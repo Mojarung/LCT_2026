@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.dxf binary
+*.dwg binary
+*.pdf binary
