@@ -39,6 +39,17 @@ def test_raw_line_break_inside_value_is_joined(tmp_path: Path) -> None:
     assert any("строковых значений 1," in note for note in notes)
 
 
+def test_blank_tail_line_inside_file_is_joined(tmp_path: Path) -> None:
+    """Строка из пробелов посреди файла это хвост значения, а не код группы (Берзарина)."""
+    path = tmp_path / "broken_blank.dxf"
+    _drawing_with_text(path, b"GREEN_REPAIR\n   ")
+
+    doc, notes = load_document(path)
+
+    assert [e.dxf.text for e in doc.modelspace().query("TEXT")] == ["GREEN_REPAIR"]
+    assert any("строковых значений 1," in note for note in notes)
+
+
 def test_split_escape_and_line_break_are_repaired_together(tmp_path: Path) -> None:
     path = tmp_path / "broken_escape.dxf"
     _drawing_with_text(path, b"d=400\\U+0\n422 tail")

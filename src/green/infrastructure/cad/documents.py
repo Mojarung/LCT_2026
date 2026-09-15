@@ -112,20 +112,22 @@ def _join_broken_values(data: bytes) -> tuple[bytes, int]:
     """DXF чередует строку кода группы и строку значения. Если на месте кода стоит не число,
     это хвост предыдущего значения с сырым переводом строки: он приклеивается обратно."""
     lines = data.split(b"\n")
+    last = len(lines) - 1
     out: list[bytes] = []
     joined = 0
     expect_code = True
-    for line in lines:
+    for position, line in enumerate(lines):
         if not expect_code:
             out.append(line)
             expect_code = True
-        elif not line.strip():
+        elif position == last and not line.strip():
             # Пустой хвост после последнего перевода строки (CRLF в конце файла) не значение.
             out.append(line)
         elif _GROUP_CODE.match(line) or not out:
             out.append(line)
             expect_code = False
         else:
-            out[-1] = out[-1].rstrip(b"\r") + b" " + line.strip()
+            tail = line.strip()
+            out[-1] = out[-1].rstrip(b"\r") + (b" " + tail if tail else b"")
             joined += 1
     return b"\n".join(out), joined
