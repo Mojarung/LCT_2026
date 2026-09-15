@@ -72,6 +72,7 @@ class RunReport:
             "rejections": len(self.plan.rejections),
             "integrity_ok": self.integrity.ok,
             "total_ms": round(sum(t.ms for t in self.timings), 1),
+            "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),
         }
 

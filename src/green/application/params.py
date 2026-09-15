@@ -18,3 +18,5 @@ class PlanParams:
     allow_needs_approval: bool = True
     label_search_radius_m: float = 3.0
     max_rejections: int = 2000
+    require_soil: bool = True
+    surface_cell_m: float = 0.5

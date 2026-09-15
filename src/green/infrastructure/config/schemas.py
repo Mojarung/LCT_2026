@@ -100,3 +100,5 @@ class ProfileModel(_Strict):
     allow_needs_approval: bool = True
     label_search_radius_m: float = Field(default=3.0, gt=0, le=20)
     max_rejections: int = Field(default=2000, ge=0, le=100_000)
+    require_soil: bool = True
+    surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)

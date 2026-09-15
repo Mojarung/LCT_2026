@@ -96,7 +96,7 @@ class PlanSite:
                 scene = promote_unknown_lines(scene)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
         with watch.stage("place"):
-            plan = self._strategy.plan(features, rulebook, species, params)
+            plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

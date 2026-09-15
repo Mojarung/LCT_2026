@@ -10,6 +10,7 @@ import numpy as np
 import shapely
 from shapely import STRtree
 
+from green.application.surfaces import Material
 from green.domain.norms import MeasureTo, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, RuleCheck, Verdict
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import DistanceRule
     from green.domain.objects import Feature
 
@@ -81,7 +83,9 @@ class ConstraintIndex:
         rules: Sequence[DistanceRule],
         *,
         require_utility_data: bool,
+        surface: SurfaceMap | None = None,
     ) -> None:
+        self.surface = surface
         by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
         for feature in features:
             by_class[feature.object_class].append(feature)
@@ -105,18 +109,21 @@ class ConstraintIndex:
             if f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES
         ]
         self._hard = STRtree(hard) if hard else None
+        self.has_surface_polygons = bool(hard)
         self.boundary: BaseGeometry | None = _boundary(by_class.get(ObjectClass.WORK_BOUNDARY, []))
         if self.boundary is not None:
             shapely.prepare(self.boundary)
 
     def plantable(self, points: NDArray[np.object_]) -> NDArray[np.bool_]:
-        """Точка не на твёрдом покрытии (проезжая часть, пути, здания) и внутри границы работ."""
+        """Точка на грунте по карте покрытий, не на твёрдом покрытии и внутри границы работ."""
         mask = np.ones(len(points), dtype=bool)
         if self._hard is not None and len(points):
             inside = self._hard.query(points, predicate="within")
             mask[np.unique(inside[0])] = False
         if self.boundary is not None and len(points):
             mask &= shapely.contains(self.boundary, points)
+        if self.surface is not None and len(points):
+            mask &= self.surface.material(points) == Material.SOIL
         return mask
 
     def evaluate(self, points: NDArray[np.object_]) -> EvaluationBatch:

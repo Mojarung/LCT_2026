@@ -12,6 +12,7 @@ import shapely
 
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
+from green.application.surfaces import build_surface_map
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict
 
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     from green.application.params import PlanParams
     from green.domain.norms import RuleBook
-    from green.domain.objects import Feature
+    from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Species
 
 _TANGENT_STEP_M = 0.5
@@ -35,6 +36,7 @@ class PlacementStrategy(Protocol):
     def plan(
         self,
         features: Sequence[Feature],
+        labels: Sequence[TextLabel],
         rulebook: RuleBook,
         species: Species,
         params: PlanParams,
@@ -60,6 +62,7 @@ class CurbAlleyStrategy:
     def plan(
         self,
         features: Sequence[Feature],
+        labels: Sequence[TextLabel],
         rulebook: RuleBook,
         species: Species,
         params: PlanParams,
@@ -70,6 +73,10 @@ class CurbAlleyStrategy:
 
         rules = rulebook.distance_rules_for(params.planting_type)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
+        if params.require_soil:
+            index.surface = build_surface_map(
+                features, labels, index.boundary, params.surface_cell_m
+            )
         candidates = _candidates(_curb_lines(features), params)
         points = shapely.points([(c.x, c.y) for c in candidates]) if candidates else np.array([])
         positions = np.flatnonzero(index.plantable(points))
@@ -79,10 +86,17 @@ class CurbAlleyStrategy:
             for row, position in enumerate(positions.tolist()):
                 selector.offer(candidates[position], row)
         selector.flush()
+        stats: dict[str, int | float] = {
+            "candidates": len(candidates),
+            "candidates_plantable": len(positions),
+        }
+        if index.surface is not None:
+            stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
-            warnings=_warnings(features, index, selector.rejections, params.max_rejections),
+            warnings=_warnings(features, index, selector.rejections, params),
+            stats=stats,
         )
 
 
@@ -250,9 +264,16 @@ def _warnings(
     features: Sequence[Feature],
     index: ConstraintIndex,
     plan_rejections: Sequence[Rejection],
-    max_rejections: int,
+    params: PlanParams,
 ) -> tuple[str, ...]:
+    max_rejections = params.max_rejections
     warnings = []
+    if params.require_soil and index.surface is None and not index.has_surface_polygons:
+        warnings.append(
+            "Карта покрытий не построена: в чертеже нет подписей материала покрытий "
+            "(«А», «Ц», «ПЛ») или признаков грунта («ГАЗОН», существующие деревья). "
+            "Сторона борта (проезжая часть или тротуар) не различается."
+        )
     if not any(f.object_class is ObjectClass.CURB for f in features):
         warnings.append("В чертеже не найден бортовой камень: рядовая посадка не построена.")
     if not index.has_utility_data:

@@ -27,6 +27,8 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.POWER_LINE_OVERHEAD: "воздушной линии",
     ObjectClass.POLE: "опоры освещения или контактной сети",
     ObjectClass.CURB: "бортового камня",
+    ObjectClass.PAVEMENT_EDGE: "границы покрытия",
+    ObjectClass.FENCE: "ограды",
     ObjectClass.ROAD: "края проезжей части",
     ObjectClass.SIDEWALK: "края тротуара",
     ObjectClass.TRAM: "трамвайных путей",

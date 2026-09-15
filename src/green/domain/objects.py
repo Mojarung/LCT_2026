@@ -28,6 +28,8 @@ class ObjectClass(StrEnum):
     POWER_LINE_OVERHEAD = "power_line_overhead"
     POLE = "pole"
     CURB = "curb"
+    PAVEMENT_EDGE = "pavement_edge"
+    FENCE = "fence"
     ROAD = "road"
     SIDEWALK = "sidewalk"
     TRAM = "tram"
@@ -48,6 +50,21 @@ class ObjectClass(StrEnum):
     def is_hard_surface(self) -> bool:
         """Покрытие, внутри которого посадочное место не рассматривается вовсе."""
         return self in {ObjectClass.ROAD, ObjectClass.TRAM, ObjectClass.BUILDING}
+
+    @property
+    def is_surface_barrier(self) -> bool:
+        """Линия, по которой меняется покрытие: граница для карты покрытий."""
+        return self in {
+            ObjectClass.CURB,
+            ObjectClass.PAVEMENT_EDGE,
+            ObjectClass.BUILDING,
+            ObjectClass.FENCE,
+            ObjectClass.LAWN,
+            ObjectClass.ROAD,
+            ObjectClass.SIDEWALK,
+            ObjectClass.TRAM,
+            ObjectClass.WORK_BOUNDARY,
+        }
 
 
 @dataclass(frozen=True, slots=True)

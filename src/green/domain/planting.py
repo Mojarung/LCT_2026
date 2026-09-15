@@ -7,6 +7,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from green.domain.norms import PlantingType
     from green.domain.objects import ObjectClass, SourceRef
 
@@ -84,6 +86,7 @@ class Plan:
     rejections: tuple[Rejection, ...]
     explanations: tuple[Explanation, ...] = field(default=())
     warnings: tuple[str, ...] = field(default=())
+    stats: Mapping[str, int | float] = field(default_factory=dict)
 
     @property
     def allowed_count(self) -> int:
