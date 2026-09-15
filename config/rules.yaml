@@ -1,0 +1,65 @@
+# Правила размещения. rule_id стабилен, цитата и пункт меняются при смене редакции.
+# Значения взяты из СП 42.13330.2016 по ресерчу (ТЗ/research.md, версия 2) и совпадают между двумя
+# независимыми прогонами ресерча. До сверки с текстом СП 42.13330.2026 статус unverified:
+# explain помечает такие ссылки как «цитата не сверена».
+version: 1
+distance_rules:
+  - {rule_id: R-BLD-TREE-001, object_class: building, planting_type: tree, min_distance_m: 5.0, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний до деревьев и кустарников: наружная стена здания"}}
+  - {rule_id: R-BLD-SHRUB-001, object_class: building, planting_type: shrub, min_distance_m: 1.5, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний до деревьев и кустарников: наружная стена здания"}}
+  - {rule_id: R-ROAD-TREE-001, object_class: road, planting_type: tree, min_distance_m: 2.0, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край проезжей части"}}
+  - {rule_id: R-ROAD-SHRUB-001, object_class: road, planting_type: shrub, min_distance_m: 1.0, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край проезжей части"}}
+  - {rule_id: R-SWALK-TREE-001, object_class: sidewalk, planting_type: tree, min_distance_m: 0.7, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край тротуара и садовой дорожки"}}
+  - {rule_id: R-SWALK-SHRUB-001, object_class: sidewalk, planting_type: shrub, min_distance_m: 0.5, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край тротуара и садовой дорожки"}}
+  - {rule_id: R-POLE-TREE-001, object_class: pole, planting_type: tree, min_distance_m: 4.0, measure_to: axis,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: мачты и опоры осветительной сети"}}
+  - {rule_id: R-GAS-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, газопровод"}}
+  - {rule_id: R-GASZONE-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
+     citation: {act_id: PPRF878, clause: "охранная зона газопровода 2 м с каждой стороны (по ресерчу, сверить пункт)"}}
+  - {rule_id: R-SEWER-TREE-001, object_class: utility.sewer, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, канализация"}}
+  - {rule_id: R-STORM-TREE-001, object_class: utility.storm, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, канализация (водосток)"}}
+  - {rule_id: R-HEAT-TREE-001, object_class: utility.heat, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: тепловая сеть (стенка канала)"}}
+  - {rule_id: R-HEAT-SHRUB-001, object_class: utility.heat, planting_type: shrub, min_distance_m: 1.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: тепловая сеть (стенка канала)"}}
+  - {rule_id: R-WATER-TREE-001, object_class: utility.water, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: водопровод, дренаж"}}
+  - {rule_id: R-DRAIN-TREE-001, object_class: utility.drain, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: водопровод, дренаж"}}
+  - {rule_id: R-POWER-TREE-001, object_class: utility.power_cable, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
+  - {rule_id: R-POWER-SHRUB-001, object_class: utility.power_cable, planting_type: shrub, min_distance_m: 0.7, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
+  - {rule_id: R-TELECOM-TREE-001, object_class: utility.telecom, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
+  - {rule_id: R-TELECOM-SHRUB-001, object_class: utility.telecom, planting_type: shrub, min_distance_m: 0.7, measure_to: outer_wall,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
+  # Fail-closed: сеть неизвестного типа получает наибольший отступ из правил для сетей.
+  - {rule_id: R-UTILUNK-TREE-001, object_class: utility.unknown, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
+     citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей", status: verified}}
+  - {rule_id: R-UTILUNK-SHRUB-001, object_class: utility.unknown, planting_type: shrub, min_distance_m: 1.0, measure_to: outer_wall,
+     citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей", status: verified}}
+  # Колодец - единственный признак сети в чертежах без линий сетей (выгрузка АСУ ОДХ).
+  - {rule_id: R-ACCESS-TREE-001, object_class: utility.access, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
+     citation: {act_id: PROJECT, clause: "смотровой колодец как признак подземной сети", status: verified}}
+  - {rule_id: R-EXTREE-TREE-001, object_class: existing_tree, planting_type: tree, min_distance_m: 4.0, measure_to: axis,
+     citation: {act_id: PROJECT, clause: "не сажать ближе 4 м к существующему дереву", status: verified}}
+species_bans:
+  - {rule_id: R-INV-ACERNEG-001, species_lat: Acer negundo,
+     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, клён ясенелистный (группу сверить)"}}
+  - {rule_id: R-INV-HERACL-001, species_lat: Heracleum sosnowskyi,
+     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, группа I: борщевик Сосновского"}}
+  - {rule_id: R-INV-AILANT-001, species_lat: Ailanthus altissima,
+     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, группа I: айлант высочайший"}}
+  - {rule_id: R-INV-SORBAR-001, species_lat: Sorbaria sorbifolia,
+     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, рябинник рябинолистный (по ресерчу, сверить)"}}
+  - {rule_id: R-INV-QUERUB-001, species_lat: Quercus rubra,
+     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, дуб красный (по ресерчу, сверить)"}}

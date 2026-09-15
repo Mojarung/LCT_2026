@@ -1,0 +1,17 @@
+# Ассортимент для условных знаков. crown_diameter_m - ориентир кроны через 10 лет для отрисовки,
+# не норма; перед демо сверить с ассортиментными ведомостями пилота и справочниками питомников.
+version: 1
+species:
+  - {code: tilia_cordata, name_ru: Липа мелколистная, name_lat: Tilia cordata, crown_diameter_m: 4.0}
+  - {code: acer_platanoides, name_ru: Клён остролистный, name_lat: Acer platanoides, crown_diameter_m: 4.0}
+  - {code: ulmus_laevis, name_ru: Вяз гладкий, name_lat: Ulmus laevis, crown_diameter_m: 4.5}
+  - {code: betula_pendula, name_ru: Берёза повислая, name_lat: Betula pendula, crown_diameter_m: 3.5}
+  - {code: sorbus_aucuparia, name_ru: Рябина обыкновенная, name_lat: Sorbus aucuparia, crown_diameter_m: 3.0}
+  - {code: prunus_maackii, name_ru: Черёмуха Маака, name_lat: Prunus maackii, crown_diameter_m: 3.5}
+  - {code: malus_decorative, name_ru: Яблоня декоративная, name_lat: Malus, crown_diameter_m: 3.0}
+  - {code: picea_abies, name_ru: Ель обыкновенная, name_lat: Picea abies, crown_diameter_m: 3.0}
+  - {code: syringa_meyeri, name_ru: Сирень Мейера, name_lat: Syringa meyeri, crown_diameter_m: 1.2}
+  - {code: cornus_alba, name_ru: Дёрен белый, name_lat: Cornus alba, crown_diameter_m: 1.5}
+  - {code: spiraea_japonica, name_ru: Спирея японская, name_lat: Spiraea japonica, crown_diameter_m: 0.8}
+  # Запрещён 369-ПП: оставлен, чтобы запрет срабатывал при попытке выбрать вид.
+  - {code: acer_negundo, name_ru: Клён ясенелистный, name_lat: Acer negundo, crown_diameter_m: 5.0}

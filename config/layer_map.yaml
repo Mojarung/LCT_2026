@@ -1,0 +1,53 @@
+# Семантика слоёв. Порядок важен: побеждает первое совпадение. Поиск без учёта регистра.
+# Префикс (?:^|[|$]) допускает имена слоёв из привязанных XREF вида "file|Слой" и "file$0$Слой".
+# confirmed: true - слой видели в данных пилота 15.09.2026 (АСУ ОДХ 3-й Парковой, выгрузки
+# Геотреста Олимпийской деревни: tp - топоплан, up - подземные сети, pp - проектируемые сети,
+# kl - красные линии, brd - рамки и граница заказа).
+version: 1
+rules:
+  # Блоки-символы: определяются по имени блока раньше, чем по слою.
+  - {pattern: "^(люк|решетка)$", target: block, object_class: utility.access, confirmed: true}
+  - {pattern: "опор[аы].*(освещени|контактн)|^фонарь$|^светофор$", target: block, object_class: pole, confirmed: true}
+
+  # АСУ ОДХ: номер классификатора в начале имени слоя.
+  - {pattern: "(?:^|[|$])13\\s*Проезжие части", object_class: road, confirmed: true}
+  - {pattern: "(?:^|[|$])14\\s*Тротуары", object_class: sidewalk, confirmed: true}
+  - {pattern: "(?:^|[|$])15\\s*Бортовые камни", object_class: curb, confirmed: true}
+  - {pattern: "(?:^|[|$])20\\s*Трамвайные пути", object_class: tram, confirmed: true}
+  - {pattern: "(?:^|[|$])8\\s*Люки", object_class: utility.access, confirmed: true}
+  - {pattern: "(?:^|[|$])(5\\s*Остановки|7\\s*Малые архитектурные|9\\s*Инженерные сооружения)", object_class: structure, confirmed: true}
+  - {pattern: "(?:^|[|$])(10\\s*Знаки|11\\s*Ограждения|16\\s*Прочие территории)", object_class: ignore, confirmed: true}
+  - {pattern: "(?:^|[|$])Объекты дорожного хозяйства$", object_class: work_boundary, confirmed: true, note: "контур объекта АСУ ОДХ"}
+  - {pattern: "(?:^|[|$])(Штиховка|Подписи$)", object_class: ignore, confirmed: true}
+
+  # Воздушные линии раньше кабелей: «Возд линии телеграф» в топоплане не подземная сеть.
+  - {pattern: "Возд\\w*\\s+лини", object_class: power_line_overhead, confirmed: true}
+
+  # Геотрест up/pp: подземные сети (проектируемые учитываются так же, как существующие).
+  - {pattern: "Кабель связи", object_class: utility.telecom, confirmed: true}
+  - {pattern: "Водопровод", object_class: utility.water, confirmed: true}
+  - {pattern: "Канализация", object_class: utility.sewer, confirmed: true}
+  - {pattern: "Водосток", object_class: utility.storm, confirmed: true}
+  - {pattern: "Дренаж", object_class: utility.drain, confirmed: true}
+  - {pattern: "Теплосеть", object_class: utility.heat, confirmed: true}
+  - {pattern: "Газопровод", object_class: utility.gas, confirmed: true}
+  - {pattern: "Кабель электрический|Кабели|Кабель защиты", object_class: utility.power_cable, confirmed: true}
+  - {pattern: "Общий коллектор|Подземные коммуникации|Трубопроводы", object_class: utility.unknown, confirmed: true,
+     note: "тип не указан: fail-closed, наибольший отступ"}
+
+  # Геотрест tp: топоплан.
+  - {pattern: "Бортовой камень", object_class: curb, confirmed: true}
+  - {pattern: "(?:^|[|$])(Здания|Части зданий)$", object_class: building, confirmed: true}
+  - {pattern: "Отдельно стоящее дерево|Полоса деревьев", object_class: existing_tree, confirmed: true}
+  - {pattern: "(?:^|[|$])(Колодцы|Люки)$", object_class: utility.access, confirmed: true}
+  - {pattern: "(?:^|[|$])(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
+  - {pattern: "(?:^|[|$])ЛЭП$", object_class: power_line_overhead, confirmed: true}
+  - {pattern: "Граница растительности|Леса и газоны", object_class: lawn, confirmed: true}
+  - {pattern: "Горизонтали|Откосы|Ограды|(?:^|[|$])Территории$|Топографические|Пояснительные|Номер дома|Вентиляторы|Крыльца|Фонтаны|Памятники|Внутреннее заполнение|Указатель подз|Граница улицы",
+     object_class: ignore, confirmed: true}
+
+  # Геотрест kl и brd.
+  - {pattern: "Красные линии", object_class: ignore, confirmed: true}
+  - {pattern: "Граница заказа", object_class: work_boundary, confirmed: true}
+  - {pattern: "Координатные кресты|(?:^|[|$])Рамки$|Подписи рамок", object_class: ignore, confirmed: true}
+  - {pattern: "^(0|Defpoints)$", object_class: ignore, confirmed: true}

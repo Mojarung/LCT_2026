@@ -1,0 +1,8 @@
+description: Рядовая посадка кустарника вдоль борта.
+planting_type: shrub
+species_code: syringa_meyeri
+spacing_m: 1.5
+curb_offsets_m: [1.0, 1.5, 2.0]
+require_utility_data: true
+unknown_lines_as_utility: true
+allow_needs_approval: true

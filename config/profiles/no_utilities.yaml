@@ -1,0 +1,8 @@
+description: Чертёж без подземных сетей (например, выгрузка АСУ ОДХ). Посадки ставятся, но помечаются «требует согласования».
+planting_type: tree
+species_code: tilia_cordata
+spacing_m: 8.0
+curb_offsets_m: [2.0, 2.5, 3.0]
+require_utility_data: false
+unknown_lines_as_utility: true
+allow_needs_approval: true
