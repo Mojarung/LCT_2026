@@ -64,12 +64,22 @@ def _key(path: Path) -> tuple[str, int, int]:
 
 
 def load_document(path: Path) -> tuple[Drawing, list[str]]:
+    doc: Drawing | None = None
     try:
-        return ezdxf.readfile(path), []
+        doc = ezdxf.readfile(path)
     except ezdxf.DXFStructureError, ValueError:
         pass
     except OSError as error:
         raise InputError(f"Не удалось открыть {path.name}: {error}") from error
+    if doc is not None:
+        # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
+        # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
+        auditor = doc.audit()
+        fixes = len(auditor.fixes)
+        if not fixes and not auditor.errors:
+            return doc, []
+        note = f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}"
+        return doc, [note]
     notes: list[str] = []
     try:
         doc, auditor = recover.readfile(path)

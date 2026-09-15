@@ -57,6 +57,20 @@ distance_rules:
       quote: "Край трамвайного полотна | 5,0 | 3,0"
       status: verified
       related: *table_tram
+  # Железные дороги есть в топопланах Геотреста (Берзарина, 48 объектов). Строки для ЖД в табл. 9.1
+  # нет: проектный отступ по аналогии с краем трамвайного полотна, до сверки норм ЖД.
+  - rule_id: R-RAIL-TREE-001
+    object_class: railway
+    planting_type: tree
+    min_distance_m: 5.0
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "5 м от края железнодорожного пути по аналогии с краем трамвайного полотна (табл. 9.1 СП 42.13330.2016), норма ЖД не сверена", status: verified}
+  - rule_id: R-RAIL-SHRUB-001
+    object_class: railway
+    planting_type: shrub
+    min_distance_m: 3.0
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "3 м от края железнодорожного пути по аналогии с краем трамвайного полотна (табл. 9.1 СП 42.13330.2016), норма ЖД не сверена", status: verified}
   - rule_id: R-ROAD-TREE-001
     object_class: road
     planting_type: tree

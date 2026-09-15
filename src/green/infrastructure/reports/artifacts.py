@@ -212,6 +212,7 @@ def _integrity(report: RunReport) -> dict[str, Any]:
         "changed": list(integrity.changed),
         "missing": list(integrity.missing),
         "added_outside_result_layers": list(integrity.added_outside_result_layers),
+        "unexportable": integrity.unexportable,
     }
 
 

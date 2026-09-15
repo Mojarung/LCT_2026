@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -30,9 +31,11 @@ SYMBOL_BLOCK_MAX_ENTITIES = 64
 # Условный знак (люк, опора, дерево) умещается в квадрат 12 м; больше - это уже геометрия.
 SYMBOL_MAX_SIZE_M = 12.0
 # Экспорт из MicroStation (выгрузки Геотреста): каждый элемент - отдельный блок, это не символ.
-ELEMENT_BLOCK_PREFIX = "MSDELEMENTTYPE"
+# В привязанном (BIND) XREF имя блока получает префикс файла: "output[1-12]_...up$0$DIMTXT_3",
+# у XREF без привязки разделитель "|". Проверка по началу имени такие блоки не видит.
+ELEMENT_BLOCK = re.compile(r"(?:^|\$0\$|\|)msdElementType", re.IGNORECASE)
 # Подпись сети Геотреста: текст и стрелка-выноска. Стрелка не должна стать трубой.
-LABEL_BLOCK_PREFIX = "DIMTXT"
+LABEL_BLOCK = re.compile(r"(?:^|\$0\$|\|)DIMTXT", re.IGNORECASE)
 SMALL_CIRCLE_RADIUS_M = 2.0
 MAX_BLOCK_DEPTH = 8
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
@@ -134,7 +137,7 @@ class _Walker:
         if block.block_record.is_xref and len(block) == 0:
             self.unresolved_xrefs.add(name)
             return
-        labels_only = name.upper().startswith(LABEL_BLOCK_PREFIX)
+        labels_only = LABEL_BLOCK.search(name) is not None
         if not labels_only and self._is_symbol(insert, block):
             point = insert.dxf.insert
             self.features.append(
@@ -165,7 +168,7 @@ class _Walker:
         if (
             block.block_record.is_xref
             or len(block) > SYMBOL_BLOCK_MAX_ENTITIES
-            or name.upper().startswith(ELEMENT_BLOCK_PREFIX)
+            or ELEMENT_BLOCK.search(name) is not None
         ):
             return False
         size = self.block_sizes.get(name)

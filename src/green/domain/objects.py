@@ -33,6 +33,7 @@ class ObjectClass(StrEnum):
     ROAD = "road"
     SIDEWALK = "sidewalk"
     TRAM = "tram"
+    RAILWAY = "railway"
     BUILDING = "building"
     STRUCTURE = "structure"
     WORK_BOUNDARY = "work_boundary"
@@ -49,7 +50,12 @@ class ObjectClass(StrEnum):
     @property
     def is_hard_surface(self) -> bool:
         """Покрытие, внутри которого посадочное место не рассматривается вовсе."""
-        return self in {ObjectClass.ROAD, ObjectClass.TRAM, ObjectClass.BUILDING}
+        return self in {
+            ObjectClass.ROAD,
+            ObjectClass.TRAM,
+            ObjectClass.RAILWAY,
+            ObjectClass.BUILDING,
+        }
 
     @property
     def is_surface_barrier(self) -> bool:
@@ -63,6 +69,7 @@ class ObjectClass(StrEnum):
             ObjectClass.ROAD,
             ObjectClass.SIDEWALK,
             ObjectClass.TRAM,
+            ObjectClass.RAILWAY,
             ObjectClass.WORK_BOUNDARY,
         }
 

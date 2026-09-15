@@ -28,7 +28,7 @@ flowchart LR
 flowchart TD
     A[DWG или DXF] -->|DWG| B[конвертер: ODA или LibreDWG, отдельный процесс]
     A -->|DXF| C
-    B --> C[чтение ezdxf: геометрия Shapely, слой 0 в блоках наследует INSERT]
+    B --> C[чтение ezdxf с аудитом: геометрия Shapely, слой 0 в блоках наследует INSERT, блоки msdElementType* взрываются, DIMTXT дают только текст]
     C --> D[классификация слоёв по config/layer_map.yaml]
     D --> E[fail-closed: неизвестные линии считаются сетью неизвестного типа]
     E --> F[диаметры из подписей d=400 привязываются к сетям того же слоя]
