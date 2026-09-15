@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
 from green.application.params import PlanParams
-from green.domain.norms import Act, Citation, DistanceRule, RuleBook, SpeciesBan
+from green.domain.norms import Act, Citation, DistanceRule, Reference, RuleBook, SpeciesBan
 from green.domain.planting import Species
 from green.infrastructure.config.schemas import (
     ActsFile,
@@ -51,7 +51,11 @@ def _validate[T: BaseModel](model: type[T], data: object, path: Path) -> T:
 
 def _citation(model: CitationModel) -> Citation:
     return Citation(
-        act_id=model.act_id, clause=model.clause, quote=model.quote, status=model.status
+        act_id=model.act_id,
+        clause=model.clause,
+        quote=model.quote,
+        status=model.status,
+        related=tuple(Reference(act_id=r.act_id, clause=r.clause) for r in model.related),
     )
 
 
@@ -72,6 +76,7 @@ class YamlRuleBookSource:
                 edition=a.edition,
                 url=a.url,
                 checked_at=a.checked_at,
+                short=a.short,
             )
             for a in acts_file.acts
         }
@@ -84,6 +89,7 @@ class YamlRuleBookSource:
                 measure_to=r.measure_to,
                 severity=r.severity,
                 citation=_citation(r.citation),
+                genera=frozenset(g.casefold() for g in r.genera),
             )
             for r in rules_file.distance_rules
         )
@@ -95,7 +101,8 @@ class YamlRuleBookSource:
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise ConfigurationError(f"Повторяются rule_id: {', '.join(duplicates)}")
-        unknown_acts = sorted({r.citation.act_id for r in (*distance, *bans)} - acts.keys())
+        cited = {act_id for r in (*distance, *bans) for act_id in r.citation.act_ids}
+        unknown_acts = sorted(cited - acts.keys())
         if unknown_acts:
             raise ConfigurationError(
                 f"Правила ссылаются на неизвестные акты: {', '.join(unknown_acts)}"

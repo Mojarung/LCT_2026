@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
 _PASS, _FAIL, _NO_DATA = 0, 1, 2
+_EPS_M = 1e-6
 _OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA)
 _VERDICTS = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
 
@@ -154,7 +155,8 @@ class ConstraintIndex:
             np.maximum(values, 0.0, out=values)
             clearance[row] = values
             nearest[row] = owners
-            outcomes[row] = np.where(values >= rule.min_distance_m, _PASS, _FAIL)
+            # Допуск на округление: кандидат, поставленный ровно на норму, её не нарушает.
+            outcomes[row] = np.where(values >= rule.min_distance_m - _EPS_M, _PASS, _FAIL)
         return EvaluationBatch(
             rules=self._rules,
             outcomes=outcomes,

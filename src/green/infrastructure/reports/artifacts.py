@@ -38,6 +38,7 @@ CSV_COLUMNS = (
     "act_id",
     "act_title",
     "clause",
+    "related",
     "citation_status",
     "quote",
     "url",
@@ -113,6 +114,10 @@ def _rows(
                 "act_id": citation.act_id if citation else "",
                 "act_title": act.title if act else "",
                 "clause": citation.clause if citation else "",
+                "related": "; ".join(
+                    f"{rulebook.label_of(ref.act_id)}, {ref.clause}"
+                    for ref in (citation.related if citation else ())
+                ),
                 "citation_status": citation.status.value if citation else "",
                 "quote": citation.quote if citation else "",
                 "url": act.url if act else "",

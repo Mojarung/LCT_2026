@@ -71,7 +71,7 @@ class CurbAlleyStrategy:
         if ban is not None:
             raise InputError(f"Вид {species.name_lat} запрещён правилом {ban.rule_id}")
 
-        rules = rulebook.distance_rules_for(params.planting_type)
+        rules = rulebook.distance_rules_for(params.planting_type, species.name_lat)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
         if params.require_soil:
             index.surface = build_surface_map(

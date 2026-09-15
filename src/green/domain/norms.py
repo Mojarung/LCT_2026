@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -49,6 +49,20 @@ class Act:
     edition: str
     url: str
     checked_at: date | None = None
+    short: str = ""
+
+    @property
+    def label(self) -> str:
+        """Короткое имя акта для объяснений: «СП 42.13330.2016», «743-ПП»."""
+        return self.short or self.act_id
+
+
+@dataclass(frozen=True, slots=True)
+class Reference:
+    """Дополнительная ссылка на пункт другого акта с тем же требованием."""
+
+    act_id: str
+    clause: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +71,25 @@ class Citation:
     clause: str
     quote: str
     status: CitationStatus
+    related: tuple[Reference, ...] = ()
 
     @property
     def is_verified(self) -> bool:
         return self.status is CitationStatus.VERIFIED
 
+    @property
+    def act_ids(self) -> tuple[str, ...]:
+        return (self.act_id, *(ref.act_id for ref in self.related))
+
 
 @dataclass(frozen=True, slots=True)
 class DistanceRule:
-    """Минимальное расстояние от посадки данного типа до объекта данного класса."""
+    """Минимальное расстояние от посадки данного типа до объекта данного класса.
+
+    genera ограничивает правило родами растений (латинское имя рода в нижнем регистре),
+    как в МГСН 1.02-02 п. 4.2.8: у теплотрасс липа и клён не ближе 2 м, берёза не ближе 3-4 м.
+    Пустое множество означает правило для любого вида.
+    """
 
     rule_id: str
     object_class: ObjectClass
@@ -74,9 +98,14 @@ class DistanceRule:
     measure_to: MeasureTo
     severity: Severity
     citation: Citation
+    genera: frozenset[str] = field(default_factory=frozenset)
 
-    def applies_to(self, planting_type: PlantingType) -> bool:
-        return self.planting_type is planting_type
+    def applies_to(self, planting_type: PlantingType, species_lat: str | None = None) -> bool:
+        if self.planting_type is not planting_type:
+            return False
+        if not self.genera:
+            return True
+        return species_lat is not None and genus_of(species_lat) in self.genera
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,11 +126,17 @@ class RuleBook:
     species_bans: tuple[SpeciesBan, ...]
     fingerprint: str
 
-    def distance_rules_for(self, planting_type: PlantingType) -> tuple[DistanceRule, ...]:
-        return tuple(rule for rule in self.distance_rules if rule.applies_to(planting_type))
+    def distance_rules_for(
+        self, planting_type: PlantingType, species_lat: str | None = None
+    ) -> tuple[DistanceRule, ...]:
+        return tuple(r for r in self.distance_rules if r.applies_to(planting_type, species_lat))
 
     def act_of(self, citation: Citation) -> Act | None:
         return self.acts.get(citation.act_id)
+
+    def label_of(self, act_id: str) -> str:
+        act = self.acts.get(act_id)
+        return act.label if act is not None else act_id
 
     def rule(self, rule_id: str) -> DistanceRule | SpeciesBan | None:
         for rule in (*self.distance_rules, *self.species_bans):
@@ -115,3 +150,9 @@ class RuleBook:
             if ban.species_lat.casefold() == normalized:
                 return ban
         return None
+
+
+def genus_of(species_lat: str) -> str:
+    """Род из латинского названия: «Tilia cordata» -> «tilia»."""
+    parts = species_lat.strip().split()
+    return parts[0].casefold() if parts else ""

@@ -11,7 +11,7 @@ from green.domain.norms import PlantingType
 class PlanParams:
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
-    spacing_m: float = 8.0
+    spacing_m: float = 6.0  # 743-ПП, п. 3.6.4, табл. 3.6.2: однорядная посадка деревьев 5-6 м
     curb_offsets_m: tuple[float, ...] = (2.0, 2.5, 3.0)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True

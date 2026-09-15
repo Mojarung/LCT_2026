@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from green.application.explain import citation_text
 from green.application.results import SourceSnapshot
 from green.domain.planting import CheckOutcome, Verdict
 from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
@@ -146,12 +147,8 @@ class EzdxfPlanWriter:
         lines = ["Результат сервиса green: слои GREEN_*. Правила:"]
         for rule_id in used:
             rule = rulebook.rule(rule_id)
-            if rule is None:
-                continue
-            act = rulebook.act_of(rule.citation)
-            title = act.title if act else rule.citation.act_id
-            mark = "" if rule.citation.is_verified else " (цитата не сверена)"
-            lines.append(f"{rule_id}: {title}, {rule.citation.clause}{mark}")
+            if rule is not None:
+                lines.append(f"{rule_id}: {citation_text(rule, rulebook)}")
         xs = [p.x for p in plan.placements] + [r.x for r in plan.rejections]
         ys = [p.y for p in plan.placements] + [r.y for r in plan.rejections]
         if not xs:

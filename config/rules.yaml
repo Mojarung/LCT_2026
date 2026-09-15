@@ -1,82 +1,435 @@
-# Правила размещения. rule_id стабилен, цитата и пункт меняются при смене редакции.
-# Значения взяты из СП 42.13330.2016 по ресерчу (ТЗ/research.md, версия 2) и совпадают между двумя
-# независимыми прогонами ресерча. До сверки с текстом СП 42.13330.2026 статус unverified:
-# explain помечает такие ссылки как «цитата не сверена».
-version: 1
+# Правила размещения. rule_id стабилен, пункт и цитата меняются при смене редакции.
+# Основная ссылка на СП 42.13330.2016 (п. 9.6, табл. 9.1), как требует ТЗ. Те же значения дают
+# 743-ПП (п. 3.6.3, табл. 3.6.1) и МГСН 1.01-99 (табл. 7.6), на которую отсылает 623-ПП (п. 4.2.4):
+# они указаны в related, чтобы объяснение ссылалось на все три акта ТЗ.
+# Расстояние до сетей по примечанию 5 к табл. 9.1 мерится между наружными поверхностями ствола
+# и трубы: measure_to outer_wall вычитает половину диаметра сети, если он подписан в чертеже.
+version: 2
 distance_rules:
-  - {rule_id: R-BLD-TREE-001, object_class: building, planting_type: tree, min_distance_m: 5.0, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний до деревьев и кустарников: наружная стена здания"}}
-  - {rule_id: R-BLD-SHRUB-001, object_class: building, planting_type: shrub, min_distance_m: 1.5, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний до деревьев и кустарников: наружная стена здания"}}
-  - {rule_id: R-ROAD-TREE-001, object_class: road, planting_type: tree, min_distance_m: 2.0, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край проезжей части"}}
-  - {rule_id: R-ROAD-SHRUB-001, object_class: road, planting_type: shrub, min_distance_m: 1.0, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край проезжей части"}}
-  - {rule_id: R-SWALK-TREE-001, object_class: sidewalk, planting_type: tree, min_distance_m: 0.7, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край тротуара и садовой дорожки"}}
-  - {rule_id: R-SWALK-SHRUB-001, object_class: sidewalk, planting_type: shrub, min_distance_m: 0.5, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край тротуара и садовой дорожки"}}
-  - {rule_id: R-POLE-TREE-001, object_class: pole, planting_type: tree, min_distance_m: 4.0, measure_to: axis,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: мачты и опоры осветительной сети"}}
-  - {rule_id: R-STRUCT-TREE-001, object_class: structure, planting_type: tree, min_distance_m: 3.0, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подошва или внутренняя грань подпорной стенки (сооружения: парапеты, мосты, лестницы)"}}
-  - {rule_id: R-STRUCT-SHRUB-001, object_class: structure, planting_type: shrub, min_distance_m: 1.0, measure_to: edge,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подошва или внутренняя грань подпорной стенки"}}
-  # Трамвайные пути есть в данных АСУ ОДХ (3-я Парковая); строка нормы ещё не найдена, пока проектный отступ.
-  - {rule_id: R-TRAM-TREE-001, object_class: tram, planting_type: tree, min_distance_m: 5.0, measure_to: edge,
-     citation: {act_id: PROJECT, clause: "5 м от края трамвайного полотна до сверки строки в СП 42.13330 / МГСН 1.02-02", status: verified}}
-  - {rule_id: R-TRAM-SHRUB-001, object_class: tram, planting_type: shrub, min_distance_m: 3.0, measure_to: edge,
-     citation: {act_id: PROJECT, clause: "3 м от края трамвайного полотна до сверки строки в СП 42.13330 / МГСН 1.02-02", status: verified}}
-  # Охранная зона ВЛ (ТЗ: «охранные зоны ЛЭП»). Класс напряжения в чертеже не подписан: взята зона
-  # для ВЛ до 1 кВ (2 м), посадка в зоне требует согласования сетевой организации, а не запрещена.
-  - {rule_id: R-OHL-TREE-001, object_class: power_line_overhead, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
-     severity: needs_approval,
-     citation: {act_id: PPRF160, clause: "п. 10 «в» Правил: посадка деревьев и кустарников в охранной зоне без письменного согласования сетевой организации запрещена; приложение: ВЛ до 1 кВ - 2 м (для 1-20 кВ - 10 м, сверить)"}}
-  - {rule_id: R-OHL-SHRUB-001, object_class: power_line_overhead, planting_type: shrub, min_distance_m: 2.0, measure_to: axis,
-     severity: needs_approval,
-     citation: {act_id: PPRF160, clause: "п. 10 «в» Правил: посадка деревьев и кустарников в охранной зоне без письменного согласования сетевой организации запрещена; приложение: ВЛ до 1 кВ - 2 м"}}
-  - {rule_id: R-GAS-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, газопровод"}}
-  - {rule_id: R-GASZONE-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
-     citation: {act_id: PPRF878, clause: "охранная зона газопровода 2 м с каждой стороны (по ресерчу, сверить пункт)"}}
-  - {rule_id: R-SEWER-TREE-001, object_class: utility.sewer, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, канализация"}}
-  - {rule_id: R-STORM-TREE-001, object_class: utility.storm, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, канализация (водосток)"}}
-  - {rule_id: R-HEAT-TREE-001, object_class: utility.heat, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: тепловая сеть (стенка канала)"}}
-  - {rule_id: R-HEAT-SHRUB-001, object_class: utility.heat, planting_type: shrub, min_distance_m: 1.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: тепловая сеть (стенка канала)"}}
-  - {rule_id: R-WATER-TREE-001, object_class: utility.water, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: водопровод, дренаж"}}
-  - {rule_id: R-DRAIN-TREE-001, object_class: utility.drain, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: водопровод, дренаж"}}
-  - {rule_id: R-POWER-TREE-001, object_class: utility.power_cable, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
-  - {rule_id: R-POWER-SHRUB-001, object_class: utility.power_cable, planting_type: shrub, min_distance_m: 0.7, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
-  - {rule_id: R-TELECOM-TREE-001, object_class: utility.telecom, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
-  - {rule_id: R-TELECOM-SHRUB-001, object_class: utility.telecom, planting_type: shrub, min_distance_m: 0.7, measure_to: outer_wall,
-     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: силовой кабель и кабель связи"}}
+  # Здания и сооружения.
+  - rule_id: R-BLD-TREE-001
+    object_class: building
+    planting_type: tree
+    min_distance_m: 5.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: наружная стена здания и сооружения"
+      quote: "Наружная стена здания и сооружения | 5,0 | 1,5"
+      status: verified
+      related: &table_trees
+        - {act_id: PP743, clause: "п. 3.6.3, табл. 3.6.1"}
+        - {act_id: PP623, clause: "п. 4.2.4 (табл. 7.6 МГСН 1.01-99)"}
+  - rule_id: R-BLD-SHRUB-001
+    object_class: building
+    planting_type: shrub
+    min_distance_m: 1.5
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: наружная стена здания и сооружения"
+      quote: "Наружная стена здания и сооружения | 5,0 | 1,5"
+      status: verified
+      related: *table_trees
+
+  # Улица: трамвай, проезжая часть, борт, тротуар.
+  - rule_id: R-TRAM-TREE-001
+    object_class: tram
+    planting_type: tree
+    min_distance_m: 5.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край трамвайного полотна"
+      quote: "Край трамвайного полотна | 5,0 | 3,0"
+      status: verified
+      related: &table_tram
+        - {act_id: PP743, clause: "п. 3.6.3, табл. 3.6.1: ось трамвайных путей, 5,0 / 3,0"}
+        - {act_id: PP623, clause: "п. 4.2.4 (табл. 7.6 МГСН 1.01-99)"}
+  - rule_id: R-TRAM-SHRUB-001
+    object_class: tram
+    planting_type: shrub
+    min_distance_m: 3.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край трамвайного полотна"
+      quote: "Край трамвайного полотна | 5,0 | 3,0"
+      status: verified
+      related: *table_tram
+  - rule_id: R-ROAD-TREE-001
+    object_class: road
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край проезжей части улиц"
+      quote: "Край проезжей части улиц, кромка укрепленной полосы обочины дороги или бровка канавы | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  - rule_id: R-ROAD-SHRUB-001
+    object_class: road
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край проезжей части улиц"
+      quote: "Край проезжей части улиц, кромка укрепленной полосы обочины дороги или бровка канавы | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  # Бортовой камень в топоплане разделяет и проезжую часть с тротуаром, и тротуар с газоном.
+  # Сторона не известна, поэтому борт принят как край проезжей части (больший отступ).
+  - rule_id: R-CURB-TREE-001
+    object_class: curb
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край проезжей части улиц (бортовой камень принят как край проезжей части)"
+      quote: "Край проезжей части улиц, кромка укрепленной полосы обочины дороги или бровка канавы | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  - rule_id: R-CURB-SHRUB-001
+    object_class: curb
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край проезжей части улиц (бортовой камень принят как край проезжей части)"
+      quote: "Край проезжей части улиц, кромка укрепленной полосы обочины дороги или бровка канавы | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  - rule_id: R-SWALK-TREE-001
+    object_class: sidewalk
+    planting_type: tree
+    min_distance_m: 0.7
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край тротуара и садовой дорожки"
+      quote: "Край тротуара и садовой дорожки | 0,7 | 0,5"
+      status: verified
+      related: *table_trees
+  - rule_id: R-SWALK-SHRUB-001
+    object_class: sidewalk
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край тротуара и садовой дорожки"
+      quote: "Край тротуара и садовой дорожки | 0,7 | 0,5"
+      status: verified
+      related: *table_trees
+  # «Граница улицы» топоплана Геотреста: граница покрытий (асфальт, плитка) с газоном.
+  - rule_id: R-PAVE-TREE-001
+    object_class: pavement_edge
+    planting_type: tree
+    min_distance_m: 0.7
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край тротуара и садовой дорожки (граница покрытия топоплана)"
+      quote: "Край тротуара и садовой дорожки | 0,7 | 0,5"
+      status: verified
+      related: *table_trees
+  - rule_id: R-PAVE-SHRUB-001
+    object_class: pavement_edge
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: край тротуара и садовой дорожки (граница покрытия топоплана)"
+      quote: "Край тротуара и садовой дорожки | 0,7 | 0,5"
+      status: verified
+      related: *table_trees
+
+  # Опоры и сооружения.
+  - rule_id: R-POLE-TREE-001
+    object_class: pole
+    planting_type: tree
+    min_distance_m: 4.0
+    measure_to: axis
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: мачта и опора осветительной сети, трамвая, мостовая опора и эстакада"
+      quote: "Мачта и опора осветительной сети, трамвая, мостовая опора и эстакада | 4,0 | -"
+      status: verified
+      related: *table_trees
+  # Класс structure: парапеты, лестницы набережных, мосты, подземные переходы. Приняты как подпорные стенки.
+  - rule_id: R-STRUCT-TREE-001
+    object_class: structure
+    planting_type: tree
+    min_distance_m: 3.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подошва или внутренняя грань подпорной стенки (сооружения топоплана приняты как подпорные стенки)"
+      quote: "Подошва или внутренняя грань подпорной стенки | 3,0 | 1,0"
+      status: verified
+      related: *table_trees
+  - rule_id: R-STRUCT-SHRUB-001
+    object_class: structure
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подошва или внутренняя грань подпорной стенки"
+      quote: "Подошва или внутренняя грань подпорной стенки | 3,0 | 1,0"
+      status: verified
+      related: *table_trees
+
+  # Подземные сети (табл. 9.1, раздел «Подземные сети»; для кустарника «-» означает, что нормы нет).
+  - rule_id: R-GAS-TREE-001
+    object_class: utility.gas
+    planting_type: tree
+    min_distance_m: 1.5
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, газопровод; прим. 5"
+      quote: "- газопровод, канализация | 1,5 | -. Прим. 5: Расстояние от инженерных сетей до дерева (кустарника) измеряется как расстояние между наружными поверхностями их стволов и трубы инженерной сети (либо защитного футляра (обоймы))."
+      status: verified
+      related: *table_trees
+  - rule_id: R-GASZONE-TREE-001
+    object_class: utility.gas
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: axis
+    citation:
+      act_id: PPRF878
+      clause: "охранная зона газопровода 2 м с каждой стороны (по ресерчу, пункт не сверен)"
+  - rule_id: R-SEWER-TREE-001
+    object_class: utility.sewer
+    planting_type: tree
+    min_distance_m: 1.5
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, канализация; прим. 5"
+      quote: "- газопровод, канализация | 1,5 | -"
+      status: verified
+      related: *table_trees
+  - rule_id: R-STORM-TREE-001
+    object_class: utility.storm
+    planting_type: tree
+    min_distance_m: 1.5
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, канализация (водосток принят как канализация); прим. 5"
+      quote: "- газопровод, канализация | 1,5 | -"
+      status: verified
+      related: *table_trees
+  - rule_id: R-HEAT-TREE-001
+    object_class: utility.heat
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: тепловая сеть (стенка канала, тоннеля или оболочка при бесканальной прокладке)"
+      quote: "- тепловая сеть (стенка канала, тоннеля или оболочка при бесканальной прокладке) | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  - rule_id: R-HEAT-SHRUB-001
+    object_class: utility.heat
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: тепловая сеть (стенка канала, тоннеля или оболочка при бесканальной прокладке)"
+      quote: "- тепловая сеть (стенка канала, тоннеля или оболочка при бесканальной прокладке) | 2,0 | 1,0"
+      status: verified
+      related: *table_trees
+  # МГСН 1.02-02 п. 4.2.8: у теплотрасс отступ зависит от породы. «3-4 м» принято по верхней границе.
+  - rule_id: R-HEAT-TREE-002
+    object_class: utility.heat
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: axis
+    genera: [Tilia, Acer]
+    citation:
+      act_id: PP623
+      clause: "МГСН 1.02-02, п. 4.2.8: липа, клён у теплотрасс не ближе 2 м"
+      quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
+      status: verified
+  - rule_id: R-HEAT-TREE-003
+    object_class: utility.heat
+    planting_type: tree
+    min_distance_m: 4.0
+    measure_to: axis
+    genera: [Populus, Crataegus, Larix, Betula]
+    citation:
+      act_id: PP623
+      clause: "МГСН 1.02-02, п. 4.2.8: тополь, боярышник, лиственница, берёза у теплотрасс не ближе 3-4 м (принято 4 м)"
+      quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
+      status: verified
+  - rule_id: R-HEAT-SHRUB-002
+    object_class: utility.heat
+    planting_type: shrub
+    min_distance_m: 2.0
+    measure_to: axis
+    genera: [Syringa, Lonicera]
+    citation:
+      act_id: PP623
+      clause: "МГСН 1.02-02, п. 4.2.8: сирень, жимолость у теплотрасс не ближе 2 м"
+      quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
+      status: verified
+  - rule_id: R-HEAT-SHRUB-003
+    object_class: utility.heat
+    planting_type: shrub
+    min_distance_m: 4.0
+    measure_to: axis
+    genera: [Cotoneaster, Cornus, Crataegus]
+    citation:
+      act_id: PP623
+      clause: "МГСН 1.02-02, п. 4.2.8: кизильник, дёрен у теплотрасс не ближе 3-4 м (принято 4 м)"
+      quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
+      status: verified
+  - rule_id: R-WATER-TREE-001
+    object_class: utility.water
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, водопровод; прим. 5"
+      quote: "- водопровод, дренаж | 2,0 | -"
+      status: verified
+      related: *table_trees
+  - rule_id: R-DRAIN-TREE-001
+    object_class: utility.drain
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, дренаж; прим. 5"
+      quote: "- водопровод, дренаж | 2,0 | -"
+      status: verified
+      related: *table_trees
+  - rule_id: R-POWER-TREE-001
+    object_class: utility.power_cable
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, силовой кабель; прим. 5"
+      quote: "- силовой кабель и кабель связи | 2,0 | 0,7"
+      status: verified
+      related: *table_trees
+  - rule_id: R-POWER-SHRUB-001
+    object_class: utility.power_cable
+    planting_type: shrub
+    min_distance_m: 0.7
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, силовой кабель; прим. 5"
+      quote: "- силовой кабель и кабель связи | 2,0 | 0,7"
+      status: verified
+      related: *table_trees
+  - rule_id: R-TELECOM-TREE-001
+    object_class: utility.telecom
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, кабель связи; прим. 5"
+      quote: "- силовой кабель и кабель связи | 2,0 | 0,7"
+      status: verified
+      related: *table_trees
+  - rule_id: R-TELECOM-SHRUB-001
+    object_class: utility.telecom
+    planting_type: shrub
+    min_distance_m: 0.7
+    measure_to: outer_wall
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подземные сети, кабель связи; прим. 5"
+      quote: "- силовой кабель и кабель связи | 2,0 | 0,7"
+      status: verified
+      related: *table_trees
+
   # Fail-closed: сеть неизвестного типа получает наибольший отступ из правил для сетей.
-  - {rule_id: R-UTILUNK-TREE-001, object_class: utility.unknown, planting_type: tree, min_distance_m: 2.0, measure_to: outer_wall,
-     citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей", status: verified}}
-  - {rule_id: R-UTILUNK-SHRUB-001, object_class: utility.unknown, planting_type: shrub, min_distance_m: 1.0, measure_to: outer_wall,
-     citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей", status: verified}}
+  - rule_id: R-UTILUNK-TREE-001
+    object_class: utility.unknown
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: outer_wall
+    citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
+  - rule_id: R-UTILUNK-SHRUB-001
+    object_class: utility.unknown
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: outer_wall
+    citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
   # Колодец - единственный признак сети в чертежах без линий сетей (выгрузка АСУ ОДХ).
-  - {rule_id: R-ACCESS-TREE-001, object_class: utility.access, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
-     citation: {act_id: PROJECT, clause: "смотровой колодец как признак подземной сети", status: verified}}
-  - {rule_id: R-EXTREE-TREE-001, object_class: existing_tree, planting_type: tree, min_distance_m: 4.0, measure_to: axis,
-     citation: {act_id: PROJECT, clause: "не сажать ближе 4 м к существующему дереву", status: verified}}
+  - rule_id: R-ACCESS-TREE-001
+    object_class: utility.access
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: axis
+    citation: {act_id: PROJECT, clause: "смотровой колодец как признак подземной сети, отступ как до водопровода", status: verified}
+
+  # Существующие деревья: ориентировочный шаг посадки 743-ПП, принят нижний предел.
+  - rule_id: R-EXTREE-TREE-001
+    object_class: existing_tree
+    planting_type: tree
+    min_distance_m: 5.0
+    measure_to: axis
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.4, табл. 3.6.2: расстояние между деревьями при однорядной посадке 5-6 м (принят нижний предел)"
+      quote: "С однорядной посадкой деревьев | 5-6; С двухрядной посадкой деревьев | 7-8; С групповой посадкой: деревьев | 5-7"
+      status: verified
+
+  # Охранная зона ВЛ (ТЗ: «охранные зоны ЛЭП»). Класс напряжения в чертеже не подписан: взята зона
+  # для ВЛ до 1 кВ. Посадка в зоне требует письменного согласования сетевой организации, а не запрещена.
+  - rule_id: R-OHL-TREE-001
+    object_class: power_line_overhead
+    planting_type: tree
+    min_distance_m: 2.0
+    measure_to: axis
+    severity: needs_approval
+    citation:
+      act_id: PPRF160
+      clause: "Правила, п. 10 «в»; приложение, п. «а»: охранная зона ВЛ до 1 кВ - 2 м"
+      quote: "10. В пределах охранных зон без письменного решения о согласовании сетевых организаций юридическим и физическим лицам запрещаются: ... в) посадка и вырубка деревьев и кустарников. Приложение, а): до 1 кВ - 2 м; 1 - 20 кВ - 10 м (5 - для линий с самонесущими или изолированными проводами, размещенных в границах населенных пунктов)."
+      status: verified
+      related:
+        - {act_id: SP42_13330_2016, clause: "табл. 9.1, прим. 2: расстояния от ВЛ до деревьев по [10]"}
+  - rule_id: R-OHL-SHRUB-001
+    object_class: power_line_overhead
+    planting_type: shrub
+    min_distance_m: 2.0
+    measure_to: axis
+    severity: needs_approval
+    citation:
+      act_id: PPRF160
+      clause: "Правила, п. 10 «в»; приложение, п. «а»: охранная зона ВЛ до 1 кВ - 2 м"
+      quote: "10. В пределах охранных зон без письменного решения о согласовании сетевых организаций юридическим и физическим лицам запрещаются: ... в) посадка и вырубка деревьев и кустарников."
+      status: verified
+
 species_bans:
   - {rule_id: R-INV-ACERNEG-001, species_lat: Acer negundo,
-     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, клён ясенелистный (группу сверить)"}}
+     citation: {act_id: PP369_2026, clause: "приложение 1, перечень инвазивных видов: клён ясенелистный (группа не сверена)"}}
   - {rule_id: R-INV-HERACL-001, species_lat: Heracleum sosnowskyi,
-     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, группа I: борщевик Сосновского"}}
+     citation: {act_id: PP369_2026, clause: "приложение 1: борщевик Сосновского (группа не сверена)",
+                related: [{act_id: PP743, clause: "п. 2.11, п. 3.2.1: борщевик Сосновского как запрещённое растение"}]}}
   - {rule_id: R-INV-AILANT-001, species_lat: Ailanthus altissima,
-     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, группа I: айлант высочайший"}}
+     citation: {act_id: PP369_2026, clause: "приложение 1: айлант высочайший (по ресерчу, не сверено)"}}
   - {rule_id: R-INV-SORBAR-001, species_lat: Sorbaria sorbifolia,
-     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, рябинник рябинолистный (по ресерчу, сверить)"}}
+     citation: {act_id: PP369_2026, clause: "приложение 1: рябинник рябинолистный (по ресерчу, не сверено)"}}
   - {rule_id: R-INV-QUERUB-001, species_lat: Quercus rubra,
-     citation: {act_id: PP369_2026, clause: "перечень инвазивных видов, дуб красный (по ресерчу, сверить)"}}
+     citation: {act_id: PP369_2026, clause: "приложение 1: дуб красный (по ресерчу, не сверено)"}}

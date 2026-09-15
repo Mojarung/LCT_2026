@@ -18,6 +18,7 @@ class _Strict(BaseModel):
 
 class ActModel(_Strict):
     act_id: str = Field(pattern=r"^[A-Z0-9_]+$")
+    short: str = ""
     title: str
     edition: str
     url: str
@@ -29,11 +30,17 @@ class ActsFile(_Strict):
     acts: list[ActModel]
 
 
+class ReferenceModel(_Strict):
+    act_id: str
+    clause: str
+
+
 class CitationModel(_Strict):
     act_id: str
     clause: str
     quote: str = ""
     status: CitationStatus = CitationStatus.UNVERIFIED
+    related: list[ReferenceModel] = Field(default_factory=list)
 
 
 class DistanceRuleModel(_Strict):
@@ -43,6 +50,7 @@ class DistanceRuleModel(_Strict):
     min_distance_m: float = Field(ge=0, le=100)
     measure_to: MeasureTo = MeasureTo.UNSPECIFIED
     severity: Severity = Severity.FORBID
+    genera: list[str] = Field(default_factory=list)
     citation: CitationModel
 
 
@@ -94,7 +102,7 @@ class ProfileModel(_Strict):
     description: str = ""
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
-    spacing_m: float = Field(default=8.0, gt=1, le=50)
+    spacing_m: float = Field(default=6.0, ge=0.3, le=50)
     curb_offsets_m: tuple[float, ...] = Field(default=(2.0, 2.5, 3.0), min_length=1, max_length=10)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True

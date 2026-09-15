@@ -10,7 +10,7 @@ from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
-    from green.domain.norms import RuleBook
+    from green.domain.norms import RuleBook, SpeciesBan
     from green.domain.planting import Placement, Rejection, RuleCheck
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
@@ -52,14 +52,20 @@ def explain(plan: Plan, rulebook: RuleBook) -> Plan:
     return replace(plan, explanations=tuple(explanations))
 
 
+def citation_text(rule: DistanceRule | SpeciesBan, rulebook: RuleBook) -> str:
+    """«СП 42.13330.2016, п. 9.6, табл. 9.1: ...; 743-ПП, п. 3.6.3, табл. 3.6.1; ...»."""
+    citation = rule.citation
+    parts = [f"{rulebook.label_of(citation.act_id)}, {citation.clause}"]
+    parts += [f"{rulebook.label_of(ref.act_id)}, {ref.clause}" for ref in citation.related]
+    status = "" if citation.is_verified else " (цитата не сверена)"
+    return "; ".join(parts) + status
+
+
 def cite(check: RuleCheck, rulebook: RuleBook) -> str:
     rule = rulebook.rule(check.rule_id)
     if rule is None:
         return f"{check.rule_id} (правило отсутствует в базе)"
-    act = rulebook.act_of(rule.citation)
-    act_title = act.title if act is not None else rule.citation.act_id
-    status = "" if rule.citation.is_verified else ", цитата не сверена"
-    return f"{check.rule_id}: {act_title}, {rule.citation.clause}{status}"
+    return f"{check.rule_id}: {citation_text(rule, rulebook)}"
 
 
 def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
