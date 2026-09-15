@@ -7,7 +7,7 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from green.application.classification import MatchTarget
+from green.application.classification import GeometryKind, MatchTarget
 from green.domain.norms import CitationStatus, MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 
@@ -61,6 +61,7 @@ class RulesFile(_Strict):
 class LayerRuleModel(_Strict):
     pattern: str
     target: MatchTarget = MatchTarget.LAYER
+    geometry: GeometryKind = GeometryKind.ANY
     object_class: ObjectClass
     confirmed: bool = False
     note: str = ""

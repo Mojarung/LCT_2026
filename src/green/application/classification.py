@@ -18,12 +18,41 @@ class MatchTarget(StrEnum):
     BLOCK = "block"
 
 
+class GeometryKind(StrEnum):
+    """Фильтр по типу геометрии: на одном слое топоплана бывают и стволы, и контур полосы."""
+
+    ANY = "any"
+    POINT = "point"
+    LINE = "line"
+    AREA = "area"
+
+
+_KIND_OF_TYPE = {
+    "Point": GeometryKind.POINT,
+    "MultiPoint": GeometryKind.POINT,
+    "LineString": GeometryKind.LINE,
+    "MultiLineString": GeometryKind.LINE,
+    "Polygon": GeometryKind.AREA,
+    "MultiPolygon": GeometryKind.AREA,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class LayerRule:
     pattern: re.Pattern[str]
     target: MatchTarget
     object_class: ObjectClass
     confirmed: bool
+    geometry: GeometryKind = GeometryKind.ANY
+
+    def matches(self, feature: Feature) -> bool:
+        value = feature.block if self.target is MatchTarget.BLOCK else feature.layer
+        if value is None or not self.pattern.search(value):
+            return False
+        return (
+            self.geometry is GeometryKind.ANY
+            or _KIND_OF_TYPE.get(feature.geometry.geom_type) is self.geometry
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,8 +64,7 @@ class LayerMap:
 
     def classify(self, feature: Feature) -> ObjectClass:
         for rule in self.rules:
-            value = feature.block if rule.target is MatchTarget.BLOCK else feature.layer
-            if value is not None and rule.pattern.search(value):
+            if rule.matches(feature):
                 return rule.object_class
         return ObjectClass.UNKNOWN
 

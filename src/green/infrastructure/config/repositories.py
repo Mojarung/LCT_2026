@@ -119,6 +119,7 @@ class YamlLayerMapSource:
                 target=rule.target,
                 object_class=rule.object_class,
                 confirmed=rule.confirmed,
+                geometry=rule.geometry,
             )
             for rule in parsed.rules
         )
