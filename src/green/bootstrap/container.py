@@ -1,0 +1,102 @@
+"""Сборка зависимостей. Единственное место, где прикладной слой встречается с адаптерами."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from green.application.placement import CurbAlleyStrategy
+from green.application.runs import RunService
+from green.application.use_case import PlanSite
+from green.bootstrap.settings import Settings
+from green.infrastructure.cad.documents import DocumentCache
+from green.infrastructure.cad.integrity import EzdxfIntegrityChecker
+from green.infrastructure.cad.reader import EzdxfSceneReader
+from green.infrastructure.cad.writer import EzdxfPlanWriter
+from green.infrastructure.config.repositories import (
+    YamlLayerMapSource,
+    YamlProfileSource,
+    YamlRuleBookSource,
+    YamlSpeciesCatalog,
+)
+from green.infrastructure.convert.libredwg import LibreDwgConverter
+from green.infrastructure.convert.oda import OdaFileConverter
+from green.infrastructure.reports.artifacts import FileArtifactSink
+from green.infrastructure.storage.runs import FileSystemRunStore
+
+type Converter = LibreDwgConverter | OdaFileConverter
+
+
+@dataclass(frozen=True, slots=True)
+class Container:
+    settings: Settings
+    use_case: PlanSite
+    runs: RunService
+    store: FileSystemRunStore
+    profiles: YamlProfileSource
+    rules: YamlRuleBookSource
+    layers: YamlLayerMapSource
+    species: YamlSpeciesCatalog
+    reader: EzdxfSceneReader
+    integrity: EzdxfIntegrityChecker
+    artifacts: FileArtifactSink
+    converters: tuple[Converter, ...]
+
+
+def build_container(settings: Settings | None = None) -> Container:
+    settings = settings or Settings()
+    config = settings.config_dir
+    rules = YamlRuleBookSource(config / "acts.yaml", config / "rules.yaml")
+    layers = YamlLayerMapSource(config / "layer_map.yaml")
+    species = YamlSpeciesCatalog(config / "species.yaml")
+    profiles = YamlProfileSource(config / "profiles")
+    documents = DocumentCache()
+    reader = EzdxfSceneReader(documents=documents)
+    integrity = EzdxfIntegrityChecker()
+    artifacts = FileArtifactSink()
+    converters = _converters(settings)
+    use_case = PlanSite(
+        reader=reader,
+        converters=converters,
+        rules=rules,
+        layers=layers,
+        species=species,
+        strategy=CurbAlleyStrategy(),
+        writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
+        integrity=integrity,
+    )
+    store = FileSystemRunStore(settings.runs_dir)
+    runs = RunService(
+        store=store,
+        use_case=use_case,
+        profiles=profiles,
+        artifacts=artifacts,
+        max_parallel=settings.max_parallel_runs,
+    )
+    return Container(
+        settings=settings,
+        use_case=use_case,
+        runs=runs,
+        store=store,
+        profiles=profiles,
+        rules=rules,
+        layers=layers,
+        species=species,
+        reader=reader,
+        integrity=integrity,
+        artifacts=artifacts,
+        converters=converters,
+    )
+
+
+def _converters(settings: Settings) -> tuple[Converter, ...]:
+    oda = OdaFileConverter(binary=settings.oda_binary, timeout_s=settings.converter_timeout_s)
+    libredwg = LibreDwgConverter(
+        binary=settings.libredwg_binary, timeout_s=settings.converter_timeout_s
+    )
+    choice: dict[str, tuple[Converter, ...]] = {
+        "auto": (oda, libredwg),
+        "oda": (oda,),
+        "libredwg": (libredwg,),
+        "none": (),
+    }
+    return choice[settings.converter]
