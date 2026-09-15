@@ -18,6 +18,23 @@ distance_rules:
      citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: край тротуара и садовой дорожки"}}
   - {rule_id: R-POLE-TREE-001, object_class: pole, planting_type: tree, min_distance_m: 4.0, measure_to: axis,
      citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: мачты и опоры осветительной сети"}}
+  - {rule_id: R-STRUCT-TREE-001, object_class: structure, planting_type: tree, min_distance_m: 3.0, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подошва или внутренняя грань подпорной стенки (сооружения: парапеты, мосты, лестницы)"}}
+  - {rule_id: R-STRUCT-SHRUB-001, object_class: structure, planting_type: shrub, min_distance_m: 1.0, measure_to: edge,
+     citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подошва или внутренняя грань подпорной стенки"}}
+  # Трамвайные пути есть в данных АСУ ОДХ (3-я Парковая); строка нормы ещё не найдена, пока проектный отступ.
+  - {rule_id: R-TRAM-TREE-001, object_class: tram, planting_type: tree, min_distance_m: 5.0, measure_to: edge,
+     citation: {act_id: PROJECT, clause: "5 м от края трамвайного полотна до сверки строки в СП 42.13330 / МГСН 1.02-02", status: verified}}
+  - {rule_id: R-TRAM-SHRUB-001, object_class: tram, planting_type: shrub, min_distance_m: 3.0, measure_to: edge,
+     citation: {act_id: PROJECT, clause: "3 м от края трамвайного полотна до сверки строки в СП 42.13330 / МГСН 1.02-02", status: verified}}
+  # Охранная зона ВЛ (ТЗ: «охранные зоны ЛЭП»). Класс напряжения в чертеже не подписан: взята зона
+  # для ВЛ до 1 кВ (2 м), посадка в зоне требует согласования сетевой организации, а не запрещена.
+  - {rule_id: R-OHL-TREE-001, object_class: power_line_overhead, planting_type: tree, min_distance_m: 2.0, measure_to: axis,
+     severity: needs_approval,
+     citation: {act_id: PPRF160, clause: "п. 10 «в» Правил: посадка деревьев и кустарников в охранной зоне без письменного согласования сетевой организации запрещена; приложение: ВЛ до 1 кВ - 2 м (для 1-20 кВ - 10 м, сверить)"}}
+  - {rule_id: R-OHL-SHRUB-001, object_class: power_line_overhead, planting_type: shrub, min_distance_m: 2.0, measure_to: axis,
+     severity: needs_approval,
+     citation: {act_id: PPRF160, clause: "п. 10 «в» Правил: посадка деревьев и кустарников в охранной зоне без письменного согласования сетевой организации запрещена; приложение: ВЛ до 1 кВ - 2 м"}}
   - {rule_id: R-GAS-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 1.5, measure_to: outer_wall,
      citation: {act_id: SP42_13330_2016, clause: "табл. расстояний: подземные сети, газопровод"}}
   - {rule_id: R-GASZONE-TREE-001, object_class: utility.gas, planting_type: tree, min_distance_m: 2.0, measure_to: axis,

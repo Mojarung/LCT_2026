@@ -43,6 +43,13 @@ rules:
   - {pattern: "(?:^|[|$])(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
   - {pattern: "(?:^|[|$])ЛЭП$", object_class: power_line_overhead, confirmed: true}
   - {pattern: "Граница растительности|Леса и газоны", object_class: lawn, confirmed: true}
+  - {pattern: "(?:^|[|$])(Навесы|Павильоны|Спец сооружения)$", object_class: building, confirmed: true,
+     note: "наружная стена здания и сооружения"}
+  - {pattern: "(?:^|[|$])(Парапеты|Лестницы набережных|Мосты)$", object_class: structure, confirmed: true}
+  - {pattern: "(?:^|[|$])(Вышки|Громоотвод)$", object_class: pole, confirmed: true}
+  - {pattern: "(?:^|[|$])Выгребные ямы$", object_class: utility.sewer, confirmed: true}
+  - {pattern: "(?:^|[|$])Трубы$", object_class: utility.unknown, confirmed: true}
+  - {pattern: "(?:^|[|$])(Граница площадки|Геодезические пункты|Береговая линия)$", object_class: ignore, confirmed: true}
   - {pattern: "Горизонтали|Откосы|Ограды|(?:^|[|$])Территории$|Топографические|Пояснительные|Номер дома|Вентиляторы|Крыльца|Фонтаны|Памятники|Внутреннее заполнение|Указатель подз|Граница улицы",
      object_class: ignore, confirmed: true}
 
