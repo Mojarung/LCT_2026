@@ -49,12 +49,16 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/green/infrastructure/convert/*.py" = ["S603"]  # external converters run as subprocesses by design
 "src/green/interfaces/api/**/*.py" = ["TC001", "TC002", "TC003"]  # FastAPI resolves annotations at runtime
+"tests/**/*.py" = ["S101", "INP001", "PLR2004"]  # tests use assert, magic numbers and no __init__.py
 
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.importlinter]
 root_package = "green"
@@ -91,6 +95,7 @@ forbidden_modules = [
 [dependency-groups]
 dev = [
     "import-linter>=2.15",
+    "pytest>=9.1.1",
     "ruff>=0.16.7",
     "ty>=0.0.81",
 ]
