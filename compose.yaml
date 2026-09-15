@@ -1,0 +1,18 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: green:latest
+    ports:
+      - "8000:8000"
+    environment:
+      GREEN_MAX_PARALLEL_RUNS: "2"
+      GREEN_CORS_ORIGINS: '["http://localhost:5173"]'
+    volumes:
+      - runs:/data/runs
+      - ./dataset:/dataset:ro
+    restart: unless-stopped
+
+volumes:
+  runs:
