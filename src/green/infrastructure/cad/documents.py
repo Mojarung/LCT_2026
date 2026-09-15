@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import re
 import threading
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -83,37 +83,14 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     notes: list[str] = []
     try:
         doc, auditor = recover.readfile(path)
-    except ezdxf.DXFStructureError as error:
-        raise InputError(f"{path.name} не является корректным DXF: {error}") from error
-    except ValueError:
+    except ezdxf.DXFStructureError, ValueError:
+        # LibreDWG режет длинные строки посреди «\U+XXXX» (ValueError) и оставляет сырые
+        # переводы строк (DXFStructureError, пары «код-значение» съезжают): чиним и читаем снова.
         doc, auditor, note = _recover_repaired(path)
         notes.append(note)
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
-    doc, dropped = _normalized(doc)
-    if dropped:
-        kinds = ", ".join(f"{kind}: {count}" for kind, count in dropped.most_common(5))
-        notes.append(
-            f"{path.name}: ezdxf не сохраняет {dropped.total()} сущностей без данных ({kinds}); "
-            "проверка целостности ведётся от нормализованного исходника"
-        )
     return doc, notes
-
-
-def _normalized(doc: Drawing) -> tuple[Drawing, Counter[str]]:
-    """Круговой путь через запись ezdxf для отремонтированного чертежа.
-
-    После ремонта ezdxf при сохранении опускает атрибуты по умолчанию и отбрасывает сущности
-    без данных (REGION без ACIS после LibreDWG). Снимок исходника и результат строятся от
-    нормализованного документа, чтобы проверка целостности ловила только правки сервиса.
-    """
-    before = {e.dxf.handle: e.dxftype() for block in doc.blocks for e in block}
-    stream = io.StringIO()
-    doc.write(stream)
-    stream.seek(0)
-    normalized = ezdxf.read(stream)
-    kept = {e.dxf.handle for block in normalized.blocks for e in block}
-    return normalized, Counter(kind for handle, kind in before.items() if handle not in kept)
 
 
 def _recover_repaired(path: Path) -> tuple[Drawing, Auditor, str]:
@@ -142,6 +119,9 @@ def _join_broken_values(data: bytes) -> tuple[bytes, int]:
         if not expect_code:
             out.append(line)
             expect_code = True
+        elif not line.strip():
+            # Пустой хвост после последнего перевода строки (CRLF в конце файла) не значение.
+            out.append(line)
         elif _GROUP_CODE.match(line) or not out:
             out.append(line)
             expect_code = False

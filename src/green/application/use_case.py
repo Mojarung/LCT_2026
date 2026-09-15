@@ -104,6 +104,14 @@ class PlanSite:
             snapshot = self._writer.write(source, plan, rulebook, output)
         with watch.stage("verify"):
             integrity = self._integrity.check(snapshot, output)
+        integrity_notes: tuple[str, ...] = ()
+        if integrity.unexportable:
+            integrity_notes = (
+                (
+                    f"В исходнике {integrity.unexportable} сущностей без данных (REGION без ACIS "
+                    "после конвертации DWG): ezdxf их не сохраняет, в сверку они не входят."
+                ),
+            )
 
         return RunReport(
             run_id=request.run_id,
@@ -121,7 +129,7 @@ class PlanSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             converter=converter,
-            warnings=(*scene.warnings, *plan.warnings),
+            warnings=(*scene.warnings, *plan.warnings, *integrity_notes),
         )
 
     def _to_dxf(self, source: Path, work_dir: Path) -> tuple[Path, str | None]:
