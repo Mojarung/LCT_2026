@@ -1,0 +1,95 @@
+[project]
+name = "green"
+version = "0.1.0"
+description = "Автопроектирование озеленения улиц по нормам с учётом подземных сетей: DXF -> план посадок на отдельных слоях -> DXF"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "cyclopts>=4.25.2",
+    "ezdxf>=1.4.4",
+    "fastapi>=0.141.1",
+    "granian>=2.8.3",
+    "orjson>=3.12.0",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "shapely>=2.1.2",
+    "structlog>=26.1.0",
+]
+
+[project.scripts]
+green = "green.interfaces.cli.main:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",       # docstrings are optional in this codebase
+  "COM812",  # conflicts with the formatter
+  "CPY",     # no copyright headers
+  "TD",      # TODO format
+  "FIX",     # TODO markers are allowed
+  "RUF001",  # Cyrillic text is intentional
+  "RUF002",
+  "RUF003",
+  "EM",      # exception messages may be inline
+  "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/green/infrastructure/convert/*.py" = ["S603"]  # external converters run as subprocesses by design
+"src/green/interfaces/api/**/*.py" = ["TC001", "TC002", "TC003"]  # FastAPI resolves annotations at runtime
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.importlinter]
+root_package = "green"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Hexagonal layers: interfaces -> bootstrap -> infrastructure -> application -> domain"
+type = "layers"
+layers = [
+  "green.interfaces",
+  "green.bootstrap",
+  "green.infrastructure",
+  "green.application",
+  "green.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Core stays free of frameworks and I/O libraries"
+type = "forbidden"
+source_modules = ["green.domain", "green.application"]
+forbidden_modules = [
+  "ezdxf",
+  "fastapi",
+  "starlette",
+  "pydantic",
+  "pydantic_settings",
+  "granian",
+  "cyclopts",
+  "yaml",
+  "orjson",
+  "structlog",
+]
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+    "ruff>=0.16.7",
+    "ty>=0.0.81",
+]
