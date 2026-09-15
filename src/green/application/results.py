@@ -28,6 +28,7 @@ class SourceSnapshot:
     """Отпечатки исходных сущностей (handle -> digest), снятые до записи результата."""
 
     digests: Mapping[str, str]
+    unexportable: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,9 @@ class IntegrityReport:
     changed: tuple[str, ...]
     missing: tuple[str, ...]
     added_outside_result_layers: tuple[str, ...]
+    # Сущности исходника, которые ezdxf не экспортирует (REGION без ACIS-данных из LibreDWG):
+    # их нет и не может быть в результате, поэтому они не считаются потерянными.
+    unexportable: int = 0
 
     @property
     def ok(self) -> bool:

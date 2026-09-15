@@ -46,7 +46,8 @@ class EzdxfPlanWriter:
     def write(self, source: Path, plan: Plan, rulebook: RuleBook, target: Path) -> SourceSnapshot:
         """Пишет результат в копию исходника и возвращает отпечатки исходных сущностей до правок."""
         doc, _ = self._documents.take(source) if self._documents else load_document(source)
-        snapshot = SourceSnapshot(fingerprints(doc))
+        digests, unexportable = fingerprints(doc)
+        snapshot = SourceSnapshot(digests, unexportable)
         self._prepare(doc)
         msp = doc.modelspace()
         for placement in plan.placements:
