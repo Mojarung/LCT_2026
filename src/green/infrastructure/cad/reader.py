@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import shapely
+from ezdxf import bbox
 from ezdxf.addons import geo
 from ezdxf.path import make_path
 from shapely.geometry import LineString, Point, Polygon, shape
@@ -20,11 +21,18 @@ if TYPE_CHECKING:
 
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic, Insert
+    from ezdxf.layouts import BlockLayout
     from shapely.geometry.base import BaseGeometry
 
     from green.infrastructure.cad.documents import DocumentCache
 
 SYMBOL_BLOCK_MAX_ENTITIES = 64
+# Условный знак (люк, опора, дерево) умещается в квадрат 12 м; больше - это уже геометрия.
+SYMBOL_MAX_SIZE_M = 12.0
+# Экспорт из MicroStation (выгрузки Геотреста): каждый элемент - отдельный блок, это не символ.
+ELEMENT_BLOCK_PREFIX = "MSDELEMENTTYPE"
+# Подпись сети Геотреста: текст и стрелка-выноска. Стрелка не должна стать трубой.
+LABEL_BLOCK_PREFIX = "DIMTXT"
 SMALL_CIRCLE_RADIUS_M = 2.0
 MAX_BLOCK_DEPTH = 8
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
@@ -83,8 +91,9 @@ class _Walker:
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
+    block_sizes: dict[str, float] = field(default_factory=dict)
 
-    def visit(
+    def visit(  # noqa: PLR0913 - обход передаёт контекст родителя явно
         self,
         entity: DXFGraphic,
         *,
@@ -92,6 +101,7 @@ class _Walker:
         chain: tuple[str, ...],
         parent_handle: str,
         index: int,
+        labels_only: bool = False,
     ) -> None:
         layer = entity.dxf.get("layer", "0")
         if layer == "0" and parent_layer is not None:
@@ -102,6 +112,8 @@ class _Walker:
 
         if kind in _TEXT_ENTITIES:
             self._label(entity, ref, layer)
+        elif labels_only:
+            self.skipped[f"{kind}:label-leader"] += 1
         elif kind == "INSERT":
             self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
@@ -122,7 +134,8 @@ class _Walker:
         if block.block_record.is_xref and len(block) == 0:
             self.unresolved_xrefs.add(name)
             return
-        if len(block) <= SYMBOL_BLOCK_MAX_ENTITIES and not block.block_record.is_xref:
+        labels_only = name.upper().startswith(LABEL_BLOCK_PREFIX)
+        if not labels_only and self._is_symbol(insert, block):
             point = insert.dxf.insert
             self.features.append(
                 Feature(ref=ref, layer=layer, geometry=Point(point.x, point.y), block=name)
@@ -143,7 +156,25 @@ class _Walker:
                 chain=(*chain, name),
                 parent_handle=ref.handle,
                 index=position,
+                labels_only=labels_only,
             )
+
+    def _is_symbol(self, insert: Insert, block: BlockLayout) -> bool:
+        """Условный знак: маленький блок-не-xref, кроме элементов экспорта MicroStation."""
+        name = block.name
+        if (
+            block.block_record.is_xref
+            or len(block) > SYMBOL_BLOCK_MAX_ENTITIES
+            or name.upper().startswith(ELEMENT_BLOCK_PREFIX)
+        ):
+            return False
+        size = self.block_sizes.get(name)
+        if size is None:
+            extents = bbox.extents(block, fast=True)
+            size = max(extents.size.x, extents.size.y) if extents.has_data else 0.0
+            self.block_sizes[name] = size
+        scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
+        return size * scale <= SYMBOL_MAX_SIZE_M
 
     def _label(self, entity: DXFGraphic, ref: SourceRef, layer: str) -> None:
         text = entity.dxf.text if entity.dxftype() == "TEXT" else entity.plain_text()  # ty: ignore[unresolved-attribute]
