@@ -21,6 +21,16 @@ rules:
 
   # Генпланы проектировщиков (АПОТ, слои «ДВ_ГП_*», «_АД_*», «Борт ...»): проектные борта,
   # покрытия смежных территорий штриховками, газоны, граница работ.
+  # План покрытий «ДВ_ПП_*» (Берзарина): «X_У за счет Y» это устройство X на месте Y, класс по X;
+  # «_Р» ремонт существующего покрытия. Проверяется раньше общих правил Газон / _ПЧ / Тротуар.
+  - {pattern: "ДВ_ПП_Газон_[РУ]", object_class: lawn, confirmed: true}
+  - {pattern: "ДВ_ПП_Тип\\d+_[РУ]_?ПЧ|ДВ_ПП_Тип\\d+_Р_покрытия_ПЧ", object_class: road, confirmed: true}
+  - {pattern: "ДВ_ПП_Тип\\d+_[РУ]_?ТР|ДВ_ПП_Тип\\d+_Р ТР|ДВ_ПП_Ремонт плитки", object_class: sidewalk, confirmed: true}
+  - {pattern: "Устройство покр\\. ТЕРРАВЕЙ|покрытия детских и спортивных площадок|Восстанавливаемое плиточное|Замена а_б покрытия тротуара|конструкции тротуара",
+     object_class: sidewalk, confirmed: true, note: "твёрдое покрытие дорожек и площадок"}
+  # Колодцы и камеры на генпланах проектировщиков: «_ГП_В1/К1/ТС/Г колодцы_сущ.», «_ГП_СК СУЩ», дождеприёмники.
+  - {pattern: "колодц|колодец|Дождеприемник|СК СУЩ", object_class: utility.access, confirmed: true}
+  - {pattern: "Веншахт|Вент\\. шахта", object_class: structure, confirmed: true, note: "вентиляционные шахты метро и теплосети"}
   - {pattern: "Борт|kerb|^БР \\d", object_class: curb, confirmed: true}
   - {pattern: "СМЕЖ_ПЧ|_ПЧ$|Проезжая часть", object_class: road, confirmed: true}
   - {pattern: "СМЕЖ_ТРОТ|Тротуар|_АБ ТР", object_class: sidewalk, confirmed: true}
@@ -76,7 +86,10 @@ rules:
   - {pattern: "(?:^|[|$]|Топо_)(Парапеты|Лестницы набережных|Мосты)$", object_class: structure, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Вышки|Громоотвод)$", object_class: pole, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)Выгребные ямы$", object_class: utility.sewer, confirmed: true}
-  - {pattern: "(?:^|[|$]|Топо_)Трубы$", object_class: utility.unknown, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Трубы$|Трубы под дорогами", object_class: utility.unknown, confirmed: true}
+  - {pattern: "Железные дороги", object_class: railway, confirmed: true}
+  - {pattern: "Топливопровод", object_class: utility.unknown, confirmed: true,
+     note: "продуктопровод: отдельной строки нормы нет, fail-closed наибольший отступ"}
   - {pattern: "(?:^|[|$]|Топо_)(Граница площадки|Геодезические пункты|Береговая линия)$", object_class: ignore, confirmed: true}
   # Барьеры карты покрытий: «Граница улицы» это граница покрытий с подписями материала («А», «Ц», «ПЛ»).
   - {pattern: "Граница улицы", object_class: pavement_edge, confirmed: true}
@@ -86,6 +99,9 @@ rules:
 
   # Геотрест kl и brd.
   - {pattern: "Красные линии", object_class: ignore, confirmed: true}
+  # Слой вставки привязанных XREF в генпланах проектировщиков: наследуется рамками, штриховками
+  # и линиями листов kl/brd, лежащими на слое «0» внутри выгрузки (Берзарина: 2 722 объекта).
+  - {pattern: "^0_геоподоснов", object_class: ignore, confirmed: true}
   - {pattern: "Граница заказа", object_class: work_boundary, confirmed: true}
   - {pattern: "Координатные кресты|(?:^|[|$])Рамки$|Подписи рамок", object_class: ignore, confirmed: true}
   - {pattern: "^(0|Defpoints)$", object_class: ignore, confirmed: true}

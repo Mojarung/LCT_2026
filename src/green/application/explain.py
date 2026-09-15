@@ -32,6 +32,7 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.ROAD: "края проезжей части",
     ObjectClass.SIDEWALK: "края тротуара",
     ObjectClass.TRAM: "трамвайных путей",
+    ObjectClass.RAILWAY: "железнодорожных путей",
     ObjectClass.BUILDING: "наружной стены здания",
     ObjectClass.STRUCTURE: "сооружения",
     ObjectClass.EXISTING_TREE: "существующего дерева",
