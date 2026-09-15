@@ -6,7 +6,7 @@
 
 Не «сдать минимум», а закрыть ТЗ целиком, включая желательное и бонус. MVP допустим только как **тонкий вертикальный срез той же архитектуры** (промежуточная сдача), который потом наращивается, а не переписывается. Правило проверки любого решения: «когда будем делать план-максимум, это придётся переделывать?» — если да, делаем сразу правильно.
 
-Как это обеспечивается (спека `docs/plans/2026-09-15-design.md`, архитектура — `docs/architecture.md`):
+Как это обеспечивается (целевая спека `docs/spec.md`, текущая архитектура — `docs/architecture.md`, оперативный план Кирилла — `docs/plan.md`):
 - Гексагональное ядро `green.domain` + `green.application` без фреймворков (контракт import-linter); CLI, HTTP API и будущий веб — тонкие обёртки над одним кодом.
 - Нормы как данные (`config/rules.yaml`, `config/acts.yaml`): `rule_id` стабилен, цитата и пункт меняются при смене редакции; объяснения строятся только из трассы правил, без LLM.
 - Стратегии размещения за портом `PlacementStrategy`: жадная аллея вдоль борта сегодня, «заполнение газона» и CP-SAT завтра, тот же порт.
@@ -27,14 +27,14 @@ src/green/
 config/            acts.yaml, rules.yaml (34 правила), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml, profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
-tools/             dwg_scan.py, dwg_summary.py (Кирилл); libredwg/ — win64-бинарники, в git не идут
-scripts/           extract_street.py, research/ — наша разведка датасета и проверка эталонов (черновики)
+tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, research/ — наша разведка датасета
+                   и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
 docs/
-  architecture.md, plan.md, research-review.md, notes/01..06   заметки Кирилла: решения, проблемы, замеры, план
-  DATA.md, RESEARCH.md, plans/2026-09-15-design.md             наши: карта данных, разбор форматов, спека
-  case/            ТЗ (pdf + txt) — только локально, в git не идёт (документы заказчика не коммитим)
-data/              датасет и конвертированные DXF (наша машина), в git не идёт. У Кирилла тот же датасет в dataset/
-ТЗ/research.md     внешний ресерч, разобран в docs/research-review.md
+  architecture.md, plan.md, research-review.md   архитектура, оперативный план и разбор ресерча (Кирилл)
+  spec.md                                        целевая спецификация «план-максимум» (наша)
+  notes/01..06 (Кирилл), notes/07-dataset-map.md, notes/08-berzarina-layers-and-offsets.md (наши)
+dataset/           датасет и конвертированные DXF, в git не идёт; compose монтирует ./dataset в /dataset
+ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
 Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green serve` (Swagger на `/docs`), `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
@@ -46,7 +46,7 @@ data/              датасет и конвертированные DXF (на�
 - Датасет и ТЗ в git не кладём. Результаты прогонов — `runs/`, `out/` (игнорируются).
 - Windows-грабли: `PYTHONIOENCODING=utf-8` для кириллицы в консоли; Git Bash переписывает аргументы с двоеточием (`origin/main:.gitignore`) — `MSYS_NO_PATHCONV=1`.
 
-## Условия сдачи (из ТЗ ДПиООС, полный текст — `docs/case/tz_dpioos_2026.txt`, локально)
+## Условия сдачи (из ТЗ ДПиООС, полный текст — `ТЗ/tz_dpioos_2026.txt`, локально)
 
 Целевая среда проверки — НЕ машина разработчика:
 - **ОС: МосТех.ОС** (Linux x86-64, по среде близка к Ubuntu). Windows не является целевой ОС. Разработка на Ubuntu-совместимом Linux допустима.
@@ -68,6 +68,6 @@ data/              датасет и конвертированные DXF (на�
 
 - Нормы: ни одно правило не цитирует 743-ПП и 623-ПП, verified только проектные параметры, СП 42 надо переносить на редакцию 2026 с пунктами и цитатами.
 - Одна стратегия (аллея вдоль борта), один вид на прогон; эталон Олимпийской деревни сажает группами во дворах — нужны «заполнение газона» и CP-SAT.
-- Тестов нет (только линтеры). Нормоконтроль эталонов — прототип в `scripts/research/` (Берзарина: 306 нарушений), переносить в `green audit`.
+- Тестов нет (только линтеры). Нормоконтроль эталонов — прототип в `tools/research/` (Берзарина: 306 нарушений), переносить в `green audit`.
 - ezdxf на генплане 309 тыс. сущностей: чтение+запись больше двух минут.
 - LibreDWG: в Docker собирается стабильная 0.14 и работает; на Windows-сборке 0.14 ezdxf не открывал полученный DXF, помог pre-release 0.14.8597 (`tools/libredwg/`). Геометрия подосновы лежит внутри привязанных xref (`$0$`), блоки `DIMTXT` — подписи со стрелками, а не сети.

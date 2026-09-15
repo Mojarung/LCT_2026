@@ -14,11 +14,10 @@ dist/
 
 # Data of the pilot and customer documents: never commit
 dataset/
-data/
 ТЗ/*.pdf
-docs/case/
+ТЗ/*.txt
 
-# Local binaries (LibreDWG win64 for DWG conversion)
+# Local binaries (LibreDWG win64 for DWG conversion on Windows)
 tools/libredwg/
 
 # Runtime artifacts

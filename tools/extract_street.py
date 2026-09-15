@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ZIP = ROOT / "data" / "Датасет" / "Пилотный проект 20 улиц.zip"
+ZIP = ROOT / "dataset" / "Датасет" / "Пилотный проект 20 улиц.zip"
 OUT = ROOT / "data" / "streets"
 SKIP_EXT = (".jpg", ".jpeg", ".heic", ".png", ".mp4")
 
