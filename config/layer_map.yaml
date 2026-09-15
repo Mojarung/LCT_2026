@@ -6,8 +6,32 @@
 version: 1
 rules:
   # Блоки-символы: определяются по имени блока раньше, чем по слою.
-  - {pattern: "^(люк|решетка)$", target: block, object_class: utility.access, confirmed: true}
+  - {pattern: "^(люк|решетка)$|^РСО_Люк_", target: block, object_class: utility.access, confirmed: true}
   - {pattern: "опор[аы].*(освещени|контактн)|^фонарь$|^светофор$", target: block, object_class: pole, confirmed: true}
+
+  # Оформление и служебные слои любых чертежей: размеры, выноски, рамки, штампы условных знаков,
+  # трассировка PDF, разбивочные сетки. «Условные_штампы» Геотреста: до миллиона отрезков легенды.
+  - {pattern: "Условн\\w*_штампы|^PDF ?_|Размер|Выноск|Рамк|Штамп|Разбивочная сетка|^Сетка$|Оформление|ОФОРМЛЕНИЕ|Не печать|Вспомогат|Координат|Номера|НУМДЕНДР|^point0|^line0|Вертикалк|вертикалка|Горизонтали|Отметки|GRADES|Грунты|^Layer1$|Defpoints",
+     object_class: ignore, confirmed: true}
+
+  # Дендрологические изыскания проектировщиков (ИП_*.dwg, слои «!!!_1. Дендра_*»): сохранить -
+  # блоки существующих деревьев, вырубка - деревья под снос, остальное подписи.
+  - {pattern: "Дендра_сохранить", object_class: existing_tree, confirmed: true}
+  - {pattern: "Дендра_|Дендро\\w* Выноски|Дендроплан \\(существующие", object_class: ignore, confirmed: true}
+
+  # Генпланы проектировщиков (АПОТ, слои «ДВ_ГП_*», «_АД_*», «Борт ...»): проектные борта,
+  # покрытия смежных территорий штриховками, газоны, граница работ.
+  - {pattern: "Борт|kerb|^БР \\d", object_class: curb, confirmed: true}
+  - {pattern: "СМЕЖ_ПЧ|_ПЧ$|Проезжая часть", object_class: road, confirmed: true}
+  - {pattern: "СМЕЖ_ТРОТ|Тротуар|_АБ ТР", object_class: sidewalk, confirmed: true}
+  - {pattern: "Газон|ГЗН", object_class: lawn, confirmed: true}
+  - {pattern: "Граница работ", object_class: work_boundary, confirmed: true}
+  - {pattern: "Трамвайные линии", object_class: tram, confirmed: true}
+  - {pattern: "Подземный переход", object_class: structure, confirmed: true}
+  - {pattern: "_НО_Опора|Опора_КО|СУЩ\\.ОПОРА|нумерация опор", object_class: pole, confirmed: true}
+  - {pattern: "ЭН_Труб|ЭС_Футляр|Трубы НО|_КЛ 0\\.4|ЭС_КЛ", object_class: utility.power_cable, confirmed: true}
+  - {pattern: "Колодцы Ремонт", object_class: utility.access, confirmed: true}
+  - {pattern: "_МАФ|Демонтаж|разметка|Разметка|ГП_ДК|_знаки|Знаки", object_class: ignore, confirmed: true}
 
   # АСУ ОДХ: номер классификатора в начале имени слоя.
   - {pattern: "(?:^|[|$])13\\s*Проезжие части", object_class: road, confirmed: true}
@@ -35,21 +59,21 @@ rules:
   - {pattern: "Общий коллектор|Подземные коммуникации|Трубопроводы", object_class: utility.unknown, confirmed: true,
      note: "тип не указан: fail-closed, наибольший отступ"}
 
-  # Геотрест tp: топоплан.
+  # Геотрест tp: топоплан. На 3-й Парковой слои с префиксом «Топо_», сети с «Сущ_Сети_».
   - {pattern: "Бортовой камень", object_class: curb, confirmed: true}
-  - {pattern: "(?:^|[|$])(Здания|Части зданий)$", object_class: building, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Здания|Части зданий)$", object_class: building, confirmed: true}
   - {pattern: "Отдельно стоящее дерево|Полоса деревьев", object_class: existing_tree, confirmed: true}
-  - {pattern: "(?:^|[|$])(Колодцы|Люки)$", object_class: utility.access, confirmed: true}
-  - {pattern: "(?:^|[|$])(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
-  - {pattern: "(?:^|[|$])ЛЭП$", object_class: power_line_overhead, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Колодцы|Люки|Решетки)$", object_class: utility.access, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)ЛЭП$", object_class: power_line_overhead, confirmed: true}
   - {pattern: "Граница растительности|Леса и газоны", object_class: lawn, confirmed: true}
-  - {pattern: "(?:^|[|$])(Навесы|Павильоны|Спец сооружения)$", object_class: building, confirmed: true,
+  - {pattern: "(?:^|[|$]|Топо_)(Навесы|Павильоны|Спец сооружения)$", object_class: building, confirmed: true,
      note: "наружная стена здания и сооружения"}
-  - {pattern: "(?:^|[|$])(Парапеты|Лестницы набережных|Мосты)$", object_class: structure, confirmed: true}
-  - {pattern: "(?:^|[|$])(Вышки|Громоотвод)$", object_class: pole, confirmed: true}
-  - {pattern: "(?:^|[|$])Выгребные ямы$", object_class: utility.sewer, confirmed: true}
-  - {pattern: "(?:^|[|$])Трубы$", object_class: utility.unknown, confirmed: true}
-  - {pattern: "(?:^|[|$])(Граница площадки|Геодезические пункты|Береговая линия)$", object_class: ignore, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Парапеты|Лестницы набережных|Мосты)$", object_class: structure, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Вышки|Громоотвод)$", object_class: pole, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Выгребные ямы$", object_class: utility.sewer, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Трубы$", object_class: utility.unknown, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Граница площадки|Геодезические пункты|Береговая линия)$", object_class: ignore, confirmed: true}
   - {pattern: "Горизонтали|Откосы|Ограды|(?:^|[|$])Территории$|Топографические|Пояснительные|Номер дома|Вентиляторы|Крыльца|Фонтаны|Памятники|Внутреннее заполнение|Указатель подз|Граница улицы",
      object_class: ignore, confirmed: true}
 
