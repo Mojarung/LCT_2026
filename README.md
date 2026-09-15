@@ -9,6 +9,6 @@ uv run green serve                  # OpenAPI: http://127.0.0.1:8000/docs
 docker compose up --build           # то же в контейнере, API на :8000
 ```
 
-Линтеры: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Линтеры и тесты: `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run ty check src`, `uv run lint-imports`, `uv run pytest`.
 
 Подробности: [docs/architecture.md](docs/architecture.md), разбор ресерча: [docs/research-review.md](docs/research-review.md).
