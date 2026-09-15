@@ -24,7 +24,7 @@ LCT_2026\
 │   ├── extract_street.py              достать одну улицу из большого zip
 │   ├── research\                      черновики разведки: инспекция слоёв, типы блоков, отступы vs эталон, отрисовка окна
 │   └── libredwg\                      LibreDWG 0.14.8597 win64 (dwg2dxf, dwglayers, dwgread), в git не идёт
-└── docs\notes\                        07-dataset-map.md (этот файл), 08-berzarina-layers-and-offsets.md, img\
+└── docs\notes\                        08-dataset-map.md (этот файл), 09-berzarina-layers-and-offsets.md, img\
 ```
 
 ## Пилотный проект 20 улиц (внутренний zip)

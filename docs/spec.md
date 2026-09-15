@@ -1,7 +1,7 @@
 # GreenPlan — спецификация решения кейса ДПиООС (ЛЦТ 2026)
 
 Версия 0.1, 2026-09-15. Статус: черновик на ревью команды.
-Основания: ТЗ — `ТЗ/tz_dpioos_2026.txt`; данные — `docs/notes/07-dataset-map.md`; разведка форматов и эмпирика отступов — `docs/notes/08-berzarina-layers-and-offsets.md`.
+Основания: ТЗ — `ТЗ/tz_dpioos_2026.txt`; данные — `docs/notes/08-dataset-map.md`; разведка форматов и эмпирика отступов — `docs/notes/09-berzarina-layers-and-offsets.md`.
 Рабочее имя пакета — `greenplan` (переименовать можно в любой момент, это одна строка в `pyproject.toml`).
 
 ## 1. Цель и стратегия
