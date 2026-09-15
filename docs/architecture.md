@@ -1,0 +1,116 @@
+# Архитектура green
+
+Сервис строит план посадок по нормам и подземным сетям: DXF или DWG на входе, копия исходного DXF с результатом на слоях `GREEN_*` на выходе, плюс объяснение каждой посадки и каждого отказа со ссылкой на правило, акт и пункт.
+
+## Слои кода
+
+Гексагональная архитектура, зависимости направлены только внутрь. Контракт проверяет import-linter (`uv run lint-imports`): второй контракт запрещает домену и прикладному слою импортировать ezdxf, FastAPI, pydantic, YAML и логирование.
+
+```mermaid
+flowchart LR
+    interfaces["interfaces: CLI (cyclopts), API (FastAPI)"] --> bootstrap["bootstrap: настройки, сборка"]
+    bootstrap --> infrastructure["infrastructure: ezdxf, YAML, конвертеры, хранилище, отчёты"]
+    infrastructure --> application["application: сценарий, ограничения, размещение, объяснения, порты"]
+    application --> domain["domain: объекты, нормы, план"]
+```
+
+| Пакет | Что внутри |
+|---|---|
+| `domain` | `Feature`, `SourceRef`, `DistanceRule`, `RuleBook`, `Placement`, `Rejection`, `Plan` |
+| `application` | `PlanSite` (сценарий), `ConstraintIndex` (векторные проверки), `CurbAlleyStrategy`, `explain`, `RunService`, порты |
+| `infrastructure` | `EzdxfSceneReader`, `EzdxfPlanWriter`, `EzdxfIntegrityChecker`, YAML-репозитории, `LibreDwgConverter`, `OdaFileConverter`, `FileSystemRunStore`, `FileArtifactSink` |
+| `bootstrap` | `Settings` (переменные `GREEN_*`), `build_container` |
+| `interfaces` | `green` CLI и HTTP API `/api/v1` |
+
+## Конвейер прогона
+
+```mermaid
+flowchart TD
+    A[DWG или DXF] -->|DWG| B[конвертер: ODA или LibreDWG, отдельный процесс]
+    A -->|DXF| C
+    B --> C[чтение ezdxf: геометрия Shapely, слой 0 в блоках наследует INSERT]
+    C --> D[классификация слоёв по config/layer_map.yaml]
+    D --> E[fail-closed: неизвестные линии считаются сетью неизвестного типа]
+    E --> F[диаметры из подписей d=400 привязываются к сетям того же слоя]
+    F --> G[кандидаты вдоль борта: станции по линиям и штрихам]
+    G --> H[векторная проверка всех правил: STRtree + numpy]
+    H --> I[жадный отбор: шаг аллеи, дедупликация отказов]
+    I --> J[объяснения по шаблонам из трассы правил]
+    J --> K[запись слоёв GREEN_*, блоков, атрибутов, XDATA LCT_GREEN]
+    K --> L[проверка целостности: отпечатки исходных сущностей до и после]
+    L --> M[артефакты: result.dxf, plan.json, interpretations.csv/json, run_manifest.json, verify.json]
+```
+
+Вердикт точки: `forbidden` при нарушении запрещающего правила, `unknown` или `needs_approval` при отсутствии данных о сетях (выбирает профиль), `needs_approval` при нарушении правила с согласованием, иначе `allowed`.
+
+## Результат в DXF
+
+| Слой | Содержимое |
+|---|---|
+| `GREEN_TREES` | посадки с вердиктом `allowed`, блок `GREEN_TREE_<ВИД>` с кругом кроны |
+| `GREEN_TREES_APPROVAL` | посадки, требующие согласования |
+| `GREEN_REJECT` | отметки отказов `GREEN_REJECT_MARK` |
+| `GREEN_LABELS` | атрибуты NUM, SPECIES, NPA и легенда правил |
+
+XDATA `LCT_GREEN` на каждой вставке: id решения, вердикт, список rule_id. Исходные сущности, слои, блоки и стили не меняются, это проверяет `verify.json`.
+
+## Стек (версии проверены 15.09.2026)
+
+| Компонент | Версия | Зачем |
+|---|---|---|
+| Python | 3.14 (uv-managed) | среда выполнения |
+| uv | 0.12.15 | зависимости, lock, запуск |
+| ezdxf | 1.4.4 | чтение и запись DXF |
+| Shapely / GEOS | 2.1.2 / 3.13 | геометрия, STRtree |
+| numpy | 2.5 | векторные проверки |
+| FastAPI / Starlette | 0.141.1 / 1.6.0 | HTTP API, OpenAPI |
+| Granian | 2.8.3 | ASGI-сервер |
+| pydantic / pydantic-settings | 2.13.5 / 2.15.0 | схемы конфигов и API |
+| cyclopts | 4.25.2 | CLI |
+| LibreDWG | 0.14 | DWG -> DXF по умолчанию (GPLv3, отдельный процесс) |
+| ODA File Converter | 27.1 | DWG -> DXF по выбору, ставится при сборке образа |
+| ruff / ty / import-linter | 0.16.7 / 0.0.81 / 2.15 | линтеры |
+
+## Запуск
+
+```bash
+uv sync
+uv run green inspect путь/к/файлу.dxf
+uv run green run путь/к/файлу.dxf --profile strict --set spacing_m=6
+uv run green verify исходный.dxf out/<run_id>/result.dxf
+uv run green serve --port 8000        # OpenAPI: http://127.0.0.1:8000/docs
+
+docker compose up --build             # API на :8000, датасет смонтирован в /dataset
+```
+
+Профили лежат в `config/profiles`: `strict` (нет сетей в чертеже - посадок нет), `no_utilities` (для выгрузки АСУ ОДХ, посадки с согласованием), `shrubs`.
+
+## API для будущего клиента
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/api/v1/health` | живость |
+| GET | `/api/v1/meta` | профили, виды, слои результата, число сверенных правил, доступные конвертеры |
+| POST | `/api/v1/runs` | загрузка DXF/DWG (multipart: `file`, `profile`, `overrides` JSON), ответ 202 и `Location` |
+| GET | `/api/v1/runs` | последние прогоны |
+| GET | `/api/v1/runs/{id}` | статус, сводка, ссылки на артефакты |
+| GET | `/api/v1/runs/{id}/artifacts/{name}` | скачать артефакт |
+
+Ошибки в формате RFC 9457 (`application/problem+json`). CORS включается переменной `GREEN_CORS_ORIGINS`.
+
+## Замеры на данных пилота
+
+| Вход | Сущностей | Посадок | Отказов | Время |
+|---|---|---|---|---|
+| АСУ ОДХ 3-й Парковой, профиль `no_utilities` | 2 200 | 1 (с согласованием) | 259 | 5 с |
+| Генплан Олимпийской деревни из выгрузок заказа 25_03117 (tp + up + pp + brd), `strict` | 309 000 | 1 171 | 2 000 (лимит) | 151 с |
+
+Во втором прогоне основные причины отказов: силовые кабели, существующие деревья, опоры, здания, водосток и водопровод. Проверка целостности подтвердила 507 532 исходных сущности без изменений. Время уходит в основном на разбор и запись DXF ezdxf (чтение 37 с, запись 43 с, повторное чтение для проверки 51 с).
+
+## Ограничения и следующие шаги
+
+- Внешние ссылки eTransmit пока склеиваются вне сервиса. Нужен шаг ingest: регистронезависимый поиск XREF в пакете, конвертация каждой ссылки и `ezdxf.xref.load_modelspace`.
+- Значения отступов взяты из СП 42.13330.2016 и помечены `unverified`. Нужно сверить с текстом СП 42.13330.2026 и заполнить дословные цитаты.
+- Выгрузка АСУ ОДХ почти целиком замощена: для неё нужен режим посадки в приствольных решётках в тротуаре с проверкой свободной ширины прохода.
+- Жадную аллею дополнит стратегия на OR-Tools CP-SAT через тот же порт `PlacementStrategy`.
+- Для очень больших чертежей можно ускорить проверку целостности, если сравнивать отпечатки в памяти без повторного чтения файла.
