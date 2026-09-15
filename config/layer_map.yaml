@@ -30,7 +30,12 @@ rules:
   - {pattern: "Подземный переход", object_class: structure, confirmed: true}
   - {pattern: "_НО_Опора|Опора_КО|СУЩ\\.ОПОРА|нумерация опор", object_class: pole, confirmed: true}
   - {pattern: "ЭН_Труб|ЭС_Футляр|Трубы НО|_КЛ 0\\.4|ЭС_КЛ", object_class: utility.power_cable, confirmed: true}
-  - {pattern: "Колодцы Ремонт", object_class: utility.access, confirmed: true}
+  - {pattern: "Колодцы Ремонт|колодцы_сущ|_СК СУЩ", object_class: utility.access, confirmed: true,
+     note: "Берзарина, link_Люки: колодцы В1, К1, ТС, Г и смотровые"}
+  # Новые покрытия проектировщика по типам ремонта (Берзарина, «Покрытия — Новые»): ПЧ - проезжая
+  # часть, ТР - тротуар, ПЛ - плитка. Уширение ПЧ за счёт тротуара - это уже проезжая часть.
+  - {pattern: "ДВ_ПП_.*(?:^|[_ ])ПЧ(?:[_ ]|$)", object_class: road, confirmed: true}
+  - {pattern: "ДВ_ПП_.*(?:(?:^|[_ ])ТР(?:[_ ]|$)|плитки|ТЕРРАВЕЙ)", object_class: sidewalk, confirmed: true}
   - {pattern: "_МАФ|Демонтаж|разметка|Разметка|ГП_ДК|_знаки|Знаки", object_class: ignore, confirmed: true}
 
   # АСУ ОДХ: номер классификатора в начале имени слоя.
