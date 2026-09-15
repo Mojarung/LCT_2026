@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from green.application.placement import CurbAlleyStrategy
+from green.application.placement import GreedyPlantingStrategy
 from green.application.runs import RunService
 from green.application.use_case import PlanSite
 from green.bootstrap.settings import Settings
@@ -60,7 +60,7 @@ def build_container(settings: Settings | None = None) -> Container:
         rules=rules,
         layers=layers,
         species=species,
-        strategy=CurbAlleyStrategy(),
+        strategy=GreedyPlantingStrategy(),
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
     )

@@ -9,6 +9,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
 import orjson
+import shapely
 
 from green.domain.planting import Placement
 
@@ -59,6 +60,7 @@ class FileArtifactSink:
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
+            "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
         }
 
 
@@ -161,6 +163,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "x": p.x,
                 "y": p.y,
                 "verdict": p.verdict.value,
+                "notes": list(p.notes),
                 "explanation": texts.get(p.placement_id, ""),
                 "checks": [_check(c) for c in p.checks],
             }
@@ -180,6 +183,22 @@ def _plan(report: RunReport) -> dict[str, Any]:
             for r in plan.rejections
         ],
         "warnings": list(report.warnings),
+    }
+
+
+def _zones(plan: Plan) -> dict[str, Any]:
+    """Зоны допустимости в GeoJSON в координатах чертежа (метры, без геопривязки)."""
+    return {
+        "type": "FeatureCollection",
+        "crs_note": "координаты чертежа в метрах, не WGS84",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"verdict": zone.verdict.value, "area_m2": round(zone.area_m2)},
+                "geometry": orjson.loads(shapely.to_geojson(zone.geometry)),
+            }
+            for zone in plan.zones
+        ],
     }
 
 

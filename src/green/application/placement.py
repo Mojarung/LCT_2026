@@ -1,4 +1,10 @@
-"""Стратегии размещения. По умолчанию: рядовая посадка вдоль бортового камня."""
+"""Стратегия размещения: жадный отбор кандидатов двух приёмов по одним и тем же правилам.
+
+Приём «alley»: рядовая посадка вдоль бортового камня, станции по линиям и штрихам борта,
+отступы из профиля с обеих сторон. Приём «lawn»: заполнение грунта шахматной сеткой с шагом
+посадки по карте покрытий, как сажают проектировщики во дворах. Оба приёма проверяются
+одним ConstraintIndex, посадки держат шаг между собой. Результат детерминирован.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +18,8 @@ import shapely
 
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
-from green.application.surfaces import build_surface_map
+from green.application.surfaces import Material, build_surface_map
+from green.application.zones import build_zones
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict
 
@@ -23,10 +30,14 @@ if TYPE_CHECKING:
     from shapely.geometry import LineString
 
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Species
 
+MODE_ALLEY = "alley"
+MODE_LAWN = "lawn"
+MODE_LABELS = {MODE_ALLEY: "аллея вдоль борта", MODE_LAWN: "заполнение газона"}
 _TANGENT_STEP_M = 0.5
 _SPACING_TOLERANCE = 0.95
 _Z_ORDER_BITS = 16
@@ -46,18 +57,13 @@ class PlacementStrategy(Protocol):
 @dataclass(frozen=True, slots=True)
 class _Candidate:
     station: int
-    offset_m: float
+    mode: str
     x: float
     y: float
 
 
-class CurbAlleyStrategy:
-    """Жадная аллея вдоль борта: на каждой станции первый допустимый отступ, шаг по сетке.
-
-    Борт в данных бывает сплошной линией (АСУ ОДХ) или тысячами штрихов по 0.7 м
-    (топоплан Геотреста), поэтому станции строятся и по длинным линиям, и по коротким
-    фрагментам, а шаг аллеи обеспечивает отбор. Результат детерминирован.
-    """
+class GreedyPlantingStrategy:
+    """Аллея вдоль борта, затем заполнение газона; первый допустимый вариант на станции."""
 
     def plan(
         self,
@@ -77,27 +83,43 @@ class CurbAlleyStrategy:
             index.surface = build_surface_map(
                 features, labels, index.boundary, params.surface_cell_m
             )
-        candidates = _candidates(_curb_lines(features), params)
-        points = shapely.points([(c.x, c.y) for c in candidates]) if candidates else np.array([])
-        positions = np.flatnonzero(index.plantable(points))
         selector = _Selector(species=species, params=params)
-        if len(positions):
-            selector.batch = index.evaluate(points[positions])
-            for row, position in enumerate(positions.tolist()):
-                selector.offer(candidates[position], row)
-        selector.flush()
-        stats: dict[str, int | float] = {
-            "candidates": len(candidates),
-            "candidates_plantable": len(positions),
-        }
+        stats: dict[str, int | float] = {}
+        if MODE_ALLEY in params.modes:
+            candidates = _curb_candidates(_curb_lines(features), params)
+            stats["alley_candidates"] = len(candidates)
+            stats["alley_plantable"] = _offer(index, selector, candidates)
+        if MODE_LAWN in params.modes and index.surface is not None:
+            candidates = _lawn_candidates(index.surface, params)
+            stats["lawn_candidates"] = len(candidates)
+            stats["lawn_plantable"] = _offer(index, selector, candidates)
         if index.surface is not None:
             stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
+        zones = build_zones(index, params.zone_cell_m) if params.zones else ()
+        for zone in zones:
+            stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
             warnings=_warnings(features, index, selector.rejections, params),
             stats=stats,
+            zones=zones,
         )
+
+
+def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
+    """Проверяет кандидатов пачкой и предлагает отборщику; возвращает число допустимых точек."""
+    if not candidates:
+        return 0
+    points = shapely.points([(c.x, c.y) for c in candidates])
+    positions = np.flatnonzero(index.plantable(points))
+    if not len(positions):
+        return 0
+    selector.batch = index.evaluate(points[positions])
+    for row, position in enumerate(positions.tolist()):
+        selector.offer(candidates[position], row)
+    selector.flush()
+    return len(positions)
 
 
 def _curb_lines(features: Sequence[Feature]) -> list[LineString]:
@@ -133,7 +155,8 @@ def _z_order(xy: NDArray[np.float64]) -> NDArray[np.uint64]:
     return code
 
 
-def _candidates(lines: list[LineString], params: PlanParams) -> list[_Candidate]:
+def _curb_candidates(lines: list[LineString], params: PlanParams) -> list[_Candidate]:
+    """Станции по борту с шагом посадки, на каждой все отступы профиля с обеих сторон."""
     candidates: list[_Candidate] = []
     station = 0
     for line in lines:
@@ -152,8 +175,26 @@ def _candidates(lines: list[LineString], params: PlanParams) -> list[_Candidate]
             for side in (1.0, -1.0):
                 for offset in params.curb_offsets_m:
                     x, y = base[position] + normal[position] * side * offset
-                    candidates.append(_Candidate(station, offset, float(x), float(y)))
+                    candidates.append(_Candidate(station, MODE_ALLEY, float(x), float(y)))
                 station += 1
+    return candidates
+
+
+def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
+    """Шахматная сетка с шагом посадки по ячейкам грунта; каждая точка - своя станция."""
+    stride = max(1, round(params.spacing_m / surface.cell))
+    grid = surface.grid
+    candidates: list[_Candidate] = []
+    station = 1_000_000  # станции аллеи нумеруются с нуля, здесь свой диапазон
+    for row_index, row in enumerate(range(0, grid.shape[0], stride)):
+        start = stride // 2 if row_index % 2 else 0
+        cols = np.arange(start, grid.shape[1], stride)
+        soil = cols[grid[row, cols] == Material.SOIL]
+        y = surface.origin[1] + (row + 0.5) * surface.cell
+        for col in soil.tolist():
+            x = surface.origin[0] + (col + 0.5) * surface.cell
+            candidates.append(_Candidate(station, MODE_LAWN, x, y))
+            station += 1
     return candidates
 
 
@@ -186,7 +227,7 @@ class _Grid:
 
 @dataclass(slots=True)
 class _Selector:
-    """Обходит станции по порядку: принимает первый допустимый отступ, дедуплицирует отказы."""
+    """Обходит станции по порядку: принимает первый допустимый вариант, дедуплицирует отказы."""
 
     species: Species
     params: PlanParams
@@ -216,7 +257,7 @@ class _Selector:
         if self.params.allow_needs_approval:
             ranks.append(Verdict.NEEDS_APPROVAL)
 
-        # Сначала любой отступ без замечаний, и только потом отступ с согласованием.
+        # Сначала любой вариант без замечаний, и только потом вариант с согласованием.
         for verdict in ranks:
             for candidate, row in options:
                 if batch.verdict(row) is verdict:
@@ -241,6 +282,7 @@ class _Selector:
             y=round(candidate.y, 3),
             verdict=batch.verdict(row),
             checks=batch.checks(row),
+            notes=(MODE_LABELS[candidate.mode],),
         )
 
     def _rejection(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> Rejection:
@@ -274,7 +316,11 @@ def _warnings(
             "(«А», «Ц», «ПЛ») или признаков грунта («ГАЗОН», существующие деревья). "
             "Сторона борта (проезжая часть или тротуар) не различается."
         )
-    if not any(f.object_class is ObjectClass.CURB for f in features):
+    if MODE_LAWN in params.modes and index.surface is None:
+        warnings.append(
+            "Заполнение газона пропущено: без карты покрытий сервис не знает, где грунт."
+        )
+    if MODE_ALLEY in params.modes and not any(f.object_class is ObjectClass.CURB for f in features):
         warnings.append("В чертеже не найден бортовой камень: рядовая посадка не построена.")
     if not index.has_utility_data:
         warnings.append(

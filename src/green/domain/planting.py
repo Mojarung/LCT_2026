@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from shapely.geometry.base import BaseGeometry
+
     from green.domain.norms import PlantingType
     from green.domain.objects import ObjectClass, SourceRef
 
@@ -81,12 +83,25 @@ class Explanation:
 
 
 @dataclass(frozen=True, slots=True)
+class Zone:
+    """Зона допустимости: где посадка данного типа получает данный вердикт по всем правилам."""
+
+    verdict: Verdict
+    geometry: BaseGeometry
+
+    @property
+    def area_m2(self) -> float:
+        return float(self.geometry.area)
+
+
+@dataclass(frozen=True, slots=True)
 class Plan:
     placements: tuple[Placement, ...]
     rejections: tuple[Rejection, ...]
     explanations: tuple[Explanation, ...] = field(default=())
     warnings: tuple[str, ...] = field(default=())
     stats: Mapping[str, int | float] = field(default_factory=dict)
+    zones: tuple[Zone, ...] = field(default=())
 
     @property
     def allowed_count(self) -> int:

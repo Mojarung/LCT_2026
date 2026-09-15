@@ -30,7 +30,8 @@ _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
 _PASS, _FAIL, _NO_DATA = 0, 1, 2
 _EPS_M = 1e-6
 _OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA)
-_VERDICTS = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
+VERDICT_ORDER = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
+_VERDICTS = VERDICT_ORDER
 
 
 @dataclass(frozen=True, slots=True)

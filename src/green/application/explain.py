@@ -95,9 +95,11 @@ def _placement(placement: Placement, rulebook: RuleBook) -> Explanation:
     closest = sorted(measured, key=lambda c: (c.measured_m or 0) - (c.threshold_m or 0))[:4]
     no_data = [c for c in placement.checks if c.outcome is CheckOutcome.NO_DATA][:1]
     parts = [describe_check(c, rulebook) for c in (*closest, *no_data)]
+    how = f", {', '.join(placement.notes)}" if placement.notes else ""
     text = (
-        f"Посадка №{placement.number}, {placement.species.name_ru} ({placement.species.name_lat}): "
-        f"{VERDICT_LABELS[placement.verdict]}. Ближайшие ограничения: " + "; ".join(parts) + "."
+        f"Посадка №{placement.number}, {placement.species.name_ru} "
+        f"({placement.species.name_lat}){how}: {VERDICT_LABELS[placement.verdict]}. "
+        "Ближайшие ограничения: " + "; ".join(parts) + "."
     )
     return Explanation(placement.placement_id, placement.number, "placement", text)
 

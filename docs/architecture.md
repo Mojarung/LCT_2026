@@ -17,7 +17,7 @@ flowchart LR
 | Пакет | Что внутри |
 |---|---|
 | `domain` | `Feature`, `SourceRef`, `DistanceRule`, `RuleBook`, `Placement`, `Rejection`, `Plan` |
-| `application` | `PlanSite` (сценарий), `ConstraintIndex` (векторные проверки), `CurbAlleyStrategy`, `explain`, `RunService`, порты |
+| `application` | `PlanSite` (сценарий), `ConstraintIndex` (векторные проверки), `SurfaceMap` (карта покрытий), `GreedyPlantingStrategy` (аллея и газон), `zones`, `explain`, `RunService`, порты |
 | `infrastructure` | `EzdxfSceneReader`, `EzdxfPlanWriter`, `EzdxfIntegrityChecker`, YAML-репозитории, `LibreDwgConverter`, `OdaFileConverter`, `FileSystemRunStore`, `FileArtifactSink` |
 | `bootstrap` | `Settings` (переменные `GREEN_*`), `build_container` |
 | `interfaces` | `green` CLI и HTTP API `/api/v1` |
@@ -33,14 +33,18 @@ flowchart TD
     D --> E[fail-closed: неизвестные линии считаются сетью неизвестного типа]
     E --> F[диаметры из подписей d=400 привязываются к сетям того же слоя]
     F --> S[карта покрытий: барьеры по бортам, границам покрытий, стенам, оградам; материал ближайшей подписи по пути]
-    S --> G[кандидаты вдоль борта: станции по линиям и штрихам, только на грунте]
+    S --> G[кандидаты: аллея вдоль борта и шахматная сетка по газону, только на грунте]
     G --> H[векторная проверка всех правил: STRtree + numpy]
-    H --> I[жадный отбор: шаг аллеи, дедупликация отказов]
+    H --> I[жадный отбор: шаг посадки, дедупликация отказов]
+    H --> Z[зоны допустимости: вердикт каждой ячейки грунта, полигоны]
     I --> J[объяснения по шаблонам из трассы правил]
-    J --> K[запись слоёв GREEN_*, блоков, атрибутов, XDATA LCT_GREEN]
+    J --> K[запись слоёв GREEN_*, блоков, атрибутов, XDATA LCT_GREEN, штриховок зон]
+    Z --> K
     K --> L[проверка целостности: отпечатки исходных сущностей до и после]
-    L --> M[артефакты: result.dxf, plan.json, interpretations.csv/json, run_manifest.json, verify.json]
+    L --> M[артефакты: result.dxf, plan.json, interpretations.csv/json, zones.geojson, run_manifest.json, verify.json]
 ```
+
+Пошаговое описание с параметрами и источниками каждого решения: [algorithm.md](algorithm.md).
 
 Вердикт точки: `forbidden` при нарушении запрещающего правила, `unknown` или `needs_approval` при отсутствии данных о сетях (выбирает профиль), `needs_approval` при нарушении правила с согласованием, иначе `allowed`.
 
@@ -54,6 +58,8 @@ flowchart TD
 | `GREEN_TREES_APPROVAL` | посадки, требующие согласования |
 | `GREEN_REJECT` | отметки отказов `GREEN_REJECT_MARK` |
 | `GREEN_LABELS` | атрибуты NUM, SPECIES, NPA и легенда правил |
+| `GREEN_ZONE_ALLOWED` | зона допустимости: сплошная штриховка с прозрачностью, где посадка проходит все правила |
+| `GREEN_ZONE_APPROVAL` | зона, где посадка требует согласования |
 
 XDATA `LCT_GREEN` на каждой вставке: id решения, вердикт, список rule_id. Исходные сущности, слои, блоки и стили не меняются, это проверяет `verify.json`.
 

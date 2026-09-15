@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import shapely
+from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
+
 from green.application.explain import citation_text
 from green.application.results import SourceSnapshot
 from green.domain.planting import CheckOutcome, Verdict
@@ -17,7 +20,7 @@ if TYPE_CHECKING:
     from ezdxf.layouts import Modelspace
 
     from green.domain.norms import RuleBook
-    from green.domain.planting import Placement, Plan, Rejection, Species
+    from green.domain.planting import Placement, Plan, Rejection, Species, Zone
     from green.infrastructure.cad.documents import DocumentCache
 
 TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
@@ -25,8 +28,19 @@ LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
 LAYER_REJECT = f"{RESULT_PREFIX}REJECT"
 LAYER_LABELS = f"{RESULT_PREFIX}LABELS"
+LAYER_ZONE_ALLOWED = f"{RESULT_PREFIX}ZONE_ALLOWED"
+LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
-LAYER_COLORS = {LAYER_TREES: 3, LAYER_TREES_APPROVAL: 30, LAYER_REJECT: 1, LAYER_LABELS: 7}
+LAYER_COLORS = {
+    LAYER_TREES: 3,
+    LAYER_TREES_APPROVAL: 30,
+    LAYER_REJECT: 1,
+    LAYER_LABELS: 7,
+    LAYER_ZONE_ALLOWED: 3,
+    LAYER_ZONE_APPROVAL: 30,
+}
+ZONE_LAYERS = {Verdict.ALLOWED: LAYER_ZONE_ALLOWED, Verdict.NEEDS_APPROVAL: LAYER_ZONE_APPROVAL}
+ZONE_TRANSPARENCY = 0.7
 XDATA_CHUNK = 240
 NPA_REFS = 2
 
@@ -50,6 +64,8 @@ class EzdxfPlanWriter:
         snapshot = SourceSnapshot(digests, unexportable)
         self._prepare(doc)
         msp = doc.modelspace()
+        for zone in plan.zones:
+            self._zone(msp, zone)
         for placement in plan.placements:
             self._placement(doc, msp, placement)
         for rejection in plan.rejections:
@@ -122,6 +138,26 @@ class EzdxfPlanWriter:
                 ),
             ],
         )
+
+    def _zone(self, msp: Modelspace, zone: Zone) -> None:
+        """Зона допустимости: сплошная полупрозрачная штриховка, по одной на каждый полигон."""
+        layer = ZONE_LAYERS.get(zone.verdict)
+        if layer is None:
+            return
+        color = LAYER_COLORS[layer]
+        for polygon in shapely.get_parts(zone.geometry):
+            if polygon.geom_type != "Polygon" or polygon.is_empty:
+                continue
+            hatch = msp.add_hatch(color=color, dxfattribs={"layer": layer})
+            hatch.set_solid_fill(color=color)
+            hatch.transparency = ZONE_TRANSPARENCY
+            hatch.paths.add_polyline_path(
+                list(polygon.exterior.coords), is_closed=True, flags=BOUNDARY_PATH_EXTERNAL
+            )
+            for ring in polygon.interiors:
+                hatch.paths.add_polyline_path(
+                    list(ring.coords), is_closed=True, flags=BOUNDARY_PATH_DEFAULT
+                )
 
     def _rejection(self, msp: Modelspace, rejection: Rejection) -> None:
         ref = msp.add_blockref(

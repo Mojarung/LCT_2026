@@ -11,4 +11,4 @@ docker compose up --build           # то же в контейнере, API н�
 
 Линтеры и тесты: `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run ty check src`, `uv run lint-imports`, `uv run pytest`.
 
-Подробности: [docs/architecture.md](docs/architecture.md), разбор ресерча: [docs/research-review.md](docs/research-review.md).
+Подробности: [docs/architecture.md](docs/architecture.md), алгоритм по шагам: [docs/algorithm.md](docs/algorithm.md), разбор ресерча: [docs/research-review.md](docs/research-review.md).

@@ -20,3 +20,8 @@ class PlanParams:
     max_rejections: int = 2000
     require_soil: bool = True
     surface_cell_m: float = 0.5
+    # Приёмы размещения по порядку: аллея вдоль борта, затем заполнение грунта сеткой.
+    modes: tuple[str, ...] = ("alley", "lawn")
+    # Слой зон допустимости: сетка по грунту с вердиктом каждой ячейки по всем правилам.
+    zones: bool = True
+    zone_cell_m: float = 1.0
