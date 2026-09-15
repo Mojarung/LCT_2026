@@ -24,7 +24,7 @@ src/green/
                    convert/ (LibreDWG, ODA), storage/runs, reports/artifacts, logs
   bootstrap/       Settings (переменные GREEN_*), build_container
   interfaces/      cli/main.py (`green run|inspect|verify|serve`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
-config/            acts.yaml, rules.yaml (42 правила, 33 с дословной цитатой НПА), layer_map.yaml (классификатор слоёв всех 20 улиц),
+config/            acts.yaml, rules.yaml (44 правила, 33 с дословной цитатой НПА), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml, profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, research/ — наша разведка датасета
