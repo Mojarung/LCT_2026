@@ -1,0 +1,119 @@
+"""Каталог на прогон: input/ (исходник), output/ (артефакты), status.json. Id: uuid7."""
+
+from __future__ import annotations
+
+import re
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import orjson
+
+from green.application.errors import InputError, NotFoundError
+from green.application.results import RunRecord, RunState
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+_RUN_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_ARTIFACT = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_UNSAFE = re.compile(r"[^\w.\- ]", re.UNICODE)
+ALLOWED_SUFFIXES = frozenset({".dxf", ".dwg"})
+MAX_NAME = 120
+STATUS = "status.json"
+
+
+class FileSystemRunStore:
+    def __init__(self, root: Path) -> None:
+        self._root = root
+        self._root.mkdir(parents=True, exist_ok=True)
+
+    def create(self, source_name: str, profile: str, overrides: Mapping[str, object]) -> RunRecord:
+        safe = _safe_name(source_name)
+        run_id = str(uuid.uuid7())
+        (self._root / run_id / "input").mkdir(parents=True)
+        now = datetime.now(UTC)
+        record = RunRecord(
+            run_id=run_id,
+            state=RunState.QUEUED,
+            source_name=safe,
+            profile=profile,
+            overrides=dict(overrides),
+            created_at=now,
+            updated_at=now,
+        )
+        self.save(record)
+        return record
+
+    def input_path(self, run_id: str) -> Path:
+        return self._dir(run_id) / "input" / self.get(run_id).source_name
+
+    def run_dir(self, run_id: str) -> Path:
+        return self._dir(run_id) / "output"
+
+    def get(self, run_id: str) -> RunRecord:
+        path = self._dir(run_id) / STATUS
+        if not path.is_file():
+            raise NotFoundError(f"Прогон {run_id} не найден")
+        data = orjson.loads(path.read_bytes())
+        return RunRecord(
+            run_id=data["run_id"],
+            state=RunState(data["state"]),
+            source_name=data["source_name"],
+            profile=data["profile"],
+            overrides=data["overrides"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            updated_at=datetime.fromisoformat(data["updated_at"]),
+            error=data.get("error"),
+            summary=data.get("summary", {}),
+            artifacts=tuple(data.get("artifacts", ())),
+        )
+
+    def save(self, record: RunRecord) -> None:
+        payload = {
+            "run_id": record.run_id,
+            "state": record.state.value,
+            "source_name": record.source_name,
+            "profile": record.profile,
+            "overrides": dict(record.overrides),
+            "created_at": record.created_at.isoformat(),
+            "updated_at": record.updated_at.isoformat(),
+            "error": record.error,
+            "summary": dict(record.summary),
+            "artifacts": list(record.artifacts),
+        }
+        path = self._dir(record.run_id) / STATUS
+        temporary = path.with_suffix(".tmp")
+        temporary.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+        temporary.replace(path)
+
+    def recent(self, limit: int) -> list[RunRecord]:
+        ids = sorted(
+            (p.name for p in self._root.iterdir() if _RUN_ID.fullmatch(p.name)), reverse=True
+        )
+        return [
+            self.get(run_id) for run_id in ids[:limit] if (self._root / run_id / STATUS).is_file()
+        ]
+
+    def artifact(self, run_id: str, name: str) -> Path:
+        if not _ARTIFACT.fullmatch(name) or name not in self.get(run_id).artifacts:
+            raise NotFoundError(f"Артефакт {name} не найден")
+        path = self.run_dir(run_id) / name
+        if not path.is_file():
+            raise NotFoundError(f"Артефакт {name} не найден")
+        return path
+
+    def _dir(self, run_id: str) -> Path:
+        if not _RUN_ID.fullmatch(run_id):
+            raise NotFoundError(f"Прогон {run_id} не найден")
+        return self._root / run_id
+
+
+def _safe_name(name: str) -> str:
+    base = Path(name.replace("\\", "/")).name
+    suffix = Path(base).suffix.lower()
+    if suffix not in ALLOWED_SUFFIXES:
+        raise InputError("Принимаются только файлы .dxf и .dwg")
+    stem = _UNSAFE.sub("_", Path(base).stem).strip(" .") or "drawing"
+    return f"{stem[:MAX_NAME]}{suffix}"

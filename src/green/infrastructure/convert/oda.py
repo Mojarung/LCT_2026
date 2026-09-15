@@ -1,0 +1,60 @@
+"""ODA File Converter (freeware, проприетарный): внешний процесс, под Linux через xvfb-run."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from typing import TYPE_CHECKING
+
+from green.application.errors import ConversionError
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+STDERR_TAIL = 400
+
+
+class OdaFileConverter:
+    name = "oda"
+
+    def __init__(
+        self,
+        *,
+        binary: str = "ODAFileConverter",
+        timeout_s: int = 600,
+        output_version: str = "ACAD2018",
+    ) -> None:
+        self._binary = binary
+        self._timeout = timeout_s
+        self._version = output_version
+
+    def available(self) -> bool:
+        if shutil.which(self._binary) is None:
+            return False
+        return not sys.platform.startswith("linux") or shutil.which("xvfb-run") is not None
+
+    def to_dxf(self, source: Path, workdir: Path) -> Path:
+        executable = shutil.which(self._binary)
+        if executable is None:
+            raise ConversionError(f"Не найден {self._binary}")
+        inbox, outbox = workdir / "oda_in", workdir / "oda_out"
+        inbox.mkdir(parents=True, exist_ok=True)
+        outbox.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, inbox / source.name)
+        command = [executable, str(inbox), str(outbox), self._version, "DXF", "0", "1", source.name]
+        if sys.platform.startswith("linux"):
+            command = [shutil.which("xvfb-run") or "xvfb-run", "-a", *command]
+        try:
+            completed = subprocess.run(
+                command, capture_output=True, text=True, timeout=self._timeout, check=False
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ConversionError(f"ODA File Converter не уложился в {self._timeout} с") from error
+        target = outbox / f"{source.stem}.dxf"
+        if not target.exists():
+            raise ConversionError(
+                f"ODA File Converter завершился с кодом {completed.returncode}: "
+                f"{completed.stderr[-STDERR_TAIL:]}"
+            )
+        return target
