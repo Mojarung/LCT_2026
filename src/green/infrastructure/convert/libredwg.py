@@ -30,10 +30,13 @@ class LibreDwgConverter:
             raise ConversionError(f"Не найден {self._binary}")
         target = workdir / f"{source.stem}.dxf"
         try:
+            # dwg2dxf печатает имена слоёв в кодировке чертежа (cp1251): строгий UTF-8 падает.
             completed = subprocess.run(
                 [executable, "-y", "-o", str(target), str(source)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self._timeout,
                 check=False,
             )

@@ -47,7 +47,13 @@ class OdaFileConverter:
             command = [shutil.which("xvfb-run") or "xvfb-run", "-a", *command]
         try:
             completed = subprocess.run(
-                command, capture_output=True, text=True, timeout=self._timeout, check=False
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self._timeout,
+                check=False,
             )
         except subprocess.TimeoutExpired as error:
             raise ConversionError(f"ODA File Converter не уложился в {self._timeout} с") from error
