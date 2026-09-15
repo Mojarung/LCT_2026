@@ -82,7 +82,7 @@ class CurbAlleyStrategy:
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
-            warnings=_warnings(features, index),
+            warnings=_warnings(features, index, selector.rejections, params.max_rejections),
         )
 
 
@@ -198,16 +198,18 @@ class _Selector:
         gap = self.params.spacing_m * _SPACING_TOLERANCE
         planted = self._planted = self._planted or _Grid(gap)
         refused = self._refused = self._refused or _Grid(gap)
-        accepted = {Verdict.ALLOWED}
+        ranks = [Verdict.ALLOWED]
         if self.params.allow_needs_approval:
-            accepted.add(Verdict.NEEDS_APPROVAL)
+            ranks.append(Verdict.NEEDS_APPROVAL)
 
-        for candidate, row in options:
-            if batch.verdict(row) in accepted:
-                if not planted.near(candidate.x, candidate.y):
-                    planted.add(candidate.x, candidate.y)
-                    self.placements.append(self._placement(candidate, batch, row))
-                return
+        # Сначала любой отступ без замечаний, и только потом отступ с согласованием.
+        for verdict in ranks:
+            for candidate, row in options:
+                if batch.verdict(row) is verdict:
+                    if not planted.near(candidate.x, candidate.y):
+                        planted.add(candidate.x, candidate.y)
+                        self.placements.append(self._placement(candidate, batch, row))
+                    return
         first, row = options[0]
         quiet = planted.near(first.x, first.y) or refused.near(first.x, first.y)
         if quiet or len(self.rejections) >= self.params.max_rejections:
@@ -244,7 +246,12 @@ def _stable_id(prefix: str, params: PlanParams, candidate: _Candidate) -> str:
     return f"{prefix}-{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
 
-def _warnings(features: Sequence[Feature], index: ConstraintIndex) -> tuple[str, ...]:
+def _warnings(
+    features: Sequence[Feature],
+    index: ConstraintIndex,
+    plan_rejections: Sequence[Rejection],
+    max_rejections: int,
+) -> tuple[str, ...]:
     warnings = []
     if not any(f.object_class is ObjectClass.CURB for f in features):
         warnings.append("В чертеже не найден бортовой камень: рядовая посадка не построена.")
@@ -255,4 +262,9 @@ def _warnings(features: Sequence[Feature], index: ConstraintIndex) -> tuple[str,
         )
     if index.boundary is None:
         warnings.append("Граница работ не найдена: размещение по всему чертежу.")
+    if len(plan_rejections) >= max_rejections:
+        warnings.append(
+            f"Отметок отказов больше лимита {max_rejections}: показаны только первые, "
+            "остальные кандидаты отклонены без отметки в чертеже."
+        )
     return tuple(warnings)

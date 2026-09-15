@@ -89,7 +89,11 @@ class ConstraintIndex:
         self._rules = tuple(rules)
         self._forbid = np.array([r.severity is Severity.FORBID for r in self._rules], dtype=bool)
         self._require_utility_data = require_utility_data
-        self.has_utility_data = any(cls.is_utility for cls in by_class)
+        # Линии, дополненные до «сети неизвестного типа» (fail-closed), не считаются данными
+        # о сетях: иначе нераспознанный слой скрывал бы отсутствие выгрузки коммуникаций.
+        self.has_utility_data = any(
+            cls.is_utility and cls is not ObjectClass.UTILITY_UNKNOWN for cls in by_class
+        )
         self._indexes = {
             cls: _index(tuple(by_class[cls]))
             for cls in {rule.object_class for rule in self._rules}
