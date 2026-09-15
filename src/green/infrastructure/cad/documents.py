@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import re
 import threading
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -80,7 +80,30 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
         notes.append(note)
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
+    doc, dropped = _normalized(doc)
+    if dropped:
+        kinds = ", ".join(f"{kind}: {count}" for kind, count in dropped.most_common(5))
+        notes.append(
+            f"{path.name}: ezdxf не сохраняет {dropped.total()} сущностей без данных ({kinds}); "
+            "проверка целостности ведётся от нормализованного исходника"
+        )
     return doc, notes
+
+
+def _normalized(doc: Drawing) -> tuple[Drawing, Counter[str]]:
+    """Круговой путь через запись ezdxf для отремонтированного чертежа.
+
+    После ремонта ezdxf при сохранении опускает атрибуты по умолчанию и отбрасывает сущности
+    без данных (REGION без ACIS после LibreDWG). Снимок исходника и результат строятся от
+    нормализованного документа, чтобы проверка целостности ловила только правки сервиса.
+    """
+    before = {e.dxf.handle: e.dxftype() for block in doc.blocks for e in block}
+    stream = io.StringIO()
+    doc.write(stream)
+    stream.seek(0)
+    normalized = ezdxf.read(stream)
+    kept = {e.dxf.handle for block in normalized.blocks for e in block}
+    return normalized, Counter(kind for handle, kind in before.items() if handle not in kept)
 
 
 def _recover_repaired(path: Path) -> tuple[Drawing, Auditor, str]:
