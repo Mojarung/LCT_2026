@@ -18,7 +18,7 @@ CATALOG = YamlSpeciesCatalog(CONFIG / "species.yaml")
 
 def test_catalog_entries_are_complete_and_consistent() -> None:
     species = CATALOG.all()
-    assert len(species) >= 12  # порог поднимается вместе с наполнением каталога
+    assert len(species) >= 40
     codes = [s.code for s in species]
     assert len(codes) == len(set(codes))
     for s in species:
@@ -33,10 +33,14 @@ def test_catalog_entries_are_complete_and_consistent() -> None:
 
 
 def test_invasive_species_carry_group_and_are_banned() -> None:
+    """Каталог и rules.yaml не расходятся: инвазивная пометка без правила запрета бесполезна."""
     negundo = CATALOG.get("acer_negundo")
     assert negundo.invasive_group is not None
     rulebook = YamlRuleBookSource(CONFIG / "acts.yaml", CONFIG / "rules.yaml").load()
     assert rulebook.ban_for(negundo.name_lat) is not None
+    for s in CATALOG.all():
+        banned = rulebook.ban_for(s.name_lat) is not None
+        assert banned == (s.invasive_group is not None), s.code
 
 
 def test_conifers_detected_by_family() -> None:

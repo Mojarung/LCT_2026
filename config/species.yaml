@@ -6,19 +6,25 @@
 # genus - латинский род в нижнем регистре, обязан совпадать с первым словом name_lat.
 # crown_diameter_m - крона через 10 лет для условного знака; crown_mature_m - взрослая крона,
 # по ней считается увеличение отступов (прим. к табл. 9.1 СП 42.13330.2016).
+# hardiness_zone - минимальная зона USDA, которую вид переносит; Москва 4 (4b-5a),
+# поэтому вид с зоной 5 по умолчанию отсеивается, хотя в паспортах пилота такие есть.
+# pilot_streets / pilot_count - в скольких паспортах пилота встречается род и сколько штук
+# по ведомостям; единицы в паспортах не унифицированы, величина справочная (tools/build_species_catalog.py).
 # status: verified - сверено с актом, reference - справочник, pilot - паспорта пилота, draft.
 # sources: имя поля -> источник значения; обязательны hardiness_zone и salt_tolerance.
+# Справочник по умолчанию: Колесников А.И. Декоративная дендрология. М.: Лесная пром-сть, 1974.
 version: 2
 species:
+  # --- Деревья первой величины (20 м и выше) ---
   - {code: tilia_cordata, name_ru: Липа мелколистная, name_lat: Tilia cordata, genus: tilia,
      family: Malvaceae, life_form: tree_large, height_m: 25, crown_diameter_m: 4.0,
      crown_mature_m: 12, lifespan_years: 300, growth: medium, root_type: mixed,
      hardiness_zone: 3, light: semi, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [6, 7, 9], uses: [row, group, solitaire, grate], care_level: 1,
-     status: reference,
+     pilot_streets: 4, pilot_count: 172, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               height_m: "Колесников 1974", uses: "практика московского озеленения"}}
+               uses: "практика московского озеленения", pilot_streets: "паспорта пилота"}}
 
   - {code: acer_platanoides, name_ru: Клён остролистный, name_lat: Acer platanoides, genus: acer,
      family: Sapindaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 4.0,
@@ -26,9 +32,19 @@ species:
      hardiness_zone: 4, light: semi, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 9, 10], uses: [row, group, solitaire], care_level: 1,
-     status: reference,
+     pilot_streets: 5, pilot_count: 134, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               height_m: "Колесников 1974"}}
+               pilot_streets: "паспорта пилота"}}
+
+  - {code: acer_saccharinum, name_ru: Клён сахаристый, name_lat: Acer saccharinum, genus: acer,
+     family: Sapindaceae, life_form: tree_large, height_m: 25, crown_diameter_m: 5.0,
+     crown_mature_m: 15, lifespan_years: 100, growth: fast, root_type: surface,
+     hardiness_zone: 3, light: sun, moisture: wet,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
+     decor_months: [4, 9, 10], uses: [group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 15, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "ломкая древесина, требует формовки у проезжей части"}}
 
   - {code: ulmus_laevis, name_ru: Вяз гладкий, name_lat: Ulmus laevis, genus: ulmus,
      family: Ulmaceae, life_form: tree_large, height_m: 25, crown_diameter_m: 4.5,
@@ -36,7 +52,7 @@ species:
      hardiness_zone: 3, light: sun, moisture: mesic,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
      decor_months: [9, 10], uses: [row, group, solitaire], care_level: 2,
-     status: reference,
+     pilot_streets: 1, pilot_count: 95, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "риск графиоза, требует наблюдения"}}
 
@@ -46,17 +62,119 @@ species:
      hardiness_zone: 2, light: sun, moisture: mesic,
      salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 0, allergen: 2,
      decor_months: [4, 5, 9, 10], uses: [group, solitaire, row], care_level: 1,
-     status: reference,
+     pilot_streets: 2, pilot_count: 89, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                allergen: "пыльца берёзы - основной весенний аллерген средней полосы"}}
 
+  - {code: quercus_robur, name_ru: Дуб черешчатый, name_lat: Quercus robur, genus: quercus,
+     family: Fagaceae, life_form: tree_large, height_m: 30, crown_diameter_m: 5.0,
+     crown_mature_m: 18, lifespan_years: 500, growth: slow, root_type: tap,
+     hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 0, allergen: 1,
+     decor_months: [9, 10], uses: [solitaire, group], care_level: 1,
+     pilot_streets: 1, pilot_count: 5, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               crown_mature_m: "взрослая крона более 5 м - увеличенные отступы по табл. 9.1"}}
+
+  - {code: fraxinus_excelsior, name_ru: Ясень обыкновенный, name_lat: Fraxinus excelsior,
+     genus: fraxinus, family: Oleaceae, life_form: tree_large, height_m: 30,
+     crown_diameter_m: 4.5, crown_mature_m: 14, lifespan_years: 200, growth: fast,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 2,
+     decor_months: [9, 10], uses: [row, group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 34, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "ясеневая изумрудная узкотелая златка - угроза роду в Москве"}}
+
+  - {code: aesculus_hippocastanum, name_ru: Каштан конский обыкновенный,
+     name_lat: Aesculus hippocastanum, genus: aesculus, family: Sapindaceae,
+     life_form: tree_large, height_m: 22, crown_diameter_m: 5.0, crown_mature_m: 14,
+     lifespan_years: 200, growth: medium, root_type: mixed,
+     hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
+     decor_months: [5, 9], uses: [row, solitaire, group], care_level: 3,
+     pilot_streets: 1, pilot_count: 3, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "каштановая минирующая моль требует ежегодной обработки"}}
+
+  - {code: pinus_sylvestris, name_ru: Сосна обыкновенная, name_lat: Pinus sylvestris,
+     genus: pinus, family: Pinaceae, life_form: tree_large, height_m: 30,
+     crown_diameter_m: 4.0, crown_mature_m: 10, lifespan_years: 300, growth: medium,
+     root_type: tap, hardiness_zone: 2, light: sun, moisture: dry, evergreen: true,
+     salt_tolerance: 0, gas_tolerance: 0, compaction_tolerance: 0, allergen: 1,
+     decor_months: [11, 12, 1, 2], uses: [group, solitaire], care_level: 1,
+     pilot_streets: 6, pilot_count: 2064, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               gas_tolerance: "Колесников 1974: сосна неустойчива к задымлению и реагентам"}}
+
+  - {code: picea_abies, name_ru: Ель обыкновенная, name_lat: Picea abies, genus: picea,
+     family: Pinaceae, life_form: tree_large, height_m: 30, crown_diameter_m: 3.0,
+     crown_mature_m: 8, lifespan_years: 300, growth: slow, root_type: surface,
+     hardiness_zone: 2, light: semi, moisture: mesic, evergreen: true,
+     salt_tolerance: 0, gas_tolerance: 0, compaction_tolerance: 0, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [group, solitaire, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 32, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               gas_tolerance: "Колесников 1974: ель неустойчива к задымлению"}}
+
+  - {code: picea_pungens, name_ru: Ель колючая, name_lat: Picea pungens, genus: picea,
+     family: Pinaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 3.5,
+     crown_mature_m: 7, lifespan_years: 200, growth: slow, root_type: mixed,
+     hardiness_zone: 3, light: sun, moisture: mesic, evergreen: true,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [group, solitaire], care_level: 1,
+     pilot_streets: 2, pilot_count: 27, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               gas_tolerance: "устойчивее ели обыкновенной, применяется у магистралей"}}
+
+  - {code: pseudotsuga_menziesii, name_ru: Псевдотсуга Мензиса, name_lat: Pseudotsuga menziesii,
+     genus: pseudotsuga, family: Pinaceae, life_form: tree_large, height_m: 30,
+     crown_diameter_m: 4.0, crown_mature_m: 9, lifespan_years: 300, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: semi, moisture: mesic, evergreen: true,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 0, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 9, status: draft,
+     sources: {hardiness_zone: "зона 4 только у сизых форм, уточнить по сорту",
+               salt_tolerance: "Колесников 1974"}}
+
+  - {code: populus_simonii, name_ru: Тополь Симона, name_lat: Populus simonii, genus: populus,
+     family: Salicaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 3.5,
+     crown_mature_m: 8, lifespan_years: 60, growth: fast, root_type: surface,
+     hardiness_zone: 3, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
+     decor_months: [5, 9], uses: [row, group], care_level: 2,
+     pilot_streets: 4, pilot_count: 88, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               fluff: "в посадку идут мужские экземпляры, пуха не дают (743-ПП п. 3.6.18)"}}
+
+  - {code: populus_balsamifera, name_ru: Тополь бальзамический,
+     name_lat: Populus balsamifera, genus: populus, family: Salicaceae, life_form: tree_large,
+     height_m: 25, crown_diameter_m: 4.0, crown_mature_m: 10, lifespan_years: 60,
+     growth: fast, root_type: surface, hardiness_zone: 2, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1, fluff: true,
+     decor_months: [5], uses: [group], care_level: 2,
+     pilot_streets: 4, pilot_count: 37, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               fluff: "женские экземпляры дают пух, 743-ПП п. 3.6.18"}}
+
+  - {code: salix_alba_tristis, name_ru: Ива плакучая, name_lat: Salix alba, genus: salix,
+     family: Salicaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 5.0,
+     crown_mature_m: 14, lifespan_years: 80, growth: fast, root_type: surface,
+     hardiness_zone: 3, light: sun, moisture: wet,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1, fluff: true,
+     decor_months: [4, 5, 6, 7, 8, 9, 10], uses: [solitaire, group], care_level: 2,
+     pilot_streets: 3, pilot_count: 22, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               fluff: "семенной пух, 743-ПП п. 3.6.18"}}
+
+  # --- Деревья второй величины (10-20 м) ---
   - {code: sorbus_aucuparia, name_ru: Рябина обыкновенная, name_lat: Sorbus aucuparia,
      genus: sorbus, family: Rosaceae, life_form: tree_medium, height_m: 10,
      crown_diameter_m: 3.0, crown_mature_m: 6, lifespan_years: 80, growth: medium,
      root_type: mixed, hardiness_zone: 2, light: semi, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
-     status: reference,
+     pilot_streets: 1, pilot_count: 5, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: prunus_maackii, name_ru: Черёмуха Маака, name_lat: Prunus maackii, genus: prunus,
@@ -65,9 +183,39 @@ species:
      hardiness_zone: 2, light: sun, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [1, 2, 5, 12], uses: [row, group, solitaire], care_level: 1,
-     status: reference,
+     pilot_streets: 1, pilot_count: 3, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "золотистая кора декоративна зимой"}}
+
+  - {code: prunus_padus, name_ru: Черёмуха обыкновенная, name_lat: Prunus padus, genus: prunus,
+     family: Rosaceae, life_form: tree_medium, height_m: 12, crown_diameter_m: 3.5,
+     crown_mature_m: 7, lifespan_years: 70, growth: fast, root_type: mixed,
+     hardiness_zone: 2, light: semi, moisture: wet,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
+     decor_months: [5, 9], uses: [group, solitaire], care_level: 2,
+     pilot_streets: 2, pilot_count: 26, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "повреждается черёмуховой молью"}}
+
+  - {code: tilia_platyphyllos, name_ru: Липа крупнолистная, name_lat: Tilia platyphyllos,
+     genus: tilia, family: Malvaceae, life_form: tree_large, height_m: 28,
+     crown_diameter_m: 4.5, crown_mature_m: 14, lifespan_years: 300, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: semi, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
+     decor_months: [6, 7, 9], uses: [row, group, solitaire], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  # --- Деревья третьей величины (до 10 м) ---
+  - {code: acer_ginnala, name_ru: Клён Гиннала, name_lat: Acer ginnala, genus: acer,
+     family: Sapindaceae, life_form: tree_small, height_m: 6, crown_diameter_m: 3.0,
+     crown_mature_m: 5, lifespan_years: 60, growth: medium, root_type: mixed,
+     hardiness_zone: 3, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
+     decor_months: [6, 9, 10], uses: [group, solitaire, hedge], care_level: 1,
+     pilot_streets: 1, pilot_count: 68, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               decor_months: "осенняя окраска - главный декоративный эффект"}}
 
   - {code: malus_decorative, name_ru: Яблоня декоративная, name_lat: Malus, genus: malus,
      family: Rosaceae, life_form: tree_small, height_m: 6, crown_diameter_m: 3.0,
@@ -75,28 +223,111 @@ species:
      hardiness_zone: 3, light: sun, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 9, 10], uses: [group, solitaire], care_level: 2,
-     status: draft,
+     pilot_streets: 5, pilot_count: 160, status: draft,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                name_lat: "сборная запись без сорта, уточнить по ведомости"}}
 
-  - {code: picea_abies, name_ru: Ель обыкновенная, name_lat: Picea abies, genus: picea,
-     family: Pinaceae, life_form: tree_large, height_m: 30, crown_diameter_m: 3.0,
-     crown_mature_m: 8, lifespan_years: 300, growth: slow, root_type: surface,
-     hardiness_zone: 2, light: semi, moisture: mesic, evergreen: true,
-     salt_tolerance: 0, gas_tolerance: 0, compaction_tolerance: 0, allergen: 0,
-     decor_months: [11, 12, 1, 2], uses: [group, solitaire, hedge], care_level: 1,
-     status: reference,
+  - {code: malus_niedzwetzkyana, name_ru: Яблоня Недзвецкого, name_lat: Malus niedzwetzkyana,
+     genus: malus, family: Rosaceae, life_form: tree_small, height_m: 8,
+     crown_diameter_m: 3.5, crown_mature_m: 5, lifespan_years: 50, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6, 9], uses: [row, group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 130, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               gas_tolerance: "Колесников 1974: ель неустойчива к задымлению"}}
+               decor_months: "пурпурная листва и розовое цветение"}}
 
-  - {code: syringa_meyeri, name_ru: Сирень Мейера, name_lat: Syringa meyeri, genus: syringa,
-     family: Oleaceae, life_form: shrub_medium, height_m: 1.5, crown_diameter_m: 1.2,
-     crown_mature_m: 1.5, lifespan_years: 40, growth: slow, root_type: mixed,
-     hardiness_zone: 4, light: sun, moisture: mesic,
+  - {code: crataegus_laevigata, name_ru: Боярышник обыкновенный, name_lat: Crataegus laevigata,
+     genus: crataegus, family: Rosaceae, life_form: tree_small, height_m: 6,
+     crown_diameter_m: 3.0, crown_mature_m: 4, lifespan_years: 100, growth: slow,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic, thorny: true,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6, 9], uses: [row, group, solitaire, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 860, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               thorny: "колючки - ограничение у детских площадок и путей движения"}}
+
+  - {code: prunus_virginiana, name_ru: Черёмуха виргинская, name_lat: Prunus virginiana,
+     genus: prunus, family: Rosaceae, life_form: tree_small, height_m: 7,
+     crown_diameter_m: 3.0, crown_mature_m: 5, lifespan_years: 50, growth: fast,
+     root_type: mixed, hardiness_zone: 2, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6, 7, 8, 9], uses: [group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 12, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               decor_months: "пурпурнолистные формы держат цвет весь сезон"}}
+
+  - {code: thuja_occidentalis, name_ru: Туя западная, name_lat: Thuja occidentalis,
+     genus: thuja, family: Cupressaceae, life_form: tree_small, height_m: 6,
+     crown_diameter_m: 1.5, crown_mature_m: 2, lifespan_years: 100, growth: slow,
+     root_type: mixed, hardiness_zone: 3, light: semi, moisture: mesic, evergreen: true,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [hedge, group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 4, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               salt_tolerance_note: "хвоя горит от реагентов, не ближе газона у дороги"}}
+
+  - {code: amelanchier_spicata, name_ru: Ирга колосистая, name_lat: Amelanchier spicata,
+     genus: amelanchier, family: Rosaceae, life_form: tree_small, height_m: 4,
+     crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 50, growth: fast,
+     root_type: mixed, hardiness_zone: 2, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [5, 6, 9, 10], uses: [group, hedge, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 19, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               uses: "высота до 4 м допускает посадку в охранной зоне ВЛ"}}
+
+  # --- Кустарники высокие (выше 2 м) ---
+  - {code: syringa_vulgaris, name_ru: Сирень обыкновенная, name_lat: Syringa vulgaris,
+     genus: syringa, family: Oleaceae, life_form: shrub_tall, height_m: 4,
+     crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 60, growth: medium,
+     root_type: mixed, hardiness_zone: 3, light: sun, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
-     decor_months: [5, 6, 9], uses: [group, hedge, under_lines], care_level: 2,
-     status: reference,
+     decor_months: [5, 6], uses: [group, hedge, solitaire], care_level: 2,
+     pilot_streets: 2, pilot_count: 370, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: syringa_josikaea, name_ru: Сирень венгерская, name_lat: Syringa josikaea,
+     genus: syringa, family: Oleaceae, life_form: shrub_tall, height_m: 4,
+     crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 60, growth: medium,
+     root_type: mixed, hardiness_zone: 3, light: semi, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
+     decor_months: [6], uses: [group, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 79, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               uses: "рекомендуется для живых изгородей вдоль магистралей"}}
+
+  - {code: cotoneaster_lucidus, name_ru: Кизильник блестящий, name_lat: Cotoneaster lucidus,
+     genus: cotoneaster, family: Rosaceae, life_form: shrub_tall, height_m: 2.5,
+     crown_diameter_m: 1.2, crown_mature_m: 1.5, lifespan_years: 40, growth: medium,
+     root_type: mixed, hardiness_zone: 3, light: semi, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [5, 9, 10], uses: [hedge, group, under_lines], care_level: 1,
+     pilot_streets: 6, pilot_count: 79026, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               pilot_count: "ведомости пилота, единицы не унифицированы"}}
+
+  - {code: physocarpus_opulifolius, name_ru: Пузыреплодник калинолистный,
+     name_lat: Physocarpus opulifolius, genus: physocarpus, family: Rosaceae,
+     life_form: shrub_tall, height_m: 2.5, crown_diameter_m: 1.5, crown_mature_m: 2,
+     lifespan_years: 30, growth: fast, root_type: mixed,
+     hardiness_zone: 3, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [5, 6, 7, 8, 9], uses: [hedge, group, under_lines], care_level: 1,
+     pilot_streets: 6, pilot_count: 75151, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               decor_months: "пурпурная и жёлтая листва держит цвет весь сезон"}}
+
+  - {code: hydrangea_paniculata, name_ru: Гортензия метельчатая,
+     name_lat: Hydrangea paniculata, genus: hydrangea, family: Hydrangeaceae,
+     life_form: shrub_tall, height_m: 2.5, crown_diameter_m: 1.5, crown_mature_m: 2,
+     lifespan_years: 40, growth: medium, root_type: surface,
+     hardiness_zone: 4, light: semi, moisture: wet,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 0, allergen: 0,
+     decor_months: [7, 8, 9, 10], uses: [group, solitaire, under_lines], care_level: 3,
+     pilot_streets: 6, pilot_count: 17236, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "требует полива и кислой почвы, не выносит реагентов"}}
 
   - {code: cornus_alba, name_ru: Дёрен белый, name_lat: Cornus alba, genus: cornus,
      family: Cornaceae, life_form: shrub_tall, height_m: 3, crown_diameter_m: 1.5,
@@ -104,27 +335,209 @@ species:
      hardiness_zone: 2, light: semi, moisture: any,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [1, 2, 5, 9, 10, 12], uses: [group, hedge, under_lines], care_level: 1,
-     status: reference,
+     pilot_streets: 5, pilot_count: 15949, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "красные побеги держат зимнюю декоративность"}}
 
+  - {code: cornus_sericea, name_ru: Дёрен отпрысковый, name_lat: Cornus sericea,
+     genus: cornus, family: Cornaceae, life_form: shrub_tall, height_m: 2.5,
+     crown_diameter_m: 1.5, crown_mature_m: 2, lifespan_years: 30, growth: fast,
+     root_type: surface, hardiness_zone: 2, light: semi, moisture: wet,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [1, 2, 9, 10, 12], uses: [group, hedge, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 1325, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: sorbaria_sorbifolia, name_ru: Рябинник рябинолистный,
+     name_lat: Sorbaria sorbifolia, genus: sorbaria, family: Rosaceae,
+     life_form: shrub_tall, height_m: 2.5, crown_diameter_m: 1.5, crown_mature_m: 2,
+     lifespan_years: 25, growth: fast, root_type: surface,
+     hardiness_zone: 2, light: semi, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [6, 7, 9], uses: [group, hedge, under_lines], care_level: 1,
+     invasive_group: 1, pilot_streets: 2, pilot_count: 4725, status: draft,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "даёт корневые отпрыски, нужна ограничивающая лента",
+               invasive_group: "R-INV-SORBAR-001 (369-ПП, по ресерчу, не сверено): запрет
+                 расходится с практикой - вид есть в паспортах двух улиц пилота, 4725 шт;
+                 сверить текст приложения 369-ПП до демонстрации"}}
+
+  - {code: euonymus_europaeus, name_ru: Бересклет европейский, name_lat: Euonymus europaeus,
+     genus: euonymus, family: Celastraceae, life_form: shrub_tall, height_m: 3,
+     crown_diameter_m: 1.5, crown_mature_m: 2.5, lifespan_years: 50, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: semi, moisture: mesic, toxic: true,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [9, 10], uses: [group, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 64, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               toxic: "плоды ядовиты - ограничение у детских площадок"}}
+
+  - {code: corylus_avellana, name_ru: Лещина обыкновенная, name_lat: Corylus avellana,
+     genus: corylus, family: Betulaceae, life_form: shrub_tall, height_m: 5,
+     crown_diameter_m: 2.5, crown_mature_m: 4, lifespan_years: 80, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: semi, moisture: mesic,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 2,
+     decor_months: [3, 9, 10], uses: [group, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 11, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               allergen: "ранняя пыльца, один из первых аллергенов сезона"}}
+
+  - {code: philadelphus_coronarius, name_ru: Чубушник венечный,
+     name_lat: Philadelphus coronarius, genus: philadelphus, family: Hydrangeaceae,
+     life_form: shrub_tall, height_m: 3, crown_diameter_m: 1.5, crown_mature_m: 2.5,
+     lifespan_years: 40, growth: medium, root_type: mixed,
+     hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [6, 7], uses: [group, hedge], care_level: 1,
+     pilot_streets: 2, pilot_count: 36, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: lonicera_tatarica, name_ru: Жимолость татарская, name_lat: Lonicera tatarica,
+     genus: lonicera, family: Caprifoliaceae, life_form: shrub_tall, height_m: 3,
+     crown_diameter_m: 1.5, crown_mature_m: 2.5, lifespan_years: 40, growth: fast,
+     root_type: mixed, hardiness_zone: 3, light: sun, moisture: dry,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
+     decor_months: [5, 6, 7], uses: [group, hedge], care_level: 1,
+     pilot_streets: 1, pilot_count: 58, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: pinus_mugo, name_ru: Сосна горная, name_lat: Pinus mugo, genus: pinus,
+     family: Pinaceae, life_form: shrub_tall, height_m: 3, crown_diameter_m: 2.0,
+     crown_mature_m: 3, lifespan_years: 100, growth: slow, root_type: mixed,
+     hardiness_zone: 3, light: sun, moisture: dry, evergreen: true,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
+     decor_months: [11, 12, 1, 2], uses: [group, solitaire, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 1816, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               uses: "низкая форма допустима в охранной зоне ВЛ"}}
+
+  - {code: cotinus_coggygria, name_ru: Скумпия кожевенная, name_lat: Cotinus coggygria,
+     genus: cotinus, family: Anacardiaceae, life_form: shrub_tall, height_m: 3,
+     crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 40, growth: medium,
+     root_type: mixed, hardiness_zone: 5, light: sun, moisture: dry,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [6, 7, 8, 9, 10], uses: [group, solitaire], care_level: 2,
+     pilot_streets: 1, pilot_count: 34, status: reference,
+     sources: {hardiness_zone: "зона 5: в Москве подмерзает, нужен профиль с region_hardiness_zone 5",
+               salt_tolerance: "Колесников 1974"}}
+
+  - {code: forsythia_ovata, name_ru: Форзиция яйцевидная, name_lat: Forsythia ovata,
+     genus: forsythia, family: Oleaceae, life_form: shrub_tall, height_m: 2.5,
+     crown_diameter_m: 1.5, crown_mature_m: 2, lifespan_years: 30, growth: medium,
+     root_type: mixed, hardiness_zone: 5, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [4, 5], uses: [group, hedge], care_level: 2,
+     pilot_streets: 1, pilot_count: 2388, status: reference,
+     sources: {hardiness_zone: "зона 5: цветочные почки подмерзают в Москве",
+               salt_tolerance: "Колесников 1974"}}
+
+  # --- Кустарники средние (1-2 м) ---
+  - {code: syringa_meyeri, name_ru: Сирень Мейера, name_lat: Syringa meyeri, genus: syringa,
+     family: Oleaceae, life_form: shrub_medium, height_m: 1.5, crown_diameter_m: 1.2,
+     crown_mature_m: 1.5, lifespan_years: 40, growth: slow, root_type: mixed,
+     hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
+     decor_months: [5, 6, 9], uses: [group, hedge, under_lines], care_level: 2,
+     pilot_streets: 1, pilot_count: 264, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: spiraea_vanhouttei, name_ru: Спирея Вангутта, name_lat: Spiraea vanhouttei,
+     genus: spiraea, family: Rosaceae, life_form: shrub_medium, height_m: 2.0,
+     crown_diameter_m: 1.5, crown_mature_m: 2, lifespan_years: 25, growth: fast,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6], uses: [group, hedge, under_lines], care_level: 1,
+     pilot_streets: 5, pilot_count: 16726, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: spiraea_cinerea, name_ru: Спирея серая, name_lat: Spiraea cinerea, genus: spiraea,
+     family: Rosaceae, life_form: shrub_medium, height_m: 1.8, crown_diameter_m: 1.5,
+     crown_mature_m: 1.8, lifespan_years: 25, growth: fast, root_type: mixed,
+     hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5], uses: [group, hedge, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 100, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: hydrangea_arborescens, name_ru: Гортензия древовидная,
+     name_lat: Hydrangea arborescens, genus: hydrangea, family: Hydrangeaceae,
+     life_form: shrub_medium, height_m: 1.5, crown_diameter_m: 1.2, crown_mature_m: 1.5,
+     lifespan_years: 30, growth: fast, root_type: surface,
+     hardiness_zone: 4, light: semi, moisture: wet,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 0, allergen: 0,
+     decor_months: [7, 8, 9], uses: [group, under_lines], care_level: 3,
+     pilot_streets: 1, pilot_count: 11376, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               care_level: "требует полива, чувствительна к реагентам"}}
+
+  - {code: juniperus_sabina, name_ru: Можжевельник казацкий, name_lat: Juniperus sabina,
+     genus: juniperus, family: Cupressaceae, life_form: shrub_medium, height_m: 1.5,
+     crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 60, growth: slow,
+     root_type: surface, hardiness_zone: 3, light: sun, moisture: dry, evergreen: true,
+     toxic: true, salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [group, under_lines], care_level: 1,
+     pilot_streets: 3, pilot_count: 8049, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               toxic: "побеги ядовиты - ограничение у детских площадок"}}
+
+  - {code: potentilla_fruticosa, name_ru: Лапчатка кустарниковая,
+     name_lat: Potentilla fruticosa, genus: potentilla, family: Rosaceae,
+     life_form: shrub_medium, height_m: 1.2, crown_diameter_m: 1.0, crown_mature_m: 1.2,
+     lifespan_years: 20, growth: medium, root_type: surface,
+     hardiness_zone: 2, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [6, 7, 8, 9], uses: [group, hedge, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 1119, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               decor_months: "цветёт непрерывно с июня по сентябрь"}}
+
+  - {code: weigela_florida, name_ru: Вейгела цветущая, name_lat: Weigela florida,
+     genus: weigela, family: Caprifoliaceae, life_form: shrub_medium, height_m: 2.0,
+     crown_diameter_m: 1.5, crown_mature_m: 2, lifespan_years: 25, growth: medium,
+     root_type: mixed, hardiness_zone: 5, light: sun, moisture: mesic,
+     salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6], uses: [group, under_lines], care_level: 3,
+     pilot_streets: 1, pilot_count: 334, status: reference,
+     sources: {hardiness_zone: "зона 5: в Москве требует укрытия",
+               salt_tolerance: "Колесников 1974"}}
+
+  # --- Кустарники низкие (ниже 1 м) ---
   - {code: spiraea_japonica, name_ru: Спирея японская, name_lat: Spiraea japonica,
      genus: spiraea, family: Rosaceae, life_form: shrub_low, height_m: 0.8,
      crown_diameter_m: 0.8, crown_mature_m: 1.0, lifespan_years: 20, growth: fast,
      root_type: surface, hardiness_zone: 4, light: sun, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [6, 7, 8], uses: [group, hedge, under_lines], care_level: 1,
-     status: reference,
+     pilot_streets: 3, pilot_count: 9398, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
-  # Запрещён 369-ПП: оставлен в каталоге, чтобы запрет срабатывал явно и с причиной.
+  - {code: spiraea_betulifolia, name_ru: Спирея берёзолистная,
+     name_lat: Spiraea betulifolia, genus: spiraea, family: Rosaceae, life_form: shrub_low,
+     height_m: 0.8, crown_diameter_m: 0.8, crown_mature_m: 1.0, lifespan_years: 20,
+     growth: medium, root_type: surface, hardiness_zone: 3, light: sun, moisture: mesic,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [6, 7, 9, 10], uses: [group, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 6354, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  - {code: juniperus_communis_repens, name_ru: Можжевельник обыкновенный стелющийся,
+     name_lat: Juniperus communis, genus: juniperus, family: Cupressaceae,
+     life_form: shrub_low, height_m: 0.4, crown_diameter_m: 1.0, crown_mature_m: 1.5,
+     lifespan_years: 60, growth: slow, root_type: surface,
+     hardiness_zone: 2, light: sun, moisture: dry, evergreen: true,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [11, 12, 1, 2], uses: [group, under_lines], care_level: 1,
+     pilot_streets: 1, pilot_count: 1575, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+
+  # --- Запрещённые: остаются в каталоге, чтобы запрет срабатывал явно и с причиной ---
   - {code: acer_negundo, name_ru: Клён ясенелистный, name_lat: Acer negundo, genus: acer,
      family: Sapindaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 5.0,
      crown_mature_m: 10, lifespan_years: 60, growth: fast, root_type: surface,
      hardiness_zone: 3, light: sun, moisture: any,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 2,
      invasive_group: 1, decor_months: [], uses: [], care_level: 3,
-     status: verified,
+     pilot_streets: 0, pilot_count: 0, status: verified,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                invasive_group: "369-ПП, перечень инвазивных видов (группу сверить по тексту)",
                allergen: "пыльца - известный аллерген"}}
