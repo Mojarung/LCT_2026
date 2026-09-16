@@ -22,6 +22,7 @@ tools/libredwg/
 
 # Runtime artifacts
 out/
+out-docker/
 runs/
 var/
 
