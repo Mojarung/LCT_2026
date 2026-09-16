@@ -11,7 +11,7 @@ from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
     from green.domain.norms import RuleBook, SpeciesBan
-    from green.domain.planting import Placement, Rejection, RuleCheck
+    from green.domain.planting import Placement, Reason, Rejection, RuleCheck
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.UTILITY_WATER: "водопровода",
@@ -37,6 +37,21 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.STRUCTURE: "сооружения",
     ObjectClass.EXISTING_TREE: "существующего дерева",
     ObjectClass.EXISTING_SHRUB: "существующего кустарника",
+}
+
+_FACTOR_LABELS = {
+    "site": "условия места",
+    "function": "роль в композиции",
+    "decor": "декоративность",
+    "longevity": "долговечность",
+    "care": "простота ухода",
+    "pilot": "применение в пилоте",
+}
+
+_STRUCTURE_LABELS = {
+    "row": "рядовая посадка одного вида",
+    "group": "массив одного вида",
+    "single": "одиночная посадка",
 }
 
 VERDICT_LABELS: dict[Verdict, str] = {
@@ -101,7 +116,42 @@ def _placement(placement: Placement, rulebook: RuleBook) -> Explanation:
         f"({placement.species.name_lat}){how}: {VERDICT_LABELS[placement.verdict]}. "
         "Ближайшие ограничения: " + "; ".join(parts) + "."
     )
+    text += describe_assortment(placement)
     return Explanation(placement.placement_id, placement.number, "placement", text)
+
+
+def describe_assortment(placement: Placement) -> str:
+    """Почему именно этот вид: основания с ссылками и уступившие альтернативы."""
+    info = placement.assortment
+    if info is None:
+        return ""
+    alternatives = ""
+    if info.alternatives:
+        listed = ", ".join(f"{a.name_ru} {a.percent}%" for a in info.alternatives)
+        alternatives = f" Альтернативы: {listed}."
+    if info.status == "no_species":
+        why = "; ".join(reason.text for reason in info.reasons)
+        return f" Вид не подобран: {why}; оставлен вид профиля.{alternatives}"
+    where = _STRUCTURE_LABELS.get(info.structure_kind or "", "")
+    place = f", {where}" if where else ""
+    grounds = [_reason(reason) for reason in info.reasons]
+    if info.factors:
+        # Процент должен быть проверяемым: рядом с ним стоят факторы, из которых он сложен.
+        parts = ", ".join(
+            f"{_FACTOR_LABELS.get(name, name)} {round(100 * value)}"
+            for name, value in info.factors.items()
+        )
+        grounds.append(f"оценка по факторам из 100 ({parts})")
+    said = f": {'; '.join(grounds)}" if grounds else ""
+    return f" Вид: {placement.species.name_ru} ({info.percent}%{place}){said}.{alternatives}"
+
+
+def _reason(reason: Reason) -> str:
+    if reason.kind == "norm" and reason.rule_id:
+        return f"{reason.text} ({reason.rule_id}: {reason.source})"
+    if reason.source:
+        return f"{reason.text} ({reason.source})"
+    return reason.text
 
 
 def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:

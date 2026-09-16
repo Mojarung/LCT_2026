@@ -18,7 +18,15 @@ if TYPE_CHECKING:
 
     from green.application.results import RunReport
     from green.domain.norms import RuleBook
-    from green.domain.planting import Explanation, Plan, Rejection, RuleCheck, Species
+    from green.domain.planting import (
+        AssortmentInfo,
+        AssortmentSummary,
+        Explanation,
+        Plan,
+        Rejection,
+        RuleCheck,
+        Species,
+    )
 
 CSV_COLUMNS = (
     "kind",
@@ -32,6 +40,7 @@ CSV_COLUMNS = (
     "verdict",
     "rule_id",
     "outcome",
+    "reason",
     "measured_m",
     "threshold_m",
     "object_class",
@@ -61,6 +70,10 @@ class FileArtifactSink:
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
+            "assortment.json": _write_json(
+                directory / "assortment.json",
+                _assortment_summary(report.plan.assortment_summary),
+            ),
         }
 
 
@@ -125,6 +138,39 @@ def _rows(
                 "url": act.url if act else "",
             }
         )
+    rows += _species_rows(subject, base, rulebook)
+    return rows
+
+
+def _species_rows(
+    subject: Placement | Rejection, base: dict[str, Any], rulebook: RuleBook
+) -> list[dict[str, Any]]:
+    """Строки видозависимых норм: запрет вида, отступ по роду, крона, охранная зона ВЛ."""
+    info = subject.assortment if isinstance(subject, Placement) else None
+    if info is None:
+        return []
+    rows = []
+    for reason in info.reasons:
+        if reason.kind != "norm" or not reason.rule_id:
+            continue
+        rule = rulebook.rule(reason.rule_id)
+        citation = rule.citation if rule else None
+        act = rulebook.act_of(citation) if citation else None
+        rows.append(
+            {
+                **base,
+                "rule_id": reason.rule_id,
+                "outcome": "species",
+                "reason": reason.text,
+                "object_class": getattr(getattr(rule, "object_class", None), "value", ""),
+                "act_id": citation.act_id if citation else "",
+                "act_title": act.title if act else "",
+                "clause": citation.clause if citation else "",
+                "citation_status": citation.status.value if citation else "",
+                "quote": citation.quote if citation else "",
+                "url": act.url if act else "",
+            }
+        )
     return rows
 
 
@@ -136,6 +182,47 @@ def _check(check: RuleCheck) -> dict[str, Any]:
         "threshold_m": check.threshold_m,
         "object_class": check.object_class.value if check.object_class else None,
         "nearest_ref": str(check.nearest) if check.nearest else None,
+    }
+
+
+def _assortment(info: AssortmentInfo | None) -> dict[str, Any] | None:
+    if info is None:
+        return None
+    return {
+        "status": info.status,
+        "percent": info.percent,
+        "factors": {name: round(value, 3) for name, value in info.factors.items()},
+        "structure": {"id": info.structure_id, "kind": info.structure_kind},
+        "reasons": [
+            {"kind": r.kind, "text": r.text, "rule_id": r.rule_id, "source": r.source}
+            for r in info.reasons
+        ],
+        "alternatives": [
+            {"code": a.code, "name_ru": a.name_ru, "percent": a.percent, "why_not": a.why_not}
+            for a in info.alternatives
+        ],
+    }
+
+
+def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
+    """Состав плана отдельным файлом: доли, разнообразие, сезонность и что не удалось."""
+    if summary is None:
+        return {"mode": "none", "counts": {}}
+    return {
+        "mode": summary.mode,
+        "solver": summary.solver,
+        "counts": dict(summary.counts),
+        "genus_shares": dict(summary.genus_shares),
+        "family_shares": dict(summary.family_shares),
+        "conifer_share": round(summary.conifer_share, 4),
+        "shannon": summary.shannon,
+        "decor_by_month": dict(summary.decor_by_month),
+        "no_species": summary.no_species,
+        "quota_violations": list(summary.quota_violations),
+        "existing": dict(summary.existing),
+        "rejected_by_kind": dict(summary.rejected_by_kind),
+        "rejected_by_rule": dict(summary.rejected_by_rule),
+        "notes": list(summary.notes),
     }
 
 
@@ -176,6 +263,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "verdict": p.verdict.value,
                 "notes": list(p.notes),
                 "explanation": texts.get(p.placement_id, ""),
+                "assortment": _assortment(p.assortment),
                 "checks": [_check(c) for c in p.checks],
             }
             for p in plan.placements

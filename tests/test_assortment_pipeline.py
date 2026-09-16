@@ -8,6 +8,7 @@ from pathlib import Path
 from green.application.assortment import assign_species
 from green.application.assortment.context import site_context
 from green.application.assortment.scoring import percent, score_species
+from green.application.explain import explain
 from green.application.params import PlanParams
 from green.application.placement import MODE_LABELS
 from green.domain.norms import PlantingType
@@ -155,6 +156,38 @@ def test_existing_trees_change_the_outcome() -> None:
     assert summary is not None
     assert summary.existing
     assert set(summary.counts) != chosen
+
+
+def test_explanation_names_the_species_percent_factors_and_alternatives() -> None:
+    plan = explain(assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS), RULEBOOK)
+    texts = {e.subject_id: e.text for e in plan.explanations}
+    assert len(texts) == 40
+    for placement in plan.placements:
+        info = placement.assortment
+        assert info is not None
+        text = texts[placement.placement_id]
+        assert "Вид" in text
+        if info.status == "assigned":
+            assert placement.species.name_ru in text
+            assert f"({info.percent}%" in text
+            assert "оценка по факторам" in text
+        if info.alternatives:
+            assert "Альтернативы:" in text
+            assert info.alternatives[0].name_ru in text
+
+
+def test_explanation_carries_the_rule_id_for_a_species_dependent_norm() -> None:
+    """У вида с правилом по роду в объяснении стоит идентификатор правила и цитата акта."""
+    plan = explain(assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS), RULEBOOK)
+    texts = {e.subject_id: e.text for e in plan.explanations}
+    with_rule = [
+        texts[p.placement_id]
+        for p in plan.placements
+        if p.assortment and any(r.rule_id for r in p.assortment.reasons if r.kind == "norm")
+    ]
+    assert with_rule
+    assert any("R-HEAT-TREE-00" in text for text in with_rule)
+    assert any("МГСН" in text for text in with_rule)
 
 
 def test_an_empty_plan_is_returned_untouched() -> None:
