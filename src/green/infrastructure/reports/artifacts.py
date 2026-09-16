@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from green.application.results import RunReport
     from green.domain.norms import RuleBook
-    from green.domain.planting import Explanation, Plan, Rejection, RuleCheck
+    from green.domain.planting import Explanation, Plan, Rejection, RuleCheck, Species
 
 CSV_COLUMNS = (
     "kind",
@@ -139,6 +139,17 @@ def _check(check: RuleCheck) -> dict[str, Any]:
     }
 
 
+def _species(species: Species) -> dict[str, Any]:
+    """Краткая карточка вида: остальные поля каталога лежат в config/species.yaml."""
+    return {
+        "code": species.code,
+        "name_ru": species.name_ru,
+        "name_lat": species.name_lat,
+        "crown_diameter_m": species.crown_diameter_m,
+        "life_form": species.life_form.value,
+    }
+
+
 def _source(report: RunReport) -> dict[str, Any]:
     return {
         "name": report.source_name,
@@ -159,7 +170,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "id": p.placement_id,
                 "number": p.number,
                 "planting_type": p.planting_type.value,
-                "species": asdict(p.species),
+                "species": _species(p.species),
                 "x": p.x,
                 "y": p.y,
                 "verdict": p.verdict.value,

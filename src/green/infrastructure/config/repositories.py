@@ -14,7 +14,7 @@ from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
 from green.application.params import PlanParams
 from green.domain.norms import Act, Citation, DistanceRule, Reference, RuleBook, SpeciesBan
-from green.domain.planting import Species
+from green.domain.planting import LifeForm, Species
 from green.infrastructure.config.schemas import (
     ActsFile,
     CitationModel,
@@ -22,6 +22,7 @@ from green.infrastructure.config.schemas import (
     ProfileModel,
     RulesFile,
     SpeciesFile,
+    SpeciesModel,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +48,44 @@ def _validate[T: BaseModel](model: type[T], data: object, path: Path) -> T:
         return model.model_validate(data)
     except ValidationError as error:
         raise ConfigurationError(f"{path.name}: {error}") from error
+
+
+def _species(model: SpeciesModel) -> Species:
+    """Запись каталога в доменный объект: списки становятся frozenset, life_form - перечислением."""
+    return Species(
+        code=model.code,
+        name_ru=model.name_ru,
+        name_lat=model.name_lat,
+        crown_diameter_m=model.crown_diameter_m,
+        genus=model.genus,
+        family=model.family,
+        life_form=LifeForm(model.life_form),
+        height_m=model.height_m,
+        crown_mature_m=model.crown_mature_m,
+        evergreen=model.evergreen,
+        root_type=model.root_type,
+        growth=model.growth,
+        lifespan_years=model.lifespan_years,
+        hardiness_zone=model.hardiness_zone,
+        light=model.light,
+        moisture=model.moisture,
+        salt_tolerance=model.salt_tolerance,
+        gas_tolerance=model.gas_tolerance,
+        compaction_tolerance=model.compaction_tolerance,
+        allergen=model.allergen,
+        toxic=model.toxic,
+        thorny=model.thorny,
+        fluff=model.fluff,
+        fruit_litter=model.fruit_litter,
+        invasive_group=model.invasive_group,
+        decor_months=frozenset(model.decor_months),
+        uses=frozenset(model.uses),
+        care_level=model.care_level,
+        pilot_streets=model.pilot_streets,
+        pilot_count=model.pilot_count,
+        status=model.status,
+        sources=dict(model.sources),
+    )
 
 
 def _citation(model: CitationModel) -> Citation:
@@ -136,19 +175,18 @@ class YamlLayerMapSource:
 class YamlSpeciesCatalog:
     def __init__(self, path: Path) -> None:
         self._path = path
+        self._cache: tuple[Species, ...] | None = None
 
     def all(self) -> tuple[Species, ...]:
-        data, _ = _read(self._path)
-        parsed = _validate(SpeciesFile, data, self._path)
-        return tuple(
-            Species(
-                code=s.code,
-                name_ru=s.name_ru,
-                name_lat=s.name_lat,
-                crown_diameter_m=s.crown_diameter_m,
-            )
-            for s in parsed.species
-        )
+        if self._cache is None:
+            data, _ = _read(self._path)
+            parsed = _validate(SpeciesFile, data, self._path)
+            codes = [s.code for s in parsed.species]
+            duplicates = sorted({c for c in codes if codes.count(c) > 1})
+            if duplicates:
+                raise ConfigurationError(f"Повторяются коды видов: {', '.join(duplicates)}")
+            self._cache = tuple(_species(s) for s in parsed.species)
+        return self._cache
 
     def get(self, code: str) -> Species:
         for species in self.all():

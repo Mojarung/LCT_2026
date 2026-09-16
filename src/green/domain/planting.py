@@ -28,12 +28,79 @@ class CheckOutcome(StrEnum):
     NO_DATA = "no_data"
 
 
+class LifeForm(StrEnum):
+    """Жизненная форма: определяет, куда вид вообще может быть назначен."""
+
+    TREE_LARGE = "tree_large"  # взрослая высота 20 м и выше
+    TREE_MEDIUM = "tree_medium"  # 10-20 м
+    TREE_SMALL = "tree_small"  # до 10 м
+    SHRUB_TALL = "shrub_tall"  # выше 2 м
+    SHRUB_MEDIUM = "shrub_medium"  # 1-2 м
+    SHRUB_LOW = "shrub_low"  # ниже 1 м
+    GROUNDCOVER = "groundcover"
+    PERENNIAL = "perennial"
+
+
+TREE_FORMS = frozenset({LifeForm.TREE_LARGE, LifeForm.TREE_MEDIUM, LifeForm.TREE_SMALL})
+SHRUB_FORMS = frozenset({LifeForm.SHRUB_TALL, LifeForm.SHRUB_MEDIUM, LifeForm.SHRUB_LOW})
+CONIFER_FAMILIES = frozenset({"Pinaceae", "Cupressaceae", "Taxaceae"})
+
+
 @dataclass(frozen=True, slots=True)
 class Species:
+    """Вид или сорт из ассортимента.
+
+    Первые четыре поля — то, без чего нельзя нарисовать посадку; остальные описывают
+    пригодность вида к месту и его ограничения, у каждого поля свой источник в sources
+    (имя поля -> откуда значение) и общий status: verified - сверено с актом, reference -
+    из справочника, pilot - из паспортов пилотных улиц, draft - требует проверки.
+    Эвристику нельзя выдавать за норму: статус и источник попадают в объяснение посадки.
+    """
+
     code: str
     name_ru: str
     name_lat: str
-    crown_diameter_m: float
+    crown_diameter_m: float  # крона через 10 лет, для отрисовки условного знака
+    genus: str = ""  # латинский род в нижнем регистре, как genus_of()
+    family: str = ""
+    life_form: LifeForm = LifeForm.TREE_MEDIUM
+    height_m: float = 0.0  # взрослая высота
+    crown_mature_m: float = 0.0  # диаметр взрослой кроны, для прим. к табл. 9.1 СП 42.13330
+    evergreen: bool = False
+    root_type: str = "mixed"  # surface | tap | mixed
+    growth: str = "medium"  # slow | medium | fast
+    lifespan_years: int = 0
+    hardiness_zone: int = 4  # USDA, минимальная зона, которую вид переносит
+    light: str = "sun"  # минимальная потребность: shade | semi | sun
+    moisture: str = "mesic"  # dry | mesic | wet | any
+    salt_tolerance: int = 1  # 0 - не переносит реагенты, 2 - устойчив
+    gas_tolerance: int = 1
+    compaction_tolerance: int = 1
+    allergen: int = 0  # 0 - нет, 2 - сильный аллерген
+    toxic: bool = False
+    thorny: bool = False
+    fluff: bool = False  # пух, 743-ПП п. 3.6.18
+    fruit_litter: bool = False
+    invasive_group: int | None = None  # группа по 369-ПП
+    decor_months: frozenset[int] = frozenset()  # месяцы пиковой декоративности
+    uses: frozenset[str] = frozenset()  # row | group | solitaire | hedge | under_lines | grate
+    care_level: int = 1  # 1 - минимальный уход, 3 - требовательный
+    pilot_streets: int = 0  # в скольких паспортах пилотных улиц встречается
+    pilot_count: int = 0
+    status: str = "draft"
+    sources: Mapping[str, str] = field(default_factory=dict, compare=False)
+
+    @property
+    def is_conifer(self) -> bool:
+        return self.family in CONIFER_FAMILIES
+
+    @property
+    def is_tree(self) -> bool:
+        return self.life_form in TREE_FORMS
+
+    @property
+    def is_shrub(self) -> bool:
+        return self.life_form in SHRUB_FORMS
 
 
 @dataclass(frozen=True, slots=True)
