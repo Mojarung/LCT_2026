@@ -43,6 +43,9 @@ class PlanParams:
     # auto - подбирает сервис; given - только виды из given_assortment в заданных количествах;
     # single - прежнее поведение, весь прогон одним видом species_code.
     assortment_mode: str = "auto"
+    # auto - целочисленная задача с запасным жадным путём; greedy - сразу жадный обход
+    # (быстро на очень больших планах, но квоты соблюдаются хуже).
+    assortment_solver: str = "auto"
     given_assortment: Mapping[str, int] = field(default_factory=dict)
     region_hardiness_zone: int = 4  # Москва 4b-5a; вид с зоной выше не переносит зиму
     salt_zone_m: float = 5.0  # полоса у проезжей части, где работают реагенты

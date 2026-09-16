@@ -168,6 +168,7 @@ class ProfileModel(_Strict):
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
     assortment_mode: Literal["auto", "given", "single"] = "auto"
+    assortment_solver: Literal["auto", "greedy"] = "auto"
     given_assortment: dict[str, int] = Field(default_factory=dict)
     region_hardiness_zone: int = Field(default=4, ge=1, le=9)
     salt_zone_m: float = Field(default=5.0, ge=0, le=100)
