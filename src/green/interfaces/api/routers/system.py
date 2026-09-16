@@ -20,7 +20,7 @@ def health() -> HealthOut:
 @router.get("/meta")
 def meta(container: ContainerDep) -> MetaOut:
     rulebook = container.rules.load()
-    rules = (*rulebook.distance_rules, *rulebook.species_bans)
+    rules = rulebook.all_rules
     return MetaOut(
         version=__version__,
         default_profile=container.settings.default_profile,

@@ -82,13 +82,37 @@ class Citation:
         return (self.act_id, *(ref.act_id for ref in self.related))
 
 
+class Territory(StrEnum):
+    """Тип территории по 369-ПП: от него зависит, допустима ли высадка вида группы III."""
+
+    GREEN_FUND = "green_fund"  # иные территории зелёного фонда (улицы, дворы, скверы)
+    PROTECTED_GREEN = "protected_green"  # особо охраняемые зелёные территории
+    NATURAL = "natural"  # природные территории
+    OUTSIDE_GREEN_FUND = "outside_green_fund"
+
+
+class InvasiveDecision(StrEnum):
+    FORBIDDEN = "forbidden"
+    CONDITIONAL = "conditional"  # допускается при выполнении условия акта
+
+
+class RestrictionKind(StrEnum):
+    """Основания 743-ПП п. 3.6.18: какие свойства вида делают посадку в городе недопустимой."""
+
+    FEMALE_FLUFF = "female_fluff"  # женские экземпляры тополей и других растений с пухом
+    FRUIT_LITTER = "fruit_litter"  # засоряют территорию во время плодоношения
+    MASS_ALLERGEN = "mass_allergen"  # массовые аллергические реакции во время цветения
+
+
 @dataclass(frozen=True, slots=True)
 class DistanceRule:
     """Минимальное расстояние от посадки данного типа до объекта данного класса.
 
     genera ограничивает правило родами растений (латинское имя рода в нижнем регистре),
     как в МГСН 1.02-02 п. 4.2.8: у теплотрасс липа и клён не ближе 2 м, берёза не ближе 3-4 м.
-    Пустое множество означает правило для любого вида.
+    Пустое множество означает правило для любого вида. min_crown_m ограничивает правило видами
+    с взрослой кроной шире этого значения (743-ПП, прим. 3 к табл. 3.6.1: широкая крона не
+    ближе 10 м от здания); пока вид не выбран, такое правило не применяется.
     """
 
     rule_id: str
@@ -99,9 +123,17 @@ class DistanceRule:
     severity: Severity
     citation: Citation
     genera: frozenset[str] = field(default_factory=frozenset)
+    min_crown_m: float | None = None
 
-    def applies_to(self, planting_type: PlantingType, species_lat: str | None = None) -> bool:
+    def applies_to(
+        self,
+        planting_type: PlantingType,
+        species_lat: str | None = None,
+        crown_m: float | None = None,
+    ) -> bool:
         if self.planting_type is not planting_type:
+            return False
+        if self.min_crown_m is not None and (crown_m is None or crown_m <= self.min_crown_m):
             return False
         if not self.genera:
             return True
@@ -109,12 +141,54 @@ class DistanceRule:
 
 
 @dataclass(frozen=True, slots=True)
-class SpeciesBan:
-    """Запрет вида в ассортименте (например, инвазивные виды)."""
+class InvasiveSpecies:
+    """Вид из перечня инвазивных растений 369-ПП (приложение 1) с номером группы.
+
+    species_lat из одного слова означает весь род («Reynoutria ssp.» в перечне).
+    """
 
     rule_id: str
     species_lat: str
+    group: int
     citation: Citation
+
+    def matches(self, species_lat: str) -> bool:
+        listed = self.species_lat.casefold().strip()
+        if " " not in listed:
+            return genus_of(species_lat) == listed
+        return species_lat.casefold().strip() == listed
+
+
+@dataclass(frozen=True, slots=True)
+class InvasiveGroupRule:
+    """Порядок 369-ПП (приложение 2) для группы: где высадка запрещена, где допускается с условием.
+
+    Территория, не названная ни в одном списке, считается запрещённой: акт запрещает высадку
+    инвазивных растений в городе (п. 2.4), исключения перечислены явно.
+    """
+
+    rule_id: str
+    group: int
+    conditional_on: frozenset[Territory]
+    condition: str
+    citation: Citation
+
+    def decision(self, territory: Territory) -> InvasiveDecision:
+        if territory in self.conditional_on:
+            return InvasiveDecision.CONDITIONAL
+        return InvasiveDecision.FORBIDDEN
+
+
+@dataclass(frozen=True, slots=True)
+class SpeciesRestriction:
+    """Запрет вида по его свойству, а не по названию (743-ПП п. 3.6.18)."""
+
+    rule_id: str
+    kind: RestrictionKind
+    citation: Citation
+
+
+type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,13 +197,29 @@ class RuleBook:
 
     acts: Mapping[str, Act]
     distance_rules: tuple[DistanceRule, ...]
-    species_bans: tuple[SpeciesBan, ...]
     fingerprint: str
+    invasive_species: tuple[InvasiveSpecies, ...] = ()
+    invasive_groups: tuple[InvasiveGroupRule, ...] = ()
+    species_restrictions: tuple[SpeciesRestriction, ...] = ()
+
+    @property
+    def all_rules(self) -> tuple[AnyRule, ...]:
+        return (
+            *self.distance_rules,
+            *self.invasive_species,
+            *self.invasive_groups,
+            *self.species_restrictions,
+        )
 
     def distance_rules_for(
-        self, planting_type: PlantingType, species_lat: str | None = None
+        self,
+        planting_type: PlantingType,
+        species_lat: str | None = None,
+        crown_m: float | None = None,
     ) -> tuple[DistanceRule, ...]:
-        return tuple(r for r in self.distance_rules if r.applies_to(planting_type, species_lat))
+        return tuple(
+            r for r in self.distance_rules if r.applies_to(planting_type, species_lat, crown_m)
+        )
 
     def act_of(self, citation: Citation) -> Act | None:
         return self.acts.get(citation.act_id)
@@ -138,18 +228,20 @@ class RuleBook:
         act = self.acts.get(act_id)
         return act.label if act is not None else act_id
 
-    def rule(self, rule_id: str) -> DistanceRule | SpeciesBan | None:
-        for rule in (*self.distance_rules, *self.species_bans):
+    def rule(self, rule_id: str) -> AnyRule | None:
+        for rule in self.all_rules:
             if rule.rule_id == rule_id:
                 return rule
         return None
 
-    def ban_for(self, species_lat: str) -> SpeciesBan | None:
-        normalized = species_lat.casefold().strip()
-        for ban in self.species_bans:
-            if ban.species_lat.casefold() == normalized:
-                return ban
-        return None
+    def invasive_for(self, species_lat: str) -> InvasiveSpecies | None:
+        return next((s for s in self.invasive_species if s.matches(species_lat)), None)
+
+    def invasive_group(self, group: int) -> InvasiveGroupRule | None:
+        return next((g for g in self.invasive_groups if g.group == group), None)
+
+    def restriction(self, kind: RestrictionKind) -> SpeciesRestriction | None:
+        return next((r for r in self.species_restrictions if r.kind is kind), None)
 
 
 def genus_of(species_lat: str) -> str:

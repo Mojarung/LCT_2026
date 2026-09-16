@@ -63,17 +63,17 @@ def percent(score: Score) -> int:
 
 
 def _site(species: Species, ctx: SiteContext, params: PlanParams) -> float:
-    """Сколько условий места вид выдерживает: уплотнение всегда, реагенты и газ - у дороги."""
-    parts = [species.compaction_tolerance / _MAX_SCALE]
+    """Сколько условий места вид выдерживает: уплотнение и аллергенность всегда, реагенты и
+    газ - у дороги.
+
+    Массовые аллергены (2) запрещены 743-ПП п. 3.6.18 и до оценки не доходят. Слабая
+    аллергенность (1) нормой не запрещена и только снижает оценку.
+    """
+    parts = [species.compaction_tolerance / _MAX_SCALE, 1.0 - species.allergen / _MAX_SCALE]
     salt = nearest_clearance(ctx, _SALT_CLASSES)
     if salt is not None and salt < params.salt_zone_m:
         parts.append(species.salt_tolerance / _MAX_SCALE)
         parts.append(species.gas_tolerance / _MAX_SCALE)
-    housing = ctx.clearance_m.get(ObjectClass.BUILDING)
-    if housing is not None and housing < params.housing_zone_m:
-        # Аллергенность не запрещена ни одним актом, поэтому она снижает оценку, а не
-        # отсеивает вид: у жилья это отличает берёзу от липы, не выдавая себя за норму.
-        parts.append(1.0 - species.allergen / _MAX_SCALE)
     return sum(parts) / len(parts)
 
 

@@ -76,12 +76,14 @@ class Species:
     salt_tolerance: int = 1  # 0 - не переносит реагенты, 2 - устойчив
     gas_tolerance: int = 1
     compaction_tolerance: int = 1
-    allergen: int = 0  # 0 - нет, 2 - сильный аллерген
+    # 0 - нет, 1 - слабый, 2 - вызывает массовые аллергические реакции (743-ПП п. 3.6.18)
+    allergen: int = 0
     toxic: bool = False
     thorny: bool = False
-    fluff: bool = False  # пух, 743-ПП п. 3.6.18
-    fruit_litter: bool = False
-    invasive_group: int | None = None  # группа по 369-ПП
+    fluff: bool = False  # женские экземпляры дают пух (743-ПП п. 3.6.18)
+    planting_sex: str | None = None  # male - в посадку идут только мужские клоны
+    fruit_litter: bool = False  # засоряет территорию во время плодоношения (743-ПП п. 3.6.18)
+    invasive_group: int | None = None  # группа по перечню 369-ПП (приложение 1)
     decor_months: frozenset[int] = frozenset()  # месяцы пиковой декоративности
     uses: frozenset[str] = frozenset()  # row | group | solitaire | hedge | under_lines | grate
     care_level: int = 1  # 1 - минимальный уход, 3 - требовательный
@@ -115,6 +117,9 @@ class Reason:
     text: str
     rule_id: str = ""
     source: str = ""
+    # Условие, при котором акт допускает посадку (мужские клоны тополя, контроль
+    # распространения вида группы III): попадает в предупреждения плана как обязательство.
+    condition: str = ""
 
 
 @dataclass(frozen=True, slots=True)

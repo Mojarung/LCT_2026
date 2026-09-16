@@ -31,6 +31,20 @@ distance_rules:
       quote: "Наружная стена здания и сооружения | 5,0 | 1,5"
       status: verified
       related: *table_trees
+  # 743-ПП, табл. 3.6.1, прим. 3: широкая крона у здания. Правило видозависимое: применяется,
+  # когда вид выбран и его взрослая крона шире 5 м (прим. 1: нормы таблицы даны для кроны до 5 м).
+  # Жилое здание или нет, топоплан не различает, поэтому норма применяется ко всем зданиям.
+  - rule_id: R-BLDCROWN-TREE-001
+    object_class: building
+    planting_type: tree
+    min_distance_m: 10.0
+    measure_to: edge
+    min_crown_m: 5.0
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.3, табл. 3.6.1, прим. 3: деревья с широкой кроной у зданий"
+      quote: "3. Деревья с широкой кроной (липа, клен, дуб, каштан, тополь и др.), затеняющие жилые помещения, должны сажаться не ближе 10 м от здания (Методические указания по осуществлению государственного санитарного надзора за устройством и содержанием зданий, утвержденные 24.02.1981 N 2295-81)."
+      status: verified
 
   # Улица: трамвай, проезжая часть, борт, тротуар.
   - rule_id: R-TRAM-TREE-001
@@ -435,15 +449,131 @@ distance_rules:
       quote: "10. В пределах охранных зон без письменного решения о согласовании сетевых организаций юридическим и физическим лицам запрещаются: ... в) посадка и вырубка деревьев и кустарников."
       status: verified
 
-species_bans:
-  - {rule_id: R-INV-ACERNEG-001, species_lat: Acer negundo,
-     citation: {act_id: PP369_2026, clause: "приложение 1, перечень инвазивных видов: клён ясенелистный (группа не сверена)"}}
-  - {rule_id: R-INV-HERACL-001, species_lat: Heracleum sosnowskyi,
-     citation: {act_id: PP369_2026, clause: "приложение 1: борщевик Сосновского (группа не сверена)",
-                related: [{act_id: PP743, clause: "п. 2.11, п. 3.2.1: борщевик Сосновского как запрещённое растение"}]}}
-  - {rule_id: R-INV-AILANT-001, species_lat: Ailanthus altissima,
-     citation: {act_id: PP369_2026, clause: "приложение 1: айлант высочайший (по ресерчу, не сверено)"}}
-  - {rule_id: R-INV-SORBAR-001, species_lat: Sorbaria sorbifolia,
-     citation: {act_id: PP369_2026, clause: "приложение 1: рябинник рябинолистный (по ресерчу, не сверено)"}}
-  - {rule_id: R-INV-QUERUB-001, species_lat: Quercus rubra,
-     citation: {act_id: PP369_2026, clause: "приложение 1: дуб красный (по ресерчу, не сверено)"}}
+# 369-ПП, приложение 1: перечень инвазивных видов с группой. Текст сверен 16.09.2026 по ГАРАНТ
+# (base.garant.ru/413816164). В перечне три группы, порядок (приложение 2) описывает и группу IV.
+# quote дословный, включая «Cornus albus» и «Marsha» из опубликованного текста.
+invasive_species:
+  - {rule_id: R-INV-AILANT-001, species_lat: Ailanthus altissima, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.1: Айлант высочайший (группа I)",
+                quote: "1.1 Айлант высочайший Ailanthus altissima (Mill.) Swingle", status: verified}}
+  - {rule_id: R-INV-HERACL-001, species_lat: Heracleum sosnowskyi, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.2: Борщевик Сосновского (группа I)",
+                related: [{act_id: PP743, clause: "п. 2.11, п. 3.2.1: борщевик Сосновского как запрещённое растение"}],
+                quote: "1.2 Борщевик Сосновского Heracleum sosnowskyi Manden", status: verified}}
+  - {rule_id: R-INV-SOLCAN-001, species_lat: Solidago canadensis, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.3: Золотарники канадский и гигантский (группа I)",
+                quote: "1.3 Золотарники канадский и гигантский Solidago canadensis, gigantea", status: verified}}
+  - {rule_id: R-INV-SOLGIG-001, species_lat: Solidago gigantea, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.3: Золотарники канадский и гигантский (группа I)",
+                quote: "1.3 Золотарники канадский и гигантский Solidago canadensis, gigantea", status: verified}}
+  - {rule_id: R-INV-LUPPOL-001, species_lat: Lupinus polyphyllus, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.4: Люпин многолистный (группа I)",
+                quote: "1.4 Люпин многолистный Lupinus polyphyllus Lindl.", status: verified}}
+  - {rule_id: R-INV-REYNOU-001, species_lat: Reynoutria, group: 1,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.5: Рейнутрия (группа I)",
+                quote: "1.5 Рейнутрия Reynoutria ssp.", status: verified}}
+  - {rule_id: R-INV-ACERNEG-001, species_lat: Acer negundo, group: 2,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 2.1: Клен ясенелистный (группа II)",
+                quote: "2.1 Клен ясенелистный Acer negundo L.", status: verified}}
+  - {rule_id: R-INV-AMORPH-001, species_lat: Amorpha fruticosa, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.1: Аморфа кустарниковая (группа III)",
+                quote: "3.1 Аморфа кустарниковая Amorpha fruticosa L.", status: verified}}
+  - {rule_id: R-INV-PARTHE-001, species_lat: Parthenocissus inserta, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.2: Девичий виноград (группа III)",
+                quote: "3.2 Девичий виноград Parthenocissus inserta (A. Kern.) Fritsch", status: verified}}
+  - {rule_id: R-INV-CORALB-001, species_lat: Cornus alba, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.3: Дерен белый (группа III)",
+                quote: "3.3 Дерен белый Cornus albus L.", status: verified}}
+  - {rule_id: R-INV-QUERUB-001, species_lat: Quercus rubra, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.4: Дуб красный (группа III)",
+                quote: "3.4 Дуб красный Quercus rubra L.", status: verified}}
+  - {rule_id: R-INV-AMESPI-001, species_lat: Amelanchier spicata, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.5: Ирга колосистая (группа III)",
+                quote: "3.5 Ирга колосистая Amelanchier spicata Decne", status: verified}}
+  - {rule_id: R-INV-AMEALN-001, species_lat: Amelanchier alnifolia, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.6: Ирга ольхолистная (группа III)",
+                quote: "3.6 Ирга ольхолистная Amelanchier alnifolia (Nutt.) Nutt. ex M. Roem", status: verified}}
+  - {rule_id: R-INV-HIPPOP-001, species_lat: Hippophae rhamnoides, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.7: Облепиха крушиновидная (группа III)",
+                quote: "3.7 Облепиха крушиновидная Hippophae rhamnoides L", status: verified}}
+  - {rule_id: R-INV-JUGMAN-001, species_lat: Juglans mandshurica, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.8: Орех маньчжурский (группа III)",
+                quote: "3.8 Орех маньчжурский Juglans mandshurica Maxim.", status: verified}}
+  - {rule_id: R-INV-PHYSOC-001, species_lat: Physocarpus opulifolius, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.9: Пузыреплодник калинолистный (группа III)",
+                quote: "3.9 Пузыреплодник калинолистный Physocarpus opulifolius Maxim.", status: verified}}
+  - {rule_id: R-INV-ROBINI-001, species_lat: Robinia pseudoacacia, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.10: Робиния псевдоакация «Белая акация» (группа III)",
+                quote: "3.10 Робиния псевдоакация «Белая акация» Robinia pseudoacacia L.", status: verified}}
+  - {rule_id: R-INV-ROSRUG-001, species_lat: Rosa rugosa, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.11: Роза морщинистая (шиповник морщинистый) (группа III)",
+                quote: "3.11 Роза морщинистая (шиповник морщинистый) Rosa rugosa Thunb", status: verified}}
+  - {rule_id: R-INV-SORBAR-001, species_lat: Sorbaria sorbifolia, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.12: Рябинник рябинолистный (группа III)",
+                quote: "3.12 Рябинник рябинолистный Sorbaria sorbifolia (L.) A. Braun", status: verified}}
+  - {rule_id: R-INV-PRUVIR-001, species_lat: Prunus virginiana, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.13: Черемуха виргинская (группа III)",
+                quote: "3.13 Черемуха виргинская Prunus virginiana L.", status: verified}}
+  - {rule_id: R-INV-FRAPEN-001, species_lat: Fraxinus pennsylvanica, group: 3,
+     citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.14: Ясень пенсильванский (группа III)",
+                quote: "3.14 Ясень пенсильванский Fraxinus pennsylvanica Marsha", status: verified}}
+
+# 369-ПП, приложение 2: где высадка вида группы запрещена, а где допускается с условием.
+# Территория вне conditional_on считается запрещённой: п. 2.4 запрещает высадку в городе.
+invasive_groups:
+  - rule_id: R-INVGROUP-ONE-001
+    group: 1
+    citation:
+      act_id: PP369_2026
+      clause: "приложение 2, п. 3.1 и п. 2.4: группа I, запрет высадки"
+      quote: "3.1. Применяются меры, предусмотренные пунктами 2.1, 2.3 - 2.6 настоящего Порядка. ... 2.4. Запрет высадки инвазивных растений на территории города Москвы."
+      status: verified
+  - rule_id: R-INVGROUP-TWO-001
+    group: 2
+    citation:
+      act_id: PP369_2026
+      clause: "приложение 2, п. 4.1 и п. 2.4: группа II, запрет высадки"
+      quote: "4.1. Применяются меры, предусмотренные пунктом 2 настоящего Порядка. ... 2.4. Запрет высадки инвазивных растений на территории города Москвы."
+      status: verified
+  - rule_id: R-INVGROUP-THREE-001
+    group: 3
+    conditional_on: [green_fund]
+    condition: "меры по недопущению распространения вида на территории иных правообладателей (369-ПП, прил. 2, п. 5.3), удаление самосева и поросли (п. 5.6)"
+    citation:
+      act_id: PP369_2026
+      clause: "приложение 2, пп. 5.1-5.3: группа III, запрет на особо охраняемых зелёных и природных территориях, допуск с условием на иных территориях зелёного фонда"
+      quote: "5.1. Применяются меры, предусмотренные пунктом 2 настоящего Порядка, если иное не предусмотрено настоящим пунктом. 5.2. Не допускаются высадка инвазивных растений на особо охраняемых зеленых территориях, природных территориях... 5.3. На иных территориях зеленого фонда города Москвы допускаются высадка и произрастание инвазивных растений группы III... при условии принятия правообладателем земельного участка (балансодержателем территории и (или) зеленых насаждений), обладателем публичного сервитута мер по недопущению распространения указанных инвазивных растений группы III на территориях иных правообладателей (балансодержателей)."
+      status: verified
+  - rule_id: R-INVGROUP-FOUR-001
+    group: 4
+    citation:
+      act_id: PP369_2026
+      clause: "приложение 2, п. 6.1 и п. 2.4: группа IV, запрет высадки"
+      quote: "6.1. Применяются меры, предусмотренные пунктами 2.3, 2.4, 2.6 настоящего Порядка. ... 2.4. Запрет высадки инвазивных растений на территории города Москвы."
+      status: verified
+
+# 743-ПП п. 3.6.18. Пункт не перечисляет виды: отнесение вида к пуховым, засоряющим или
+# массовым аллергенам хранится в config/species.yaml с источником (поля fluff, planting_sex,
+# fruit_litter, allergen: 2) и печатается в объяснении рядом с нормой.
+species_restrictions:
+  - rule_id: R-PPSEVEN-FLUFF-001
+    kind: female_fluff
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.18: женские экземпляры тополей и других растений"
+      quote: &pp743_3618 "3.6.18. Посадка в городе женских экземпляров тополей и других растений, засоряющих территорию во время плодоношения или вызывающих массовые аллергические реакции во время цветения, не допускается."
+      status: verified
+  - rule_id: R-PPSEVEN-LITTER-001
+    kind: fruit_litter
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.18: растения, засоряющие территорию во время плодоношения"
+      quote: *pp743_3618
+      status: verified
+  - rule_id: R-PPSEVEN-ALLERGEN-001
+    kind: mass_allergen
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.18: растения, вызывающие массовые аллергические реакции во время цветения"
+      quote: *pp743_3618
+      status: verified

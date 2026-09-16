@@ -145,7 +145,7 @@ def _rows(
 def _species_rows(
     subject: Placement | Rejection, base: dict[str, Any], rulebook: RuleBook
 ) -> list[dict[str, Any]]:
-    """Строки видозависимых норм: запрет вида, отступ по роду, крона, охранная зона ВЛ."""
+    """Строки видозависимых норм: 369-ПП, 743-ПП п. 3.6.18, отступ по роду, крона, зона ВЛ."""
     info = subject.assortment if isinstance(subject, Placement) else None
     if info is None:
         return []
@@ -161,7 +161,11 @@ def _species_rows(
                 **base,
                 "rule_id": reason.rule_id,
                 "outcome": "species",
-                "reason": reason.text,
+                "reason": (
+                    f"{reason.text}; условие: {reason.condition}"
+                    if reason.condition
+                    else reason.text
+                ),
                 "object_class": getattr(getattr(rule, "object_class", None), "value", ""),
                 "act_id": citation.act_id if citation else "",
                 "act_title": act.title if act else "",
@@ -194,7 +198,13 @@ def _assortment(info: AssortmentInfo | None) -> dict[str, Any] | None:
         "factors": {name: round(value, 3) for name, value in info.factors.items()},
         "structure": {"id": info.structure_id, "kind": info.structure_kind},
         "reasons": [
-            {"kind": r.kind, "text": r.text, "rule_id": r.rule_id, "source": r.source}
+            {
+                "kind": r.kind,
+                "text": r.text,
+                "rule_id": r.rule_id,
+                "source": r.source,
+                "condition": r.condition,
+            }
             for r in info.reasons
         ],
         "alternatives": [
@@ -303,7 +313,7 @@ def _zones(plan: Plan) -> dict[str, Any]:
 
 def _manifest(report: RunReport) -> dict[str, Any]:
     rulebook = report.rulebook
-    rules = (*rulebook.distance_rules, *rulebook.species_bans)
+    rules = rulebook.all_rules
     return {
         "run_id": report.run_id,
         "source": _source(report),

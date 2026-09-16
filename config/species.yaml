@@ -11,6 +11,9 @@
 # pilot_streets / pilot_count - в скольких паспортах пилота встречается род и сколько штук
 # по ведомостям; единицы в паспортах не унифицированы, величина справочная (tools/build_species_catalog.py).
 # status: verified - сверено с актом, reference - справочник, pilot - паспорта пилота, draft.
+# invasive_group - группа по перечню 369-ПП (приложение 1); обязана совпадать с invasive_species
+# в rules.yaml. fluff, planting_sex, fruit_litter и allergen: 2 - основания 743-ПП п. 3.6.18,
+# у каждого обязателен источник в sources: пункт не перечисляет виды, отнесение - справочное.
 # sources: имя поля -> источник значения; обязательны hardiness_zone и salt_tolerance.
 # Справочник по умолчанию: Колесников А.И. Декоративная дендрология. М.: Лесная пром-сть, 1974.
 version: 2
@@ -64,7 +67,8 @@ species:
      decor_months: [4, 5, 9, 10], uses: [group, solitaire, row], care_level: 1,
      pilot_streets: 2, pilot_count: 89, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               allergen: "пыльца берёзы - основной весенний аллерген средней полосы"}}
+               allergen: "пыльца берёзы - основной весенний аллерген средней полосы; массовая
+                 аллергия при цветении, запрет по 743-ПП п. 3.6.18"}}
 
   - {code: quercus_robur, name_ru: Дуб черешчатый, name_lat: Quercus robur, genus: quercus,
      family: Fagaceae, life_form: tree_large, height_m: 30, crown_diameter_m: 5.0,
@@ -80,11 +84,13 @@ species:
      genus: fraxinus, family: Oleaceae, life_form: tree_large, height_m: 30,
      crown_diameter_m: 4.5, crown_mature_m: 14, lifespan_years: 200, growth: fast,
      root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
-     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 2,
+     salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [9, 10], uses: [row, group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 34, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               care_level: "ясеневая изумрудная узкотелая златка - угроза роду в Москве"}}
+               care_level: "ясеневая изумрудная узкотелая златка - угроза роду в Москве",
+               allergen: "пыльца аллергенна, но к массовым аллергенам Москвы (берёза, ольха,
+                 лещина) не относится; было 2 без источника, сверить с календарём пыления"}}
 
   - {code: aesculus_hippocastanum, name_ru: Каштан конский обыкновенный,
      name_lat: Aesculus hippocastanum, genus: aesculus, family: Sapindaceae,
@@ -141,11 +147,14 @@ species:
      family: Salicaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 3.5,
      crown_mature_m: 8, lifespan_years: 60, growth: fast, root_type: surface,
      hardiness_zone: 3, light: sun, moisture: mesic,
-     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1, fluff: true,
+     planting_sex: male,
      decor_months: [5, 9], uses: [row, group], care_level: 2,
      pilot_streets: 4, pilot_count: 88, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               fluff: "в посадку идут мужские экземпляры, пуха не дают (743-ПП п. 3.6.18)"}}
+               fluff: "двудомный вид: женские экземпляры дают семенной пух",
+               planting_sex: "запись допускает только мужские клоны; требование к посадочному
+                 материалу по 743-ПП п. 3.6.18 попадает в условия плана"}}
 
   - {code: populus_balsamifera, name_ru: Тополь бальзамический,
      name_lat: Populus balsamifera, genus: populus, family: Salicaceae, life_form: tree_large,
@@ -155,7 +164,8 @@ species:
      decor_months: [5], uses: [group], care_level: 2,
      pilot_streets: 4, pilot_count: 37, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               fluff: "женские экземпляры дают пух, 743-ПП п. 3.6.18"}}
+               fluff: "двудомный вид: женские экземпляры дают пух; мужской клон не указан,
+                 поэтому запись запрещена 743-ПП п. 3.6.18"}}
 
   - {code: salix_alba_tristis, name_ru: Ива плакучая, name_lat: Salix alba, genus: salix,
      family: Salicaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 5.0,
@@ -165,7 +175,8 @@ species:
      decor_months: [4, 5, 6, 7, 8, 9, 10], uses: [solitaire, group], care_level: 2,
      pilot_streets: 3, pilot_count: 22, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               fluff: "семенной пух, 743-ПП п. 3.6.18"}}
+               fluff: "двудомный род: женские экземпляры дают семенной пух; пол сорта не
+                 указан, поэтому запись запрещена 743-ПП п. 3.6.18"}}
 
   # --- Деревья второй величины (10-20 м) ---
   - {code: sorbus_aucuparia, name_ru: Рябина обыкновенная, name_lat: Sorbus aucuparia,
@@ -253,9 +264,10 @@ species:
      root_type: mixed, hardiness_zone: 2, light: sun, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 6, 7, 8, 9], uses: [group, solitaire], care_level: 2,
-     pilot_streets: 1, pilot_count: 12, status: reference,
+     invasive_group: 3, pilot_streets: 1, pilot_count: 12, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               decor_months: "пурпурнолистные формы держат цвет весь сезон"}}
+               decor_months: "пурпурнолистные формы держат цвет весь сезон",
+               invasive_group: "369-ПП, приложение 1, п. 3.13"}}
 
   - {code: thuja_occidentalis, name_ru: Туя западная, name_lat: Thuja occidentalis,
      genus: thuja, family: Cupressaceae, life_form: tree_small, height_m: 6,
@@ -273,9 +285,10 @@ species:
      root_type: mixed, hardiness_zone: 2, light: sun, moisture: mesic,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 6, 9, 10], uses: [group, hedge, under_lines], care_level: 1,
-     pilot_streets: 1, pilot_count: 19, status: reference,
+     invasive_group: 3, pilot_streets: 1, pilot_count: 19, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               uses: "высота до 4 м допускает посадку в охранной зоне ВЛ"}}
+               uses: "высота до 4 м допускает посадку в охранной зоне ВЛ",
+               invasive_group: "369-ПП, приложение 1, п. 3.5"}}
 
   # --- Кустарники высокие (выше 2 м) ---
   - {code: syringa_vulgaris, name_ru: Сирень обыкновенная, name_lat: Syringa vulgaris,
@@ -314,9 +327,10 @@ species:
      hardiness_zone: 3, light: sun, moisture: mesic,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 6, 7, 8, 9], uses: [hedge, group, under_lines], care_level: 1,
-     pilot_streets: 6, pilot_count: 75151, status: reference,
+     invasive_group: 3, pilot_streets: 6, pilot_count: 75151, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               decor_months: "пурпурная и жёлтая листва держит цвет весь сезон"}}
+               decor_months: "пурпурная и жёлтая листва держит цвет весь сезон",
+               invasive_group: "369-ПП, приложение 1, п. 3.9"}}
 
   - {code: hydrangea_paniculata, name_ru: Гортензия метельчатая,
      name_lat: Hydrangea paniculata, genus: hydrangea, family: Hydrangeaceae,
@@ -335,9 +349,10 @@ species:
      hardiness_zone: 2, light: semi, moisture: any,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [1, 2, 5, 9, 10, 12], uses: [group, hedge, under_lines], care_level: 1,
-     pilot_streets: 5, pilot_count: 15949, status: reference,
+     invasive_group: 3, pilot_streets: 5, pilot_count: 15949, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               decor_months: "красные побеги держат зимнюю декоративность"}}
+               decor_months: "красные побеги держат зимнюю декоративность",
+               invasive_group: "369-ПП, приложение 1, п. 3.3 (в тексте «Cornus albus»)"}}
 
   - {code: cornus_sericea, name_ru: Дёрен отпрысковый, name_lat: Cornus sericea,
      genus: cornus, family: Cornaceae, life_form: shrub_tall, height_m: 2.5,
@@ -355,12 +370,11 @@ species:
      hardiness_zone: 2, light: semi, moisture: mesic,
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [6, 7, 9], uses: [group, hedge, under_lines], care_level: 1,
-     invasive_group: 1, pilot_streets: 2, pilot_count: 4725, status: draft,
+     invasive_group: 3, pilot_streets: 2, pilot_count: 4725, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "даёт корневые отпрыски, нужна ограничивающая лента",
-               invasive_group: "R-INV-SORBAR-001 (369-ПП, по ресерчу, не сверено): запрет
-                 расходится с практикой - вид есть в паспортах двух улиц пилота, 4725 шт;
-                 сверить текст приложения 369-ПП до демонстрации"}}
+               invasive_group: "369-ПП, приложение 1, п. 3.12: группа III, не I; на иных
+                 территориях зелёного фонда допускается с мерами против распространения"}}
 
   - {code: euonymus_europaeus, name_ru: Бересклет европейский, name_lat: Euonymus europaeus,
      genus: euonymus, family: Celastraceae, life_form: shrub_tall, height_m: 3,
@@ -530,14 +544,14 @@ species:
      pilot_streets: 1, pilot_count: 1575, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
-  # --- Запрещённые: остаются в каталоге, чтобы запрет срабатывал явно и с причиной ---
+  # --- Запрещённые (369-ПП, группа II): остаются в каталоге, чтобы запрет срабатывал явно ---
   - {code: acer_negundo, name_ru: Клён ясенелистный, name_lat: Acer negundo, genus: acer,
      family: Sapindaceae, life_form: tree_large, height_m: 20, crown_diameter_m: 5.0,
      crown_mature_m: 10, lifespan_years: 60, growth: fast, root_type: surface,
      hardiness_zone: 3, light: sun, moisture: any,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 2,
-     invasive_group: 1, decor_months: [], uses: [], care_level: 3,
+     invasive_group: 2, decor_months: [], uses: [], care_level: 3,
      pilot_streets: 0, pilot_count: 0, status: verified,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               invasive_group: "369-ПП, перечень инвазивных видов (группу сверить по тексту)",
+               invasive_group: "369-ПП, приложение 1, п. 2.1: группа II, высадка запрещена везде",
                allergen: "пыльца - известный аллерген"}}

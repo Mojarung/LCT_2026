@@ -10,7 +10,7 @@ from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
-    from green.domain.norms import RuleBook, SpeciesBan
+    from green.domain.norms import AnyRule, RuleBook
     from green.domain.planting import Placement, Reason, Rejection, RuleCheck
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
@@ -68,7 +68,7 @@ def explain(plan: Plan, rulebook: RuleBook) -> Plan:
     return replace(plan, explanations=tuple(explanations))
 
 
-def citation_text(rule: DistanceRule | SpeciesBan, rulebook: RuleBook) -> str:
+def citation_text(rule: AnyRule, rulebook: RuleBook) -> str:
     """«СП 42.13330.2016, п. 9.6, табл. 9.1: ...; 743-ПП, п. 3.6.3, табл. 3.6.1; ...»."""
     citation = rule.citation
     parts = [f"{rulebook.label_of(citation.act_id)}, {citation.clause}"]
@@ -148,7 +148,8 @@ def describe_assortment(placement: Placement) -> str:
 
 def _reason(reason: Reason) -> str:
     if reason.kind == "norm" and reason.rule_id:
-        return f"{reason.text} ({reason.rule_id}: {reason.source})"
+        condition = f", условие: {reason.condition}" if reason.condition else ""
+        return f"{reason.text} ({reason.rule_id}: {reason.source}){condition}"
     if reason.source:
         return f"{reason.text} ({reason.source})"
     return reason.text

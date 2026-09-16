@@ -10,7 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from green.application.classification import GeometryKind, MatchTarget
 from green.application.params import DEFAULT_WEIGHTS
-from green.domain.norms import CitationStatus, MeasureTo, PlantingType, Severity, genus_of
+from green.domain.norms import (
+    CitationStatus,
+    MeasureTo,
+    PlantingType,
+    RestrictionKind,
+    Severity,
+    Territory,
+    genus_of,
+)
 from green.domain.objects import ObjectClass
 from green.domain.planting import LifeForm
 
@@ -54,19 +62,55 @@ class DistanceRuleModel(_Strict):
     measure_to: MeasureTo = MeasureTo.UNSPECIFIED
     severity: Severity = Severity.FORBID
     genera: list[str] = Field(default_factory=list)
+    min_crown_m: float | None = Field(default=None, gt=0, le=40)
     citation: CitationModel
 
 
-class SpeciesBanModel(_Strict):
-    rule_id: str = Field(pattern=r"^R-[A-Z0-9]+-[A-Z]+-\d{3}$")
-    species_lat: str
+_RULE_ID = r"^R-[A-Z0-9]+-[A-Z]+-\d{3}$"
+_INVASIVE_GROUPS = 4  # 369-ПП, приложение 2: четыре группы
+
+
+class InvasiveSpeciesModel(_Strict):
+    rule_id: str = Field(pattern=_RULE_ID)
+    species_lat: str = Field(min_length=3)
+    group: int = Field(ge=1, le=_INVASIVE_GROUPS)
+    citation: CitationModel
+
+
+class InvasiveGroupModel(_Strict):
+    rule_id: str = Field(pattern=_RULE_ID)
+    group: int = Field(ge=1, le=_INVASIVE_GROUPS)
+    conditional_on: list[Territory] = Field(default_factory=list)
+    condition: str = ""
+    citation: CitationModel
+
+    @model_validator(mode="after")
+    def _condition_named(self) -> InvasiveGroupModel:
+        if self.conditional_on and not self.condition:
+            raise ValueError(f"{self.rule_id}: для conditional_on нужен текст условия")
+        return self
+
+
+class SpeciesRestrictionModel(_Strict):
+    rule_id: str = Field(pattern=_RULE_ID)
+    kind: RestrictionKind
     citation: CitationModel
 
 
 class RulesFile(_Strict):
     version: int = 1
     distance_rules: list[DistanceRuleModel]
-    species_bans: list[SpeciesBanModel] = Field(default_factory=list)
+    invasive_species: list[InvasiveSpeciesModel] = Field(default_factory=list)
+    invasive_groups: list[InvasiveGroupModel] = Field(default_factory=list)
+    species_restrictions: list[SpeciesRestrictionModel] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _every_listed_group_has_a_rule(self) -> RulesFile:
+        ruled = {g.group for g in self.invasive_groups}
+        missing = sorted({s.group for s in self.invasive_species} - ruled)
+        if missing:
+            raise ValueError(f"нет порядка 369-ПП для групп: {missing}")
+        return self
 
 
 class LayerRuleModel(_Strict):
@@ -116,8 +160,9 @@ class SpeciesModel(_Strict):
     toxic: bool = False
     thorny: bool = False
     fluff: bool = False
+    planting_sex: Literal["male"] | None = None
     fruit_litter: bool = False
-    invasive_group: int | None = Field(default=None, ge=1, le=4)
+    invasive_group: int | None = Field(default=None, ge=1, le=_INVASIVE_GROUPS)
     decor_months: list[int] = Field(default_factory=list)
     uses: list[Literal["row", "group", "solitaire", "hedge", "under_lines", "grate"]] = Field(
         default_factory=list
@@ -143,7 +188,21 @@ class SpeciesModel(_Strict):
             raise ValueError(
                 f"{self.code}: sources должен называть hardiness_zone и salt_tolerance"
             )
+        # Признаки, по которым вид запрещается нормой, без источника превращаются в
+        # запрет «потому что так записано в каталоге».
+        restricting = {
+            "allergen": self.allergen >= _MASS_ALLERGEN,
+            "fluff": self.fluff,
+            "fruit_litter": self.fruit_litter,
+            "planting_sex": self.planting_sex is not None,
+        }
+        unsourced = sorted(k for k, on in restricting.items() if on and k not in self.sources)
+        if unsourced:
+            raise ValueError(f"{self.code}: нет источника в sources для {', '.join(unsourced)}")
         return self
+
+
+_MASS_ALLERGEN = 2
 
 
 class SpeciesFile(_Strict):
@@ -172,12 +231,10 @@ class ProfileModel(_Strict):
     given_assortment: dict[str, int] = Field(default_factory=dict)
     region_hardiness_zone: int = Field(default=4, ge=1, le=9)
     salt_zone_m: float = Field(default=5.0, ge=0, le=100)
-    housing_zone_m: float = Field(default=30.0, ge=0, le=200)
     max_height_under_lines_m: float = Field(default=4.0, gt=0, le=50)
     crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
-    crown_extra_classes: tuple[ObjectClass, ...] = Field(
-        default=(ObjectClass.BUILDING, ObjectClass.STRUCTURE)
-    )
+    crown_extra_classes: tuple[ObjectClass, ...] = ()
+    territory: Territory = Territory.GREEN_FUND
     quota_species: float = Field(default=0.10, gt=0, le=1)
     quota_genus: float = Field(default=0.20, gt=0, le=1)
     quota_family: float = Field(default=0.30, gt=0, le=1)

@@ -59,14 +59,45 @@ def _ctx_of(*, under_line: bool = False, **clearances: float) -> SiteContext:
     )
 
 
-def test_invasive_species_is_rejected_by_the_ban_rule() -> None:
-    verdict = species_verdict(CATALOG.get("acer_negundo"), _ctx_of(), RULEBOOK, PARAMS)
+def test_group_two_invasive_is_rejected_on_any_territory() -> None:
+    for territory in ("green_fund", "protected_green", "natural", "outside_green_fund"):
+        params = replace(PARAMS, territory=territory)
+        verdict = species_verdict(CATALOG.get("acer_negundo"), _ctx_of(), RULEBOOK, params)
+        assert not verdict.allowed
+        blocking = verdict.blocking
+        assert blocking is not None
+        assert blocking.kind == NORM
+        assert blocking.rule_id == "R-INV-ACERNEG-001"
+        assert "группы II" in blocking.text
+        assert "п. 2.1" in blocking.source
+        assert "п. 4.1" in blocking.source
+
+
+def test_group_three_is_conditional_on_green_fund_and_forbidden_on_protected_land() -> None:
+    """369-ПП прил. 2: п. 5.3 допускает высадку на иных территориях зелёного фонда с мерами
+    против распространения, п. 5.2 запрещает на особо охраняемых зелёных и природных."""
+    sorbaria = CATALOG.get("sorbaria_sorbifolia")
+    admitted = species_verdict(sorbaria, _ctx_of(), RULEBOOK, PARAMS)
+    assert admitted.allowed
+    conditional = [r for r in admitted.reasons if r.condition]
+    assert len(conditional) == 1
+    assert conditional[0].rule_id == "R-INVGROUP-THREE-001"
+    assert "распространения" in conditional[0].condition
+    for territory in ("protected_green", "natural", "outside_green_fund"):
+        params = replace(PARAMS, territory=territory)
+        rejected = species_verdict(sorbaria, _ctx_of(), RULEBOOK, params)
+        assert not rejected.allowed, territory
+        assert rejected.blocking is not None
+        assert rejected.blocking.rule_id == "R-INV-SORBAR-001"
+
+
+def test_genus_wide_listing_catches_any_species_of_the_genus() -> None:
+    """«Reynoutria ssp.» в перечне: запрещён любой вид рода."""
+    knotweed = _species(name_lat="Reynoutria japonica", genus="reynoutria")
+    verdict = species_verdict(knotweed, _ctx_of(), RULEBOOK, PARAMS)
     assert not verdict.allowed
-    blocking = verdict.blocking
-    assert blocking is not None
-    assert blocking.kind == NORM
-    assert blocking.rule_id == "R-INV-ACERNEG-001"
-    assert "369-ПП" in blocking.source
+    assert verdict.blocking is not None
+    assert verdict.blocking.rule_id == "R-INV-REYNOU-001"
 
 
 def test_genus_rule_rejects_birch_and_admits_linden_at_the_same_distance() -> None:
@@ -92,13 +123,28 @@ def test_crown_wider_than_five_metres_raises_the_table_thresholds() -> None:
     assert rejected.blocking is not None
     assert rejected.blocking.rule_id == "R-BLD-TREE-001"
     assert "8.5" in rejected.blocking.text.replace(",", ".")
+    assert "толкование проекта" in rejected.blocking.text
     assert species_verdict(narrow, ctx, RULEBOOK, PARAMS).allowed
 
 
 def test_crown_increase_is_switched_off_by_the_project_parameter() -> None:
     wide = _species(crown_mature_m=12.0)
     params = replace(PARAMS, crown_extra_per_m=0.0)
-    assert species_verdict(wide, _ctx_of(building=6.0), RULEBOOK, params).allowed
+    assert species_verdict(wide, _ctx_of(curb=2.0), RULEBOOK, params).allowed
+
+
+def test_wide_crown_keeps_ten_metres_from_buildings_by_743_pp() -> None:
+    """743-ПП, прим. 3 к табл. 3.6.1: широкая крона не ближе 10 м от здания, без коэффициентов."""
+    wide = _species(crown_mature_m=12.0)
+    params = replace(PARAMS, crown_extra_per_m=0.0)
+    rejected = species_verdict(wide, _ctx_of(building=9.0), RULEBOOK, params)
+    assert not rejected.allowed
+    assert rejected.blocking is not None
+    assert rejected.blocking.rule_id == "R-BLDCROWN-TREE-001"
+    assert "прим. 3" in rejected.blocking.source
+    assert species_verdict(wide, _ctx_of(building=10.5), RULEBOOK, params).allowed
+    narrow = _species(crown_mature_m=5.0)
+    assert species_verdict(narrow, _ctx_of(building=5.5), RULEBOOK, params).allowed
 
 
 def test_only_low_species_stay_under_an_overhead_line() -> None:
@@ -111,15 +157,43 @@ def test_only_low_species_stay_under_an_overhead_line() -> None:
     assert species_verdict(_species(height_m=3.5), ctx, RULEBOOK, PARAMS).allowed
 
 
-def test_fluffy_species_is_rejected_near_housing_and_admitted_away_from_it() -> None:
-    fluffy = _species(fluff=True)
-    near = species_verdict(fluffy, _ctx_of(building=12.0), RULEBOOK, PARAMS)
-    assert not near.allowed
-    assert near.blocking is not None
-    assert near.blocking.kind == NORM
-    assert "743-ПП" in near.blocking.source
-    assert "3.6.18" in near.blocking.source
-    assert species_verdict(fluffy, _ctx_of(building=60.0), RULEBOOK, PARAMS).allowed
+def test_female_fluff_is_rejected_anywhere_in_the_city() -> None:
+    """743-ПП п. 3.6.18 запрещает посадку «в городе»: расстояние до жилья не при чём."""
+    fluffy = _species(fluff=True, sources={"hardiness_zone": "a", "salt_tolerance": "b"})
+    for ctx in (_ctx_of(building=12.0), _ctx_of(building=500.0), _ctx_of()):
+        verdict = species_verdict(fluffy, ctx, RULEBOOK, PARAMS)
+        assert not verdict.allowed
+        assert verdict.blocking is not None
+        assert verdict.blocking.kind == NORM
+        assert verdict.blocking.rule_id == "R-PPSEVEN-FLUFF-001"
+        assert "3.6.18" in verdict.blocking.source
+
+
+def test_male_clone_passes_with_a_condition_on_planting_material() -> None:
+    poplar = CATALOG.get("populus_simonii")
+    verdict = species_verdict(poplar, _ctx_of(), RULEBOOK, PARAMS)
+    assert verdict.allowed
+    assert any("мужские" in r.condition for r in verdict.reasons)
+    assert not species_verdict(
+        CATALOG.get("populus_balsamifera"), _ctx_of(), RULEBOOK, PARAMS
+    ).allowed
+
+
+@pytest.mark.parametrize("code", ["betula_pendula", "corylus_avellana"])
+def test_mass_allergens_are_rejected_by_743_pp(code: str) -> None:
+    verdict = species_verdict(CATALOG.get(code), _ctx_of(), RULEBOOK, PARAMS)
+    assert not verdict.allowed
+    assert verdict.blocking is not None
+    assert verdict.blocking.rule_id == "R-PPSEVEN-ALLERGEN-001"
+    assert "отнесение вида" in verdict.blocking.text
+
+
+def test_fruit_litter_is_rejected_by_743_pp() -> None:
+    litter = _species(fruit_litter=True, sources={"hardiness_zone": "a", "salt_tolerance": "b"})
+    verdict = species_verdict(litter, _ctx_of(), RULEBOOK, PARAMS)
+    assert not verdict.allowed
+    assert verdict.blocking is not None
+    assert verdict.blocking.rule_id == "R-PPSEVEN-LITTER-001"
 
 
 def test_species_from_a_warmer_zone_is_rejected_as_a_reference_reason() -> None:
@@ -162,24 +236,21 @@ def test_admitted_species_carries_positive_reasons_with_numbers() -> None:
     assert any("2.4" in r.text.replace(",", ".") for r in verdict.reasons)
 
 
-def test_crown_increase_applies_to_buildings_and_not_to_underground_utilities() -> None:
-    """Прибавка за крону - там, где крона мешает: у стены, а не у подземной теплосети.
+def test_crown_increase_applies_to_every_row_of_the_table_by_default() -> None:
+    """Прим. 1 к табл. 9.1 написано для всей таблицы: по умолчанию увеличение везде.
 
-    Примечание к табл. 9.1 писано для всей таблицы, но буквальное применение ко всем
-    строкам запрещает липу с кроной 12 м в двух метрах от борта, то есть обычную
-    московскую аллею. Толкование вынесено в параметр crown_extra_classes.
+    Липа с кроной 12 м: борт 2 + 3,5 = 5,5 м, силовой кабель 2 + 3,5 = 5,5 м.
     """
     linden = CATALOG.get("tilia_cordata")
-    assert not species_verdict(linden, _ctx_of(building=6.0), RULEBOOK, PARAMS).allowed
-    assert species_verdict(linden, _ctx_of(heat=2.6), RULEBOOK, PARAMS).allowed
-    assert species_verdict(linden, _ctx_of(curb=2.0), RULEBOOK, PARAMS).allowed
+    assert not species_verdict(linden, _ctx_of(curb=2.0), RULEBOOK, PARAMS).allowed
+    assert not species_verdict(linden, _ctx_of(power=2.6), RULEBOOK, PARAMS).allowed
+    assert species_verdict(linden, _ctx_of(curb=5.6, power=5.6), RULEBOOK, PARAMS).allowed
 
 
-def test_crown_extra_classes_widen_the_increase_when_the_profile_asks() -> None:
+def test_narrowed_crown_classes_are_an_explicit_profile_deviation() -> None:
     linden = CATALOG.get("tilia_cordata")
-    strict = replace(PARAMS, crown_extra_classes=("building", "structure", "utility.heat"))
-    assert not species_verdict(linden, _ctx_of(heat=2.6), RULEBOOK, strict).allowed
-    assert species_verdict(linden, _ctx_of(heat=5.6), RULEBOOK, strict).allowed
+    narrowed = replace(PARAMS, crown_extra_classes=("building", "structure"))
+    assert species_verdict(linden, _ctx_of(curb=2.0), RULEBOOK, narrowed).allowed
 
 
 @pytest.mark.parametrize("code", ["cotinus_coggygria", "forsythia_ovata", "weigela_florida"])

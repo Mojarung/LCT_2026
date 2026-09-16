@@ -1,7 +1,7 @@
 """Жёсткие фильтры: какие виды в этой точке запрещены и по какому основанию.
 
-Основание у каждой причины своего рода: norm - акт и пункт (запрет вида, отступ по роду,
-крона, охранная зона ВЛ, пух у жилья), reference - справочник (морозостойкость, реагенты),
+Основание у каждой причины своего рода: norm - акт и пункт (369-ПП, 743-ПП п. 3.6.18, отступ
+по роду, крона, охранная зона ВЛ), reference - справочник (морозостойкость, реагенты),
 parameter - заданный ассортимент участка. Смешивать их нельзя: рекомендация справочника,
 поданная как норма, - это ложная ссылка на акт в объяснении.
 
@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from green.application.assortment.context import nearest_clearance
 from green.application.explain import OBJECT_LABELS, citation_text
+from green.application.species_norms import species_norms
 from green.domain.norms import Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import Reason
@@ -36,13 +37,12 @@ _EPS_M = 1e-6
 _CROWN_BASE_M = 5.0  # прим. к табл. 9.1: расстояния даны для кроны не более 5 м
 _TABLE_91 = "табл. 9.1"
 _SALT_CLASSES = (ObjectClass.ROAD, ObjectClass.CURB)
-_PP743_CLAUSE = "п. 3.6.18"
 _SALT_PROOF = 2
 _RELEVANT_FACTOR = 3.0  # во сколько норм укладывается расстояние, при котором правило значимо
-# Набор правил зависит только от рода, типа посадки и содержимого rulebook, поэтому
+# Набор правил зависит только от рода, кроны, типа посадки и содержимого rulebook, поэтому
 # кешируется по отпечатку конфигурации: иначе 44 правила перебираются заново для каждой
 # пары «посадка - вид», а пар десятки тысяч.
-_RULES_CACHE: dict[tuple[str, str, str], tuple[DistanceRule, ...]] = {}
+_RULES_CACHE: dict[tuple[str, str, str, float], tuple[DistanceRule, ...]] = {}
 _CACHE_LIMIT = 512
 
 
@@ -62,7 +62,7 @@ def species_verdict(
     species: Species, ctx: SiteContext, rulebook: RuleBook, params: PlanParams
 ) -> SpeciesVerdict:
     reasons: list[Reason] = []
-    for check in (_given, _banned, _distances, _overhead, _fluff, _hardiness, _salt):
+    for check in (_given, _species_norms, _distances, _overhead, _hardiness, _salt):
         blocking = check(species, ctx, rulebook, params, reasons)
         if blocking is not None:
             return SpeciesVerdict(species=species, allowed=False, reasons=(*reasons, blocking))
@@ -83,28 +83,17 @@ def _given(
     return None
 
 
-def _banned(
+def _species_norms(
     species: Species,
     _ctx: SiteContext,
     rulebook: RuleBook,
-    _params: PlanParams,
-    _reasons: list[Reason],
+    params: PlanParams,
+    reasons: list[Reason],
 ) -> Reason | None:
-    if (ban := rulebook.ban_for(species.name_lat)) is not None:
-        return Reason(
-            NORM,
-            f"{species.name_ru} - инвазивный вид, посадка запрещена",
-            rule_id=ban.rule_id,
-            source=citation_text(ban, rulebook),
-        )
-    if species.invasive_group is not None:
-        return Reason(
-            REFERENCE,
-            f"{species.name_ru} отнесён к инвазивным (группа {species.invasive_group}), "
-            "правила запрета в базе нет",
-            source=species.sources.get("invasive_group", "369-ПП"),
-        )
-    return None
+    """369-ПП и 743-ПП п. 3.6.18: запрет или условие для вида, одинаковые в любой точке."""
+    verdict = species_norms(species, rulebook, params.territory)
+    reasons.extend(verdict.reasons)
+    return verdict.blocking
 
 
 def _distances(
@@ -114,7 +103,7 @@ def _distances(
     params: PlanParams,
     reasons: list[Reason],
 ) -> Reason | None:
-    """Отступы, зависящие от вида: правила по роду и увеличение по диаметру кроны."""
+    """Отступы, зависящие от вида: правила по роду, по ширине кроны и увеличение по кроне."""
     extra = max(0.0, species.crown_mature_m - _CROWN_BASE_M) * params.crown_extra_per_m
     for rule in _forbid_rules(rulebook, params.planting_type, species):
         measured = ctx.clearance_m.get(rule.object_class)
@@ -123,7 +112,10 @@ def _distances(
         grows = (
             extra > 0
             and _TABLE_91 in rule.citation.clause
-            and rule.object_class.value in params.crown_extra_classes
+            and (
+                not params.crown_extra_classes
+                or rule.object_class.value in params.crown_extra_classes
+            )
         )
         threshold = rule.min_distance_m + (extra if grows else 0.0)
         target = OBJECT_LABELS.get(rule.object_class, rule.object_class.value)
@@ -131,12 +123,12 @@ def _distances(
             return _too_close(species, rule, rulebook, measured, threshold)
         # «До теплосети 30 м при норме 4 м» - не основание выбрать вид, а шум: правило по
         # роду попадает в объяснение, только когда объект рядом и норма действительно решала.
-        if rule.genera and measured <= threshold * _RELEVANT_FACTOR:
+        if (rule.genera or rule.min_crown_m) and measured <= threshold * _RELEVANT_FACTOR:
             reasons.append(
                 Reason(
                     NORM,
                     f"до {target} {measured:.1f} м при норме {threshold:.1f} м "
-                    f"для рода {species.genus.capitalize()}",
+                    f"{_rule_scope(species, rule)}",
                     rule_id=rule.rule_id,
                     source=citation_text(rule, rulebook),
                 )
@@ -161,24 +153,6 @@ def _overhead(
         "(предел - проектный параметр)",
         rule_id=rule.rule_id if rule else "",
         source=citation_text(rule, rulebook) if rule else "",
-    )
-
-
-def _fluff(
-    species: Species,
-    ctx: SiteContext,
-    rulebook: RuleBook,
-    params: PlanParams,
-    _reasons: list[Reason],
-) -> Reason | None:
-    housing = ctx.clearance_m.get(ObjectClass.BUILDING)
-    if not species.fluff or housing is None or housing >= params.housing_zone_m:
-        return None
-    return Reason(
-        NORM,
-        f"вид даёт пух, до жилой застройки {housing:.1f} м "
-        f"при защитной полосе {params.housing_zone_m:.0f} м",
-        source=f"{rulebook.label_of('PP743')}, {_PP743_CLAUSE}",
     )
 
 
@@ -232,12 +206,12 @@ def _too_close(
         text = (
             f"крона {species.crown_mature_m:.0f} м больше {_CROWN_BASE_M:.0f} м: отступ до "
             f"{target} увеличен с {rule.min_distance_m:.1f} до {threshold:.1f} м, "
-            f"измерено {measured:.1f} м (величина увеличения - проектный параметр)"
+            f"измерено {measured:.1f} м (величину увеличения акт не задаёт: принят прирост "
+            "радиуса кроны, толкование проекта)"
         )
-    elif rule.genera:
+    elif rule.genera or rule.min_crown_m:
         text = (
-            f"до {target} {measured:.1f} м при норме {threshold:.1f} м "
-            f"для рода {species.genus.capitalize()}"
+            f"до {target} {measured:.1f} м при норме {threshold:.1f} м {_rule_scope(species, rule)}"
         )
     else:
         text = f"до {target} {measured:.1f} м при норме {threshold:.1f} м"
@@ -248,14 +222,16 @@ def _forbid_rules(
     rulebook: RuleBook, planting_type: PlantingType, species: Species
 ) -> tuple[DistanceRule, ...]:
     """Правила-запреты для рода вида. Согласования (needs_approval) учтены в вердикте точки."""
-    key = (rulebook.fingerprint, planting_type.value, species.genus)
+    key = (rulebook.fingerprint, planting_type.value, species.genus, species.crown_mature_m)
     cached = _RULES_CACHE.get(key)
     if cached is None:
         if len(_RULES_CACHE) > _CACHE_LIMIT:
             _RULES_CACHE.clear()
         cached = tuple(
             rule
-            for rule in rulebook.distance_rules_for(planting_type, species.name_lat)
+            for rule in rulebook.distance_rules_for(
+                planting_type, species.name_lat, crown_m=species.crown_mature_m
+            )
             if rule.severity is Severity.FORBID
         )
         _RULES_CACHE[key] = cached
@@ -269,3 +245,10 @@ def _rule_for(
         if rule.object_class is object_class:
             return rule
     return None
+
+
+def _rule_scope(species: Species, rule: DistanceRule) -> str:
+    """К кому относится видозависимое правило: к роду или к виду с широкой кроной."""
+    if rule.min_crown_m is not None:
+        return f"для кроны шире {rule.min_crown_m:.0f} м (у вида {species.crown_mature_m:.0f} м)"
+    return f"для рода {species.genus.capitalize()}"

@@ -18,6 +18,7 @@ import shapely
 
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
+from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.zones import build_zones
 from green.domain.objects import ObjectClass
@@ -73,11 +74,18 @@ class GreedyPlantingStrategy:
         species: Species,
         params: PlanParams,
     ) -> Plan:
-        ban = rulebook.ban_for(species.name_lat)
-        if ban is not None:
-            raise InputError(f"Вид {species.name_lat} запрещён правилом {ban.rule_id}")
-
-        rules = rulebook.distance_rules_for(params.planting_type, species.name_lat)
+        # В режиме одного вида видовые нормы проверяются здесь; в режиме подбора - на каждой
+        # паре «посадка - вид» (assortment.filters), а вид профиля лишь задаёт отступы по роду.
+        single = params.assortment_mode == "single"
+        if single:
+            norms = species_norms(species, rulebook, params.territory)
+            if norms.blocking is not None:
+                raise InputError(
+                    f"Вид {species.name_lat} недопустим: {norms.blocking.text} "
+                    f"({norms.blocking.rule_id or norms.blocking.source})"
+                )
+        crown = species.crown_mature_m if single else None
+        rules = rulebook.distance_rules_for(params.planting_type, species.name_lat, crown)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
         if params.require_soil:
             index.surface = build_surface_map(

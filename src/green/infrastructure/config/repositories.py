@@ -13,7 +13,16 @@ from pydantic import ValidationError
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
 from green.application.params import PlanParams
-from green.domain.norms import Act, Citation, DistanceRule, Reference, RuleBook, SpeciesBan
+from green.domain.norms import (
+    Act,
+    Citation,
+    DistanceRule,
+    InvasiveGroupRule,
+    InvasiveSpecies,
+    Reference,
+    RuleBook,
+    SpeciesRestriction,
+)
 from green.domain.planting import LifeForm, Species
 from green.infrastructure.config.schemas import (
     ActsFile,
@@ -76,6 +85,7 @@ def _species(model: SpeciesModel) -> Species:
         toxic=model.toxic,
         thorny=model.thorny,
         fluff=model.fluff,
+        planting_sex=model.planting_sex,
         fruit_litter=model.fruit_litter,
         invasive_group=model.invasive_group,
         decor_months=frozenset(model.decor_months),
@@ -129,27 +139,49 @@ class YamlRuleBookSource:
                 severity=r.severity,
                 citation=_citation(r.citation),
                 genera=frozenset(g.casefold() for g in r.genera),
+                min_crown_m=r.min_crown_m,
             )
             for r in rules_file.distance_rules
         )
-        bans = tuple(
-            SpeciesBan(rule_id=b.rule_id, species_lat=b.species_lat, citation=_citation(b.citation))
-            for b in rules_file.species_bans
+        rulebook = RuleBook(
+            acts=acts,
+            distance_rules=distance,
+            fingerprint=hashlib.sha256((acts_digest + rules_digest).encode()).hexdigest(),
+            invasive_species=tuple(
+                InvasiveSpecies(
+                    rule_id=i.rule_id,
+                    species_lat=i.species_lat,
+                    group=i.group,
+                    citation=_citation(i.citation),
+                )
+                for i in rules_file.invasive_species
+            ),
+            invasive_groups=tuple(
+                InvasiveGroupRule(
+                    rule_id=g.rule_id,
+                    group=g.group,
+                    conditional_on=frozenset(g.conditional_on),
+                    condition=g.condition,
+                    citation=_citation(g.citation),
+                )
+                for g in rules_file.invasive_groups
+            ),
+            species_restrictions=tuple(
+                SpeciesRestriction(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
+                for r in rules_file.species_restrictions
+            ),
         )
-        ids = [rule.rule_id for rule in (*distance, *bans)]
+        ids = [rule.rule_id for rule in rulebook.all_rules]
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise ConfigurationError(f"Повторяются rule_id: {', '.join(duplicates)}")
-        cited = {act_id for r in (*distance, *bans) for act_id in r.citation.act_ids}
+        cited = {act_id for r in rulebook.all_rules for act_id in r.citation.act_ids}
         unknown_acts = sorted(cited - acts.keys())
         if unknown_acts:
             raise ConfigurationError(
                 f"Правила ссылаются на неизвестные акты: {', '.join(unknown_acts)}"
             )
-        fingerprint = hashlib.sha256((acts_digest + rules_digest).encode()).hexdigest()
-        return RuleBook(
-            acts=acts, distance_rules=distance, species_bans=bans, fingerprint=fingerprint
-        )
+        return rulebook
 
 
 class YamlLayerMapSource:

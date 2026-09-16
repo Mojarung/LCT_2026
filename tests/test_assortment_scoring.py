@@ -61,19 +61,15 @@ def test_salt_tolerance_matters_next_to_the_carriageway_and_not_far_from_it() ->
     )
 
 
-def test_allergen_lowers_the_site_factor_near_housing_only() -> None:
-    allergic = replace(BASE, allergen=2)
+def test_weak_allergen_lowers_the_site_factor_anywhere() -> None:
+    """Слабая аллергенность нормой не запрещена: штраф в оценке, одинаковый у жилья и вдали."""
+    allergic = replace(BASE, allergen=1)
     neutral = replace(BASE, allergen=0)
-    near = _ctx(building=15.0)
-    assert (
-        score_species(allergic, near, PARAMS).factors["site"]
-        < (score_species(neutral, near, PARAMS).factors["site"])
-    )
-    far = _ctx(building=80.0)
-    assert (
-        score_species(allergic, far, PARAMS).factors["site"]
-        == score_species(neutral, far, PARAMS).factors["site"]
-    )
+    for ctx in (_ctx(building=15.0), _ctx(building=80.0)):
+        assert (
+            score_species(allergic, ctx, PARAMS).factors["site"]
+            < score_species(neutral, ctx, PARAMS).factors["site"]
+        )
 
 
 def test_function_follows_the_structure_kind() -> None:

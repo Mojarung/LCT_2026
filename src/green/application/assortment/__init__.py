@@ -1,8 +1,8 @@
 """Подбор ассортимента: какой вид поставить в уже выбранную точку и почему именно его.
 
 Проход выполняется после размещения: позиции и измеренные расстояния до объектов уже
-есть в Placement.checks, поэтому видозависимые нормы (запреты 369-ПП, отступы по роду,
-крона более 5 м, высота под ВЛ, пух у жилья) проверяются без повторной геометрии.
+есть в Placement.checks, поэтому видозависимые нормы (369-ПП, 743-ПП п. 3.6.18, отступы по
+роду, крона более 5 м, высота под ВЛ) проверяются без повторной геометрии.
 
 Порядок: структуры (ряды, группы, одиночки) -> контекст точки -> жёсткие фильтры ->
 оценка пригодности -> назначение видов с квотами разнообразия -> сводка.
@@ -43,6 +43,11 @@ GIVEN = "given"
 SINGLE = "single"
 NO_SPECIES = "no_species"
 _ALTERNATIVES = 3
+_ORPHAN_REASON = Reason(
+    COMPOSITION,
+    "общий вид для структуры не нашёлся: назначен лучший допустимый вид этой точки, "
+    "квоты разнообразия при этом не учитывались",
+)
 _FORMS = {
     PlantingType.TREE: TREE_FORMS,
     PlantingType.SHRUB: SHRUB_FORMS,
@@ -109,7 +114,9 @@ def assign_species(
             )
         verdicts[placement.placement_id] = allowed
 
-    assignment = assign(candidates, structures, index, existing, params)
+    solved = assign(candidates, structures, index, existing, params)
+    assignment = _fill_orphans(solved, verdicts, scores)
+    orphans = frozenset(assignment.species_by_placement) - frozenset(solved.species_by_placement)
     status = GIVEN if params.assortment_mode == GIVEN else ASSIGNED
     placements = tuple(
         _apply(
@@ -120,6 +127,7 @@ def assign_species(
             chosen=assignment.species_by_placement,
             index=index,
             status=status,
+            orphans=orphans,
         )
         for placement in plan.placements
     )
@@ -133,10 +141,40 @@ def assign_species(
         rejected_by_kind=dict(rejected_kind),
         rejected_by_rule=dict(rejected_rule),
     )
-    warnings = (*plan.warnings, *_warnings(assignment, no_species))
+    warnings = (*plan.warnings, *_warnings(assignment, no_species), *_conditions(placements))
     return replace(
         plan, placements=placements, assortment_summary=summary, warnings=tuple(warnings)
     )
+
+
+def _fill_orphans(
+    assignment: Assignment,
+    verdicts: Mapping[str, list[SpeciesVerdict]],
+    scores: Mapping[tuple[str, str], Score],
+) -> Assignment:
+    """Посадке без вида, у которой есть допустимые виды, ставится лучший из них для точки.
+
+    Иначе в чертеже остаётся вид профиля, который в этой точке мог не пройти нормы (крона,
+    род, 743-ПП). Структура при этом дробится, а квота может быть превышена: это видно в
+    основаниях посадки и в предупреждениях.
+    """
+    chosen = dict(assignment.species_by_placement)
+    orphans = 0
+    for placement_id, allowed in verdicts.items():
+        if placement_id in chosen or not allowed:
+            continue
+        best = max(
+            allowed, key=lambda v: (scores[(placement_id, v.species.code)].total, v.species.code)
+        )
+        chosen[placement_id] = best.species.code
+        orphans += 1
+    if not orphans:
+        return assignment
+    note = (
+        f"{orphans} посадкам общий вид структуры не нашёлся, назначен лучший допустимый вид точки "
+        "без учёта квот"
+    )
+    return replace(assignment, species_by_placement=chosen, notes=(*assignment.notes, note))
 
 
 def _warnings(assignment: Assignment, no_species: int) -> list[str]:
@@ -154,6 +192,22 @@ def _warnings(assignment: Assignment, no_species: int) -> list[str]:
     return messages
 
 
+def _conditions(placements: Sequence[Placement]) -> list[str]:
+    """Условия актов, под которыми допущены назначенные виды: обязательства для проекта."""
+    counts: Counter[tuple[str, str, str]] = Counter()
+    for placement in placements:
+        info = placement.assortment
+        if info is None or info.status == NO_SPECIES:
+            continue
+        for reason in info.reasons:
+            if reason.condition:
+                counts[(placement.species.name_ru, reason.condition, reason.rule_id)] += 1
+    return [
+        f"Условие допуска: {name}, {count} посадок - {condition} ({rule_id})."
+        for (name, condition, rule_id), count in sorted(counts.items())
+    ]
+
+
 def _apply(  # noqa: PLR0913 - все части решения нужны, чтобы собрать карточку посадки
     placement: Placement,
     contexts: Mapping[str, SiteContext],
@@ -163,6 +217,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     chosen: Mapping[str, str],
     index: Mapping[str, Species],
     status: str,
+    orphans: frozenset[str] = frozenset(),
 ) -> Placement:
     ctx = contexts[placement.placement_id]
     allowed = verdicts.get(placement.placement_id, [])
@@ -191,7 +246,11 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
             factors=score.factors,
             structure_id=ctx.structure_id,
             structure_kind=ctx.structure_kind,
-            reasons=verdict.reasons,
+            reasons=(
+                (*verdict.reasons, _ORPHAN_REASON)
+                if placement.placement_id in orphans
+                else verdict.reasons
+            ),
             alternatives=_alternatives(placement.placement_id, allowed, scores, code, score.total),
         ),
     )
