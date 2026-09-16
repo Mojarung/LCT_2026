@@ -52,10 +52,16 @@ class PlanParams:
     housing_zone_m: float = 30.0  # 743-ПП п. 3.6.18: пух и засорение у жилья
     max_height_under_lines_m: float = 4.0  # предельная высота в охранной зоне ВЛ
     crown_extra_per_m: float = 0.5  # прим. к табл. 9.1: прибавка отступа на метр кроны сверх 5 м
+    # К каким объектам прибавка применяется. Примечание к табл. 9.1 писано для всей таблицы,
+    # но буквальное применение ко всем строкам запрещает липу с кроной 12 м в двух метрах от
+    # борта, то есть обычную московскую аллею. Крона мешает там, где есть стена или габарит:
+    # у зданий и сооружений. Список - параметр, чтобы толкование было видно и проверяемо.
+    crown_extra_classes: tuple[str, ...] = ("building", "structure")
     quota_species: float = 0.10  # правило 10-20-30 (Santamour, 1990)
     quota_genus: float = 0.20
     quota_family: float = 0.30
     conifer_share: tuple[float, float] = (0.15, 0.40)
-    group_max_species: int = 3
-    structure_penalty: float = 0.3  # штраф за каждый лишний вид в структуре
+    # Крупная структура делится на участки: вид назначается участку целиком, поэтому
+    # аллея и массив меняют породу кварталами, а не через дерево.
+    structure_patch_size: int = 10
     assortment_weights: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))

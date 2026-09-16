@@ -2,13 +2,20 @@
 
 Жадный обход обделяет тех, кто идёт последним: первые ряды забирают лучшие виды, а квоты
 разнообразия («не больше 10% одного вида») при таком обходе почти всегда ломаются на
-хвосте. Поэтому виды назначаются всем посадкам сразу целочисленной задачей: переменная
-x[посадка, вид] и переменная y[структура, вид] для однородности рядов и групп.
+хвосте. Поэтому виды назначаются сразу всем, целочисленной задачей.
 
-Ограничения: одна посадка - не больше одного вида; вид в структуре учитывается через y;
-ряд - один вид, группа - не больше group_max_species; квоты 10-20-30 по виду, роду и
-семейству с учётом существующих деревьев; доля хвойных в заданном коридоре. Цель -
-максимум суммы оценок плюс премия за каждую заполненную посадку минус штраф за пестроту.
+Переменная одна: y[структура, вид] - «этот участок занят этим видом». Посадка внутри
+структуры получает вид структуры, если проходит по ней фильтры, иначе остаётся без вида.
+Однородность ряда и участка группы обеспечена самой моделью, а не ограничением, поэтому
+задача маленькая: сотни переменных вместо десятков тысяч. На варианте с переменной на
+каждую пару «посадка - вид» те же сорок посадок считались три секунды - квоты, натянутые
+на тысячи двоичных переменных, дают тяжёлое дерево поиска.
+
+Квоты 10-20-30 по виду, роду и семейству и доля хвойных заданы мягко: у каждой есть
+переменная превышения со штрафом. Жёсткая квота противоречит однородности ряда (10% от
+тридцати посадок - три дерева, а ряд из десяти требует десяти одного вида) и оставила бы
+посадки пустыми; мягкая позволяет превысить долю ровно настолько, насколько иначе места
+остались бы без вида, и показывает превышение в сводке.
 
 Если решатель не справился (нет решения или кончилось время), работает жадный запасной
 путь, и факт этого попадает и в предупреждения прогона, и в сводку.
@@ -24,7 +31,7 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
-from green.application.assortment.structures import ROW
+from green.application.assortment.structures import SINGLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -36,7 +43,10 @@ if TYPE_CHECKING:
 MILP = "milp"
 GREEDY = "greedy"
 _TIME_LIMIT_S = 60.0
-_FILL_BONUS = 1.0  # заполнить посадку всегда выгоднее, чем оставить её без вида
+# Веса в цели упорядочены по важности: заполнить посадку важнее, чем выдержать квоту,
+# а выдержать квоту важнее, чем выбрать вид с оценкой чуть выше (оценка не больше 1).
+_FILL_BONUS = 10.0
+_QUOTA_PENALTY = 3.0
 _MIN_STRUCTURE = 2  # у одиночки однородность не ограничивают
 _HALF = 0.5  # порог округления двоичной переменной
 _EPS = 1e-9
@@ -49,6 +59,16 @@ class Candidate:
     structure_kind: str
     species: Species
     score: float
+
+
+@dataclass(frozen=True, slots=True)
+class _QuotaSpec:
+    """Мягкая доля: столбцы задачи, допуск и направление ограничения."""
+
+    label: str
+    columns: Mapping[int, float]
+    cap: float
+    at_least: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,134 +140,112 @@ class _Problem:
         self.placements = sorted({c.placement_id for c in self.candidates})
         self.codes = sorted({c.species.code for c in self.candidates})
         self.kinds = {s.structure_id: s.kind for s in structures}
-        self.sizes = {s.structure_id: len(s.placement_ids) for s in structures}
         self.by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             self.by_structure[candidate.structure_id].append(candidate)
-        self.floor = self._floor()
-        self.x_index = {(c.placement_id, c.species.code): i for i, c in enumerate(self.candidates)}
-        self.y_pairs = sorted(
-            {
-                (c.structure_id, c.species.code)
-                for c in self.candidates
-                if self.sizes.get(c.structure_id, 1) >= _MIN_STRUCTURE
-            }
-        )
-        self.y_index = {pair: len(self.x_index) + i for i, pair in enumerate(self.y_pairs)}
+        # Что даёт вид структуре: сколько её посадок он займёт и какую сумму оценок принесёт.
+        self.members: defaultdict[tuple[str, str], list[Candidate]] = defaultdict(list)
+        for candidate in self.candidates:
+            self.members[(candidate.structure_id, candidate.species.code)].append(candidate)
+        self.pairs = sorted(self.members)
+        self.index = {pair: position for position, pair in enumerate(self.pairs)}
+        self.structures = sorted(self.by_structure)
 
     # --- целочисленная задача ---
 
     def solve_milp(self) -> Assignment | None:
-        size = len(self.x_index) + len(self.y_index)
+        given = self.params.assortment_mode == "given"
+        specs = [] if given else self._quota_specs()
+        fixed = len(self.pairs)
+        size = fixed + len(specs)
         rows = _Rows(size)
         notes: list[str] = []
-        self._placement_rows(rows)
-        self._structure_rows(rows)
-        if self.params.assortment_mode == "given":
+        for structure_id in self.structures:
+            rows.add(
+                {self.index[(structure_id, code)]: 1.0 for code in self._codes_of(structure_id)},
+                0.0,
+                1.0,
+            )
+        if given:
             for code, count in sorted(self.params.given_assortment.items()):
                 rows.add(self._columns({code}), 0.0, float(count))
             notes.append("режим заданного ассортимента: квоты разнообразия не применяются")
         else:
-            notes += self._quota_rows(rows)
-            notes += self._conifer_rows(rows)
+            notes += self._conifer_note()
+        for offset, spec in enumerate(specs):
+            slack = fixed + offset
+            if spec.at_least:
+                rows.add({**spec.columns, slack: 1.0}, spec.cap, np.inf)
+            else:
+                rows.add({**spec.columns, slack: -1.0}, -np.inf, spec.cap)
+        planned = float(len(self.placements))
         result = milp(
-            c=self._cost(size),
+            c=self._cost(size, specs),
             constraints=rows.constraint(),
-            integrality=np.ones(size),
-            bounds=Bounds(0, 1),
+            integrality=np.concatenate([np.ones(fixed), np.zeros(len(specs))]),
+            bounds=Bounds(
+                np.zeros(size), np.concatenate([np.ones(fixed), np.full(len(specs), planned)])
+            ),
             options={"time_limit": _TIME_LIMIT_S},
         )
         if not result.success or result.x is None:
             return None
-        chosen = {
-            placement: code
-            for (placement, code), index in self.x_index.items()
-            if result.x[index] > _HALF
-        }
+        chosen: dict[str, str] = {}
+        for pair, position in self.index.items():
+            if result.x[position] > _HALF:
+                for candidate in self.members[pair]:
+                    chosen[candidate.placement_id] = pair[1]
+        violations = tuple(
+            f"{spec.label}: отклонение от квоты на {result.x[fixed + offset]:.0f} посадок"
+            for offset, spec in enumerate(specs)
+            if result.x[fixed + offset] > _HALF
+        )
         return Assignment(
-            species_by_placement=dict(sorted(chosen.items())), solver=MILP, notes=tuple(notes)
+            species_by_placement=dict(sorted(chosen.items())),
+            solver=MILP,
+            quota_violations=violations,
+            notes=tuple(notes),
         )
 
-    def _cost(self, size: int) -> np.ndarray:
+    def _codes_of(self, structure_id: str) -> list[str]:
+        return sorted({c.species.code for c in self.by_structure[structure_id]})
+
+    def _cost(self, size: int, specs: Sequence[_QuotaSpec]) -> np.ndarray:
         cost = np.zeros(size)
-        for candidate in self.candidates:
-            index = self.x_index[(candidate.placement_id, candidate.species.code)]
-            cost[index] = -(candidate.score + _FILL_BONUS)
-        for index in self.y_index.values():
-            cost[index] = self.params.structure_penalty
+        for pair, position in self.index.items():
+            cost[position] = -sum(c.score + _FILL_BONUS for c in self.members[pair])
+        fixed = len(self.pairs)
+        for offset in range(len(specs)):
+            cost[fixed + offset] = _QUOTA_PENALTY
         return cost
 
-    def _placement_rows(self, rows: _Rows) -> None:
-        by_placement: defaultdict[str, dict[int, float]] = defaultdict(dict)
-        for (placement, _), index in self.x_index.items():
-            by_placement[placement][index] = 1.0
-        for placement in self.placements:
-            rows.add(by_placement[placement], 0.0, 1.0)
-
-    def _structure_rows(self, rows: _Rows) -> None:
-        for structure_id, code in self.y_pairs:
-            entries = {
-                self.x_index[(c.placement_id, code)]: 1.0
-                for c in self.by_structure[structure_id]
-                if c.species.code == code
-            }
-            entries[self.y_index[(structure_id, code)]] = -float(self.sizes[structure_id])
-            rows.add(entries, -np.inf, 0.0)
-        for structure_id in sorted({s for s, _ in self.y_pairs}):
-            entries = {
-                self.y_index[(structure_id, code)]: 1.0
-                for s, code in self.y_pairs
-                if s == structure_id
-            }
-            limit = (
-                1.0
-                if self.kinds.get(structure_id, ROW) == ROW
-                else float(self.params.group_max_species)
-            )
-            rows.add(entries, 0.0, limit)
-
     def _columns(self, codes: set[str]) -> dict[int, float]:
-        return {index: 1.0 for (_, code), index in self.x_index.items() if code in codes}
-
-    def _floor(self) -> int:
-        """Нижний порог допуска: сколько посадок вид обязан иметь право занять.
-
-        Он держит две вещи: структура должна помещаться в один вид, а доступного
-        разнообразия должно хватать, чтобы занять все посадки. Второе считается по видам,
-        родам и семействам, потому что квота семейства сужает ёмкость сильнее видовой:
-        шесть видов, из которых два хвойных одного семейства, покрывают меньше, чем
-        кажется по числу видов. Виды, у которых допуск уже съеден существующими
-        деревьями, в расчёт не идут.
-        """
-        largest = max((self.sizes.get(s, 1) for s in self.by_structure), default=1)
-        planned = len(self.placements)
-        base = _Quota(self.catalog, self.existing, self.params, planned, largest)
-        usable = [code for code in self.codes if base.cap_species(code) > 0]
-        if not usable:
-            return largest
-        known = [self.catalog[code] for code in usable if code in self.catalog]
-        counts = [len(usable), len({s.genus for s in known}), len({s.family for s in known})]
-        return max(largest, *(-(-planned // n) for n in counts if n))
+        """Столбцы задачи с весом «сколько посадок займёт этот вид в этой структуре»."""
+        return {
+            position: float(len(self.members[pair]))
+            for pair, position in self.index.items()
+            if pair[1] in codes
+        }
 
     def _quota(self) -> _Quota:
-        return _Quota(self.catalog, self.existing, self.params, len(self.placements), self.floor)
+        return _Quota(self.catalog, self.existing, self.params, len(self.placements))
 
-    def _quota_rows(self, rows: _Rows) -> list[str]:
+    def _quota_specs(self) -> list[_QuotaSpec]:
+        """Мягкие ограничения состава: превышение возможно, но стоит штрафа и попадает в сводку."""
         quota = self._quota()
-        for code in self.codes:
-            rows.add(self._columns({code}), 0.0, quota.cap_species(code))
-        for genus, codes in sorted(self._grouped("genus").items()):
-            rows.add(self._columns(codes), 0.0, quota.cap_genus(genus))
-        for family, codes in sorted(self._grouped("family").items()):
-            rows.add(self._columns(codes), 0.0, quota.cap_family(family))
-        if quota.raised:
-            raised = (
-                f"квота вида поднята до {self.floor} посадок: иначе структуру нельзя "
-                "выдержать в одном виде или посадок больше, чем позволяет доля "
-                "при доступных видах"
-            )
-            return [raised]
-        return []
+        specs = [
+            _QuotaSpec(f"вид {code}", self._columns({code}), quota.cap_species(code))
+            for code in self.codes
+        ]
+        specs += [
+            _QuotaSpec(f"род {genus}", self._columns(codes), quota.cap_genus(genus))
+            for genus, codes in sorted(self._grouped("genus").items())
+        ]
+        specs += [
+            _QuotaSpec(f"семейство {family}", self._columns(codes), quota.cap_family(family))
+            for family, codes in sorted(self._grouped("family").items())
+        ]
+        return [spec for spec in specs if spec.columns] + self._conifer_specs()
 
     def _grouped(self, attribute: str) -> dict[str, set[str]]:
         groups: defaultdict[str, set[str]] = defaultdict(set)
@@ -257,28 +255,27 @@ class _Problem:
                 groups[str(getattr(species, attribute))].add(code)
         return groups
 
-    def _conifer_rows(self, rows: _Rows) -> list[str]:
+    def _conifer_note(self) -> list[str]:
+        low_share, _ = self.params.conifer_share
+        codes = {c for c in self.codes if c in self.catalog and self.catalog[c].is_conifer}
+        if low_share > 0 and not codes:
+            return ["доля хвойных не выдержана: допустимых хвойных на участке нет"]
+        return []
+
+    def _conifer_specs(self) -> list[_QuotaSpec]:
         low_share, high_share = self.params.conifer_share
         codes = {c for c in self.codes if c in self.catalog and self.catalog[c].is_conifer}
+        total = float(len(self.placements))
         entries = self._columns(codes)
-        total = len(self.placements)
         if not entries:
-            if low_share > 0:
-                return ["доля хвойных не выдержана: допустимых хвойных на участке нет"]
             return []
-        quota = self._quota()
-        reachable = len({placement for (placement, code) in self.x_index if code in codes})
-        capacity = min(float(reachable), sum(quota.cap_species(code) for code in sorted(codes)))
-        low = low_share * total
-        notes: list[str] = []
-        if capacity + _EPS < low:
-            notes.append(
-                f"нижняя граница доли хвойных снята: мест под хвойные {capacity:.0f} "
-                f"при требуемых {low:.0f}"
+        specs = []
+        if low_share > 0:
+            specs.append(
+                _QuotaSpec("доля хвойных снизу", entries, low_share * total, at_least=True)
             )
-            low = 0.0
-        rows.add(entries, low, high_share * total)
-        return notes
+        specs.append(_QuotaSpec("доля хвойных сверху", entries, high_share * total))
+        return specs
 
     # --- жадный запасной путь ---
 
@@ -288,7 +285,8 @@ class _Problem:
         given_mode = self.params.assortment_mode == "given"
         chosen: dict[str, str] = {}
         violations: list[str] = []
-        for structure_id in sorted(self.by_structure, key=lambda s: (-self.sizes.get(s, 1), s)):
+        order = sorted(self.by_structure, key=lambda s: (-len(self.by_structure[s]), s))
+        for structure_id in order:
             members = self.by_structure[structure_id]
             options: defaultdict[str, list[float]] = defaultdict(list)
             for candidate in members:
@@ -304,9 +302,8 @@ class _Problem:
             ]
             code = fitting[0][0] if fitting else ranked[0][0]
             if not fitting:
-                violations.append(
-                    f"структура {structure_id}: вид {code} назначен с нарушением квоты"
-                )
+                kind = self.kinds.get(structure_id, SINGLE)
+                violations.append(f"{kind} {structure_id}: вид {code} назначен сверх квоты")
             used = 0
             for candidate in members:
                 if candidate.species.code == code:
@@ -330,12 +327,10 @@ class _Problem:
 class _Quota:
     """Квоты 10-20-30 с учётом уже растущих деревьев: существующая популяция съедает долю.
 
-    У квоты есть нижний порог. Без него квота противоречит однородности ряда: при 30
-    посадках 10% - это три дерева, а ряд из десяти требует десяти одного вида, и солвер
-    оставил бы семь посадок пустыми. Поэтому допуск не опускается ниже размера самой
-    крупной структуры и ниже доли, которой хватает, чтобы занять все посадки доступными
-    видами. Существующие деревья вычитаются уже из поднятого допуска, поэтому вид,
-    которого на улице и так много, всё равно не назначается.
+    Допуск считается от общего числа деревьев - запроектированных и существующих, - поэтому
+    вид, которого на улице и так много, новых посадок почти не получает. В целочисленной
+    задаче допуск мягкий (превышение стоит штрафа), в жадном пути - жёсткий, и превышение
+    там записывается в quota_violations.
     """
 
     def __init__(
@@ -344,11 +339,9 @@ class _Quota:
         existing: Mapping[str, int],
         params: PlanParams,
         planned: int,
-        floor: int = 1,
     ) -> None:
         self.catalog = catalog
         self.params = params
-        self.floor = float(floor)
         self.total = planned + sum(existing.values())
         self.used_species: defaultdict[str, int] = defaultdict(int)
         self.used_genus: defaultdict[str, int] = defaultdict(int)
@@ -361,21 +354,13 @@ class _Quota:
                 self.used_family[species.family] += count
 
     def cap_species(self, code: str) -> float:
-        allowed = max(self.params.quota_species * self.total, self.floor)
-        return max(0.0, allowed - self.used_species[code])
+        return max(0.0, self.params.quota_species * self.total - self.used_species[code])
 
     def cap_genus(self, genus: str) -> float:
-        allowed = max(self.params.quota_genus * self.total, self.floor)
-        return max(0.0, allowed - self.used_genus[genus])
+        return max(0.0, self.params.quota_genus * self.total - self.used_genus[genus])
 
     def cap_family(self, family: str) -> float:
-        allowed = max(self.params.quota_family * self.total, self.floor)
-        return max(0.0, allowed - self.used_family[family])
-
-    @property
-    def raised(self) -> bool:
-        """Порог оказался выше квоты: доли в сводке будут больше заявленных."""
-        return self.floor > self.params.quota_species * self.total
+        return max(0.0, self.params.quota_family * self.total - self.used_family[family])
 
     def fits(self, code: str, count: int) -> bool:
         species = self.catalog.get(code)

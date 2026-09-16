@@ -18,4 +18,4 @@ quota_species: 0.10
 quota_genus: 0.20
 quota_family: 0.30
 conifer_share: [0.15, 0.40]
-group_max_species: 3
+structure_patch_size: 10

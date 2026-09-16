@@ -18,6 +18,7 @@ from green.application.assortment.context import nearest_clearance
 from green.application.explain import OBJECT_LABELS, citation_text
 from green.domain.norms import Severity
 from green.domain.objects import ObjectClass
+from green.domain.planting import Reason
 
 if TYPE_CHECKING:
     from green.application.assortment.context import SiteContext
@@ -42,14 +43,6 @@ _SALT_PROOF = 2
 # пары «посадка - вид», а пар десятки тысяч.
 _RULES_CACHE: dict[tuple[str, str, str], tuple[DistanceRule, ...]] = {}
 _CACHE_LIMIT = 512
-
-
-@dataclass(frozen=True, slots=True)
-class Reason:
-    kind: str
-    text: str
-    rule_id: str = ""
-    source: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,7 +119,11 @@ def _distances(
         measured = ctx.clearance_m.get(rule.object_class)
         if measured is None:
             continue
-        grows = extra > 0 and _TABLE_91 in rule.citation.clause
+        grows = (
+            extra > 0
+            and _TABLE_91 in rule.citation.clause
+            and rule.object_class.value in params.crown_extra_classes
+        )
         threshold = rule.min_distance_m + (extra if grows else 0.0)
         target = OBJECT_LABELS.get(rule.object_class, rule.object_class.value)
         if measured + _EPS_M < threshold:

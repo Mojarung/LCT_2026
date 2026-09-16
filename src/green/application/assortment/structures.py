@@ -20,7 +20,7 @@ from scipy.spatial import KDTree
 from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_LAWN
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from green.domain.planting import Placement
 
@@ -40,8 +40,17 @@ class Structure:
     placement_ids: tuple[str, ...]
 
 
-def build_structures(placements: Sequence[Placement], spacing_m: float) -> tuple[Structure, ...]:
+def build_structures(
+    placements: Sequence[Placement], spacing_m: float, patch_size: int = 10
+) -> tuple[Structure, ...]:
+    """Разбить посадки на структуры, каждая из которых получит один вид.
+
+    Кластер длиннее patch_size делится на участки: аллея в сто деревьев одной породы
+    возможна, но участок в десять даёт кварталы разного вида, как и делают проектировщики,
+    а заодно держит задачу назначения маленькой.
+    """
     radius = max(spacing_m, 0.1) * _LINK_FACTOR
+    points = {p.placement_id: (p.x, p.y) for p in placements}
     clusters: list[tuple[str, tuple[str, ...]]] = []
     for mode in sorted({_mode_of(p) for p in placements}):
         members = sorted(
@@ -54,12 +63,28 @@ def build_structures(placements: Sequence[Placement], spacing_m: float) -> tuple
                 # и связывать их одним видом не за что.
                 clusters += [(SINGLE, (placement_id,)) for placement_id in ids]
             else:
-                clusters.append((kind, ids))
+                clusters += [(kind, patch) for patch in _patches(ids, points, patch_size)]
     clusters.sort(key=lambda item: item[1][0])
     return tuple(
         Structure(structure_id=f"{kind}-{number}", kind=kind, placement_ids=ids)
         for number, (kind, ids) in enumerate(clusters, start=1)
     )
+
+
+def _patches(
+    ids: tuple[str, ...], points: Mapping[str, tuple[float, float]], patch_size: int
+) -> list[tuple[str, ...]]:
+    """Деление кластера пополам по длинной оси, пока участок не влезет в patch_size."""
+    if len(ids) <= max(patch_size, _MIN_ROW):
+        return [ids]
+    xs = [points[i][0] for i in ids]
+    ys = [points[i][1] for i in ids]
+    axis = 0 if (max(xs) - min(xs)) >= (max(ys) - min(ys)) else 1
+    ordered = sorted(ids, key=lambda i: (points[i][axis], points[i][1 - axis], i))
+    half = len(ordered) // 2
+    left = tuple(sorted(ordered[:half]))
+    right = tuple(sorted(ordered[half:]))
+    return _patches(left, points, patch_size) + _patches(right, points, patch_size)
 
 
 def _mode_of(placement: Placement) -> str:

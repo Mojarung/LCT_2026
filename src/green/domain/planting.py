@@ -104,6 +104,65 @@ class Species:
 
 
 @dataclass(frozen=True, slots=True)
+class Reason:
+    """Основание решения о виде: норма, справочник, эмпирика пилота или параметр участка.
+
+    kind различает их намеренно: рекомендация справочника, поданная как норма, - ложная
+    ссылка на акт. rule_id заполняется только у norm, source несёт цитату или справочник.
+    """
+
+    kind: str  # norm | reference | pilot | composition | parameter
+    text: str
+    rule_id: str = ""
+    source: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Alternative:
+    """Вид, который подошёл бы этой точке, но уступил выбранному."""
+
+    code: str
+    name_ru: str
+    percent: int
+    why_not: str
+
+
+@dataclass(frozen=True, slots=True)
+class AssortmentInfo:
+    """Почему в этой точке именно этот вид: оценка, структура, основания и альтернативы."""
+
+    status: str  # assigned | given | single | no_species
+    percent: int
+    factors: Mapping[str, float]
+    structure_id: str | None = None
+    structure_kind: str | None = None
+    reasons: tuple[Reason, ...] = field(default=())
+    alternatives: tuple[Alternative, ...] = field(default=())
+
+
+@dataclass(frozen=True, slots=True)
+class AssortmentSummary:
+    """Состав плана: доли, разнообразие, сезонность и то, чего сделать не удалось."""
+
+    mode: str
+    solver: str
+    counts: Mapping[str, int]
+    genus_shares: Mapping[str, float]
+    family_shares: Mapping[str, float]
+    conifer_share: float
+    shannon: float
+    decor_by_month: Mapping[int, int]
+    no_species: int
+    quota_violations: tuple[str, ...] = field(default=())
+    existing: Mapping[str, int] = field(default_factory=dict)
+    # Сколько пар «посадка - вид» отсеяно и по какому основанию: без этих чисел отчёт
+    # показывает только то, что осталось, и молчаливый отсев неотличим от успеха.
+    rejected_by_kind: Mapping[str, int] = field(default_factory=dict)
+    rejected_by_rule: Mapping[str, int] = field(default_factory=dict)
+    notes: tuple[str, ...] = field(default=())
+
+
+@dataclass(frozen=True, slots=True)
 class RuleCheck:
     """Результат проверки одного правила для одной точки."""
 
@@ -126,6 +185,7 @@ class Placement:
     verdict: Verdict
     checks: tuple[RuleCheck, ...]
     notes: tuple[str, ...] = field(default=())
+    assortment: AssortmentInfo | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +229,7 @@ class Plan:
     warnings: tuple[str, ...] = field(default=())
     stats: Mapping[str, int | float] = field(default_factory=dict)
     zones: tuple[Zone, ...] = field(default=())
+    assortment_summary: AssortmentSummary | None = None
 
     @property
     def allowed_count(self) -> int:

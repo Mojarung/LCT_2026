@@ -162,11 +162,24 @@ def test_admitted_species_carries_positive_reasons_with_numbers() -> None:
     assert any("2.4" in r.text.replace(",", ".") for r in verdict.reasons)
 
 
-def test_real_linden_needs_more_room_from_a_heat_network_than_the_table_says() -> None:
-    """Следствие прим. к табл. 9.1 на реальных данных: крона 12 м поднимает 2,0 м до 5,5 м."""
+def test_crown_increase_applies_to_buildings_and_not_to_underground_utilities() -> None:
+    """Прибавка за крону - там, где крона мешает: у стены, а не у подземной теплосети.
+
+    Примечание к табл. 9.1 писано для всей таблицы, но буквальное применение ко всем
+    строкам запрещает липу с кроной 12 м в двух метрах от борта, то есть обычную
+    московскую аллею. Толкование вынесено в параметр crown_extra_classes.
+    """
     linden = CATALOG.get("tilia_cordata")
-    assert not species_verdict(linden, _ctx_of(heat=2.6), RULEBOOK, PARAMS).allowed
-    assert species_verdict(linden, _ctx_of(heat=5.6), RULEBOOK, PARAMS).allowed
+    assert not species_verdict(linden, _ctx_of(building=6.0), RULEBOOK, PARAMS).allowed
+    assert species_verdict(linden, _ctx_of(heat=2.6), RULEBOOK, PARAMS).allowed
+    assert species_verdict(linden, _ctx_of(curb=2.0), RULEBOOK, PARAMS).allowed
+
+
+def test_crown_extra_classes_widen_the_increase_when_the_profile_asks() -> None:
+    linden = CATALOG.get("tilia_cordata")
+    strict = replace(PARAMS, crown_extra_classes=("building", "structure", "utility.heat"))
+    assert not species_verdict(linden, _ctx_of(heat=2.6), RULEBOOK, strict).allowed
+    assert species_verdict(linden, _ctx_of(heat=5.6), RULEBOOK, strict).allowed
 
 
 @pytest.mark.parametrize("code", ["cotinus_coggygria", "forsythia_ovata", "weigela_florida"])

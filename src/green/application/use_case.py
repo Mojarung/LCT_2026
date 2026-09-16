@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from green.application.assortment import assign_species
 from green.application.classification import classify_scene, promote_unknown_lines
 from green.application.diameters import assign_diameters
 from green.application.errors import ConversionError, InputError
@@ -15,7 +16,7 @@ from green.application.explain import explain
 from green.application.results import RunReport, StageTiming
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
     from pathlib import Path
 
     from green.application.params import PlanParams
@@ -40,6 +41,8 @@ class PlanRequest:
     work_dir: Path
     profile: str
     params: PlanParams
+    # Существующие деревья по породам из перечётной ведомости: входят в квоты разнообразия.
+    inventory: Mapping[str, int] | None = None
 
 
 @dataclass(slots=True)
@@ -97,6 +100,8 @@ class PlanSite:
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
         with watch.stage("place"):
             plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
+        with watch.stage("assort"):
+            plan = assign_species(plan, rulebook, self._species.all(), params, request.inventory)
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

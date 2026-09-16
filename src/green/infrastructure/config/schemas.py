@@ -175,12 +175,14 @@ class ProfileModel(_Strict):
     housing_zone_m: float = Field(default=30.0, ge=0, le=200)
     max_height_under_lines_m: float = Field(default=4.0, gt=0, le=50)
     crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
+    crown_extra_classes: tuple[ObjectClass, ...] = Field(
+        default=(ObjectClass.BUILDING, ObjectClass.STRUCTURE)
+    )
     quota_species: float = Field(default=0.10, gt=0, le=1)
     quota_genus: float = Field(default=0.20, gt=0, le=1)
     quota_family: float = Field(default=0.30, gt=0, le=1)
     conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
-    group_max_species: int = Field(default=3, ge=1, le=10)
-    structure_penalty: float = Field(default=0.3, ge=0, le=10)
+    structure_patch_size: int = Field(default=10, ge=1, le=200)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
     @field_validator("conifer_share")

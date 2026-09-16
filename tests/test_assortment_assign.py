@@ -108,11 +108,13 @@ def test_quota_limits_a_species_when_structures_are_small() -> None:
     assert result.solver == MILP
     assert len(result.species_by_placement) == 30
     counts = Counter(result.species_by_placement.values())
-    # Шесть видов на 30 посадок: доля 10% (3 посадки) поднимается до покрывающей. Считается
-    # она по семействам - хвойные делят Pinaceae, поэтому порог 6, а не 5.
+    # Шесть видов на 30 посадок: доля 10% - это три дерева на вид, то есть 18 мест из 30.
+    # Квота мягкая, поэтому все 30 заняты, а превышение на 12 показано пофамильно, а не
+    # спрятано пустыми посадками.
     assert max(counts.values()) <= 6
     assert len(counts) >= 5
-    assert not result.quota_violations
+    assert result.quota_violations
+    assert all("отклонение от квоты" in violation for violation in result.quota_violations)
 
 
 def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
