@@ -27,7 +27,9 @@ LAWN = MODE_LABELS["lawn"]
 CHECKS = (
     RuleCheck("R-CURB-TREE-001", CheckOutcome.PASS, 2.0, 2.5, None, ObjectClass.CURB),
     RuleCheck("R-BLD-TREE-001", CheckOutcome.PASS, 5.0, 14.0, None, ObjectClass.BUILDING),
-    RuleCheck("R-HEAT-TREE-001", CheckOutcome.PASS, 2.0, 9.0, None, ObjectClass.UTILITY_HEAT),
+    # Теплосеть рядом: правило по роду (липа и клён 2 м, берёза и тополь 4 м) здесь решает,
+    # поэтому попадает в объяснение. На тридцати метрах оно уже не основание, а шум.
+    RuleCheck("R-HEAT-TREE-001", CheckOutcome.PASS, 2.0, 5.0, None, ObjectClass.UTILITY_HEAT),
 )
 
 

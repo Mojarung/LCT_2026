@@ -38,6 +38,7 @@ _TABLE_91 = "табл. 9.1"
 _SALT_CLASSES = (ObjectClass.ROAD, ObjectClass.CURB)
 _PP743_CLAUSE = "п. 3.6.18"
 _SALT_PROOF = 2
+_RELEVANT_FACTOR = 3.0  # во сколько норм укладывается расстояние, при котором правило значимо
 # Набор правил зависит только от рода, типа посадки и содержимого rulebook, поэтому
 # кешируется по отпечатку конфигурации: иначе 44 правила перебираются заново для каждой
 # пары «посадка - вид», а пар десятки тысяч.
@@ -128,7 +129,9 @@ def _distances(
         target = OBJECT_LABELS.get(rule.object_class, rule.object_class.value)
         if measured + _EPS_M < threshold:
             return _too_close(species, rule, rulebook, measured, threshold)
-        if rule.genera:
+        # «До теплосети 30 м при норме 4 м» - не основание выбрать вид, а шум: правило по
+        # роду попадает в объяснение, только когда объект рядом и норма действительно решала.
+        if rule.genera and measured <= threshold * _RELEVANT_FACTOR:
             reasons.append(
                 Reason(
                     NORM,
