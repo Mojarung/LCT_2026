@@ -163,15 +163,17 @@ def test_single_mode_keeps_the_profile_species_but_still_scores_it() -> None:
 
 
 def test_existing_trees_change_the_outcome() -> None:
+    """Три вида плана уже растут на улице сверх доли: новых посадок этих видов нет."""
     plan = assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS)
-    chosen = {p.species.code for p in plan.placements if p.assortment}
+    crowded_codes = sorted({p.species.code for p in plan.placements})[:3]
     crowded = assign_species(
-        _plan(), RULEBOOK, CATALOG.all(), PARAMS, existing=dict.fromkeys(chosen, 40)
+        _plan(), RULEBOOK, CATALOG.all(), PARAMS, existing=dict.fromkeys(crowded_codes, 100)
     )
     summary = crowded.assortment_summary
     assert summary is not None
     assert summary.existing
-    assert set(summary.counts) != chosen
+    assert not set(summary.counts) & set(crowded_codes)
+    assert not summary.quota_violations
 
 
 def test_explanation_names_the_species_percent_factors_and_alternatives() -> None:

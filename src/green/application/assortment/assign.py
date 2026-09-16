@@ -7,9 +7,9 @@
 Квоты 10-20-30 (вид, род, семейство) и верхняя граница доли хвойных - жёсткие ограничения:
 план, который их нарушает, сервис не выдаёт. Доля считается от числа реально занятых мест,
 а это число - переменная той же задачи: «посадок вида не больше 10% от всех занятых» -
-линейное ограничение c_s <= 0,1 * T. Одно растение вида квоту не нарушает никогда
-(иначе план из пяти деревьев требовал бы пяти родов и пяти семейств): это допущение
-задано двоичной переменной «вид взят в одном экземпляре».
+линейное ограничение c_s <= 0,1 * T. На участке, где доля меньше одного растения (для
+вида - меньше десяти мест), один экземпляр квоту не нарушает, иначе такой участок нельзя
+было бы засадить вовсе; это допущение задано двоичной переменной «ключ взят один раз».
 
 Каждая доля проверяется и в популяции улицы вместе с существующими деревьями:
 c_s + E_s <= 0,1 * (T + E). Если вида на улице уже больше доли, новых посадок этого вида
@@ -53,6 +53,10 @@ GENUS_LEVEL = "род"
 FAMILY_LEVEL = "семейство"
 CONIFER_KEY = ("хвойные", "")
 _TIME_LIMIT_S = 60.0
+# Допустимый зазор до оптимума: цель - премия 10 за каждое занятое место плюс оценка вида,
+# 0,5% от неё на плане из трёхсот мест - около полутора мест. Без зазора HiGHS доказывал
+# оптимум дольше минуты (Берзарина, 16.09.2026), с зазором - 12 секунд.
+_MIP_GAP = 0.005
 # Заполнить место важнее, чем выбрать вид с оценкой чуть выше (оценка не больше 1), и
 # важнее, чем добрать хвойных до нижней границы коридора.
 _FILL_BONUS = 10.0
@@ -100,6 +104,13 @@ def assign(
 
 
 # --- квоты ---
+
+
+def allowance(share: float, planned: int) -> int:
+    """Сколько растений ключа допускает доля: вниз до целого; один, если доля меньше одного."""
+    if share * planned < 1:
+        return 1
+    return math.floor(share * planned + _EPS)
 
 
 class Quotas:
@@ -155,7 +166,7 @@ class Quotas:
         for key, count in sorted(self.counts(chosen).items()):
             share = self.share(key)
             label = f"{key[0]} {key[1]}".strip()
-            if count > max(1, math.floor(share * planned + _EPS)):
+            if count > allowance(share, planned):
                 found.append(f"{label}: {count} из {planned} в плане, доля {share:.0%}")
             if key == CONIFER_KEY or not self.existing_total:
                 continue
@@ -277,8 +288,13 @@ def _milp(
             in_key[key].append(position)
     keys = sorted(in_key)
     count = len(pairs)
-    single = {key: count + i for i, key in enumerate(keys)}  # столбцы b
-    slack = count + len(keys)  # недобор хвойных до нижней границы
+    # Исключение «один экземпляр» нужно, только пока доля меньше одного растения: при N
+    # местах и доле 10% это N < 10. На большом плане без него квота лишь строже, а
+    # двоичные переменные с большой константой делают задачу в десятки раз тяжелее.
+    places = len(fixed) + len({c.placement_id for g in groups.values() for c in g})
+    small = [key for key in keys if places * quotas.share(key) < 1]
+    single = {key: count + i for i, key in enumerate(small)}  # столбцы b
+    slack = count + len(small)  # недобор хвойных до нижней границы
     size = slack + 1
     rows = _one_species_per_group(pairs, size)
     big = float(len(fixed) + weights.sum())
@@ -299,16 +315,20 @@ def _milp(
         constraints=rows.constraint(),
         integrality=integrality,
         bounds=Bounds(np.zeros(size), upper),
-        options={"time_limit": _TIME_LIMIT_S},
+        options={"time_limit": _TIME_LIMIT_S, "mip_rel_gap": _MIP_GAP},
     )
-    if not result.success or result.x is None:
+    if result.x is None:
         return None
-    return {
+    chosen = {
         candidate.placement_id: pair[1]
         for position, pair in enumerate(pairs)
         if result.x[position] > _HALF
         for candidate in members[pair]
     }
+    # Кончилось время, но допустимое решение найдено: берём его, если квоты целы.
+    if not result.success and quotas.violations({**fixed, **chosen}):
+        return None
+    return chosen
 
 
 def _one_species_per_group(pairs: Sequence[tuple[str, str]], size: int) -> _Rows:
@@ -344,12 +364,13 @@ def _share_rows(rows: _Rows, key: Key, positions: Sequence[int], ctx: _Context) 
         return
     # c + F - share * (F_T + T) - b <= 0: доля в плане, b разрешает один экземпляр.
     plan = {p: weights[p] * ((1.0 if p in inside else 0.0) - share) for p in range(len(weights))}
-    plan[single[key]] = -1.0
+    if key in single:
+        plan[single[key]] = -1.0
+        # b = 1 только если ключ взят не больше одного раза: c + F + big * b <= 1 + big.
+        once = {p: weights[p] for p in positions}
+        once[single[key]] = big
+        rows.add(once, -np.inf, 1.0 + big - used)
     rows.add(_nonzero(plan), -np.inf, share * fixed_total - used)
-    # b = 1 только если ключ взят не больше одного раза: c + F + big * b <= 1 + big.
-    once = {p: weights[p] for p in positions}
-    once[single[key]] = big
-    rows.add(once, -np.inf, 1.0 + big - used)
     if key == CONIFER_KEY or not quotas.existing_total:
         return
     grown = float(quotas.existing[key])
@@ -422,7 +443,7 @@ def _greedy(
 def _fits(quotas: Quotas, key: Key, count: int, planned: int) -> bool:
     if key != CONIFER_KEY and quotas.exhausted(key):
         return False
-    return count <= max(1, math.floor(quotas.share(key) * planned + _EPS))
+    return count <= allowance(quotas.share(key), planned)
 
 
 def _most_over(quotas: Quotas, plan: Mapping[str, str], removable: Mapping[str, str]) -> str:

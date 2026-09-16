@@ -132,16 +132,24 @@ def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
 
 
 def test_exhausted_diversity_leaves_places_empty_instead_of_breaking_quotas() -> None:
-    """Два вида, один уже выбрал долю на улице: второй не может занять больше 10% плана.
+    """Два вида, один уже выбрал долю на улице: второй один не может быть 10% плана.
 
-    Квоты жёсткие, поэтому сервис оставляет места пустыми, а не досаживает один вид.
+    Квоты жёсткие, поэтому места остаются пустыми, а не досаживаются одним видом.
+    Исключение «один экземпляр» действует только на участке меньше десяти мест.
     """
     structures = _singles(30)
     candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
-    counts = _counts(result)
-    assert counts["tilia_cordata"] == 0
-    assert 0 < len(result.species_by_placement) < 30
+    assert result.species_by_placement == {}
+    assert not result.quota_violations
+
+
+def test_a_tiny_site_may_hold_one_plant_of_a_species() -> None:
+    """Пять мест, доля 10% - половина растения: один экземпляр вида квоту не нарушает."""
+    structures = _singles(5)
+    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
+    assert len(result.species_by_placement) == 5
+    assert max(_counts(result).values()) == 1
     assert not result.quota_violations
 
 

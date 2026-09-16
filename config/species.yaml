@@ -280,7 +280,7 @@ species:
                salt_tolerance_note: "хвоя горит от реагентов, не ближе газона у дороги"}}
 
   - {code: amelanchier_spicata, name_ru: Ирга колосистая, name_lat: Amelanchier spicata,
-     genus: amelanchier, family: Rosaceae, life_form: tree_small, height_m: 4,
+     genus: amelanchier, family: Rosaceae, life_form: shrub_tall, height_m: 4,
      crown_diameter_m: 2.0, crown_mature_m: 3, lifespan_years: 50, growth: fast,
      root_type: mixed, hardiness_zone: 2, light: sun, moisture: mesic,
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
@@ -288,7 +288,70 @@ species:
      invasive_group: 3, pilot_streets: 1, pilot_count: 19, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                uses: "высота до 4 м допускает посадку в охранной зоне ВЛ",
-               invasive_group: "369-ПП, приложение 1, п. 3.5"}}
+               invasive_group: "369-ПП, приложение 1, п. 3.5",
+               life_form: "кустарник по «Справочнику пород» шаблона перечётки ДПиООС
+                 (tools/research/city_species_dictionary.py); было tree_small"}}
+
+  # Добавлены 16.09.2026 для квот 10-20-30: новые семейства малых деревьев, устойчивых к соли.
+  # Порядок выбора и проверки - docs/notes/12-catalog-families.md. Значения со ссылкой на
+  # страницу источника; чего в источнике нет, помечено «не найдено» и оставлено по умолчанию.
+  - {code: maackia_amurensis, name_ru: Маакия амурская, name_lat: Maackia amurensis,
+     genus: maackia, family: Fabaceae, life_form: tree_small, height_m: 9,
+     crown_diameter_m: 4.0, crown_mature_m: 8, lifespan_years: 0, growth: slow,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [6, 7], uses: [row, group, solitaire], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     sources: {hardiness_zone: "Cornell Woody Plants, woodyplants.cals.cornell.edu/plant/142:
+                 «Hardy To Zone: 4a»",
+               height_m: "там же: «Height: 20' - 30' (equal or wider spread)» - 6-9 м",
+               crown_mature_m: "там же: крона равна высоте или шире - 6-9 м, принято 8",
+               salt_tolerance: "там же: «Salt Tolerance: Tolerates salty soil»",
+               decor_months: "там же: «white pea-like flowers in June/July»",
+               care_level: "там же: «Insect Disease: none serious»",
+               life_form: "дерево, код ценности 2 по «Справочнику пород» шаблона перечётки ДПиООС",
+               allergen: "не найдено, принято 0", lifespan_years: "не найдено",
+               gas_tolerance: "не найдено, принято 1", uses: "по аналогии с малыми деревьями каталога"}}
+
+  - {code: elaeagnus_angustifolia, name_ru: Лох узколистный, name_lat: Elaeagnus angustifolia,
+     genus: elaeagnus, family: Elaeagnaceae, life_form: tree_small, height_m: 7,
+     crown_diameter_m: 3.5, crown_mature_m: 5, lifespan_years: 0, growth: fast,
+     root_type: mixed, hardiness_zone: 2, light: sun, moisture: dry,
+     salt_tolerance: 2, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     sources: {hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/elaeagnus-angustifolia:
+                 «USDA Plant Hardiness Zone: 2a ... 7b»",
+               height_m: "там же: «Height: 12 ft. 0 in. - 30 ft. 0 in.» - 3,7-9,1 м, принято 7",
+               crown_mature_m: "там же: «Width: 12 ft. 0 in. - 20 ft. 0 in.» - 3,7-6,1 м, принято 5",
+               salt_tolerance: "там же: теги «#salt tolerant», «#salt spray tolerant»",
+               moisture: "там же: «#drought tolerant»",
+               decor_months: "там же: цветки «April-June», плоды «August-October»",
+               invasive_note: "там же: «invasive species in North Carolina»; в перечне 369-ПП вида нет",
+               fruit_litter: "плоды описаны как «resemble olives», засорение не отмечено - не выставлено",
+               life_form: "дерево, код ценности 2 по «Справочнику пород» шаблона перечётки ДПиООС",
+               allergen: "не найдено, принято 0", lifespan_years: "не найдено",
+               gas_tolerance: "не найдено, принято 1", uses: "по аналогии с малыми деревьями каталога"}}
+
+  - {code: ulmus_pumila, name_ru: Вяз приземистый, name_lat: Ulmus pumila, genus: ulmus,
+     family: Ulmaceae, life_form: tree_medium, height_m: 18, crown_diameter_m: 5.0,
+     crown_mature_m: 12, lifespan_years: 0, growth: fast, root_type: surface,
+     hardiness_zone: 4, light: sun, moisture: dry,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     fruit_litter: true, decor_months: [], uses: [group], care_level: 3,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     sources: {hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/ulmus-pumila:
+                 «USDA Plant Hardiness Zone: 4a ... 9b»",
+               height_m: "там же: «Height: 50 ft. 0 in. - 70 ft. 0 in.» - 15-21 м",
+               crown_mature_m: "там же: «Width: 35 ft. 0 in. - 50 ft. 0 in.» - 10,7-15 м, принято 12",
+               fruit_litter: "там же: «Problems: ... Messy ... Weedy», «copious seed formation» -
+                 засоряет территорию при плодоношении, запрет 743-ПП п. 3.6.18",
+               gas_tolerance: "там же: «#air pollution tolerant»",
+               care_level: "там же: «Frequent Insect Problems / Messy / Weak Wood»",
+               salt_tolerance: "не найдено (тега солеустойчивости на странице нет), принято 1",
+               life_form: "дерево, код ценности 2 («Вяз приземистый», «Вяз мелколистный») по
+                 «Справочнику пород» шаблона перечётки ДПиООС",
+               allergen: "не найдено, принято 0", lifespan_years: "не найдено"}}
 
   # --- Кустарники высокие (выше 2 м) ---
   - {code: syringa_vulgaris, name_ru: Сирень обыкновенная, name_lat: Syringa vulgaris,
@@ -416,14 +479,16 @@ species:
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: pinus_mugo, name_ru: Сосна горная, name_lat: Pinus mugo, genus: pinus,
-     family: Pinaceae, life_form: shrub_tall, height_m: 3, crown_diameter_m: 2.0,
+     family: Pinaceae, life_form: tree_small, height_m: 3, crown_diameter_m: 2.0,
      crown_mature_m: 3, lifespan_years: 100, growth: slow, root_type: mixed,
      hardiness_zone: 3, light: sun, moisture: dry, evergreen: true,
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [11, 12, 1, 2], uses: [group, solitaire, under_lines], care_level: 1,
      pilot_streets: 1, pilot_count: 1816, status: reference,
      sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               uses: "низкая форма допустима в охранной зоне ВЛ"}}
+               uses: "низкая форма допустима в охранной зоне ВЛ",
+               life_form: "дерево (код ценности 1) по «Справочнику пород» шаблона перечётки
+                 ДПиООС; было shrub_tall"}}
 
   - {code: cotinus_coggygria, name_ru: Скумпия кожевенная, name_lat: Cotinus coggygria,
      genus: cotinus, family: Anacardiaceae, life_form: shrub_tall, height_m: 3,

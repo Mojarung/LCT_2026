@@ -121,7 +121,15 @@
 1. Дописать запись в `config/species.yaml` (обязательные поля перечислены в `SpeciesModel`).
 2. Если вид есть в перечне 369-ПП, записать его группу в `invasive_group`. В `invasive_species`
    файла `config/rules.yaml` перечень внесён целиком, иначе тест согласованности упадёт.
-3. Прогнать `uv run pytest tests/test_species_catalog.py -q`.
+3. Жизненную форму взять из «Справочника пород» ДПиООС (лист перечётной ведомости пилота):
+   `uv run python tools/research/city_species_dictionary.py` печатает расхождения, тест
+   `tests/test_city_dictionary.py` их ловит.
+4. Каждое значение, от которого зависит норма или фильтр (зона, крона, соль, `fluff`,
+   `fruit_litter`, `allergen: 2`), - со ссылкой на загруженную страницу и дословной строкой
+   в `sources`. Поисковый сниппет источником не считается. Чего нет в источнике, пометить
+   «не найдено» и оставить значение по умолчанию. Пример - `docs/notes/12-catalog-families.md`.
+5. Проверить эффект за секунды: `uv run python tools/research/replay_assortment.py <прогон>`.
+6. Прогнать `uv run pytest tests/test_species_catalog.py tests/test_city_dictionary.py -q`.
 
 ## Как импортировать чужой каталог
 

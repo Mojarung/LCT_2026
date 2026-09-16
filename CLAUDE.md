@@ -28,7 +28,7 @@ src/green/
   bootstrap/       Settings (переменные GREEN_*), build_container
   interfaces/      cli/main.py (`green run|inspect|verify|serve`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
 config/            acts.yaml, rules.yaml (68 правил: 40 расстояний, перечень и порядок 369-ПП, 743-ПП п. 3.6.18; 62 с дословной цитатой НПА), layer_map.yaml (классификатор слоёв всех 20 улиц),
-                   species.yaml (v2: 52 вида с экологией, ограничениями и источниками по полям),
+                   species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, research/ — наша разведка датасета
