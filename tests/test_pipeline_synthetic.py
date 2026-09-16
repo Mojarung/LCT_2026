@@ -134,3 +134,21 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
         report.plan.placements  # type: ignore[attr-defined]
     )
     assert run["artifacts"]["zones.geojson"].exists()  # type: ignore[index]
+
+
+def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, object]) -> None:
+    """Подобранные виды доезжают до чертежа: у каждого свой блок и свой атрибут SPECIES."""
+    report = run["report"]
+    plan = report.plan  # type: ignore[attr-defined]
+    doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
+    codes = {p.species.code for p in plan.placements}
+    assert len(codes) > 1
+    blocks = {name for name in (b.name for b in doc.blocks) if name.startswith("GREEN_TREE_")}
+    assert {f"GREEN_TREE_{code.upper()}" for code in codes} <= blocks
+    names = {
+        attrib.dxf.text
+        for insert in doc.modelspace().query("INSERT[layer=='GREEN_TREES']")
+        for attrib in insert.attribs
+        if attrib.dxf.tag == "SPECIES"
+    }
+    assert names == {p.species.name_ru for p in plan.placements}
