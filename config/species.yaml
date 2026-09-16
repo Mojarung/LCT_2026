@@ -310,14 +310,17 @@ species:
                decor_months: "там же: «white pea-like flowers in June/July»",
                care_level: "там же: «Insect Disease: none serious»",
                life_form: "дерево, код ценности 2 по «Справочнику пород» шаблона перечётки ДПиООС",
-               allergen: "не найдено, принято 0", lifespan_years: "не найдено",
+               allergen: "0: PubMed «Maackia amurensis AND (pollen OR allergy)», 16.09.2026 -
+                 3 статьи, все о лектине MAL (26981635, 20473713, 9046027), об аллергии на
+                 пыльцу ни одной",
+               lifespan_years: "не найдено",
                gas_tolerance: "не найдено, принято 1", uses: "по аналогии с малыми деревьями каталога"}}
 
   - {code: elaeagnus_angustifolia, name_ru: Лох узколистный, name_lat: Elaeagnus angustifolia,
      genus: elaeagnus, family: Elaeagnaceae, life_form: tree_small, height_m: 7,
      crown_diameter_m: 3.5, crown_mature_m: 5, lifespan_years: 0, growth: fast,
      root_type: mixed, hardiness_zone: 2, light: sun, moisture: dry,
-     salt_tolerance: 2, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
+     salt_tolerance: 2, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 6, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 0, pilot_count: 0, status: reference,
      sources: {hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/elaeagnus-angustifolia:
@@ -330,7 +333,11 @@ species:
                invasive_note: "там же: «invasive species in North Carolina»; в перечне 369-ПП вида нет",
                fruit_litter: "плоды описаны как «resemble olives», засорение не отмечено - не выставлено",
                life_form: "дерево, код ценности 2 по «Справочнику пород» шаблона перечётки ДПиООС",
-               allergen: "не найдено, принято 0", lifespan_years: "не найдено",
+               allergen: "1 - аллерген, но не массовый: PMC5108988 «With a prick test, 30 % of
+                 patients with rhinitis and rhinoconjunctivitis were sensitive to Russian olive
+                 pollens»; PubMed 15461599, 1471780 (перекрёстная реакция с оливой). Данных о
+                 массовых реакциях в Москве не найдено - толкование, сверить с экспертом",
+               lifespan_years: "не найдено",
                gas_tolerance: "не найдено, принято 1", uses: "по аналогии с малыми деревьями каталога"}}
 
   - {code: ulmus_pumila, name_ru: Вяз приземистый, name_lat: Ulmus pumila, genus: ulmus,

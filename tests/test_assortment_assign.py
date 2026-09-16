@@ -257,3 +257,19 @@ def test_the_same_input_gives_the_same_assignment() -> None:
 
 def test_no_candidates_give_an_empty_assignment() -> None:
     assert assign([], [], CATALOG, {}, PARAMS).species_by_placement == {}
+
+
+def test_greedy_fallback_stays_close_to_the_solver_and_holds_quotas() -> None:
+    """Запасной путь ищет наибольшее число мест T, при котором допуски от T выдержаны.
+
+    Прежний вариант срезал превышения по одной посадке и терял больше половины плана
+    (Берзарина: 110 мест против 280 у решателя).
+    """
+    structures = [*_rows(4, 10), *_singles(17)]
+    candidates = _candidates(structures, list(CATALOG))
+    solved = assign(candidates, structures, CATALOG, {}, PARAMS)
+    greedy = assign(
+        candidates, structures, CATALOG, {}, replace(PARAMS, assortment_solver="greedy")
+    )
+    assert not greedy.quota_violations
+    assert len(greedy.species_by_placement) >= 0.9 * len(solved.species_by_placement)

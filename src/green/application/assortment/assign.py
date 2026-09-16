@@ -208,33 +208,33 @@ class _QuotaAssignment:
 
     def run(self) -> Assignment:
         notes: list[str] = []
-        solver = MILP
         if self.params.assortment_solver == GREEDY:
-            solver = GREEDY
             notes.append("виды назначены жадным обходом структур по настройке профиля")
+            chosen, split = _greedy_plan(self.candidates, self.quotas)
+            return self._assignment(chosen, split, GREEDY, notes)
         by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             by_structure[candidate.structure_id].append(candidate)
-        whole = self._solve(by_structure, {}, solver)
-        if whole is None:
-            solver = GREEDY
-            notes.append("решатель не справился, виды назначены жадным обходом структур")
-            whole = self._solve(by_structure, {}, solver) or {}
+        whole = _milp(by_structure, {}, self.quotas)
         singles: defaultdict[str, list[Candidate]] = defaultdict(list)
-        for candidate in self.candidates:
-            if candidate.placement_id not in whole:
-                singles[candidate.placement_id].append(candidate)
-        rest = self._solve(singles, whole, solver) if singles else {}
-        if rest is None:
-            solver = GREEDY
-            notes.append("решатель не справился со вторым шагом, он выполнен жадно")
-            rest = self._solve(singles, whole, solver) or {}
-        chosen = {**whole, **rest}
-        notes += self.quotas.exhausted_notes(self.codes)
-        notes += self._conifer_notes(chosen)
-        if rest:
+        if whole is not None:
+            for candidate in self.candidates:
+                if candidate.placement_id not in whole:
+                    singles[candidate.placement_id].append(candidate)
+        rest = _milp(singles, whole, self.quotas) if whole is not None and singles else {}
+        if whole is None or rest is None:
+            notes.append("решатель не справился, виды назначены жадным обходом структур")
+            chosen, split = _greedy_plan(self.candidates, self.quotas)
+            return self._assignment(chosen, split, GREEDY, notes)
+        return self._assignment({**whole, **rest}, set(rest), MILP, notes)
+
+    def _assignment(
+        self, chosen: Mapping[str, str], split: set[str], solver: str, notes: list[str]
+    ) -> Assignment:
+        notes = [*notes, *self.quotas.exhausted_notes(self.codes), *self._conifer_notes(chosen)]
+        if split:
             split_note = (
-                f"{len(rest)} посадок получили вид вне своей структуры: одним видом структура "
+                f"{len(split)} посадок получили вид вне своей структуры: одним видом структура "
                 "в квоты разнообразия не влезла"
             )
             notes.append(split_note)
@@ -243,15 +243,8 @@ class _QuotaAssignment:
             solver=solver,
             quota_violations=self.quotas.violations(chosen),
             notes=tuple(notes),
-            split_placements=frozenset(rest),
+            split_placements=frozenset(split),
         )
-
-    def _solve(
-        self, groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], solver: str
-    ) -> dict[str, str] | None:
-        if solver == GREEDY:
-            return _greedy(groups, fixed, self.quotas)
-        return _milp(groups, fixed, self.quotas)
 
     def _conifer_notes(self, chosen: Mapping[str, str]) -> list[str]:
         low = self.params.conifer_share[0]
@@ -400,64 +393,125 @@ def _nonzero(entries: Mapping[int, float]) -> dict[int, float]:
     return {k: v for k, v in entries.items() if abs(v) > _EPS}
 
 
-def _greedy(
-    groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], quotas: Quotas
-) -> dict[str, str]:
-    """Запасной путь: группы по убыванию размера, вид целиком в пределах допуска от числа мест.
+def _greedy_plan(
+    candidates: Sequence[Candidate], quotas: Quotas
+) -> tuple[dict[str, str], set[str]]:
+    """Запасной путь без решателя: наибольшее число мест T, которое жадный обход занимает
+    целиком при допусках, посчитанных от того же T.
 
-    Допуск считается от числа всех мест; если часть осталась пустой, из выбранного убираются
-    посадки с наибольшим превышением, пока итоговый план не выдержит квоты.
+    Заполнено ровно T мест при допусках от T - значит, квоты на итоговом плане выдержаны по
+    построению, подрезать ничего не нужно. Прежний вариант брал допуски от всех мест и
+    срезал превышение по одной посадке: каждое срезание уменьшало план и допуски остальных,
+    и на Берзарина оставалось 110 мест из 301 при 280 у решателя. T ищется двоичным поиском.
     """
-    target = len(fixed) + len({c.placement_id for g in groups.values() for c in g})
-    used = quotas.counts(fixed)
-    chosen: dict[str, str] = {}
-    scores: dict[str, float] = {}
-    order = sorted(groups, key=lambda g: (-len({c.placement_id for c in groups[g]}), g))
-    for group_id in order:
+    places = len({c.placement_id for c in candidates})
+    full = _greedy_fill(candidates, quotas, places)
+    if len(full[0]) == places:  # все места заняты - искать меньшее T незачем
+        return full
+    best: tuple[dict[str, str], set[str]] = ({}, set())
+    low, high = 1, places - 1
+    while low <= high:
+        target = (low + high) // 2
+        chosen, split = _greedy_fill(candidates, quotas, target)
+        if len(chosen) == target:
+            best = (chosen, split)
+            low = target + 1
+        else:
+            high = target - 1
+    return best
+
+
+def _greedy_fill(
+    candidates: Sequence[Candidate], quotas: Quotas, target: int
+) -> tuple[dict[str, str], set[str]]:
+    """Не больше target мест: структуры целиком, затем оставшиеся места поодиночке.
+
+    Порядок - сначала самые стеснённые (меньше всего допустимых видов), вид - с наибольшим
+    остатком допуска: иначе крупные массивы газона забирают долю видов, которые одни проходят
+    у борта, и аллея остаётся пустой.
+    """
+    fill = _Fill(quotas, target)
+    by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
+    for candidate in candidates:
+        by_structure[candidate.structure_id].append(candidate)
+    for members in sorted(by_structure.values(), key=_tightness):
+        fill.whole(members)
+    rest: defaultdict[str, list[Candidate]] = defaultdict(list)
+    for candidate in candidates:
+        if candidate.placement_id not in fill.chosen:
+            rest[candidate.placement_id].append(candidate)
+    for options in sorted(rest.values(), key=_tightness):
+        fill.single(options)
+    return fill.chosen, fill.split
+
+
+def _tightness(members: Sequence[Candidate]) -> tuple[int, int, str]:
+    codes = {c.species.code for c in members}
+    places = {c.placement_id for c in members}
+    return (len(codes), -len(places), min(c.placement_id for c in members))
+
+
+class _Fill:
+    """Состояние жадного заполнения: занятое по ключам и выбранные виды."""
+
+    def __init__(self, quotas: Quotas, target: int) -> None:
+        self.quotas = quotas
+        self.target = target
+        self.used: Counter[Key] = Counter()
+        self.chosen: dict[str, str] = {}
+        self.split: set[str] = set()
+
+    def room(self, code: str) -> int:
+        """Сколько ещё посадок вида допускают все его ключи при target местах."""
+        return min(
+            _limit(self.quotas, key, self.target) - self.used[key]
+            for key in self.quotas.keys(self.quotas.catalog[code])
+        )
+
+    def take(self, code: str, members: Sequence[Candidate]) -> None:
+        for candidate in members:
+            self.chosen[candidate.placement_id] = code
+        for key in self.quotas.keys(self.quotas.catalog[code]):
+            self.used[key] += len(members)
+
+    def whole(self, members: Sequence[Candidate]) -> None:
+        places = {c.placement_id for c in members}
+        if len(self.chosen) + len(places) > self.target:
+            return
         options: defaultdict[str, list[Candidate]] = defaultdict(list)
-        for candidate in groups[group_id]:
+        for candidate in members:
             options[candidate.species.code].append(candidate)
-        size = len({c.placement_id for c in groups[group_id]})
-        ranked = sorted(options.items(), key=lambda item: (-sum(c.score for c in item[1]), item[0]))
-        for code, candidates in ranked:
-            keys = quotas.keys(quotas.catalog[code])
-            if len(candidates) != size or not all(
-                _fits(quotas, key, used[key] + size, target) for key in keys
-            ):
-                continue
-            for candidate in candidates:
-                chosen[candidate.placement_id] = code
-                scores[candidate.placement_id] = candidate.score
-            for key in keys:
-                used[key] += size
-            break
-    while chosen and quotas.violations({**fixed, **chosen}):
-        worst = _most_over(quotas, {**fixed, **chosen}, chosen)
-        victim = min(
-            (p for p, code in chosen.items() if code == worst), key=lambda p: (scores[p], p)
-        )
-        del chosen[victim]
-    return chosen
+        fitting = [
+            (self.room(code), sum(c.score for c in group), code, group)
+            for code, group in options.items()
+            if len(group) == len(places)
+        ]
+        fitting = [item for item in fitting if item[0] >= len(places)]
+        if fitting:
+            _, _, code, group = max(fitting, key=lambda item: (item[0], item[1], item[2]))
+            self.take(code, group)
+
+    def single(self, options: Sequence[Candidate]) -> None:
+        if len(self.chosen) >= self.target:
+            return
+        fitting = [(self.room(c.species.code), c.score, c.species.code, c) for c in options]
+        fitting = [item for item in fitting if item[0] >= 1]
+        if fitting:
+            candidate = max(fitting, key=lambda item: (item[0], item[1], item[2]))[3]
+            self.take(candidate.species.code, (candidate,))
+            self.split.add(candidate.placement_id)
 
 
-def _fits(quotas: Quotas, key: Key, count: int, planned: int) -> bool:
-    if key != CONIFER_KEY and quotas.exhausted(key):
-        return False
-    return count <= allowance(quotas.share(key), planned)
-
-
-def _most_over(quotas: Quotas, plan: Mapping[str, str], removable: Mapping[str, str]) -> str:
-    """Вид, чья доля в плане сильнее всего выходит за квоту, среди тех, что можно убрать."""
-    counts = quotas.counts(plan)
-    planned = len(plan)
-
-    def excess(code: str) -> float:
-        return max(
-            counts[key] / max(1, planned) - quotas.share(key)
-            for key in quotas.keys(quotas.catalog[code])
-        )
-
-    return max(sorted(set(removable.values())), key=excess)
+def _limit(quotas: Quotas, key: Key, planned: int) -> int:
+    """Наибольшее число посадок ключа при planned местах (та же арифметика, что в _fits)."""
+    share = quotas.share(key)
+    limit = allowance(share, planned)
+    if key == CONIFER_KEY or not quotas.existing_total:
+        return limit
+    if quotas.exhausted(key):
+        return 0
+    population = math.floor(share * (planned + quotas.existing_total) + _EPS)
+    return min(limit, population - quotas.existing[key])
 
 
 # --- заданный ассортимент ---

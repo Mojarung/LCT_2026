@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from green.application.assortment import assign_species
@@ -31,7 +32,8 @@ from green.infrastructure.config.repositories import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-CONFIG = ROOT / "config"
+import os
+CONFIG = Path(os.environ.get("GREEN_CONFIG_DIR", ROOT / "config"))
 
 
 def _placements(plan: dict, catalog: YamlSpeciesCatalog, default: str) -> tuple[Placement, ...]:
@@ -67,16 +69,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("run", type=Path, help="каталог прогона с plan.json и assortment.json")
     parser.add_argument("--profile", default="strict")
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="переопределить параметр профиля")
     parser.add_argument(
         "--why", nargs="*", default=[], metavar="FAMILY", help="три главные причины отказа видов"
+    )
+    parser.add_argument(
+        "--empty", action="store_true", help="какие виды допустимы в незанятых местах"
     )
     args = parser.parse_args()
 
     plan_data = json.loads((args.run / "plan.json").read_text(encoding="utf-8"))
-    existing = json.loads((args.run / "assortment.json").read_text(encoding="utf-8"))["existing"]
+    summary_path = args.run / "assortment.json"
+    existing = (
+        json.loads(summary_path.read_text(encoding="utf-8"))["existing"]
+        if summary_path.exists()
+        else {}
+    )
     rulebook = YamlRuleBookSource(CONFIG / "acts.yaml", CONFIG / "rules.yaml").load()
     catalog = YamlSpeciesCatalog(CONFIG / "species.yaml")
-    params = YamlProfileSource(CONFIG / "profiles").load(args.profile)
+    overrides = dict(item.split("=", 1) for item in args.set)
+    params = YamlProfileSource(CONFIG / "profiles").load(args.profile, overrides)
     placements = _placements(plan_data, catalog, params.species_code)
 
     plan = assign_species(
@@ -110,6 +122,54 @@ def main() -> None:
     for note in summary.notes:
         print("заметка:", note)
     _why(placements, catalog, rulebook, params, set(args.why))
+    if args.empty:
+        _empty(placements, plan, catalog, rulebook, params)
+
+
+def _empty(placements, plan, catalog, rulebook, params) -> None:  # noqa: ANN001
+    """Незанятые места: сколько их, какие виды там допустимы и сколько этих видов в плане."""
+    planted = {p.placement_id for p in plan.placements}
+    counts = plan.assortment_summary.counts
+    total = len(plan.placements)
+    allowed_at_empty: Counter[str] = Counter()
+    families_at_empty: Counter[frozenset[str]] = Counter()
+    for placement in placements:
+        if placement.placement_id in planted:
+            continue
+        ctx = site_context(placement)
+        allowed = [
+            s
+            for s in catalog.all()
+            if s.is_tree and species_verdict(s, ctx, rulebook, params).allowed
+        ]
+        allowed_at_empty.update(s.code for s in allowed)
+        families_at_empty[frozenset(s.family for s in allowed)] += 1
+    print(f"незанятых мест: {len(placements) - total}")
+    for code, places in allowed_at_empty.most_common():
+        family = catalog.get(code).family
+        share = counts.get(code, 0) / total if total else 0
+        print(f"  {code} ({family}): допустим в {places} пустых, в плане {counts.get(code, 0)} ({share:.1%})")
+    for families, places in families_at_empty.most_common():
+        print(f"  набор семейств {sorted(families)}: {places} мест")
+    # Пробный вид: без правил по роду, солеустойчивый, зимостойкий, высота 8 м. Меняется
+    # только крона - видно, какую крону допускают пустые места по нормам.
+    probe = replace(
+        catalog.get("elaeagnus_angustifolia"),
+        code="probe",
+        name_lat="Probus probus",
+        genus="probus",
+        family="Probaceae",
+        height_m=8.0,
+    )
+    for crown in (3, 4, 5, 6, 7, 8, 10):
+        candidate = replace(probe, crown_mature_m=float(crown))
+        fits = sum(
+            1
+            for placement in placements
+            if placement.placement_id not in planted
+            and species_verdict(candidate, site_context(placement), rulebook, params).allowed
+        )
+        print(f"  пробный вид с кроной {crown} м допустим в {fits} пустых местах")
 
 
 def _why(placements, catalog, rulebook, params, families: set[str]) -> None:  # noqa: ANN001
