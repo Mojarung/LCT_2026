@@ -14,6 +14,7 @@ from green.application.diameters import assign_diameters
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.results import RunReport, StageTiming
+from green.application.shrub_groups import fill_shrub_groups
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -122,6 +123,17 @@ class PlanSite:
             )
             if inventory is not None:
                 plan = replace(plan, warnings=(*plan.warnings, _inventory_note(inventory)))
+        with watch.stage("shrub_groups"):
+            plan = fill_shrub_groups(
+                plan,
+                strategy=self._strategy,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                catalog=self._species.all(),
+                params=params,
+                existing=inventory.matched if inventory else None,
+            )
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

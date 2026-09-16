@@ -38,7 +38,12 @@ if TYPE_CHECKING:
 
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
-MODE_LABELS = {MODE_ALLEY: "аллея вдоль борта", MODE_LAWN: "заполнение газона"}
+MODE_SHRUB_GROUP = "shrub_group"
+MODE_LABELS = {
+    MODE_ALLEY: "аллея вдоль борта",
+    MODE_LAWN: "заполнение газона",
+    MODE_SHRUB_GROUP: "группа кустарников на месте дерева",
+}
 _TANGENT_STEP_M = 0.5
 _SPACING_TOLERANCE = 0.95
 _Z_ORDER_BITS = 16
@@ -53,6 +58,17 @@ class PlacementStrategy(Protocol):
         species: Species,
         params: PlanParams,
     ) -> Plan: ...
+
+    def shrub_groups(  # noqa: PLR0913 - те же входы, что у plan, плюс центры групп
+        self,
+        features: Sequence[Feature],
+        labels: Sequence[TextLabel],
+        rulebook: RuleBook,
+        species: Species,
+        params: PlanParams,
+        *,
+        centers: Sequence[tuple[float, float]],
+    ) -> tuple[Placement, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +128,54 @@ class GreedyPlantingStrategy:
             warnings=_warnings(features, index, selector.rejections, params),
             stats=stats,
             zones=zones,
+        )
+
+    def shrub_groups(  # noqa: PLR0913 - те же входы, что у plan, плюс центры групп
+        self,
+        features: Sequence[Feature],
+        labels: Sequence[TextLabel],
+        rulebook: RuleBook,
+        species: Species,
+        params: PlanParams,
+        *,
+        centers: Sequence[tuple[float, float]],
+    ) -> tuple[Placement, ...]:
+        """Группы кустарников: квадрат size x size с шагом spacing_m вокруг каждого центра.
+
+        Точка группы проверяется так же, как посадка: грунт по карте покрытий, граница работ,
+        все правила расстояний для кустарника. Правила по роду здесь не применяются - вид
+        ещё не выбран, их проверяет подбор ассортимента. Точка, не прошедшая нормы, просто
+        не входит в группу: отказ на месте уже записан для дерева.
+        """
+        if not centers:
+            return ()
+        rules = rulebook.distance_rules_for(params.planting_type)
+        index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
+        if params.require_soil:
+            index.surface = build_surface_map(
+                features, labels, index.boundary, params.surface_cell_m
+            )
+        size = params.shrub_group_size
+        offsets = [(i - (size - 1) / 2) * params.spacing_m for i in range(size)]
+        candidates = [
+            _Candidate(station, MODE_SHRUB_GROUP, cx + dx, cy + dy)
+            for station, (cx, cy) in enumerate(centers)
+            for dx in offsets
+            for dy in offsets
+        ]
+        points = shapely.points([(c.x, c.y) for c in candidates])
+        positions = np.flatnonzero(index.plantable(points))
+        if not len(positions):
+            return ()
+        batch = index.evaluate(points[positions])
+        accepted = {Verdict.ALLOWED}
+        if params.allow_needs_approval:
+            accepted.add(Verdict.NEEDS_APPROVAL)
+        selector = _Selector(species=species, params=params)
+        return tuple(
+            selector._placement(candidates[position], batch, row)  # noqa: SLF001 - тот же формат
+            for row, position in enumerate(positions.tolist())
+            if batch.verdict(row) in accepted
         )
 
 

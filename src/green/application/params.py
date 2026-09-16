@@ -62,6 +62,13 @@ class PlanParams:
     # (особо охраняемые зелёные), natural (природные), outside_green_fund. Решает, допустима
     # ли высадка видов группы III.
     territory: str = "green_fund"
+    # Место дерева, которое допустимо по нормам, но не получило вид из-за квот, занимается
+    # группой кустарников (docs/notes/14-shrub-groups.md). Шаг группы - толкование табл. 3.6.2
+    # 743-ПП: групповая посадка кустарников 0,3 м, однорядная высоких 0,5-1 м; принят 1 м,
+    # потому что крона кустарников каталога через 10 лет 0,8-2,5 м.
+    shrub_groups: bool = True
+    shrub_group_spacing_m: float = 1.0
+    shrub_group_size: int = 3  # квадрат 3 x 3
     quota_species: float = 0.10  # правило 10-20-30 (Santamour, 1990)
     quota_genus: float = 0.20
     quota_family: float = 0.30

@@ -238,6 +238,8 @@ class Plan:
     stats: Mapping[str, int | float] = field(default_factory=dict)
     zones: tuple[Zone, ...] = field(default=())
     assortment_summary: AssortmentSummary | None = None
+    # Состав групп кустарников на местах, которые квоты деревьев оставили пустыми.
+    shrub_assortment_summary: AssortmentSummary | None = None
 
     @property
     def allowed_count(self) -> int:

@@ -235,6 +235,9 @@ class ProfileModel(_Strict):
     crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
+    shrub_groups: bool = True
+    shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
+    shrub_group_size: int = Field(default=3, ge=1, le=5)
     quota_species: float = Field(default=0.10, gt=0, le=1)
     quota_genus: float = Field(default=0.20, gt=0, le=1)
     quota_family: float = Field(default=0.30, gt=0, le=1)

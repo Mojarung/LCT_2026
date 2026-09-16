@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
 LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
+LAYER_SHRUBS = f"{RESULT_PREFIX}SHRUBS"
+LAYER_SHRUBS_APPROVAL = f"{RESULT_PREFIX}SHRUBS_APPROVAL"
 LAYER_REJECT = f"{RESULT_PREFIX}REJECT"
 LAYER_LABELS = f"{RESULT_PREFIX}LABELS"
 LAYER_ZONE_ALLOWED = f"{RESULT_PREFIX}ZONE_ALLOWED"
@@ -34,6 +36,8 @@ REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 LAYER_COLORS = {
     LAYER_TREES: 3,
     LAYER_TREES_APPROVAL: 30,
+    LAYER_SHRUBS: 94,
+    LAYER_SHRUBS_APPROVAL: 40,
     LAYER_REJECT: 1,
     LAYER_LABELS: 7,
     LAYER_ZONE_ALLOWED: 3,
@@ -92,7 +96,8 @@ class EzdxfPlanWriter:
             )
 
     def _tree_block(self, doc: Drawing, species: Species) -> str:
-        name = f"{RESULT_PREFIX}TREE_{species.code.upper()}"
+        kind = "SHRUB" if species.is_shrub else "TREE"
+        name = f"{RESULT_PREFIX}{kind}_{species.code.upper()}"
         if name not in doc.blocks:
             block = doc.blocks.new(name)
             block.add_circle((0, 0), radius=species.crown_diameter_m / 2)
@@ -107,7 +112,11 @@ class EzdxfPlanWriter:
         return name
 
     def _placement(self, doc: Drawing, msp: Modelspace, placement: Placement) -> None:
-        layer = LAYER_TREES if placement.verdict is Verdict.ALLOWED else LAYER_TREES_APPROVAL
+        allowed = placement.verdict is Verdict.ALLOWED
+        if placement.species.is_shrub:
+            layer = LAYER_SHRUBS if allowed else LAYER_SHRUBS_APPROVAL
+        else:
+            layer = LAYER_TREES if allowed else LAYER_TREES_APPROVAL
         ref = msp.add_blockref(
             self._tree_block(doc, placement.species),
             (placement.x, placement.y),

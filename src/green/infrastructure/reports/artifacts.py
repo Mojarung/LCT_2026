@@ -73,6 +73,10 @@ class FileArtifactSink:
                 directory / "assortment.json",
                 _assortment_summary(report.plan.assortment_summary),
             ),
+            "assortment_shrubs.json": _write_json(
+                directory / "assortment_shrubs.json",
+                _assortment_summary(report.plan.shrub_assortment_summary),
+            ),
         }
 
 

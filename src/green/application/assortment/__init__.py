@@ -64,8 +64,15 @@ def assign_species(
     existing: Mapping[str, int] | None = None,
 ) -> Plan:
     """Назначить вид каждой посадке плана и собрать сводку состава."""
-    existing = dict(existing or {})
     index = {species.code: species for species in catalog}
+    # Квоты деревьев считаются по существующим деревьям, квоты кустарников - по кустарникам:
+    # доля вида в популяции улицы имеет смысл внутри одной жизненной формы.
+    forms = _FORMS.get(params.planting_type, frozenset())
+    existing = {
+        code: count
+        for code, count in (existing or {}).items()
+        if code in index and index[code].life_form in forms
+    }
     if params.assortment_mode == SINGLE or not plan.placements:
         return _single_mode(plan, catalog, params, existing, index)
 
