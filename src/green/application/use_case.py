@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment import assign_species
@@ -16,7 +16,7 @@ from green.application.explain import explain
 from green.application.results import RunReport, StageTiming
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
     from green.application.params import PlanParams
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from green.application.ports import (
         DrawingConverter,
         IntegrityChecker,
+        InventoryCounts,
         LayerMapSource,
         PlanWriter,
         RuleBookSource,
@@ -34,6 +35,16 @@ if TYPE_CHECKING:
 RESULT_DXF = "result.dxf"
 
 
+def _inventory_note(counts: InventoryCounts) -> str:
+    """Что из ведомости доехало до квот, а что нет: одно число без второго ничего не значит."""
+    return (
+        f"Перечётка: строк {counts.rows_read}, учтено {counts.total} растений "
+        f"{len(counts.matched)} пород, не опознано строк {counts.rows_unmatched}, "
+        f"к вырубке {counts.rows_removed}, без количества {counts.rows_without_count}, "
+        f"по роду приблизительно {len(counts.approximate)}."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PlanRequest:
     run_id: str
@@ -41,8 +52,8 @@ class PlanRequest:
     work_dir: Path
     profile: str
     params: PlanParams
-    # Существующие деревья по породам из перечётной ведомости: входят в квоты разнообразия.
-    inventory: Mapping[str, int] | None = None
+    # Существующие деревья по перечётной ведомости: входят в квоты разнообразия.
+    inventory: InventoryCounts | None = None
 
 
 @dataclass(slots=True)
@@ -101,7 +112,16 @@ class PlanSite:
         with watch.stage("place"):
             plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
         with watch.stage("assort"):
-            plan = assign_species(plan, rulebook, self._species.all(), params, request.inventory)
+            inventory = request.inventory
+            plan = assign_species(
+                plan,
+                rulebook,
+                self._species.all(),
+                params,
+                inventory.matched if inventory else None,
+            )
+            if inventory is not None:
+                plan = replace(plan, warnings=(*plan.warnings, _inventory_note(inventory)))
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

@@ -12,14 +12,15 @@ from green.application.results import RunRecord, RunState
 from green.application.use_case import PlanRequest
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
+    from pathlib import Path
 
-    from green.application.ports import ArtifactSink, ProfileSource, RunStore
+    from green.application.ports import ArtifactSink, InventoryCounts, ProfileSource, RunStore
     from green.application.use_case import PlanSite
 
 
 class RunService:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - composition root passes every port explicitly
         self,
         *,
         store: RunStore,
@@ -27,11 +28,13 @@ class RunService:
         profiles: ProfileSource,
         artifacts: ArtifactSink,
         max_parallel: int,
+        inventory: Callable[[Path], InventoryCounts] | None = None,
     ) -> None:
         self._store = store
         self._use_case = use_case
         self._profiles = profiles
         self._artifacts = artifacts
+        self._inventory = inventory
         self._slots = threading.BoundedSemaphore(max_parallel)
 
     def register(
@@ -44,7 +47,7 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
-    def execute(self, run_id: str) -> RunRecord:
+    def execute(self, run_id: str, inventory_path: Path | None = None) -> RunRecord:
         """Синхронный прогон: вызывается из пула потоков, CPU-работа не блокирует event loop."""
         record = self._store.get(run_id)
         with self._slots:
@@ -52,6 +55,11 @@ class RunService:
             try:
                 params = self._profiles.load(record.profile, record.overrides)
                 run_dir = self._store.run_dir(run_id)
+                counts = (
+                    self._inventory(inventory_path)
+                    if inventory_path is not None and self._inventory is not None
+                    else None
+                )
                 report = self._use_case.execute(
                     PlanRequest(
                         run_id=run_id,
@@ -59,6 +67,7 @@ class RunService:
                         work_dir=run_dir,
                         profile=record.profile,
                         params=params,
+                        inventory=counts,
                     )
                 )
                 saved = self._artifacts.save(run_dir, report)

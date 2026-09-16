@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import anyio
@@ -17,7 +18,6 @@ from green.interfaces.api.schemas import RunListOut, RunOut
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
 router = APIRouter(prefix="/runs", tags=["runs"], responses=PROBLEM_RESPONSES)
 CHUNK = 1024 * 1024
@@ -68,6 +68,10 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
     overrides: Annotated[
         str | None, Form(description="JSON-объект параметров поверх профиля")
     ] = None,
+    inventory: Annotated[
+        UploadFile | None,
+        File(description="Перечётная ведомость .xls или .xlsx: существующие деревья в квотах"),
+    ] = None,
 ) -> RunOut:
     """Принять чертёж и поставить прогон в очередь. Статус: GET /runs/{id}."""
     settings = container.settings
@@ -83,7 +87,16 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
     except PayloadTooLargeError as error:
         container.runs.reject(record.run_id, str(error))
         raise
-    background.add_task(container.runs.execute, record.run_id)
+    inventory_path = None
+    if inventory is not None and inventory.filename:
+        suffix = Path(inventory.filename).suffix or ".xlsx"
+        inventory_path = container.store.input_path(record.run_id).with_name(f"inventory{suffix}")
+        try:
+            await _store_upload(inventory, inventory_path, settings.max_upload_mb * CHUNK)
+        except PayloadTooLargeError as error:
+            container.runs.reject(record.run_id, str(error))
+            raise
+    background.add_task(container.runs.execute, record.run_id, inventory_path)
     response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
     return RunOut.from_record(record, _artifact_url(request))
 
