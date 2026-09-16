@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from green.application.classification import GeometryKind, MatchTarget
+from green.application.params import DEFAULT_WEIGHTS
 from green.domain.norms import CitationStatus, MeasureTo, PlantingType, Severity, genus_of
 from green.domain.objects import ObjectClass
 from green.domain.planting import LifeForm
@@ -166,3 +167,37 @@ class ProfileModel(_Strict):
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
+    assortment_mode: Literal["auto", "given", "single"] = "auto"
+    given_assortment: dict[str, int] = Field(default_factory=dict)
+    region_hardiness_zone: int = Field(default=4, ge=1, le=9)
+    salt_zone_m: float = Field(default=5.0, ge=0, le=100)
+    housing_zone_m: float = Field(default=30.0, ge=0, le=200)
+    max_height_under_lines_m: float = Field(default=4.0, gt=0, le=50)
+    crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
+    quota_species: float = Field(default=0.10, gt=0, le=1)
+    quota_genus: float = Field(default=0.20, gt=0, le=1)
+    quota_family: float = Field(default=0.30, gt=0, le=1)
+    conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
+    group_max_species: int = Field(default=3, ge=1, le=10)
+    structure_penalty: float = Field(default=0.3, ge=0, le=10)
+    assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+
+    @field_validator("conifer_share")
+    @classmethod
+    def _share(cls, value: tuple[float, float]) -> tuple[float, float]:
+        low, high = value
+        if not 0 <= low <= high <= 1:
+            raise ValueError("conifer_share: доля хвойных задаётся парой 0 <= min <= max <= 1")
+        return value
+
+    @field_validator("assortment_weights")
+    @classmethod
+    def _weights(cls, value: dict[str, float]) -> dict[str, float]:
+        unknown = sorted(set(value) - set(DEFAULT_WEIGHTS))
+        if unknown:
+            raise ValueError(f"assortment_weights: неизвестные факторы {', '.join(unknown)}")
+        if any(weight < 0 for weight in value.values()):
+            raise ValueError("assortment_weights: вес не может быть отрицательным")
+        if value and sum(value.values()) <= 0:
+            raise ValueError("assortment_weights: сумма весов должна быть больше нуля")
+        return value

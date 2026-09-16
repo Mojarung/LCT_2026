@@ -6,3 +6,16 @@ curb_offsets_m: [1.0, 1.5, 2.0]
 require_utility_data: true
 unknown_lines_as_utility: true
 allow_needs_approval: true
+# Кустарники подбираются из жизненных форм shrub_*; слой кустарников отдельным приёмом
+# пока не строится, поэтому квоты мягче, а доля хвойных не задаётся.
+assortment_mode: auto
+region_hardiness_zone: 4
+salt_zone_m: 5.0
+housing_zone_m: 30.0
+max_height_under_lines_m: 4.0
+crown_extra_per_m: 0.5
+quota_species: 0.20
+quota_genus: 0.35
+quota_family: 0.50
+conifer_share: [0.0, 0.30]
+group_max_species: 3
