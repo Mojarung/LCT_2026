@@ -202,6 +202,9 @@ class Rejection:
     y: float
     verdict: Verdict
     blocking: tuple[RuleCheck, ...]
+    # Место допустимо по нормам, но не занято: причина не из правил расстояний (квоты
+    # разнообразия, заданные количества). У отказа по нормам поле пустое.
+    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)

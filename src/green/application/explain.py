@@ -156,6 +156,12 @@ def _reason(reason: Reason) -> str:
 
 
 def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
+    if rejection.note:
+        text = (
+            f"Отказ №{rejection.number}: место допустимо по нормам, посадка не выполнена. "
+            f"Причина: {rejection.note}."
+        )
+        return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
     parts = [describe_check(c, rulebook) for c in rejection.blocking]
     text = (
         f"Отказ №{rejection.number}: {VERDICT_LABELS[rejection.verdict]}. Причины: "

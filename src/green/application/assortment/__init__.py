@@ -27,6 +27,7 @@ from green.domain.planting import (
     Alternative,
     AssortmentInfo,
     Reason,
+    Rejection,
     Species,
 )
 
@@ -43,10 +44,10 @@ GIVEN = "given"
 SINGLE = "single"
 NO_SPECIES = "no_species"
 _ALTERNATIVES = 3
-_ORPHAN_REASON = Reason(
+_SPLIT_REASON = Reason(
     COMPOSITION,
-    "общий вид для структуры не нашёлся: назначен лучший допустимый вид этой точки, "
-    "квоты разнообразия при этом не учитывались",
+    "структура одним видом в квоты разнообразия не влезла: вид назначен этой посадке отдельно "
+    "из оставшегося допуска",
 )
 _FORMS = {
     PlantingType.TREE: TREE_FORMS,
@@ -114,9 +115,7 @@ def assign_species(
             )
         verdicts[placement.placement_id] = allowed
 
-    solved = assign(candidates, structures, index, existing, params)
-    assignment = _fill_orphans(solved, verdicts, scores)
-    orphans = frozenset(assignment.species_by_placement) - frozenset(solved.species_by_placement)
+    assignment = assign(candidates, structures, index, existing, params)
     status = GIVEN if params.assortment_mode == GIVEN else ASSIGNED
     placements = tuple(
         _apply(
@@ -127,11 +126,12 @@ def assign_species(
             chosen=assignment.species_by_placement,
             index=index,
             status=status,
-            orphans=orphans,
+            split=assignment.split_placements,
         )
         for placement in plan.placements
     )
-    no_species = sum(1 for p in placements if p.assortment and p.assortment.status == NO_SPECIES)
+    placements, unplanted = _drop_unplanted(placements, plan.rejections)
+    no_species = len(unplanted)
     summary = build_summary(
         assignment,
         index,
@@ -143,51 +143,52 @@ def assign_species(
     )
     warnings = (*plan.warnings, *_warnings(assignment, no_species), *_conditions(placements))
     return replace(
-        plan, placements=placements, assortment_summary=summary, warnings=tuple(warnings)
+        plan,
+        placements=placements,
+        rejections=(*plan.rejections, *unplanted),
+        assortment_summary=summary,
+        warnings=tuple(warnings),
     )
 
 
-def _fill_orphans(
-    assignment: Assignment,
-    verdicts: Mapping[str, list[SpeciesVerdict]],
-    scores: Mapping[tuple[str, str], Score],
-) -> Assignment:
-    """Посадке без вида, у которой есть допустимые виды, ставится лучший из них для точки.
-
-    Иначе в чертеже остаётся вид профиля, который в этой точке мог не пройти нормы (крона,
-    род, 743-ПП). Структура при этом дробится, а квота может быть превышена: это видно в
-    основаниях посадки и в предупреждениях.
-    """
-    chosen = dict(assignment.species_by_placement)
-    orphans = 0
-    for placement_id, allowed in verdicts.items():
-        if placement_id in chosen or not allowed:
-            continue
-        best = max(
-            allowed, key=lambda v: (scores[(placement_id, v.species.code)].total, v.species.code)
+def _drop_unplanted(
+    placements: Sequence[Placement], rejections: Sequence[Rejection]
+) -> tuple[tuple[Placement, ...], tuple[Rejection, ...]]:
+    """Место без вида не попадает в план: в чертеже не должно быть посадки вида профиля,
+    который здесь мог не пройти нормы или квоты. Место уходит в отказы со своей причиной."""
+    planted = [p for p in placements if p.assortment is None or p.assortment.status != NO_SPECIES]
+    next_number = max((r.number for r in rejections), default=0) + 1
+    unplanted = tuple(
+        Rejection(
+            rejection_id=p.placement_id,
+            number=next_number + offset,
+            planting_type=p.planting_type,
+            x=p.x,
+            y=p.y,
+            verdict=p.verdict,
+            blocking=(),
+            note="; ".join(r.text for r in p.assortment.reasons) if p.assortment else "",
         )
-        chosen[placement_id] = best.species.code
-        orphans += 1
-    if not orphans:
-        return assignment
-    note = (
-        f"{orphans} посадкам общий вид структуры не нашёлся, назначен лучший допустимый вид точки "
-        "без учёта квот"
+        for offset, p in enumerate(
+            p for p in placements if p.assortment is not None and p.assortment.status == NO_SPECIES
+        )
     )
-    return replace(assignment, species_by_placement=chosen, notes=(*assignment.notes, note))
+    renumbered = tuple(replace(p, number=position) for position, p in enumerate(planted, 1))
+    return renumbered, unplanted
 
 
 def _warnings(assignment: Assignment, no_species: int) -> list[str]:
     messages = [f"Подбор ассортимента: {note}." for note in assignment.notes]
-    if assignment.quota_violations:
+    if assignment.quota_violations:  # по построению пусто; если нет - это ошибка сервиса
         messages.append(
-            "Подбор ассортимента: квоты разнообразия нарушены в "
-            f"{len(assignment.quota_violations)} структурах."
+            "Подбор ассортимента: ОШИБКА, квоты разнообразия нарушены: "
+            + "; ".join(assignment.quota_violations)
         )
     if no_species:
         messages.append(
-            f"Подбор ассортимента: {no_species} посадок остались без вида, "
-            "вид профиля сохранён и помечен в плане."
+            f"Подбор ассортимента: {no_species} мест допустимы по нормам, но не заняты: "
+            "ни один допустимый вид не укладывается в квоты разнообразия, места перенесены "
+            "в отказы."
         )
     return messages
 
@@ -217,7 +218,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     chosen: Mapping[str, str],
     index: Mapping[str, Species],
     status: str,
-    orphans: frozenset[str] = frozenset(),
+    split: frozenset[str] = frozenset(),
 ) -> Placement:
     ctx = contexts[placement.placement_id]
     allowed = verdicts.get(placement.placement_id, [])
@@ -231,7 +232,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 factors={},
                 structure_id=ctx.structure_id,
                 structure_kind=ctx.structure_kind,
-                reasons=(_no_species_reason(allowed),),
+                reasons=(_no_species_reason(allowed, given=status == GIVEN),),
                 alternatives=_alternatives(placement.placement_id, allowed, scores, None, None),
             ),
         )
@@ -247,8 +248,8 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
             structure_id=ctx.structure_id,
             structure_kind=ctx.structure_kind,
             reasons=(
-                (*verdict.reasons, _ORPHAN_REASON)
-                if placement.placement_id in orphans
+                (*verdict.reasons, _SPLIT_REASON)
+                if placement.placement_id in split
                 else verdict.reasons
             ),
             alternatives=_alternatives(placement.placement_id, allowed, scores, code, score.total),
@@ -256,12 +257,14 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     )
 
 
-def _no_species_reason(allowed: Sequence[SpeciesVerdict]) -> Reason:
+def _no_species_reason(allowed: Sequence[SpeciesVerdict], *, given: bool) -> Reason:
+    if allowed and given:
+        return Reason(COMPOSITION, "заданные количества видов исчерпаны")
     if allowed:
         return Reason(
             COMPOSITION,
-            f"ни один из {len(allowed)} подходящих видов не прошёл по квотам разнообразия "
-            "или однородности структуры",
+            f"ни один из {len(allowed)} допустимых по нормам видов не укладывается в квоты "
+            "разнообразия 10-20-30 (с учётом существующих деревьев)",
         )
     return Reason(COMPOSITION, "ни один вид каталога не прошёл ограничения этой точки")
 

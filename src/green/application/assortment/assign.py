@@ -1,41 +1,35 @@
 """Назначение видов: одна задача оптимизации вместо обхода посадок по очереди.
 
 Жадный обход обделяет тех, кто идёт последним: первые ряды забирают лучшие виды, а квоты
-разнообразия («не больше 10% одного вида») при таком обходе почти всегда ломаются на
-хвосте. Поэтому виды назначаются сразу всем, целочисленной задачей.
+разнообразия («не больше 10% одного вида») при таком обходе ломаются на хвосте. Поэтому
+виды назначаются сразу всем, целочисленной задачей.
 
-Переменных две на пару «структура - вид»: y - «участок занят этим видом» (двоичная) и
-n - сколько посадок участка этот вид занимает (целая, не больше доступных). Однородность
-ряда и участка группы обеспечена самой моделью, а не ограничением, поэтому задача
-маленькая: сотни переменных вместо десятков тысяч. На варианте с переменной на каждую
-пару «посадка - вид» те же сорок посадок считались три секунды - квоты, натянутые на
-тысячи двоичных переменных, дают тяжёлое дерево поиска.
+Квоты 10-20-30 (вид, род, семейство) и верхняя граница доли хвойных - жёсткие ограничения:
+план, который их нарушает, сервис не выдаёт. Доля считается от числа реально занятых мест,
+а это число - переменная той же задачи: «посадок вида не больше 10% от всех занятых» -
+линейное ограничение c_s <= 0,1 * T. Одно растение вида квоту не нарушает никогда
+(иначе план из пяти деревьев требовал бы пяти родов и пяти семейств): это допущение
+задано двоичной переменной «вид взят в одном экземпляре».
 
-Отдельная n нужна, чтобы участок можно было занять не целиком: без неё режим заданного
-ассортимента не сходится по счётчикам («дано 25 лип и 15 елей» на участках по 10 и 8 даёт
-20 и 12, а восемь мест остаются пустыми). Какие именно посадки участка занять, решается
-после солвера - по убыванию оценки.
+Каждая доля проверяется и в популяции улицы вместе с существующими деревьями:
+c_s + E_s <= 0,1 * (T + E). Если вида на улице уже больше доли, новых посадок этого вида
+нет вовсе.
 
-Квоты 10-20-30 по виду, роду и семейству и доля хвойных заданы мягко: у каждой есть
-переменная превышения со штрафом. Жёсткая квота противоречит однородности ряда (10% от
-тридцати посадок - три дерева, а ряд из десяти требует десяти одного вида) и оставила бы
-посадки пустыми; мягкая позволяет превысить долю ровно настолько, насколько иначе места
-остались бы без вида, и показывает превышение в сводке.
+Проход в два шага. Сначала структура (ряд, участок группы) получает один вид целиком - так
+аллея однородна. Места, которые целиком одним видом в квоты не влезли, вторым шагом
+получают виды поодиночке, в тех же квотах с учётом уже занятого. Место, под которое ни один
+допустимый вид в квоты не укладывается, остаётся пустым, и это видно в плане.
 
-Каждая доля проверяется дважды - в самом плане и в популяции улицы вместе с уже растущими
-деревьями, - и цены превышения разные. Без плановой доли улица с семьюстами существующих
-деревьев позволяет занять треть нового плана одним видом и формально остаться в 10%; без
-популяционной сервис добавляет клёнов туда, где клёнов и так половина. Порядок цен -
-плановая доля дешевле популяционной, популяционная дешевле пустого места - и даёт порядок
-предпочтений: сперва виды в обеих долях, затем вышедшие за плановую, и только вместо
-пустой посадки - вид, которого на улице уже больше нормы.
+Нижняя граница доли хвойных мягкая: хвойных мест на участке может не быть, и жёсткий
+минимум оставил бы пустым весь план. Недобор записывается в заметки.
 
-Если решатель не справился (нет решения или кончилось время), работает жадный запасной
-путь, и факт этого попадает и в предупреждения прогона, и в сводку.
+Режим заданного ассортимента («25 лип и 15 елей») квоты не применяет: количества задал
+человек. Там участок можно занять не целиком (переменная n), иначе счётчики не сходятся.
 """
 
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -43,8 +37,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
-
-from green.application.assortment.structures import SINGLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -55,16 +47,20 @@ if TYPE_CHECKING:
 
 MILP = "milp"
 GREEDY = "greedy"
+GIVEN_MODE = "given"
+SPECIES_LEVEL = "вид"
+GENUS_LEVEL = "род"
+FAMILY_LEVEL = "семейство"
+CONIFER_KEY = ("хвойные", "")
 _TIME_LIMIT_S = 60.0
-# Веса в цели упорядочены по важности: заполнить посадку важнее, чем выдержать квоту,
-# а выдержать квоту важнее, чем выбрать вид с оценкой чуть выше (оценка не больше 1).
+# Заполнить место важнее, чем выбрать вид с оценкой чуть выше (оценка не больше 1), и
+# важнее, чем добрать хвойных до нижней границы коридора.
 _FILL_BONUS = 10.0
-_QUOTA_PENALTY = 3.0
-# Доля с учётом уже растущих деревьев стоит дороже плановой, но дешевле пустого места:
-# вид, которого на улице и так много, назначается последним и только вместо пустоты.
-_POPULATION_PENALTY = 9.0
-_MIN_STRUCTURE = 2  # у одиночки однородность не ограничивают
+_CONIFER_PENALTY = 3.0
 _HALF = 0.5  # порог округления двоичной переменной
+_EPS = 1e-9
+
+type Key = tuple[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,37 +73,373 @@ class Candidate:
 
 
 @dataclass(frozen=True, slots=True)
-class _QuotaSpec:
-    """Мягкая доля: столбцы задачи, допуск и направление ограничения."""
-
-    label: str
-    columns: Mapping[int, float]
-    cap: float
-    at_least: bool = False
-    penalty: float = _QUOTA_PENALTY
-
-
-@dataclass(frozen=True, slots=True)
 class Assignment:
     species_by_placement: Mapping[str, str]
     solver: str
     quota_violations: tuple[str, ...] = ()
     notes: tuple[str, ...] = field(default=())
+    # Посадки, получившие вид вторым шагом: их структура одним видом в квоты не влезла.
+    split_placements: frozenset[str] = frozenset()
 
 
 def assign(
     candidates: Sequence[Candidate],
-    structures: Sequence[Structure],
+    structures: Sequence[Structure],  # noqa: ARG001 - структура уже записана в Candidate
     catalog: Mapping[str, Species],
     existing: Mapping[str, int],
     params: PlanParams,
 ) -> Assignment:
     if not candidates:
         return Assignment(species_by_placement={}, solver=MILP)
-    problem = _Problem(candidates, structures, catalog, existing, params)
-    if params.assortment_solver == GREEDY:
-        return problem.solve_greedy()
-    return problem.solve_milp() or problem.solve_greedy()
+    if params.assortment_mode == GIVEN_MODE:
+        problem = _GivenProblem(candidates, params)
+        if params.assortment_solver == GREEDY:
+            return problem.solve_greedy()
+        return problem.solve_milp() or problem.solve_greedy()
+    return _QuotaAssignment(candidates, catalog, existing, params).run()
+
+
+# --- квоты ---
+
+
+class Quotas:
+    """Квоты 10-20-30 и верхняя граница хвойных: какие ключи у вида и выдержан ли план."""
+
+    def __init__(
+        self, catalog: Mapping[str, Species], existing: Mapping[str, int], params: PlanParams
+    ) -> None:
+        self.catalog = catalog
+        self.params = params
+        self.shares = {
+            SPECIES_LEVEL: params.quota_species,
+            GENUS_LEVEL: params.quota_genus,
+            FAMILY_LEVEL: params.quota_family,
+            CONIFER_KEY[0]: params.conifer_share[1],
+        }
+        self.existing_total = sum(existing.values())
+        self.existing: Counter[Key] = Counter()
+        for code, count in existing.items():
+            species = catalog.get(code)
+            keys = self.keys(species) if species else ((SPECIES_LEVEL, code),)
+            for key in keys:
+                if key != CONIFER_KEY:  # коридор хвойных задан для плана, не для популяции
+                    self.existing[key] += count
+
+    def keys(self, species: Species) -> tuple[Key, ...]:
+        keys: tuple[Key, ...] = (
+            (SPECIES_LEVEL, species.code),
+            (GENUS_LEVEL, species.genus),
+            (FAMILY_LEVEL, species.family),
+        )
+        return (*keys, CONIFER_KEY) if species.is_conifer else keys
+
+    def share(self, key: Key) -> float:
+        return self.shares[key[0]]
+
+    def exhausted(self, key: Key) -> bool:
+        """На улице уже больше доли: новых посадок с этим ключом не будет."""
+        grown = self.existing[key]
+        return grown > 0 and grown > self.share(key) * self.existing_total + _EPS
+
+    def counts(self, chosen: Mapping[str, str]) -> Counter[Key]:
+        used: Counter[Key] = Counter()
+        for code in chosen.values():
+            for key in self.keys(self.catalog[code]):
+                used[key] += 1
+        return used
+
+    def violations(self, chosen: Mapping[str, str]) -> tuple[str, ...]:
+        """Проверка итогового плана той же арифметикой, что в задаче."""
+        planned = len(chosen)
+        found = []
+        for key, count in sorted(self.counts(chosen).items()):
+            share = self.share(key)
+            label = f"{key[0]} {key[1]}".strip()
+            if count > max(1, math.floor(share * planned + _EPS)):
+                found.append(f"{label}: {count} из {planned} в плане, доля {share:.0%}")
+            if key == CONIFER_KEY or not self.existing_total:
+                continue
+            if self.exhausted(key):
+                found.append(f"{label}: доля на улице уже выбрана, в плане {count}")
+                continue
+            population = planned + self.existing_total
+            if count + self.existing[key] > math.floor(share * population + _EPS):
+                found.append(f"{label}: {count + self.existing[key]} из {population} на улице")
+        return tuple(found)
+
+    def exhausted_notes(self, codes: Sequence[str]) -> list[str]:
+        keys = sorted({k for code in codes for k in self.keys(self.catalog[code])})
+        return [
+            f"{key[0]} {key[1]}: на улице уже {self.existing[key]} из {self.existing_total} "
+            "растений, доля выбрана, новых посадок нет"
+            for key in keys
+            if key != CONIFER_KEY and self.exhausted(key)
+        ]
+
+
+# --- назначение с квотами ---
+
+
+class _QuotaAssignment:
+    def __init__(
+        self,
+        candidates: Sequence[Candidate],
+        catalog: Mapping[str, Species],
+        existing: Mapping[str, int],
+        params: PlanParams,
+    ) -> None:
+        self.catalog = catalog
+        self.params = params
+        self.quotas = Quotas(catalog, existing, params)
+        usable = [c for c in candidates if c.species.code in catalog]
+        self.candidates = sorted(usable, key=lambda c: (c.placement_id, c.species.code))
+        self.codes = sorted({c.species.code for c in self.candidates})
+
+    def run(self) -> Assignment:
+        notes: list[str] = []
+        solver = MILP
+        if self.params.assortment_solver == GREEDY:
+            solver = GREEDY
+            notes.append("виды назначены жадным обходом структур по настройке профиля")
+        by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
+        for candidate in self.candidates:
+            by_structure[candidate.structure_id].append(candidate)
+        whole = self._solve(by_structure, {}, solver)
+        if whole is None:
+            solver = GREEDY
+            notes.append("решатель не справился, виды назначены жадным обходом структур")
+            whole = self._solve(by_structure, {}, solver) or {}
+        singles: defaultdict[str, list[Candidate]] = defaultdict(list)
+        for candidate in self.candidates:
+            if candidate.placement_id not in whole:
+                singles[candidate.placement_id].append(candidate)
+        rest = self._solve(singles, whole, solver) if singles else {}
+        if rest is None:
+            solver = GREEDY
+            notes.append("решатель не справился со вторым шагом, он выполнен жадно")
+            rest = self._solve(singles, whole, solver) or {}
+        chosen = {**whole, **rest}
+        notes += self.quotas.exhausted_notes(self.codes)
+        notes += self._conifer_notes(chosen)
+        if rest:
+            split_note = (
+                f"{len(rest)} посадок получили вид вне своей структуры: одним видом структура "
+                "в квоты разнообразия не влезла"
+            )
+            notes.append(split_note)
+        return Assignment(
+            species_by_placement=dict(sorted(chosen.items())),
+            solver=solver,
+            quota_violations=self.quotas.violations(chosen),
+            notes=tuple(notes),
+            split_placements=frozenset(rest),
+        )
+
+    def _solve(
+        self, groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], solver: str
+    ) -> dict[str, str] | None:
+        if solver == GREEDY:
+            return _greedy(groups, fixed, self.quotas)
+        return _milp(groups, fixed, self.quotas)
+
+    def _conifer_notes(self, chosen: Mapping[str, str]) -> list[str]:
+        low = self.params.conifer_share[0]
+        minimum = math.ceil(low * len(chosen) - _EPS)
+        if minimum <= 0:
+            return []
+        if not any(self.catalog[c].is_conifer for c in self.codes):
+            return ["доля хвойных не выдержана снизу: допустимых хвойных на участке нет"]
+        conifers = sum(1 for code in chosen.values() if self.catalog[code].is_conifer)
+        if conifers >= minimum:
+            return []
+        short_note = (
+            f"доля хвойных ниже коридора: {conifers} из {len(chosen)} при минимуме {minimum} "
+            "(нижняя граница мягкая)"
+        )
+        return [short_note]
+
+
+def _milp(
+    groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], quotas: Quotas
+) -> dict[str, str] | None:
+    """y - группа занята видом целиком (двоичная), b - ключ взят в одном экземпляре."""
+    members: defaultdict[tuple[str, str], list[Candidate]] = defaultdict(list)
+    for group_id, candidates in groups.items():
+        for candidate in candidates:
+            members[(group_id, candidate.species.code)].append(candidate)
+    pairs = sorted(members)
+    if not pairs:
+        return {}
+    weights = np.array([float(len(members[pair])) for pair in pairs])
+    in_key: defaultdict[Key, list[int]] = defaultdict(list)
+    for position, (_, code) in enumerate(pairs):
+        for key in quotas.keys(quotas.catalog[code]):
+            in_key[key].append(position)
+    keys = sorted(in_key)
+    count = len(pairs)
+    single = {key: count + i for i, key in enumerate(keys)}  # столбцы b
+    slack = count + len(keys)  # недобор хвойных до нижней границы
+    size = slack + 1
+    rows = _one_species_per_group(pairs, size)
+    big = float(len(fixed) + weights.sum())
+    ctx = _Context(weights, quotas, quotas.counts(fixed), float(len(fixed)), single, big)
+    for key in keys:
+        _share_rows(rows, key, in_key[key], ctx)
+    _conifer_floor(rows, in_key.get(CONIFER_KEY, []), ctx, slack)
+    cost = np.zeros(size)
+    for position, pair in enumerate(pairs):
+        cost[position] = -sum(c.score + _FILL_BONUS for c in members[pair])
+    cost[slack] = _CONIFER_PENALTY
+    upper = np.ones(size)
+    upper[slack] = big
+    integrality = np.ones(size)
+    integrality[slack] = 0
+    result = milp(
+        c=cost,
+        constraints=rows.constraint(),
+        integrality=integrality,
+        bounds=Bounds(np.zeros(size), upper),
+        options={"time_limit": _TIME_LIMIT_S},
+    )
+    if not result.success or result.x is None:
+        return None
+    return {
+        candidate.placement_id: pair[1]
+        for position, pair in enumerate(pairs)
+        if result.x[position] > _HALF
+        for candidate in members[pair]
+    }
+
+
+def _one_species_per_group(pairs: Sequence[tuple[str, str]], size: int) -> _Rows:
+    rows = _Rows(size)
+    by_group: defaultdict[str, dict[int, float]] = defaultdict(dict)
+    for position, (group_id, _) in enumerate(pairs):
+        by_group[group_id][position] = 1.0
+    for entries in by_group.values():
+        rows.add(entries, 0.0, 1.0)
+    return rows
+
+
+@dataclass(frozen=True, slots=True)
+class _Context:
+    """Общие части строк задачи: веса пар, квоты, уже занятое первым шагом."""
+
+    weights: np.ndarray
+    quotas: Quotas
+    used: Counter[Key]
+    fixed_total: float
+    single: Mapping[Key, int]
+    big: float
+
+
+def _share_rows(rows: _Rows, key: Key, positions: Sequence[int], ctx: _Context) -> None:
+    """Доля ключа в плане (с исключением «один экземпляр») и в популяции улицы."""
+    weights, quotas, single, big = ctx.weights, ctx.quotas, ctx.single, ctx.big
+    used, fixed_total = ctx.used[key], ctx.fixed_total
+    share = quotas.share(key)
+    inside = set(positions)
+    if key != CONIFER_KEY and quotas.existing_total and quotas.exhausted(key):
+        rows.add({p: weights[p] for p in positions}, -np.inf, float(-used))
+        return
+    # c + F - share * (F_T + T) - b <= 0: доля в плане, b разрешает один экземпляр.
+    plan = {p: weights[p] * ((1.0 if p in inside else 0.0) - share) for p in range(len(weights))}
+    plan[single[key]] = -1.0
+    rows.add(_nonzero(plan), -np.inf, share * fixed_total - used)
+    # b = 1 только если ключ взят не больше одного раза: c + F + big * b <= 1 + big.
+    once = {p: weights[p] for p in positions}
+    once[single[key]] = big
+    rows.add(once, -np.inf, 1.0 + big - used)
+    if key == CONIFER_KEY or not quotas.existing_total:
+        return
+    grown = float(quotas.existing[key])
+    population = {
+        p: weights[p] * ((1.0 if p in inside else 0.0) - share) for p in range(len(weights))
+    }
+    rows.add(
+        _nonzero(population),
+        -np.inf,
+        share * (fixed_total + quotas.existing_total) - grown - used,
+    )
+
+
+def _conifer_floor(rows: _Rows, positions: Sequence[int], ctx: _Context, slack: int) -> None:
+    """Мягкая нижняя граница хвойных: c + F - low * (F_T + T) + s >= 0."""
+    weights, used, fixed_total = ctx.weights, ctx.used, ctx.fixed_total
+    low = ctx.quotas.params.conifer_share[0]
+    if low <= 0 or not positions:
+        return
+    inside = set(positions)
+    entries = {p: weights[p] * ((1.0 if p in inside else 0.0) - low) for p in range(len(weights))}
+    entries[slack] = 1.0
+    rows.add(_nonzero(entries), low * fixed_total - used[CONIFER_KEY], np.inf)
+
+
+def _nonzero(entries: Mapping[int, float]) -> dict[int, float]:
+    return {k: v for k, v in entries.items() if abs(v) > _EPS}
+
+
+def _greedy(
+    groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], quotas: Quotas
+) -> dict[str, str]:
+    """Запасной путь: группы по убыванию размера, вид целиком в пределах допуска от числа мест.
+
+    Допуск считается от числа всех мест; если часть осталась пустой, из выбранного убираются
+    посадки с наибольшим превышением, пока итоговый план не выдержит квоты.
+    """
+    target = len(fixed) + len({c.placement_id for g in groups.values() for c in g})
+    used = quotas.counts(fixed)
+    chosen: dict[str, str] = {}
+    scores: dict[str, float] = {}
+    order = sorted(groups, key=lambda g: (-len({c.placement_id for c in groups[g]}), g))
+    for group_id in order:
+        options: defaultdict[str, list[Candidate]] = defaultdict(list)
+        for candidate in groups[group_id]:
+            options[candidate.species.code].append(candidate)
+        size = len({c.placement_id for c in groups[group_id]})
+        ranked = sorted(options.items(), key=lambda item: (-sum(c.score for c in item[1]), item[0]))
+        for code, candidates in ranked:
+            keys = quotas.keys(quotas.catalog[code])
+            if len(candidates) != size or not all(
+                _fits(quotas, key, used[key] + size, target) for key in keys
+            ):
+                continue
+            for candidate in candidates:
+                chosen[candidate.placement_id] = code
+                scores[candidate.placement_id] = candidate.score
+            for key in keys:
+                used[key] += size
+            break
+    while chosen and quotas.violations({**fixed, **chosen}):
+        worst = _most_over(quotas, {**fixed, **chosen}, chosen)
+        victim = min(
+            (p for p, code in chosen.items() if code == worst), key=lambda p: (scores[p], p)
+        )
+        del chosen[victim]
+    return chosen
+
+
+def _fits(quotas: Quotas, key: Key, count: int, planned: int) -> bool:
+    if key != CONIFER_KEY and quotas.exhausted(key):
+        return False
+    return count <= max(1, math.floor(quotas.share(key) * planned + _EPS))
+
+
+def _most_over(quotas: Quotas, plan: Mapping[str, str], removable: Mapping[str, str]) -> str:
+    """Вид, чья доля в плане сильнее всего выходит за квоту, среди тех, что можно убрать."""
+    counts = quotas.counts(plan)
+    planned = len(plan)
+
+    def excess(code: str) -> float:
+        return max(
+            counts[key] / max(1, planned) - quotas.share(key)
+            for key in quotas.keys(quotas.catalog[code])
+        )
+
+    return max(sorted(set(removable.values())), key=excess)
+
+
+# --- заданный ассортимент ---
 
 
 class _Rows:
@@ -138,137 +470,97 @@ class _Rows:
         return LinearConstraint(matrix, np.array(self.lower), np.array(self.upper))
 
 
-class _Problem:
-    """Общие индексы для обоих путей решения."""
+class _GivenProblem:
+    """Режим «вот 25 лип и 15 елей»: количества - верхняя граница, квоты не применяются."""
 
-    def __init__(
-        self,
-        candidates: Sequence[Candidate],
-        structures: Sequence[Structure],
-        catalog: Mapping[str, Species],
-        existing: Mapping[str, int],
-        params: PlanParams,
-    ) -> None:
+    def __init__(self, candidates: Sequence[Candidate], params: PlanParams) -> None:
         self.params = params
-        self.catalog = catalog
-        self.existing = existing
         self.candidates = sorted(candidates, key=lambda c: (c.placement_id, c.species.code))
-        self.placements = sorted({c.placement_id for c in self.candidates})
-        self.codes = sorted({c.species.code for c in self.candidates})
-        self.kinds = {s.structure_id: s.kind for s in structures}
         self.by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             self.by_structure[candidate.structure_id].append(candidate)
-        # Что даёт вид структуре: сколько её посадок он займёт и какую сумму оценок принесёт.
         self.members: defaultdict[tuple[str, str], list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             self.members[(candidate.structure_id, candidate.species.code)].append(candidate)
         self.pairs = sorted(self.members)
         self.index = {pair: position for position, pair in enumerate(self.pairs)}
-        self.structures = sorted(self.by_structure)
-        self.partial = False  # занимать участок не целиком: только там, где заданы счётчики
-
-    # --- целочисленная задача ---
 
     def solve_milp(self) -> Assignment | None:
-        given = self.params.assortment_mode == "given"
-        # Частичное заполнение участка нужно только там, где счётчики заданы человеком:
-        # вместе с мягкими квотами оно замедляет решатель в двадцать раз, а без квот
-        # (режим given) считается мгновенно и даёт ровно заказанные количества.
-        self.partial = given
-        specs = [] if given else self._quota_specs()
         pairs = len(self.pairs)
-        fixed = 2 * pairs if self.partial else pairs
-        size = fixed + len(specs)
+        size = 2 * pairs  # y - участок занят видом, n - сколько его посадок занято
         rows = _Rows(size)
-        notes = self._rows_for(rows, specs, fixed=fixed, given=given)
-        planned = float(len(self.placements))
-        blocks = [np.ones(pairs)]
-        if self.partial:
-            blocks.append(np.array([float(len(self.members[pair])) for pair in self.pairs]))
-        blocks.append(np.full(len(specs), planned))
+        for structure_id in sorted(self.by_structure):
+            codes = sorted({c.species.code for c in self.by_structure[structure_id]})
+            rows.add({self.index[(structure_id, code)]: 1.0 for code in codes}, 0.0, 1.0)
+        for pair, position in self.index.items():
+            rows.add(
+                {position + pairs: 1.0, position: -float(len(self.members[pair]))}, -np.inf, 0.0
+            )
+        for code, count in sorted(self.params.given_assortment.items()):
+            entries = {
+                position + pairs: 1.0 for pair, position in self.index.items() if pair[1] == code
+            }
+            rows.add(entries, 0.0, float(count))
+        cost = np.zeros(size)
+        for pair, position in self.index.items():
+            members = self.members[pair]
+            cost[position + pairs] = -(sum(c.score for c in members) / len(members) + _FILL_BONUS)
+        upper = np.concatenate(
+            [np.ones(pairs), [float(len(self.members[pair])) for pair in self.pairs]]
+        )
         result = milp(
-            c=self._cost(size, specs),
+            c=cost,
             constraints=rows.constraint(),
-            integrality=np.concatenate([np.ones(fixed), np.zeros(len(specs))]),
-            bounds=Bounds(np.zeros(size), np.concatenate(blocks)),
+            integrality=np.ones(size),
+            bounds=Bounds(np.zeros(size), upper),
             options={"time_limit": _TIME_LIMIT_S},
         )
         if not result.success or result.x is None:
             return None
-        chosen = self._chosen(result.x, pairs)
-        violations = tuple(
-            f"{spec.label}: отклонение от квоты на {result.x[fixed + offset]:.0f} посадок"
-            for offset, spec in enumerate(specs)
-            if result.x[fixed + offset] > _HALF
-        )
-        if given:
-            notes += self._given_shortfall(chosen)
-        return Assignment(
-            species_by_placement=dict(sorted(chosen.items())),
-            solver=MILP,
-            quota_violations=violations,
-            notes=tuple(notes),
-        )
-
-    def _rows_for(
-        self, rows: _Rows, specs: Sequence[_QuotaSpec], *, fixed: int, given: bool
-    ) -> list[str]:
-        """Строки задачи: один вид на участок, связь счётчика с признаком, состав плана."""
-        pairs = len(self.pairs)
-        for structure_id in self.structures:
-            rows.add(
-                {self.index[(structure_id, code)]: 1.0 for code in self._codes_of(structure_id)},
-                0.0,
-                1.0,
-            )
-        if self.partial:
-            for pair, position in self.index.items():
-                rows.add(
-                    {position + pairs: 1.0, position: -float(len(self.members[pair]))},
-                    -np.inf,
-                    0.0,
-                )
-        notes: list[str] = []
-        if given:
-            for code, count in sorted(self.params.given_assortment.items()):
-                rows.add(self._columns({code}), 0.0, float(count))
-            notes.append("режим заданного ассортимента: квоты разнообразия не применяются")
-        else:
-            notes += self._conifer_note()
-        for offset, spec in enumerate(specs):
-            slack = fixed + offset
-            if spec.at_least:
-                rows.add({**spec.columns, slack: 1.0}, spec.cap, np.inf)
-            else:
-                rows.add({**spec.columns, slack: -1.0}, -np.inf, spec.cap)
-        return notes
-
-    def _chosen(self, solution: np.ndarray, pairs: int) -> dict[str, str]:
         chosen: dict[str, str] = {}
         for pair, position in self.index.items():
-            members = self.members[pair]
-            if self.partial:
-                take = round(float(solution[position + pairs]))
-            else:
-                take = len(members) if solution[position] > _HALF else 0
-            if take <= 0:
-                continue
-            # Какие именно посадки участка занять - те, где вид оценён выше.
-            ranked = sorted(members, key=lambda c: (-c.score, c.placement_id))
+            take = round(float(result.x[position + pairs]))
+            ranked = sorted(self.members[pair], key=lambda c: (-c.score, c.placement_id))
             for candidate in ranked[:take]:
                 chosen[candidate.placement_id] = pair[1]
-        return chosen
+        notes = ["режим заданного ассортимента: квоты разнообразия не применяются"]
+        notes += self._shortfall(chosen)
+        return Assignment(
+            species_by_placement=dict(sorted(chosen.items())), solver=MILP, notes=tuple(notes)
+        )
 
-    def _codes_of(self, structure_id: str) -> list[str]:
-        return sorted({c.species.code for c in self.by_structure[structure_id]})
+    def solve_greedy(self) -> Assignment:
+        left = dict(self.params.given_assortment)
+        chosen: dict[str, str] = {}
+        order = sorted(self.by_structure, key=lambda s: (-len(self.by_structure[s]), s))
+        for structure_id in order:
+            options: defaultdict[str, list[Candidate]] = defaultdict(list)
+            for candidate in self.by_structure[structure_id]:
+                options[candidate.species.code].append(candidate)
+            ranked = sorted(
+                options.items(),
+                key=lambda item: (-len(item[1]), -sum(c.score for c in item[1]), item[0]),
+            )
+            for code, candidates in ranked:
+                take = min(len(candidates), left.get(code, 0))
+                if take <= 0:
+                    continue
+                best = sorted(candidates, key=lambda c: (-c.score, c.placement_id))[:take]
+                for candidate in best:
+                    chosen[candidate.placement_id] = code
+                left[code] -= take
+                break
+        notes = (
+            "режим заданного ассортимента: квоты разнообразия не применяются",
+            "виды назначены жадным обходом структур",
+            *self._shortfall(chosen),
+        )
+        return Assignment(
+            species_by_placement=dict(sorted(chosen.items())), solver=GREEDY, notes=notes
+        )
 
-    def _given_shortfall(self, chosen: Mapping[str, str]) -> list[str]:
-        """Заданное количество - верхняя граница: у структуры один вид, и остаток может не влезть.
-
-        Двадцать пять лип и пятнадцать елей на четыре ряда по десять требуют ряда из двух
-        видов; вместо того чтобы дробить ряд, сервис ставит меньше и говорит, сколько именно.
-        """
+    def _shortfall(self, chosen: Mapping[str, str]) -> list[str]:
+        """Заданное количество - верхняя граница: остаток между участками не делится."""
         placed = Counter(chosen.values())
         short = {
             code: count - placed.get(code, 0)
@@ -278,237 +570,9 @@ class _Problem:
         if not short:
             return []
         listed = ", ".join(f"{code} на {value}" for code, value in short.items())
-        note = (
-            f"заданные количества выдержаны не полностью (не хватило {listed}): "
-            "участок занимается одним видом, остаток между участками не делится"
-        )
-        return [note]
-
-    def _cost(self, size: int, specs: Sequence[_QuotaSpec]) -> np.ndarray:
-        """Цена занятой посадки: оценка вида плюс премия за заполнение."""
-        cost = np.zeros(size)
-        pairs = len(self.pairs)
-        for pair, position in self.index.items():
-            members = self.members[pair]
-            if self.partial:
-                average = sum(c.score for c in members) / len(members)
-                cost[position + pairs] = -(average + _FILL_BONUS)
-            else:
-                cost[position] = -sum(c.score + _FILL_BONUS for c in members)
-        fixed = 2 * pairs if self.partial else pairs
-        for offset, spec in enumerate(specs):
-            cost[fixed + offset] = spec.penalty
-        return cost
-
-    def _columns(self, codes: set[str]) -> dict[int, float]:
-        """Столбцы счётчиков посадок: по ним считаются квоты и заданные количества."""
-        pairs = len(self.pairs)
-        if self.partial:
-            return {
-                position + pairs: 1.0 for pair, position in self.index.items() if pair[1] in codes
-            }
-        return {
-            position: float(len(self.members[pair]))
-            for pair, position in self.index.items()
-            if pair[1] in codes
-        }
-
-    def _quota(self) -> _Quota:
-        return _Quota(self.catalog, self.existing, self.params, len(self.placements))
-
-    def _quota_specs(self) -> list[_QuotaSpec]:
-        """Мягкие ограничения состава: превышение возможно, но стоит штрафа и попадает в сводку.
-
-        Каждая доля проверяется дважды: в самом плане и в популяции улицы вместе с уже
-        растущими деревьями. Без первой проверки улица с семьюстами существующих деревьев
-        позволяет засадить треть нового плана одним видом и формально остаться в 10%;
-        без второй сервис добавляет клёнов туда, где клёнов и так половина.
-        """
-        quota = self._quota()
-        plan_only = _Quota(self.catalog, {}, self.params, len(self.placements))
-        specs: list[_QuotaSpec] = []
-        for code in self.codes:
-            specs += self._pair_of_specs(
-                "вид",
-                code,
-                self._columns({code}),
-                plan_only.cap_species(code),
-                quota.cap_species(code),
+        return [
+            (
+                f"заданные количества выдержаны не полностью (не хватило {listed}): "
+                "участок занимается одним видом, остаток между участками не делится"
             )
-        for genus, codes in sorted(self._grouped("genus").items()):
-            specs += self._pair_of_specs(
-                "род",
-                genus,
-                self._columns(codes),
-                plan_only.cap_genus(genus),
-                quota.cap_genus(genus),
-            )
-        for family, codes in sorted(self._grouped("family").items()):
-            specs += self._pair_of_specs(
-                "семейство",
-                family,
-                self._columns(codes),
-                plan_only.cap_family(family),
-                quota.cap_family(family),
-            )
-        return [spec for spec in specs if spec.columns] + self._conifer_specs()
-
-    def _pair_of_specs(
-        self,
-        level: str,
-        name: str,
-        columns: Mapping[int, float],
-        plan_cap: float,
-        population_cap: float,
-    ) -> list[_QuotaSpec]:
-        """Две доли одного уровня: в плане и в популяции улицы, с разной ценой превышения.
-
-        Цена превышения плановой доли ниже, чем популяционной, а популяционной - ниже, чем
-        цена пустого места. Отсюда порядок предпочтений: сначала виды, укладывающиеся в
-        обе доли; затем те, что выходят за плановую (ряд из десяти иначе не выдержать в
-        одном виде); вид, которого на улице и так больше нормы, берётся последним и только
-        вместо пустой посадки.
-        """
-        specs = [_QuotaSpec(f"{level} {name} в плане", columns, plan_cap)]
-        if self.existing:
-            specs.append(
-                _QuotaSpec(
-                    f"{level} {name} с существующими",
-                    columns,
-                    population_cap,
-                    penalty=_POPULATION_PENALTY,
-                )
-            )
-        return specs
-
-    def _grouped(self, attribute: str) -> dict[str, set[str]]:
-        groups: defaultdict[str, set[str]] = defaultdict(set)
-        for code in self.codes:
-            species = self.catalog.get(code)
-            if species is not None:
-                groups[str(getattr(species, attribute))].add(code)
-        return groups
-
-    def _conifer_note(self) -> list[str]:
-        low_share, _ = self.params.conifer_share
-        codes = {c for c in self.codes if c in self.catalog and self.catalog[c].is_conifer}
-        if low_share > 0 and not codes:
-            return ["доля хвойных не выдержана: допустимых хвойных на участке нет"]
-        return []
-
-    def _conifer_specs(self) -> list[_QuotaSpec]:
-        low_share, high_share = self.params.conifer_share
-        codes = {c for c in self.codes if c in self.catalog and self.catalog[c].is_conifer}
-        total = float(len(self.placements))
-        entries = self._columns(codes)
-        if not entries:
-            return []
-        specs = []
-        if low_share > 0:
-            specs.append(
-                _QuotaSpec("доля хвойных снизу", entries, low_share * total, at_least=True)
-            )
-        specs.append(_QuotaSpec("доля хвойных сверху", entries, high_share * total))
-        return specs
-
-    # --- жадный запасной путь ---
-
-    def solve_greedy(self) -> Assignment:
-        quota = self._quota()
-        given_left = dict(self.params.given_assortment)
-        given_mode = self.params.assortment_mode == "given"
-        chosen: dict[str, str] = {}
-        violations: list[str] = []
-        order = sorted(self.by_structure, key=lambda s: (-len(self.by_structure[s]), s))
-        for structure_id in order:
-            members = self.by_structure[structure_id]
-            options: defaultdict[str, list[float]] = defaultdict(list)
-            for candidate in members:
-                options[candidate.species.code].append(candidate.score)
-            ranked = sorted(
-                options.items(), key=lambda item: (-len(item[1]), -sum(item[1]), item[0])
-            )
-            fitting = [
-                (code, scores)
-                for code, scores in ranked
-                if quota.fits(code, len(scores))
-                and (not given_mode or given_left.get(code, 0) >= len(scores))
-            ]
-            code = fitting[0][0] if fitting else ranked[0][0]
-            if not fitting:
-                kind = self.kinds.get(structure_id, SINGLE)
-                violations.append(f"{kind} {structure_id}: вид {code} назначен сверх квоты")
-            used = 0
-            for candidate in members:
-                if candidate.species.code == code:
-                    chosen[candidate.placement_id] = code
-                    used += 1
-            quota.take(code, used)
-            if given_mode:
-                given_left[code] = max(0, given_left.get(code, 0) - used)
-        return Assignment(
-            species_by_placement=dict(sorted(chosen.items())),
-            solver=GREEDY,
-            quota_violations=tuple(violations),
-            notes=(
-                "виды назначены жадным обходом структур по настройке профиля"
-                if self.params.assortment_solver == GREEDY
-                else "решатель не справился, виды назначены жадным обходом структур",
-            ),
-        )
-
-
-class _Quota:
-    """Квоты 10-20-30 с учётом уже растущих деревьев: существующая популяция съедает долю.
-
-    Допуск считается от общего числа деревьев - запроектированных и существующих, - поэтому
-    вид, которого на улице и так много, новых посадок почти не получает. В целочисленной
-    задаче допуск мягкий (превышение стоит штрафа), в жадном пути - жёсткий, и превышение
-    там записывается в quota_violations.
-    """
-
-    def __init__(
-        self,
-        catalog: Mapping[str, Species],
-        existing: Mapping[str, int],
-        params: PlanParams,
-        planned: int,
-    ) -> None:
-        self.catalog = catalog
-        self.params = params
-        self.total = planned + sum(existing.values())
-        self.used_species: defaultdict[str, int] = defaultdict(int)
-        self.used_genus: defaultdict[str, int] = defaultdict(int)
-        self.used_family: defaultdict[str, int] = defaultdict(int)
-        for code, count in existing.items():
-            self.used_species[code] += count
-            species = catalog.get(code)
-            if species is not None:
-                self.used_genus[species.genus] += count
-                self.used_family[species.family] += count
-
-    def cap_species(self, code: str) -> float:
-        return max(0.0, self.params.quota_species * self.total - self.used_species[code])
-
-    def cap_genus(self, genus: str) -> float:
-        return max(0.0, self.params.quota_genus * self.total - self.used_genus[genus])
-
-    def cap_family(self, family: str) -> float:
-        return max(0.0, self.params.quota_family * self.total - self.used_family[family])
-
-    def fits(self, code: str, count: int) -> bool:
-        species = self.catalog.get(code)
-        if species is None:
-            return self.cap_species(code) >= count
-        return (
-            self.cap_species(code) >= count
-            and self.cap_genus(species.genus) >= count
-            and self.cap_family(species.family) >= count
-        )
-
-    def take(self, code: str, count: int) -> None:
-        self.used_species[code] += count
-        species = self.catalog.get(code)
-        if species is not None:
-            self.used_genus[species.genus] += count
-            self.used_family[species.family] += count
+        ]

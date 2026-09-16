@@ -103,7 +103,8 @@ def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
     summary = plan.assortment_summary
     assert summary is not None
     assert summary.shannon > 0
-    assert sum(summary.counts.values()) + summary.no_species == len(plan.placements)
+    assert sum(summary.counts.values()) == len(plan.placements)
+    assert not summary.quota_violations
 
 
 def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:

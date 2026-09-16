@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import orjson
 import shapely
 
-from green.domain.planting import Placement
+from green.domain.planting import Placement, Rejection
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -23,7 +23,6 @@ if TYPE_CHECKING:
         AssortmentSummary,
         Explanation,
         Plan,
-        Rejection,
         RuleCheck,
         Species,
     )
@@ -88,6 +87,13 @@ def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
     return rows
 
 
+def _note_row(subject: Rejection, base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Отказ не по правилу расстояний (квоты): одна строка с причиной, без акта."""
+    if not subject.note:
+        return []
+    return [{**base, "rule_id": "", "outcome": "composition", "reason": subject.note}]
+
+
 def _rows(
     subject: Placement | Rejection,
     checks: tuple[RuleCheck, ...],
@@ -139,6 +145,8 @@ def _rows(
             }
         )
     rows += _species_rows(subject, base, rulebook)
+    if isinstance(subject, Rejection):
+        rows += _note_row(subject, base)
     return rows
 
 
@@ -286,6 +294,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "x": r.x,
                 "y": r.y,
                 "verdict": r.verdict.value,
+                "note": r.note,
                 "explanation": texts.get(r.rejection_id, ""),
                 "blocking": [_check(c) for c in r.blocking],
             }

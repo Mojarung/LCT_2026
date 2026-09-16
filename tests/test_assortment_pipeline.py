@@ -25,7 +25,9 @@ ALLEY = MODE_LABELS["alley"]
 LAWN = MODE_LABELS["lawn"]
 
 CHECKS = (
-    RuleCheck("R-CURB-TREE-001", CheckOutcome.PASS, 2.0, 2.5, None, ObjectClass.CURB),
+    # Борт в 6 м. У самого борта нормы (крона, соль) оставляют почти одни розоцветные, и
+    # квота семейства 30% не даёт занять больше пары мест: это отдельный тест.
+    RuleCheck("R-CURB-TREE-001", CheckOutcome.PASS, 2.0, 6.0, None, ObjectClass.CURB),
     RuleCheck("R-BLD-TREE-001", CheckOutcome.PASS, 5.0, 14.0, None, ObjectClass.BUILDING),
     # Теплосеть рядом: правило по роду (липа и клён 2 м, берёза и тополь 4 м) здесь решает,
     # поэтому попадает в объяснение. На тридцати метрах оно уже не основание, а шум.
@@ -66,21 +68,33 @@ def _plan() -> Plan:
     return Plan(placements=tuple(placements), rejections=())
 
 
-def test_every_placement_gets_a_card_and_rows_stay_homogeneous() -> None:
+def test_every_place_is_planted_with_a_card_or_rejected_with_a_reason() -> None:
     plan = assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS)
-    assert len(plan.placements) == 40
+    assert len(plan.placements) + len(plan.rejections) == 40
+    # У этой точки 15 допустимых видов в пяти семействах, из них три семейства по одному
+    # виду: 10-20-30 держится только на малом плане. Мест занято мало, но квоты целы.
+    assert len(plan.placements) >= 5
     for placement in plan.placements:
         assert placement.assortment is not None
-        assert placement.assortment.status in {"assigned", "no_species"}
+        assert placement.assortment.status == "assigned"
+    for rejection in plan.rejections:
+        assert "квот" in rejection.note
+    assert [p.number for p in plan.placements] == list(range(1, len(plan.placements) + 1))
     rows = {}
     for placement in plan.placements:
         info = placement.assortment
         assert info is not None
         if info.structure_kind == "row":
             rows.setdefault(info.structure_id, set()).add(placement.species.code)
-    assert rows
     for structure_id, codes in rows.items():
-        assert len(codes) == 1, structure_id
+        split = [
+            p
+            for p in plan.placements
+            if p.assortment
+            and p.assortment.structure_id == structure_id
+            and any("квоты" in r.text for r in p.assortment.reasons)
+        ]
+        assert len(codes) == 1 or split, structure_id
 
 
 def test_percent_matches_the_score_of_the_chosen_species() -> None:
@@ -116,9 +130,9 @@ def test_summary_counts_add_up_and_the_plan_is_not_a_monoculture() -> None:
     plan = assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS)
     summary = plan.assortment_summary
     assert summary is not None
-    assigned = sum(1 for p in plan.placements if p.assortment and p.assortment.status == "assigned")
-    assert sum(summary.counts.values()) == assigned
-    assert summary.no_species == 40 - assigned
+    assert sum(summary.counts.values()) == len(plan.placements)
+    assert summary.no_species == 40 - len(plan.placements)
+    assert not summary.quota_violations
     assert len(summary.counts) > 1
     assert summary.shannon > 0
     assert abs(sum(summary.genus_shares.values()) - 1.0) < 1e-6
@@ -163,7 +177,7 @@ def test_existing_trees_change_the_outcome() -> None:
 def test_explanation_names_the_species_percent_factors_and_alternatives() -> None:
     plan = explain(assign_species(_plan(), RULEBOOK, CATALOG.all(), PARAMS), RULEBOOK)
     texts = {e.subject_id: e.text for e in plan.explanations}
-    assert len(texts) == 40
+    assert len(texts) == 40  # посадки и перенесённые в отказы места
     for placement in plan.placements:
         info = placement.assortment
         assert info is not None
@@ -196,3 +210,20 @@ def test_an_empty_plan_is_returned_untouched() -> None:
     plan = assign_species(Plan(placements=(), rejections=()), RULEBOOK, CATALOG.all(), PARAMS)
     assert plan.placements == ()
     assert plan.assortment_summary is not None
+
+
+def test_curbside_places_stay_empty_rather_than_break_the_family_quota() -> None:
+    """У борта в 2,5 м допустимы 7 видов, из них 6 розоцветных: квота семейства 30% не
+    позволяет занять больше пары мест. Пустые места уходят в отказы с причиной."""
+    curbside = (
+        RuleCheck("R-CURB-TREE-001", CheckOutcome.PASS, 2.0, 2.5, None, ObjectClass.CURB),
+        *CHECKS[1:],
+    )
+    plan = _plan()
+    plan = replace(plan, placements=tuple(replace(p, checks=curbside) for p in plan.placements))
+    result = assign_species(plan, RULEBOOK, CATALOG.all(), PARAMS)
+    summary = result.assortment_summary
+    assert summary is not None
+    assert not summary.quota_violations
+    assert len(result.placements) < 10
+    assert len(result.rejections) == 40 - len(result.placements)

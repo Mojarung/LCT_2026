@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 
-from green.application.assortment.assign import GREEDY, MILP, Candidate, assign
+from green.application.assortment.assign import GREEDY, MILP, Candidate, Quotas, assign
 from green.application.assortment.structures import Structure
 from green.application.params import PlanParams
 from green.domain.planting import LifeForm, Species
@@ -30,25 +30,26 @@ def _species(code: str, *, conifer: bool = False, genus: str | None = None) -> S
     )
 
 
-CATALOG = {
-    code: _species(code, conifer=code in {"picea_abies", "pinus_sylvestris"})
-    for code in (
-        "tilia_cordata",
-        "acer_platanoides",
-        "ulmus_laevis",
-        "sorbus_aucuparia",
-        "picea_abies",
-        "pinus_sylvestris",
-    )
-}
-SCORES = {
-    "tilia_cordata": 0.90,
-    "acer_platanoides": 0.80,
-    "ulmus_laevis": 0.70,
-    "sorbus_aucuparia": 0.60,
-    "picea_abies": 0.50,
-    "pinus_sylvestris": 0.40,
-}
+# Двенадцать видов в разных родах и семействах: меньше десяти видов правило 10-20-30
+# выдержать не может в принципе, и назначение честно оставило бы места пустыми.
+CODES = (
+    "tilia_cordata",
+    "acer_platanoides",
+    "ulmus_laevis",
+    "sorbus_aucuparia",
+    "betula_alba",
+    "quercus_robur",
+    "fraxinus_excelsior",
+    "aesculus_hippocastanum",
+    "malus_baccata",
+    "prunus_padus",
+    "picea_abies",
+    "thuja_occidentalis",
+)
+CONIFERS = {"picea_abies": "Pinaceae", "thuja_occidentalis": "Cupressaceae"}
+CATALOG = {code: _species(code, conifer=code in CONIFERS) for code in CODES}
+CATALOG["thuja_occidentalis"] = replace(CATALOG["thuja_occidentalis"], family="Cupressaceae")
+SCORES = {code: round(0.95 - 0.05 * position, 2) for position, code in enumerate(CODES)}
 
 
 def _rows(count: int, size: int) -> list[Structure]:
@@ -84,61 +85,74 @@ def _candidates(structures: list[Structure], codes: list[str]) -> list[Candidate
     ]
 
 
-def test_each_row_gets_exactly_one_species() -> None:
-    structures = _rows(3, 10)
+def _counts(result: object) -> Counter[str]:
+    return Counter(result.species_by_placement.values())  # type: ignore[attr-defined]
+
+
+def test_each_row_gets_exactly_one_species_when_the_quota_allows() -> None:
+    """Десять рядов по десять: 10% от ста - ровно ряд, аллеи однородны."""
+    structures = _rows(10, 10)
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
     assert result.solver == MILP
-    assert len(result.species_by_placement) == 30
+    assert len(result.species_by_placement) == 100
+    assert not result.quota_violations
     for structure in structures:
         used = {result.species_by_placement[p] for p in structure.placement_ids}
         assert len(used) == 1, structure.structure_id
 
 
-def test_rows_do_not_all_take_the_best_species() -> None:
+def test_rows_that_do_not_fit_the_quota_are_split_not_overfilled() -> None:
+    """Три ряда по десять: 10% от тридцати - три дерева, ряд одним видом не выдержать."""
     structures = _rows(3, 10)
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
-    counts = Counter(result.species_by_placement.values())
-    assert len(counts) == 3
-    assert max(counts.values()) == 10
+    counts = _counts(result)
+    assert len(result.species_by_placement) == 30
+    assert max(counts.values()) <= 3
+    assert not result.quota_violations
+    assert result.split_placements
 
 
 def test_quota_limits_a_species_when_structures_are_small() -> None:
     structures = _singles(30)
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
-    assert result.solver == MILP
     assert len(result.species_by_placement) == 30
-    counts = Counter(result.species_by_placement.values())
-    # Шесть видов на 30 посадок: доля 10% - это три дерева на вид, то есть 18 мест из 30.
-    # Квота мягкая, поэтому все 30 заняты, а превышение на 12 показано пофамильно, а не
-    # спрятано пустыми посадками.
-    assert max(counts.values()) <= 6
-    assert len(counts) >= 5
-    assert result.quota_violations
-    assert all("отклонение от квоты" in violation for violation in result.quota_violations)
+    assert max(_counts(result).values()) <= 3
+    assert not result.quota_violations
 
 
 def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
-    """20 существующих лип и 20 новых мест: доля липы в популяции уже выбрана, липы не будет."""
+    """20 существующих лип и 20 новых мест: доля липы на улице уже выбрана, липы не будет."""
     structures = _singles(20)
     candidates = _candidates(structures, list(CATALOG))
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
     assert "tilia_cordata" not in set(result.species_by_placement.values())
     assert len(result.species_by_placement) == 20
+    assert not result.quota_violations
+    assert any("tilia_cordata" in note for note in result.notes)
 
 
-def test_exhausted_diversity_leaves_places_empty_instead_of_piling_on_one_species() -> None:
-    """Два вида, из них один уже занимает свою долю по виду, роду и семейству.
+def test_exhausted_diversity_leaves_places_empty_instead_of_breaking_quotas() -> None:
+    """Два вида, один уже выбрал долю на улице: второй не может занять больше 10% плана.
 
-    Сервис заполняет столько, сколько позволяет разнообразие, и оставляет остальное пустым,
-    а не досаживает вид, которого на улице и так больше нормы. Пустые места видны в сводке.
+    Квоты жёсткие, поэтому сервис оставляет места пустыми, а не досаживает один вид.
     """
     structures = _singles(30)
     candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
-    counts = Counter(result.species_by_placement.values())
+    counts = _counts(result)
     assert counts["tilia_cordata"] == 0
     assert 0 < len(result.species_by_placement) < 30
-    assert result.quota_violations
+    assert not result.quota_violations
+
+
+def test_every_quota_holds_on_the_final_plan() -> None:
+    structures = [*_rows(4, 10), *_singles(17)]
+    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
+    planned = len(result.species_by_placement)
+    assert planned == 57
+    assert not Quotas(CATALOG, {}, PARAMS).violations(result.species_by_placement)
+    for code, count in _counts(result).items():
+        assert count <= max(1, int(0.1 * planned)), code
 
 
 def test_given_mode_reproduces_the_requested_counts() -> None:
@@ -199,24 +213,30 @@ def test_conifer_lower_bound_is_dropped_with_a_note_when_no_conifer_fits() -> No
     assert any("хвойн" in note for note in result.notes)
 
 
-def test_greedy_solver_can_be_chosen_and_keeps_rows_homogeneous() -> None:
-    structures = _rows(3, 10)
+def test_greedy_solver_keeps_rows_homogeneous_and_quotas_hard() -> None:
+    structures = _rows(10, 10)
     params = replace(PARAMS, assortment_solver="greedy")
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, params)
     assert result.solver == GREEDY
     assert any("жадным" in note for note in result.notes)
+    assert not result.quota_violations
+    assert len(result.species_by_placement) >= 90
     for structure in structures:
-        used = {result.species_by_placement[p] for p in structure.placement_ids}
-        assert len(used) == 1
+        used = {
+            result.species_by_placement[p]
+            for p in structure.placement_ids
+            if p in result.species_by_placement
+        }
+        assert len(used) <= 1
 
 
-def test_greedy_reports_a_violation_when_existing_trees_eat_every_quota() -> None:
+def test_greedy_leaves_places_empty_when_existing_trees_eat_every_quota() -> None:
     structures = _rows(1, 10)
     params = replace(PARAMS, assortment_solver="greedy")
     candidates = _candidates(structures, ["tilia_cordata"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 400}, params)
-    assert result.quota_violations
-    assert len(result.species_by_placement) == 10
+    assert result.species_by_placement == {}
+    assert not result.quota_violations
 
 
 def test_the_same_input_gives_the_same_assignment() -> None:
