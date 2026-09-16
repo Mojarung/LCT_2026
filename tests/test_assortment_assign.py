@@ -118,11 +118,27 @@ def test_quota_limits_a_species_when_structures_are_small() -> None:
 
 
 def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
-    structures = _singles(30)
+    """20 существующих лип и 20 новых мест: доля липы в популяции уже выбрана, липы не будет."""
+    structures = _singles(20)
     candidates = _candidates(structures, list(CATALOG))
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
     assert "tilia_cordata" not in set(result.species_by_placement.values())
-    assert len(result.species_by_placement) == 30
+    assert len(result.species_by_placement) == 20
+
+
+def test_exhausted_diversity_leaves_places_empty_instead_of_piling_on_one_species() -> None:
+    """Два вида, из них один уже занимает свою долю по виду, роду и семейству.
+
+    Сервис заполняет столько, сколько позволяет разнообразие, и оставляет остальное пустым,
+    а не досаживает вид, которого на улице и так больше нормы. Пустые места видны в сводке.
+    """
+    structures = _singles(30)
+    candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
+    result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
+    counts = Counter(result.species_by_placement.values())
+    assert counts["tilia_cordata"] == 0
+    assert 0 < len(result.species_by_placement) < 30
+    assert result.quota_violations
 
 
 def test_given_mode_reproduces_the_requested_counts() -> None:
@@ -136,6 +152,35 @@ def test_given_mode_reproduces_the_requested_counts() -> None:
     result = assign(candidates, structures, CATALOG, {}, params)
     counts = Counter(result.species_by_placement.values())
     assert counts == Counter({"picea_abies": 20, "tilia_cordata": 10})
+
+
+def test_given_counts_are_an_upper_bound_and_the_shortfall_is_reported() -> None:
+    """Участок берётся не целиком, но и не делится: 25 лип на рядах по 10 дают 25, а не 20.
+
+    Ряд из двух видов сервис не делает, поэтому остаток может не влезть; тогда прогон
+    говорит, какого вида и на сколько не хватило, вместо молчаливого недобора.
+    """
+    structures = _rows(4, 10)
+    params = replace(
+        PARAMS,
+        assortment_mode="given",
+        given_assortment={"tilia_cordata": 25, "picea_abies": 15},
+    )
+    candidates = _candidates(structures, ["tilia_cordata", "picea_abies"])
+    result = assign(candidates, structures, CATALOG, {}, params)
+    counts = Counter(result.species_by_placement.values())
+    assert counts["tilia_cordata"] == 25
+    assert counts["picea_abies"] <= 15
+    assert sum(counts.values()) >= 35
+    for structure in structures:
+        used = {
+            result.species_by_placement[p]
+            for p in structure.placement_ids
+            if p in result.species_by_placement
+        }
+        assert len(used) <= 1, structure.structure_id
+    if sum(counts.values()) < 40:
+        assert any("не хватило" in note for note in result.notes)
 
 
 def test_conifer_share_is_respected_when_conifers_are_available() -> None:

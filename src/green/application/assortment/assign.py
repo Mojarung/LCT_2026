@@ -4,12 +4,17 @@
 разнообразия («не больше 10% одного вида») при таком обходе почти всегда ломаются на
 хвосте. Поэтому виды назначаются сразу всем, целочисленной задачей.
 
-Переменная одна: y[структура, вид] - «этот участок занят этим видом». Посадка внутри
-структуры получает вид структуры, если проходит по ней фильтры, иначе остаётся без вида.
-Однородность ряда и участка группы обеспечена самой моделью, а не ограничением, поэтому
-задача маленькая: сотни переменных вместо десятков тысяч. На варианте с переменной на
-каждую пару «посадка - вид» те же сорок посадок считались три секунды - квоты, натянутые
-на тысячи двоичных переменных, дают тяжёлое дерево поиска.
+Переменных две на пару «структура - вид»: y - «участок занят этим видом» (двоичная) и
+n - сколько посадок участка этот вид занимает (целая, не больше доступных). Однородность
+ряда и участка группы обеспечена самой моделью, а не ограничением, поэтому задача
+маленькая: сотни переменных вместо десятков тысяч. На варианте с переменной на каждую
+пару «посадка - вид» те же сорок посадок считались три секунды - квоты, натянутые на
+тысячи двоичных переменных, дают тяжёлое дерево поиска.
+
+Отдельная n нужна, чтобы участок можно было занять не целиком: без неё режим заданного
+ассортимента не сходится по счётчикам («дано 25 лип и 15 елей» на участках по 10 и 8 даёт
+20 и 12, а восемь мест остаются пустыми). Какие именно посадки участка занять, решается
+после солвера - по убыванию оценки.
 
 Квоты 10-20-30 по виду, роду и семейству и доля хвойных заданы мягко: у каждой есть
 переменная превышения со штрафом. Жёсткая квота противоречит однородности ряда (10% от
@@ -17,13 +22,21 @@
 посадки пустыми; мягкая позволяет превысить долю ровно настолько, насколько иначе места
 остались бы без вида, и показывает превышение в сводке.
 
+Каждая доля проверяется дважды - в самом плане и в популяции улицы вместе с уже растущими
+деревьями, - и цены превышения разные. Без плановой доли улица с семьюстами существующих
+деревьев позволяет занять треть нового плана одним видом и формально остаться в 10%; без
+популяционной сервис добавляет клёнов туда, где клёнов и так половина. Порядок цен -
+плановая доля дешевле популяционной, популяционная дешевле пустого места - и даёт порядок
+предпочтений: сперва виды в обеих долях, затем вышедшие за плановую, и только вместо
+пустой посадки - вид, которого на улице уже больше нормы.
+
 Если решатель не справился (нет решения или кончилось время), работает жадный запасной
 путь, и факт этого попадает и в предупреждения прогона, и в сводку.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -47,6 +60,9 @@ _TIME_LIMIT_S = 60.0
 # а выдержать квоту важнее, чем выбрать вид с оценкой чуть выше (оценка не больше 1).
 _FILL_BONUS = 10.0
 _QUOTA_PENALTY = 3.0
+# Доля с учётом уже растущих деревьев стоит дороже плановой, но дешевле пустого места:
+# вид, которого на улице и так много, назначается последним и только вместо пустоты.
+_POPULATION_PENALTY = 9.0
 _MIN_STRUCTURE = 2  # у одиночки однородность не ограничивают
 _HALF = 0.5  # порог округления двоичной переменной
 _EPS = 1e-9
@@ -69,6 +85,7 @@ class _QuotaSpec:
     columns: Mapping[int, float]
     cap: float
     at_least: bool = False
+    penalty: float = _QUOTA_PENALTY
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,22 +167,70 @@ class _Problem:
         self.pairs = sorted(self.members)
         self.index = {pair: position for position, pair in enumerate(self.pairs)}
         self.structures = sorted(self.by_structure)
+        self.partial = False  # занимать участок не целиком: только там, где заданы счётчики
 
     # --- целочисленная задача ---
 
     def solve_milp(self) -> Assignment | None:
         given = self.params.assortment_mode == "given"
+        # Частичное заполнение участка нужно только там, где счётчики заданы человеком:
+        # вместе с мягкими квотами оно замедляет решатель в двадцать раз, а без квот
+        # (режим given) считается мгновенно и даёт ровно заказанные количества.
+        self.partial = given
         specs = [] if given else self._quota_specs()
-        fixed = len(self.pairs)
+        pairs = len(self.pairs)
+        fixed = 2 * pairs if self.partial else pairs
         size = fixed + len(specs)
         rows = _Rows(size)
-        notes: list[str] = []
+        notes = self._rows_for(rows, specs, fixed=fixed, given=given)
+        planned = float(len(self.placements))
+        blocks = [np.ones(pairs)]
+        if self.partial:
+            blocks.append(np.array([float(len(self.members[pair])) for pair in self.pairs]))
+        blocks.append(np.full(len(specs), planned))
+        result = milp(
+            c=self._cost(size, specs),
+            constraints=rows.constraint(),
+            integrality=np.concatenate([np.ones(fixed), np.zeros(len(specs))]),
+            bounds=Bounds(np.zeros(size), np.concatenate(blocks)),
+            options={"time_limit": _TIME_LIMIT_S},
+        )
+        if not result.success or result.x is None:
+            return None
+        chosen = self._chosen(result.x, pairs)
+        violations = tuple(
+            f"{spec.label}: отклонение от квоты на {result.x[fixed + offset]:.0f} посадок"
+            for offset, spec in enumerate(specs)
+            if result.x[fixed + offset] > _HALF
+        )
+        if given:
+            notes += self._given_shortfall(chosen)
+        return Assignment(
+            species_by_placement=dict(sorted(chosen.items())),
+            solver=MILP,
+            quota_violations=violations,
+            notes=tuple(notes),
+        )
+
+    def _rows_for(
+        self, rows: _Rows, specs: Sequence[_QuotaSpec], *, fixed: int, given: bool
+    ) -> list[str]:
+        """Строки задачи: один вид на участок, связь счётчика с признаком, состав плана."""
+        pairs = len(self.pairs)
         for structure_id in self.structures:
             rows.add(
                 {self.index[(structure_id, code)]: 1.0 for code in self._codes_of(structure_id)},
                 0.0,
                 1.0,
             )
+        if self.partial:
+            for pair, position in self.index.items():
+                rows.add(
+                    {position + pairs: 1.0, position: -float(len(self.members[pair]))},
+                    -np.inf,
+                    0.0,
+                )
+        notes: list[str] = []
         if given:
             for code, count in sorted(self.params.given_assortment.items()):
                 rows.add(self._columns({code}), 0.0, float(count))
@@ -178,49 +243,71 @@ class _Problem:
                 rows.add({**spec.columns, slack: 1.0}, spec.cap, np.inf)
             else:
                 rows.add({**spec.columns, slack: -1.0}, -np.inf, spec.cap)
-        planned = float(len(self.placements))
-        result = milp(
-            c=self._cost(size, specs),
-            constraints=rows.constraint(),
-            integrality=np.concatenate([np.ones(fixed), np.zeros(len(specs))]),
-            bounds=Bounds(
-                np.zeros(size), np.concatenate([np.ones(fixed), np.full(len(specs), planned)])
-            ),
-            options={"time_limit": _TIME_LIMIT_S},
-        )
-        if not result.success or result.x is None:
-            return None
+        return notes
+
+    def _chosen(self, solution: np.ndarray, pairs: int) -> dict[str, str]:
         chosen: dict[str, str] = {}
         for pair, position in self.index.items():
-            if result.x[position] > _HALF:
-                for candidate in self.members[pair]:
-                    chosen[candidate.placement_id] = pair[1]
-        violations = tuple(
-            f"{spec.label}: отклонение от квоты на {result.x[fixed + offset]:.0f} посадок"
-            for offset, spec in enumerate(specs)
-            if result.x[fixed + offset] > _HALF
-        )
-        return Assignment(
-            species_by_placement=dict(sorted(chosen.items())),
-            solver=MILP,
-            quota_violations=violations,
-            notes=tuple(notes),
-        )
+            members = self.members[pair]
+            if self.partial:
+                take = round(float(solution[position + pairs]))
+            else:
+                take = len(members) if solution[position] > _HALF else 0
+            if take <= 0:
+                continue
+            # Какие именно посадки участка занять - те, где вид оценён выше.
+            ranked = sorted(members, key=lambda c: (-c.score, c.placement_id))
+            for candidate in ranked[:take]:
+                chosen[candidate.placement_id] = pair[1]
+        return chosen
 
     def _codes_of(self, structure_id: str) -> list[str]:
         return sorted({c.species.code for c in self.by_structure[structure_id]})
 
+    def _given_shortfall(self, chosen: Mapping[str, str]) -> list[str]:
+        """Заданное количество - верхняя граница: у структуры один вид, и остаток может не влезть.
+
+        Двадцать пять лип и пятнадцать елей на четыре ряда по десять требуют ряда из двух
+        видов; вместо того чтобы дробить ряд, сервис ставит меньше и говорит, сколько именно.
+        """
+        placed = Counter(chosen.values())
+        short = {
+            code: count - placed.get(code, 0)
+            for code, count in sorted(self.params.given_assortment.items())
+            if count - placed.get(code, 0) > 0
+        }
+        if not short:
+            return []
+        listed = ", ".join(f"{code} на {value}" for code, value in short.items())
+        note = (
+            f"заданные количества выдержаны не полностью (не хватило {listed}): "
+            "участок занимается одним видом, остаток между участками не делится"
+        )
+        return [note]
+
     def _cost(self, size: int, specs: Sequence[_QuotaSpec]) -> np.ndarray:
+        """Цена занятой посадки: оценка вида плюс премия за заполнение."""
         cost = np.zeros(size)
+        pairs = len(self.pairs)
         for pair, position in self.index.items():
-            cost[position] = -sum(c.score + _FILL_BONUS for c in self.members[pair])
-        fixed = len(self.pairs)
-        for offset in range(len(specs)):
-            cost[fixed + offset] = _QUOTA_PENALTY
+            members = self.members[pair]
+            if self.partial:
+                average = sum(c.score for c in members) / len(members)
+                cost[position + pairs] = -(average + _FILL_BONUS)
+            else:
+                cost[position] = -sum(c.score + _FILL_BONUS for c in members)
+        fixed = 2 * pairs if self.partial else pairs
+        for offset, spec in enumerate(specs):
+            cost[fixed + offset] = spec.penalty
         return cost
 
     def _columns(self, codes: set[str]) -> dict[int, float]:
-        """Столбцы задачи с весом «сколько посадок займёт этот вид в этой структуре»."""
+        """Столбцы счётчиков посадок: по ним считаются квоты и заданные количества."""
+        pairs = len(self.pairs)
+        if self.partial:
+            return {
+                position + pairs: 1.0 for pair, position in self.index.items() if pair[1] in codes
+            }
         return {
             position: float(len(self.members[pair]))
             for pair, position in self.index.items()
@@ -231,21 +318,69 @@ class _Problem:
         return _Quota(self.catalog, self.existing, self.params, len(self.placements))
 
     def _quota_specs(self) -> list[_QuotaSpec]:
-        """Мягкие ограничения состава: превышение возможно, но стоит штрафа и попадает в сводку."""
+        """Мягкие ограничения состава: превышение возможно, но стоит штрафа и попадает в сводку.
+
+        Каждая доля проверяется дважды: в самом плане и в популяции улицы вместе с уже
+        растущими деревьями. Без первой проверки улица с семьюстами существующих деревьев
+        позволяет засадить треть нового плана одним видом и формально остаться в 10%;
+        без второй сервис добавляет клёнов туда, где клёнов и так половина.
+        """
         quota = self._quota()
-        specs = [
-            _QuotaSpec(f"вид {code}", self._columns({code}), quota.cap_species(code))
-            for code in self.codes
-        ]
-        specs += [
-            _QuotaSpec(f"род {genus}", self._columns(codes), quota.cap_genus(genus))
-            for genus, codes in sorted(self._grouped("genus").items())
-        ]
-        specs += [
-            _QuotaSpec(f"семейство {family}", self._columns(codes), quota.cap_family(family))
-            for family, codes in sorted(self._grouped("family").items())
-        ]
+        plan_only = _Quota(self.catalog, {}, self.params, len(self.placements))
+        specs: list[_QuotaSpec] = []
+        for code in self.codes:
+            specs += self._pair_of_specs(
+                "вид",
+                code,
+                self._columns({code}),
+                plan_only.cap_species(code),
+                quota.cap_species(code),
+            )
+        for genus, codes in sorted(self._grouped("genus").items()):
+            specs += self._pair_of_specs(
+                "род",
+                genus,
+                self._columns(codes),
+                plan_only.cap_genus(genus),
+                quota.cap_genus(genus),
+            )
+        for family, codes in sorted(self._grouped("family").items()):
+            specs += self._pair_of_specs(
+                "семейство",
+                family,
+                self._columns(codes),
+                plan_only.cap_family(family),
+                quota.cap_family(family),
+            )
         return [spec for spec in specs if spec.columns] + self._conifer_specs()
+
+    def _pair_of_specs(
+        self,
+        level: str,
+        name: str,
+        columns: Mapping[int, float],
+        plan_cap: float,
+        population_cap: float,
+    ) -> list[_QuotaSpec]:
+        """Две доли одного уровня: в плане и в популяции улицы, с разной ценой превышения.
+
+        Цена превышения плановой доли ниже, чем популяционной, а популяционной - ниже, чем
+        цена пустого места. Отсюда порядок предпочтений: сначала виды, укладывающиеся в
+        обе доли; затем те, что выходят за плановую (ряд из десяти иначе не выдержать в
+        одном виде); вид, которого на улице и так больше нормы, берётся последним и только
+        вместо пустой посадки.
+        """
+        specs = [_QuotaSpec(f"{level} {name} в плане", columns, plan_cap)]
+        if self.existing:
+            specs.append(
+                _QuotaSpec(
+                    f"{level} {name} с существующими",
+                    columns,
+                    population_cap,
+                    penalty=_POPULATION_PENALTY,
+                )
+            )
+        return specs
 
     def _grouped(self, attribute: str) -> dict[str, set[str]]:
         groups: defaultdict[str, set[str]] = defaultdict(set)
