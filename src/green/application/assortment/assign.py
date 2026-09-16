@@ -65,7 +65,6 @@ _QUOTA_PENALTY = 3.0
 _POPULATION_PENALTY = 9.0
 _MIN_STRUCTURE = 2  # у одиночки однородность не ограничивают
 _HALF = 0.5  # порог округления двоичной переменной
-_EPS = 1e-9
 
 
 @dataclass(frozen=True, slots=True)
