@@ -6,3 +6,16 @@ curb_offsets_m: [2.0, 2.5, 3.0]
 require_utility_data: false
 unknown_lines_as_utility: true
 allow_needs_approval: true
+# Подбор ассортимента: тот же, что в строгом профиле; сетей в чертеже нет, поэтому
+# видозависимые отступы до них не проверяются и в объяснении этого не скрывают.
+assortment_mode: auto
+region_hardiness_zone: 4
+salt_zone_m: 5.0
+housing_zone_m: 30.0
+max_height_under_lines_m: 4.0
+crown_extra_per_m: 0.5
+quota_species: 0.10
+quota_genus: 0.20
+quota_family: 0.30
+conifer_share: [0.15, 0.40]
+structure_patch_size: 10

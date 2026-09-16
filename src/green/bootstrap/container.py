@@ -20,6 +20,7 @@ from green.infrastructure.config.repositories import (
 )
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
+from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.storage.runs import FileSystemRunStore
 
@@ -71,6 +72,7 @@ def build_container(settings: Settings | None = None) -> Container:
         profiles=profiles,
         artifacts=artifacts,
         max_parallel=settings.max_parallel_runs,
+        inventory=lambda path: read_inventory(path, species.all()),
     )
     return Container(
         settings=settings,

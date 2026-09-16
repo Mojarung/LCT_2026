@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import uuid
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import orjson
 import yaml
@@ -16,6 +16,11 @@ from green.application.classification import classify_scene
 from green.application.errors import GreenError, InputError
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
+from green.infrastructure.inventory import read_inventory
+
+if TYPE_CHECKING:
+    from green.application.ports import InventoryCounts
+    from green.bootstrap.container import Container
 
 app = App(
     name="green",
@@ -38,6 +43,27 @@ def _overrides(items: tuple[str, ...]) -> dict[str, object]:
     return parsed
 
 
+def _inventory(container: Container, path: Path | None) -> InventoryCounts | None:
+    """Прочитать перечётку и напечатать, сколько строк доехало до квот, а сколько нет."""
+    if path is None:
+        return None
+    counts = read_inventory(path, container.species.all())
+    _print(
+        {
+            "inventory": {
+                "rows_read": counts.rows_read,
+                "matched_plants": counts.total,
+                "matched_species": len(counts.matched),
+                "unmatched_plants": sum(counts.unmatched.values()),
+                "removed_rows": counts.rows_removed,
+                "rows_without_count": counts.rows_without_count,
+                "approximate_by_genus": len(counts.approximate),
+            }
+        }
+    )
+    return counts
+
+
 @app.command
 def run(
     source: Path,
@@ -45,6 +71,7 @@ def run(
     *,
     profile: str | None = None,
     out: Path | None = None,
+    inventory: Path | None = None,
     set_: Annotated[tuple[str, ...], Parameter(name="--set")] = (),
 ) -> None:
     """Прогнать чертёж: план на слоях GREEN_*, объяснения и проверка целостности.
@@ -57,6 +84,9 @@ def run(
         Профиль параметров из config/profiles.
     out
         Каталог результата, по умолчанию out/<run_id>.
+    inventory
+        Перечётная ведомость (.xls или .xlsx): существующие деревья входят в квоты
+        разнообразия при подборе ассортимента.
     set_
         Переопределение параметра профиля, например --set spacing_m=6.
     """
@@ -65,7 +95,10 @@ def run(
     params = container.profiles.load(profile_name, _overrides(set_))
     run_id = str(uuid.uuid7())
     work_dir = out or Path("out") / run_id
-    report = container.use_case.execute(PlanRequest(run_id, source, work_dir, profile_name, params))
+    existing = _inventory(container, inventory)
+    report = container.use_case.execute(
+        PlanRequest(run_id, source, work_dir, profile_name, params, existing)
+    )
     files = container.artifacts.save(work_dir, report)
     _print(
         {

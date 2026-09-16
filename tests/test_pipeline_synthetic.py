@@ -12,6 +12,7 @@ import math
 from typing import TYPE_CHECKING
 
 import ezdxf
+import orjson
 import pytest
 
 from green.application.use_case import PlanRequest
@@ -91,6 +92,36 @@ def test_water_distance_is_measured_to_pipe_wall(run: dict[str, object]) -> None
         assert math.isclose(water.measured_m, axis - PIPE_DIAMETER_M / 2, abs_tol=0.01)
 
 
+def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    texts = {e.subject_id: e.text for e in plan.explanations}
+    for placement in plan.placements:
+        assert placement.assortment is not None
+        assert "Вид" in texts[placement.placement_id]
+    assigned = {p.species.code for p in plan.placements if p.assortment.status == "assigned"}
+    assert len(assigned) > 1, "план не должен быть монокультурой при квоте 10%"
+    summary = plan.assortment_summary
+    assert summary is not None
+    assert summary.shannon > 0
+    assert sum(summary.counts.values()) + summary.no_species == len(plan.placements)
+
+
+def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
+    artifacts = run["artifacts"]  # type: ignore[assignment]
+    path = artifacts["assortment.json"]  # type: ignore[index]
+    assert path.exists()
+    payload = orjson.loads(path.read_bytes())
+    assert payload["counts"]
+    assert set(payload["decor_by_month"]) == {str(month) for month in range(1, 13)}
+    assert payload["solver"] in {"milp", "greedy"}
+    plan_json = orjson.loads(artifacts["plan.json"].read_bytes())  # type: ignore[index]
+    first = plan_json["placements"][0]
+    assert first["assortment"]["percent"] > 0
+    assert first["assortment"]["factors"]
+    rows = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    assert "species" in rows
+
+
 def test_zones_and_integrity(run: dict[str, object]) -> None:
     report = run["report"]  # type: ignore[assignment]
     assert report.integrity.ok  # type: ignore[attr-defined]
@@ -103,3 +134,21 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
         report.plan.placements  # type: ignore[attr-defined]
     )
     assert run["artifacts"]["zones.geojson"].exists()  # type: ignore[index]
+
+
+def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, object]) -> None:
+    """Подобранные виды доезжают до чертежа: у каждого свой блок и свой атрибут SPECIES."""
+    report = run["report"]
+    plan = report.plan  # type: ignore[attr-defined]
+    doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
+    codes = {p.species.code for p in plan.placements}
+    assert len(codes) > 1
+    blocks = {name for name in (b.name for b in doc.blocks) if name.startswith("GREEN_TREE_")}
+    assert {f"GREEN_TREE_{code.upper()}" for code in codes} <= blocks
+    names = {
+        attrib.dxf.text
+        for insert in doc.modelspace().query("INSERT[layer=='GREEN_TREES']")
+        for attrib in insert.attribs
+        if attrib.dxf.tag == "SPECIES"
+    }
+    assert names == {p.species.name_ru for p in plan.placements}

@@ -6,11 +6,13 @@ import re
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from green.application.classification import GeometryKind, MatchTarget
-from green.domain.norms import CitationStatus, MeasureTo, PlantingType, Severity
+from green.application.params import DEFAULT_WEIGHTS
+from green.domain.norms import CitationStatus, MeasureTo, PlantingType, Severity, genus_of
 from green.domain.objects import ObjectClass
+from green.domain.planting import LifeForm
 
 
 class _Strict(BaseModel):
@@ -88,14 +90,64 @@ class LayerMapFile(_Strict):
 
 
 class SpeciesModel(_Strict):
+    """Запись ассортимента. Обязательны поля, без которых подбор вида не работает."""
+
     code: str = Field(pattern=r"^[a-z0-9_]+$")
     name_ru: str
     name_lat: str
     crown_diameter_m: float = Field(gt=0, le=30)
+    genus: str = Field(pattern=r"^[a-z]+$")
+    family: str = Field(pattern=r"^[A-Z][a-z]+$")
+    life_form: LifeForm
+    height_m: float = Field(gt=0, le=100)
+    crown_mature_m: float = Field(gt=0, le=40)
+    hardiness_zone: int = Field(ge=1, le=9)
+    salt_tolerance: int = Field(ge=0, le=2)
+    sources: dict[str, str] = Field(min_length=1)
+    evergreen: bool = False
+    root_type: Literal["surface", "tap", "mixed"] = "mixed"
+    growth: Literal["slow", "medium", "fast"] = "medium"
+    lifespan_years: int = Field(default=0, ge=0, le=1000)
+    light: Literal["shade", "semi", "sun"] = "sun"
+    moisture: Literal["dry", "mesic", "wet", "any"] = "mesic"
+    gas_tolerance: int = Field(default=1, ge=0, le=2)
+    compaction_tolerance: int = Field(default=1, ge=0, le=2)
+    allergen: int = Field(default=0, ge=0, le=2)
+    toxic: bool = False
+    thorny: bool = False
+    fluff: bool = False
+    fruit_litter: bool = False
+    invasive_group: int | None = Field(default=None, ge=1, le=4)
+    decor_months: list[int] = Field(default_factory=list)
+    uses: list[Literal["row", "group", "solitaire", "hedge", "under_lines", "grate"]] = Field(
+        default_factory=list
+    )
+    care_level: int = Field(default=1, ge=1, le=3)
+    pilot_streets: int = Field(default=0, ge=0)
+    pilot_count: int = Field(default=0, ge=0)
+    status: Literal["verified", "reference", "pilot", "draft"] = "draft"
+
+    @field_validator("decor_months")
+    @classmethod
+    def _months(cls, value: list[int]) -> list[int]:
+        if any(m < 1 or m > 12 for m in value):  # noqa: PLR2004 - календарные месяцы
+            raise ValueError("decor_months: месяцы задаются числами 1-12")
+        return value
+
+    @model_validator(mode="after")
+    def _genus_matches_latin_name(self) -> SpeciesModel:
+        expected = genus_of(self.name_lat)
+        if self.genus != expected:
+            raise ValueError(f"{self.code}: genus '{self.genus}' не равен роду из name_lat")
+        if "hardiness_zone" not in self.sources or "salt_tolerance" not in self.sources:
+            raise ValueError(
+                f"{self.code}: sources должен называть hardiness_zone и salt_tolerance"
+            )
+        return self
 
 
 class SpeciesFile(_Strict):
-    version: int = 1
+    version: Literal[2] = 2
     species: list[SpeciesModel]
 
 
@@ -115,3 +167,40 @@ class ProfileModel(_Strict):
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
+    assortment_mode: Literal["auto", "given", "single"] = "auto"
+    assortment_solver: Literal["auto", "greedy"] = "auto"
+    given_assortment: dict[str, int] = Field(default_factory=dict)
+    region_hardiness_zone: int = Field(default=4, ge=1, le=9)
+    salt_zone_m: float = Field(default=5.0, ge=0, le=100)
+    housing_zone_m: float = Field(default=30.0, ge=0, le=200)
+    max_height_under_lines_m: float = Field(default=4.0, gt=0, le=50)
+    crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
+    crown_extra_classes: tuple[ObjectClass, ...] = Field(
+        default=(ObjectClass.BUILDING, ObjectClass.STRUCTURE)
+    )
+    quota_species: float = Field(default=0.10, gt=0, le=1)
+    quota_genus: float = Field(default=0.20, gt=0, le=1)
+    quota_family: float = Field(default=0.30, gt=0, le=1)
+    conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
+    structure_patch_size: int = Field(default=10, ge=1, le=200)
+    assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+
+    @field_validator("conifer_share")
+    @classmethod
+    def _share(cls, value: tuple[float, float]) -> tuple[float, float]:
+        low, high = value
+        if not 0 <= low <= high <= 1:
+            raise ValueError("conifer_share: доля хвойных задаётся парой 0 <= min <= max <= 1")
+        return value
+
+    @field_validator("assortment_weights")
+    @classmethod
+    def _weights(cls, value: dict[str, float]) -> dict[str, float]:
+        unknown = sorted(set(value) - set(DEFAULT_WEIGHTS))
+        if unknown:
+            raise ValueError(f"assortment_weights: неизвестные факторы {', '.join(unknown)}")
+        if any(weight < 0 for weight in value.values()):
+            raise ValueError("assortment_weights: вес не может быть отрицательным")
+        if value and sum(value.values()) <= 0:
+            raise ValueError("assortment_weights: сумма весов должна быть больше нуля")
+        return value

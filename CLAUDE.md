@@ -20,26 +20,31 @@ src/green/
   application/     use_case.PlanSite (сценарий), classification, diameters, constraints.ConstraintIndex
                    (STRtree+numpy), surfaces (карта покрытий, Дейкстра), placement.GreedyPlantingStrategy
                    (аллея вдоль борта + сетка по газону), zones (зоны допустимости),
-                   explain (шаблоны), results, runs, ports
+                   assortment/ (подбор вида: context, structures, filters, scoring, assign (MILP),
+                   summary), explain (шаблоны), results, runs, ports
   infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b), config/ (YAML-репозитории),
-                   convert/ (LibreDWG, ODA), storage/runs, reports/artifacts, logs
+                   convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
+                   reports/artifacts, logs
   bootstrap/       Settings (переменные GREEN_*), build_container
   interfaces/      cli/main.py (`green run|inspect|verify|serve`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
 config/            acts.yaml, rules.yaml (44 правила, 33 с дословной цитатой НПА), layer_map.yaml (классификатор слоёв всех 20 улиц),
-                   species.yaml, profiles/{strict,no_utilities,shrubs}.yaml
+                   species.yaml (v2: 52 вида с экологией, ограничениями и источниками по полям),
+                   profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, research/ — наша разведка датасета
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
 docs/
   architecture.md, plan.md, research-review.md   архитектура, оперативный план и разбор ресерча (Кирилл)
   spec.md                                        целевая спецификация «план-максимум» (наша)
+  species.md                                     база видов: поля, шкалы, источники, пробелы
+  plans/2026-09-16-assortment.md                 спецификация и план подбора ассортимента
   notes/01..07 (Кирилл: журнал, данные, решения, проблемы, скан DWG, карта покрытий, сверка норм),
   notes/08-dataset-map.md, notes/09-berzarina-layers-and-offsets.md (наши)
 dataset/           датасет и конвертированные DXF, в git не идёт; compose монтирует ./dataset в /dataset
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
-Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green serve` (Swagger на `/docs`), `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green serve` (Swagger на `/docs`), `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
 
 ## Конвенции
 
