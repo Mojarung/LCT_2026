@@ -18,6 +18,7 @@ import shapely
 
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
+from green.application.params import active_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.zones import build_zones
@@ -101,7 +102,7 @@ class GreedyPlantingStrategy:
                     f"({norms.blocking.rule_id or norms.blocking.source})"
                 )
         crown = species.crown_mature_m if single else None
-        rules = rulebook.distance_rules_for(params.planting_type, species.name_lat, crown)
+        rules = active_distance_rules(rulebook, params, species.name_lat, crown)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
         if params.require_soil:
             index.surface = build_surface_map(
@@ -149,7 +150,7 @@ class GreedyPlantingStrategy:
         """
         if not centers:
             return ()
-        rules = rulebook.distance_rules_for(params.planting_type)
+        rules = active_distance_rules(rulebook, params)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
         if params.require_soil:
             index.surface = build_surface_map(
@@ -382,6 +383,10 @@ def _warnings(
 ) -> tuple[str, ...]:
     max_rejections = params.max_rejections
     warnings = []
+    if params.disabled_rules:
+        warnings.append(
+            "Профиль отключает правила: " + ", ".join(sorted(params.disabled_rules)) + "."
+        )
     if params.require_soil and index.surface is None and not index.has_surface_polygons:
         warnings.append(
             "Карта покрытий не построена: в чертеже нет подписей материала покрытий "

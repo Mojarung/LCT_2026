@@ -10,6 +10,8 @@ from green.domain.norms import PlantingType
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from green.domain.norms import DistanceRule, RuleBook
+
 # Веса факторов пригодности вида; сумма нормируется, поэтому важны пропорции, а не масштаб.
 DEFAULT_WEIGHTS: Mapping[str, float] = {
     "site": 0.30,
@@ -66,6 +68,11 @@ class PlanParams:
     # группой кустарников (docs/notes/14-shrub-groups.md). Шаг группы - толкование табл. 3.6.2
     # 743-ПП: групповая посадка кустарников 0,3 м, однорядная высоких 0,5-1 м; принят 1 м,
     # потому что крона кустарников каталога через 10 лет 0,8-2,5 м.
+    # Правила, которые профиль отключает. Заказчик на сессии вопросов 17.09.2026 ответил, что
+    # охранные зоны сетей поверх нормативных отступов применять не требуется
+    # (docs/notes/15-organizers-qa.md, вопрос 8). Отключённые правила перечисляются в
+    # предупреждениях прогона.
+    disabled_rules: tuple[str, ...] = ()
     shrub_groups: bool = True
     shrub_group_spacing_m: float = 1.0
     shrub_group_size: int = 3  # квадрат 3 x 3
@@ -77,3 +84,14 @@ class PlanParams:
     # аллея и массив меняют породу кварталами, а не через дерево.
     structure_patch_size: int = 10
     assortment_weights: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+
+
+def active_distance_rules(
+    rulebook: RuleBook,
+    params: PlanParams,
+    species_lat: str | None = None,
+    crown_m: float | None = None,
+) -> tuple[DistanceRule, ...]:
+    """Правила расстояний для типа посадки и вида, без отключённых профилем."""
+    rules = rulebook.distance_rules_for(params.planting_type, species_lat, crown_m)
+    return tuple(rule for rule in rules if rule.rule_id not in params.disabled_rules)

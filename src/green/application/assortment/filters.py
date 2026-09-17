@@ -42,7 +42,7 @@ _RELEVANT_FACTOR = 3.0  # во сколько норм укладывается 
 # Набор правил зависит только от рода, кроны, типа посадки и содержимого rulebook, поэтому
 # кешируется по отпечатку конфигурации: иначе 44 правила перебираются заново для каждой
 # пары «посадка - вид», а пар десятки тысяч.
-_RULES_CACHE: dict[tuple[str, str, str, float], tuple[DistanceRule, ...]] = {}
+_RULES_CACHE: dict[tuple[str, str, str, float, tuple[str, ...]], tuple[DistanceRule, ...]] = {}
 _CACHE_LIMIT = 512
 
 
@@ -105,7 +105,7 @@ def _distances(
 ) -> Reason | None:
     """Отступы, зависящие от вида: правила по роду, по ширине кроны и увеличение по кроне."""
     extra = max(0.0, species.crown_mature_m - _CROWN_BASE_M) * params.crown_extra_per_m
-    for rule in _forbid_rules(rulebook, params.planting_type, species):
+    for rule in _forbid_rules(rulebook, params.planting_type, species, params.disabled_rules):
         measured = ctx.clearance_m.get(rule.object_class)
         if measured is None:
             continue
@@ -219,10 +219,20 @@ def _too_close(
 
 
 def _forbid_rules(
-    rulebook: RuleBook, planting_type: PlantingType, species: Species
+    rulebook: RuleBook, planting_type: PlantingType, species: Species, disabled: tuple[str, ...]
 ) -> tuple[DistanceRule, ...]:
-    """Правила-запреты для рода вида. Согласования (needs_approval) учтены в вердикте точки."""
-    key = (rulebook.fingerprint, planting_type.value, species.genus, species.crown_mature_m)
+    """Правила-запреты для рода вида. Согласования (needs_approval) учтены в вердикте точки.
+
+    Правила, отключённые профилем, не применяются и здесь: размещение их не проверяло, и
+    измеренного расстояния для них в контексте точки нет.
+    """
+    key = (
+        rulebook.fingerprint,
+        planting_type.value,
+        species.genus,
+        species.crown_mature_m,
+        disabled,
+    )
     cached = _RULES_CACHE.get(key)
     if cached is None:
         if len(_RULES_CACHE) > _CACHE_LIMIT:
@@ -232,7 +242,7 @@ def _forbid_rules(
             for rule in rulebook.distance_rules_for(
                 planting_type, species.name_lat, crown_m=species.crown_mature_m
             )
-            if rule.severity is Severity.FORBID
+            if rule.severity is Severity.FORBID and rule.rule_id not in disabled
         )
         _RULES_CACHE[key] = cached
     return cached

@@ -235,6 +235,7 @@ class ProfileModel(_Strict):
     crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
+    disabled_rules: tuple[str, ...] = ()
     shrub_groups: bool = True
     shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
     shrub_group_size: int = Field(default=3, ge=1, le=5)
@@ -244,6 +245,14 @@ class ProfileModel(_Strict):
     conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
     structure_patch_size: int = Field(default=10, ge=1, le=200)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+
+    @field_validator("disabled_rules")
+    @classmethod
+    def _rule_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        bad = [rule_id for rule_id in value if not re.fullmatch(_RULE_ID, rule_id)]
+        if bad:
+            raise ValueError(f"disabled_rules: некорректные rule_id {bad}")
+        return tuple(sorted(set(value)))
 
     @field_validator("conifer_share")
     @classmethod
