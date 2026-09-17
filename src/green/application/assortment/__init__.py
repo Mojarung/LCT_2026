@@ -20,6 +20,7 @@ from green.application.assortment.filters import COMPOSITION, SpeciesVerdict, sp
 from green.application.assortment.scoring import Score, percent, score_species
 from green.application.assortment.structures import build_structures
 from green.application.assortment.summary import build_summary
+from green.application.barriers import BARRIER_CONDITION
 from green.domain.norms import PlantingType
 from green.domain.planting import (
     SHRUB_FORMS,
@@ -203,17 +204,29 @@ def _warnings(assignment: Assignment, no_species: int) -> list[str]:
 def _conditions(placements: Sequence[Placement]) -> list[str]:
     """Условия актов, под которыми допущены назначенные виды: обязательства для проекта."""
     counts: Counter[tuple[str, str, str]] = Counter()
+    with_barrier: dict[str, str] = {}
     for placement in placements:
         info = placement.assortment
         if info is None or info.status == NO_SPECIES:
             continue
         for reason in info.reasons:
-            if reason.condition:
+            if reason.condition.startswith(BARRIER_CONDITION):
+                # Барьер у каждой посадки свой (кабель, теплосеть, борт): в предупреждениях одна
+                # строка, подробности в объяснении посадки и на слое GREEN_TREES_BARRIER.
+                with_barrier[placement.placement_id] = reason.rule_id
+            elif reason.condition:
                 counts[(placement.species.name_ru, reason.condition, reason.rule_id)] += 1
-    return [
+    messages = [
         f"Условие допуска: {name}, {count} посадок - {condition} ({rule_id})."
         for (name, condition, rule_id), count in sorted(counts.items())
     ]
+    if with_barrier:
+        rule_id = next(iter(with_barrier.values()))
+        messages.append(
+            f"Условие допуска: {len(with_barrier)} деревьев стоят ближе табличной нормы к сетям "
+            f"или борту и допустимы только с прикорневым барьером ({rule_id})."
+        )
+    return messages
 
 
 def _apply(  # noqa: PLR0913 - все части решения нужны, чтобы собрать карточку посадки

@@ -20,6 +20,7 @@ DEFAULT_WEIGHTS: Mapping[str, float] = {
     "longevity": 0.15,
     "care": 0.10,
     "pilot": 0.10,
+    "category": 0.20,
 }
 
 
@@ -64,6 +65,10 @@ class PlanParams:
     # (особо охраняемые зелёные), natural (природные), outside_green_fund. Решает, допустима
     # ли высадка видов группы III.
     territory: str = "green_fund"
+    # Категория насаждений по табл. В.6 МГСН 1.02-02: parks, squares, streets, yards, special.
+    # Заказчик: сначала определяется тип территории, у улиц, дворов и парков свой ассортимент
+    # (docs/notes/15-organizers-qa.md, вопрос 15). Кейс про улицы, поэтому streets.
+    planting_category: str = "streets"
     # Место дерева, которое допустимо по нормам, но не получило вид из-за квот, занимается
     # группой кустарников (docs/notes/14-shrub-groups.md). Шаг группы - толкование табл. 3.6.2
     # 743-ПП: групповая посадка кустарников 0,3 м, однорядная высоких 0,5-1 м; принят 1 м,
@@ -73,9 +78,22 @@ class PlanParams:
     # (docs/notes/15-organizers-qa.md, вопрос 8). Отключённые правила перечисляются в
     # предупреждениях прогона.
     disabled_rules: tuple[str, ...] = ()
+    # Прикорневые барьеры (СП 42.13330.2016, табл. 9.1, прим. 5): дерево допускается ближе нормы
+    # к сетям и бордюрам улиц, барьер становится условием посадки. Заказчик описал этот приём
+    # на сессии вопросов (docs/notes/15-organizers-qa.md, вопрос 29).
+    root_barriers: bool = False
     shrub_groups: bool = True
     shrub_group_spacing_m: float = 1.0
     shrub_group_size: int = 3  # квадрат 3 x 3
+    # Доли разнообразия для кустарников. Правило 10-20-30 (Santamour, 1990) написано для
+    # городских деревьев, для кустарников источника нет: это параметр проекта, квоты остаются
+    # жёсткими. Существующие кустарники из перечётки в квоты по умолчанию не входят: единицы в
+    # ведомостях не унифицированы (штуки, погонные метры, группы), см. docs/species.md.
+    shrub_quota_species: float = 0.20
+    shrub_quota_genus: float = 0.35
+    shrub_quota_family: float = 0.50
+    shrub_conifer_share: tuple[float, float] = (0.0, 0.30)
+    shrub_quotas_use_inventory: bool = False
     quota_species: float = 0.10  # правило 10-20-30 (Santamour, 1990)
     quota_genus: float = 0.20
     quota_family: float = 0.30

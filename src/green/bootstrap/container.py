@@ -10,6 +10,7 @@ from green.application.use_case import PlanSite
 from green.bootstrap.settings import Settings
 from green.infrastructure.cad.documents import DocumentCache
 from green.infrastructure.cad.integrity import EzdxfIntegrityChecker
+from green.infrastructure.cad.merge import EzdxfDrawingMerger
 from green.infrastructure.cad.reader import EzdxfSceneReader
 from green.infrastructure.cad.writer import EzdxfPlanWriter
 from green.infrastructure.config.repositories import (
@@ -64,6 +65,7 @@ def build_container(settings: Settings | None = None) -> Container:
         strategy=GreedyPlantingStrategy(),
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
+        merger=EzdxfDrawingMerger(),
     )
     store = FileSystemRunStore(settings.runs_dir)
     runs = RunService(

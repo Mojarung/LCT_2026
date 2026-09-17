@@ -102,6 +102,10 @@ class RestrictionKind(StrEnum):
     FEMALE_FLUFF = "female_fluff"  # женские экземпляры тополей и других растений с пухом
     FRUIT_LITTER = "fruit_litter"  # засоряют территорию во время плодоношения
     MASS_ALLERGEN = "mass_allergen"  # массовые аллергические реакции во время цветения
+    # МГСН 1.02-02, табл. В.6: вид не рекомендован для категории насаждений участка
+    PLANTING_CATEGORY = "planting_category"
+    # Не запрет, а условие допуска: прикорневой барьер (СП 42.13330.2016, табл. 9.1, прим. 5)
+    ROOT_BARRIER = "root_barrier"
 
 
 @dataclass(frozen=True, slots=True)

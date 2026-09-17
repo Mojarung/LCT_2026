@@ -171,6 +171,10 @@ class SpeciesModel(_Strict):
     care_level: int = Field(default=1, ge=1, le=3)
     pilot_streets: int = Field(default=0, ge=0)
     pilot_count: int = Field(default=0, ge=0)
+    categories: dict[
+        Literal["parks", "squares", "streets", "yards", "special"],
+        Literal["plus", "limited", "minus"],
+    ] = Field(default_factory=dict)
     status: Literal["verified", "reference", "pilot", "draft"] = "draft"
 
     @field_validator("decor_months")
@@ -196,6 +200,7 @@ class SpeciesModel(_Strict):
             "fluff": self.fluff,
             "fruit_litter": self.fruit_litter,
             "planting_sex": self.planting_sex is not None,
+            "categories": bool(self.categories),
         }
         unsourced = sorted(k for k, on in restricting.items() if on and k not in self.sources)
         if unsourced:
@@ -236,10 +241,17 @@ class ProfileModel(_Strict):
     crown_extra_per_m: float = Field(default=0.5, ge=0, le=5)
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
+    planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
     disabled_rules: tuple[str, ...] = ()
+    root_barriers: bool = False
     shrub_groups: bool = True
     shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
     shrub_group_size: int = Field(default=3, ge=1, le=5)
+    shrub_quota_species: float = Field(default=0.20, gt=0, le=1)
+    shrub_quota_genus: float = Field(default=0.35, gt=0, le=1)
+    shrub_quota_family: float = Field(default=0.50, gt=0, le=1)
+    shrub_conifer_share: tuple[float, float] = Field(default=(0.0, 0.30))
+    shrub_quotas_use_inventory: bool = False
     quota_species: float = Field(default=0.10, gt=0, le=1)
     quota_genus: float = Field(default=0.20, gt=0, le=1)
     quota_family: float = Field(default=0.30, gt=0, le=1)
@@ -255,7 +267,7 @@ class ProfileModel(_Strict):
             raise ValueError(f"disabled_rules: некорректные rule_id {bad}")
         return tuple(sorted(set(value)))
 
-    @field_validator("conifer_share")
+    @field_validator("conifer_share", "shrub_conifer_share")
     @classmethod
     def _share(cls, value: tuple[float, float]) -> tuple[float, float]:
         low, high = value

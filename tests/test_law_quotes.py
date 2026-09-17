@@ -19,7 +19,7 @@ TOOL = ROOT / "tools" / "research" / "check_law_quotes.py"
 REQUIREMENTS = ROOT / "docs" / "requirements" / "planting-requirements.md"
 LAWS_DIR = os.environ.get("GREEN_LAWS_DIR", "")
 QUOTE_ID = re.compile(
-    r"\b(?:SP42|SP82|SP59|PP743|PP515|PP369|MGSN|GOST|ZAKON18|PPRF160)-[A-Za-z0-9][A-Za-z0-9.\-]*"
+    r"(?<![A-Za-z0-9-])(?:SP42|SP82|SP59|PP743|PP515|PP369|MGSN|GOST|ZAKON18|PPRF160)-[A-Za-z0-9][A-Za-z0-9.\-]*"
 )
 
 

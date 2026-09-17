@@ -24,6 +24,14 @@ if TYPE_CHECKING:
 NORM = "norm"
 REFERENCE = "reference"
 MALE = "male"
+PLUS, LIMITED, MINUS = "plus", "limited", "minus"
+CATEGORY_LABELS = {
+    "parks": "сады и парки",
+    "squares": "скверы и бульвары",
+    "streets": "улицы и дороги",
+    "yards": "внутриквартальные",
+    "special": "специальные",
+}
 _MASS_ALLERGEN = 2
 _PP743_3618 = "743-ПП, п. 3.6.18"
 _ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV"}
@@ -43,18 +51,30 @@ class SpeciesNorms:
     reasons: tuple[Reason, ...]
 
 
-def species_norms(species: Species, rulebook: RuleBook, territory: str) -> SpeciesNorms:
+@dataclass(frozen=True, slots=True)
+class _Site:
+    """Что известно об участке целиком: тип территории (369-ПП) и категория насаждений (МГСН)."""
+
+    territory: Territory
+    category: str
+
+
+def species_norms(
+    species: Species, rulebook: RuleBook, territory: str, category: str = "streets"
+) -> SpeciesNorms:
+    site = _Site(Territory(territory), category)
     reasons: list[Reason] = []
-    for check in (_invasive, _female_fluff, _fruit_litter, _mass_allergen):
-        blocking = check(species, rulebook, Territory(territory), reasons)
+    for check in (_invasive, _category, _female_fluff, _fruit_litter, _mass_allergen):
+        blocking = check(species, rulebook, site, reasons)
         if blocking is not None:
             return SpeciesNorms(blocking=blocking, reasons=tuple(reasons))
     return SpeciesNorms(blocking=None, reasons=tuple(reasons))
 
 
 def _invasive(
-    species: Species, rulebook: RuleBook, territory: Territory, reasons: list[Reason]
+    species: Species, rulebook: RuleBook, site: _Site, reasons: list[Reason]
 ) -> Reason | None:
+    territory = site.territory
     listed = rulebook.invasive_for(species.name_lat)
     if listed is None:
         if species.invasive_group is None:
@@ -90,8 +110,39 @@ def _invasive(
     return None
 
 
+def _category(
+    species: Species, rulebook: RuleBook, site: _Site, reasons: list[Reason]
+) -> Reason | None:
+    """МГСН 1.02-02, табл. В.6: «-» - вид для категории не рекомендован, «с огр.» - с оговоркой."""
+    mark = species.categories.get(site.category)
+    if mark is None:
+        return None
+    label = CATEGORY_LABELS.get(site.category, site.category)
+    basis = species.sources.get("categories", "МГСН 1.02-02, табл. В.6")
+    rule = rulebook.restriction(RestrictionKind.PLANTING_CATEGORY)
+    source = citation_text(rule, rulebook) if rule else basis
+    rule_id = rule.rule_id if rule else ""
+    if mark == MINUS:
+        return Reason(
+            NORM,
+            f"{species.name_ru} не рекомендован для категории насаждений «{label}» ({basis})",
+            rule_id=rule_id,
+            source=source,
+        )
+    limited = " с ограничением" if mark == LIMITED else ""
+    reasons.append(
+        Reason(
+            NORM,
+            f"{species.name_ru} рекомендован{limited} для категории «{label}» ({basis})",
+            rule_id=rule_id,
+            source=source,
+        )
+    )
+    return None
+
+
 def _female_fluff(
-    species: Species, rulebook: RuleBook, _territory: Territory, reasons: list[Reason]
+    species: Species, rulebook: RuleBook, _site: _Site, reasons: list[Reason]
 ) -> Reason | None:
     if not species.fluff:
         return None
@@ -116,7 +167,7 @@ def _female_fluff(
 
 
 def _fruit_litter(
-    species: Species, rulebook: RuleBook, _territory: Territory, _reasons: list[Reason]
+    species: Species, rulebook: RuleBook, _site: _Site, _reasons: list[Reason]
 ) -> Reason | None:
     if not species.fruit_litter:
         return None
@@ -129,9 +180,26 @@ def _fruit_litter(
 
 
 def _mass_allergen(
-    species: Species, rulebook: RuleBook, _territory: Territory, _reasons: list[Reason]
+    species: Species, rulebook: RuleBook, site: _Site, reasons: list[Reason]
 ) -> Reason | None:
+    """Пункт 3.6.18 видов не называет, отнесение к массовым аллергенам справочное.
+
+    Если московский акт (МГСН 1.02-02, табл. В.6) рекомендует вид для категории участка,
+    справочное отнесение запретом не считается: правительство Москвы под п. 3.6.18 такой вид не
+    подводит (берёза; её же рекомендует 515-ПП). Аллергенность тогда только снижает оценку.
+    """
     if species.allergen < _MASS_ALLERGEN:
+        return None
+    if species.categories.get(site.category) in {PLUS, LIMITED}:
+        reasons.append(
+            Reason(
+                REFERENCE,
+                f"{species.name_ru}: пыльца аллергенна "
+                f"({species.sources.get('allergen', 'справочник')}), но вид рекомендован актом "
+                "для этой категории насаждений, запрет п. 3.6.18 743-ПП не применён",
+                source=species.sources.get("categories", "МГСН 1.02-02, табл. В.6"),
+            )
+        )
         return None
     return _restricted(
         rulebook,

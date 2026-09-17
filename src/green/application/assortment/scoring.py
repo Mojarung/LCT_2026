@@ -32,6 +32,9 @@ _EVERGREEN_BONUS = 0.25
 _REFERENCE_LIFESPAN_YEARS = 150.0
 _PILOT_STREETS = 7.0  # улиц в пилоте, по которым есть паспорта
 _CARE = {1: 1.0, 2: 0.5, 3: 0.0}
+# МГСН 1.02-02, табл. В.6: «+» - рекомендован, «с огр.» - с ограничением; вида нет в таблице -
+# 0,25: акт о нём молчит, это слабее рекомендации. «-» до оценки не доходит (фильтр).
+_CATEGORY = {"plus": 1.0, "limited": 0.5}
 _USE_BY_KIND = {ROW: "row", GROUP: "group", SINGLE: "solitaire"}
 
 
@@ -49,6 +52,7 @@ def score_species(species: Species, ctx: SiteContext, params: PlanParams) -> Sco
         "longevity": min(1.0, species.lifespan_years / _REFERENCE_LIFESPAN_YEARS),
         "care": _CARE.get(species.care_level, 0.0),
         "pilot": min(1.0, species.pilot_streets / _PILOT_STREETS),
+        "category": _CATEGORY.get(species.categories.get(params.planting_category, ""), 0.25),
     }
     weights = params.assortment_weights or DEFAULT_WEIGHTS
     total_weight = sum(max(0.0, weights.get(name, 0.0)) for name in factors)

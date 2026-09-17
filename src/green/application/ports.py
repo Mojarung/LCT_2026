@@ -35,6 +35,18 @@ class DrawingConverter(Protocol):
     def to_dxf(self, source: Path, workdir: Path) -> Path: ...
 
 
+@dataclass(frozen=True, slots=True)
+class MergeResult:
+    """Объединённый чертёж комплекта и заметки о склейке для предупреждений прогона."""
+
+    path: Path
+    notes: tuple[str, ...] = ()
+
+
+class DrawingMerger(Protocol):
+    def merge(self, sources: Sequence[Path], target: Path) -> MergeResult: ...
+
+
 class RuleBookSource(Protocol):
     def load(self) -> RuleBook: ...
 

@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/runs", tags=["runs"], responses=PROBLEM_RESPONSES)
 CHUNK = 1024 * 1024
+DRAWING_SUFFIXES = frozenset({".dxf", ".dwg"})
 MEDIA_TYPES = {
     ".dxf": "image/vnd.dxf",
     ".json": "application/json",
@@ -72,6 +73,10 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
         UploadFile | None,
         File(description="Перечётная ведомость .xls или .xlsx: существующие деревья в квотах"),
     ] = None,
+    extra: Annotated[
+        list[UploadFile] | None,
+        File(description="Остальные чертежи комплекта (DXF или DWG): склеиваются с основным"),
+    ] = None,
 ) -> RunOut:
     """Принять чертёж и поставить прогон в очередь. Статус: GET /runs/{id}."""
     settings = container.settings
@@ -96,7 +101,20 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
         except PayloadTooLargeError as error:
             container.runs.reject(record.run_id, str(error))
             raise
-    background.add_task(container.runs.execute, record.run_id, inventory_path)
+    extra_paths: list[Path] = []
+    for position, upload in enumerate(extra or [], 1):
+        suffix = Path(upload.filename or "").suffix.lower()
+        if suffix not in DRAWING_SUFFIXES:
+            container.runs.reject(record.run_id, f"extra: ожидается DXF или DWG, получен {suffix}")
+            raise InputError(f"extra: ожидается DXF или DWG, получен {suffix or 'файл без типа'}")
+        target = container.store.input_path(record.run_id).with_name(f"extra_{position}{suffix}")
+        try:
+            await _store_upload(upload, target, settings.max_upload_mb * CHUNK)
+        except PayloadTooLargeError as error:
+            container.runs.reject(record.run_id, str(error))
+            raise
+        extra_paths.append(target)
+    background.add_task(container.runs.execute, record.run_id, inventory_path, tuple(extra_paths))
     response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
     return RunOut.from_record(record, _artifact_url(request))
 

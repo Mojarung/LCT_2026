@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Protocol
 import numpy as np
 import shapely
 
+from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
 from green.application.params import active_distance_rules
@@ -95,7 +96,7 @@ class GreedyPlantingStrategy:
         # паре «посадка - вид» (assortment.filters), а вид профиля лишь задаёт отступы по роду.
         single = params.assortment_mode == "single"
         if single:
-            norms = species_norms(species, rulebook, params.territory)
+            norms = species_norms(species, rulebook, params.territory, params.planting_category)
             if norms.blocking is not None:
                 raise InputError(
                     f"Вид {species.name_lat} недопустим: {norms.blocking.text} "
@@ -104,7 +105,17 @@ class GreedyPlantingStrategy:
         crown = species.crown_mature_m if single else None
         traits = species.traits if single else frozenset()
         rules = active_distance_rules(rulebook, params, species.name_lat, crown, traits)
-        index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
+        # Пока вид не выбран, точка проверяется по самому мягкому барьерному расстоянию;
+        # подбор ассортимента затем требует своё расстояние по высоте каждого вида.
+        barrier = None
+        if params.root_barriers:
+            barrier = barrier_distance(species.height_m) if single else NEAR_M
+        index = ConstraintIndex(
+            features,
+            rules,
+            require_utility_data=params.require_utility_data,
+            barrier_distance_m=barrier,
+        )
         if params.require_soil:
             index.surface = build_surface_map(
                 features, labels, index.boundary, params.surface_cell_m
@@ -331,10 +342,14 @@ class _Selector:
         if self.params.allow_needs_approval:
             ranks.append(Verdict.NEEDS_APPROVAL)
 
-        # Сначала любой вариант без замечаний, и только потом вариант с согласованием.
+        # Сначала вариант без замечаний, затем с прикорневым барьером, затем с согласованием.
         for verdict in ranks:
-            for candidate, row in options:
-                if batch.verdict(row) is verdict:
+            for with_barrier in (False, True):
+                for candidate, row in options:
+                    if batch.verdict(row) is not verdict:
+                        continue
+                    if batch.needs_barrier(row) is not with_barrier:
+                        continue
                     if not planted.near(candidate.x, candidate.y):
                         planted.add(candidate.x, candidate.y)
                         self.placements.append(self._placement(candidate, batch, row))
@@ -356,7 +371,10 @@ class _Selector:
             y=round(candidate.y, 3),
             verdict=batch.verdict(row),
             checks=batch.checks(row),
-            notes=(MODE_LABELS[candidate.mode],),
+            notes=(
+                MODE_LABELS[candidate.mode],
+                *((BARRIER_NOTE,) if batch.needs_barrier(row) else ()),
+            ),
         )
 
     def _rejection(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> Rejection:
@@ -367,7 +385,11 @@ class _Selector:
             x=round(candidate.x, 3),
             y=round(candidate.y, 3),
             verdict=batch.verdict(row),
-            blocking=tuple(c for c in batch.checks(row) if c.outcome is not CheckOutcome.PASS),
+            blocking=tuple(
+                c
+                for c in batch.checks(row)
+                if c.outcome in {CheckOutcome.FAIL, CheckOutcome.NO_DATA}
+            ),
         )
 
 

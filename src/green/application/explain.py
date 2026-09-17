@@ -46,6 +46,7 @@ _FACTOR_LABELS = {
     "longevity": "долговечность",
     "care": "простота ухода",
     "pilot": "применение в пилоте",
+    "category": "рекомендация МГСН для категории",
 }
 
 _STRUCTURE_LABELS = {
@@ -96,12 +97,13 @@ def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
     if check.measured_m is None:
         return f"{target} в чертеже нет ({cite(check, rulebook)})"
     sign = ">=" if check.outcome is CheckOutcome.PASS else "<"
+    barrier = ", допустимо с прикорневым барьером" if check.outcome is CheckOutcome.BARRIER else ""
     measure = ""
     if isinstance(rule, DistanceRule) and rule.measure_to.value == "outer_wall":
         measure = " до наружной стенки"
     return (
-        f"до {target}{measure} {check.measured_m:.2f} м {sign} {check.threshold_m:.2f} м "
-        f"({cite(check, rulebook)})"
+        f"до {target}{measure} {check.measured_m:.2f} м {sign} {check.threshold_m:.2f} м"
+        f"{barrier} ({cite(check, rulebook)})"
     )
 
 

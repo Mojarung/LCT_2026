@@ -11,7 +11,7 @@ import shapely
 from shapely import STRtree
 
 from green.application.surfaces import Material
-from green.domain.norms import MeasureTo, Severity
+from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, RuleCheck, Verdict
 
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
-_PASS, _FAIL, _NO_DATA = 0, 1, 2
+_PASS, _FAIL, _NO_DATA, _BARRIER = 0, 1, 2, 3
 _EPS_M = 1e-6
-_OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA)
+_OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA, CheckOutcome.BARRIER)
 VERDICT_ORDER = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
 _VERDICTS = VERDICT_ORDER
 
@@ -57,6 +57,10 @@ class EvaluationBatch:
 
     def verdict(self, position: int) -> Verdict:
         return _VERDICTS[int(self.verdict_codes[position])]
+
+    def needs_barrier(self, position: int) -> bool:
+        """Точка допустима только с прикорневым барьером хотя бы у одного объекта."""
+        return bool((self.outcomes[:, position] == _BARRIER).any())
 
     def checks(self, position: int) -> tuple[RuleCheck, ...]:
         result = []
@@ -86,8 +90,12 @@ class ConstraintIndex:
         *,
         require_utility_data: bool,
         surface: SurfaceMap | None = None,
+        barrier_distance_m: float | None = None,
     ) -> None:
         self.surface = surface
+        # Наименьшее расстояние до сетей и бордюров, допустимое с прикорневым барьером; None -
+        # барьеры не рассматриваются, действует только табличная норма.
+        self._barrier_distance_m = barrier_distance_m
         by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
         for feature in features:
             by_class[feature.object_class].append(feature)
@@ -158,6 +166,11 @@ class ConstraintIndex:
             nearest[row] = owners
             # Допуск на округление: кандидат, поставленный ровно на норму, её не нарушает.
             outcomes[row] = np.where(values >= rule.min_distance_m - _EPS_M, _PASS, _FAIL)
+            if self._relaxable(rule):
+                relaxed = (outcomes[row] == _FAIL) & (
+                    values >= (self._barrier_distance_m or 0.0) - _EPS_M
+                )
+                outcomes[row][relaxed] = _BARRIER
         return EvaluationBatch(
             rules=self._rules,
             outcomes=outcomes,
@@ -165,6 +178,15 @@ class ConstraintIndex:
             nearest=nearest,
             features=tuple(features),
             verdict_codes=self._verdicts(outcomes),
+        )
+
+    def _relaxable(self, rule: DistanceRule) -> bool:
+        return (
+            self._barrier_distance_m is not None
+            and rule.planting_type is PlantingType.TREE
+            and rule.severity is Severity.FORBID
+            and rule.object_class.is_barrier_relaxable
+            and rule.min_distance_m > self._barrier_distance_m
         )
 
     def _verdicts(self, outcomes: NDArray[np.int8]) -> NDArray[np.int8]:

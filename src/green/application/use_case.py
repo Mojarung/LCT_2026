@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from green.application.placement import PlacementStrategy
     from green.application.ports import (
         DrawingConverter,
+        DrawingMerger,
         IntegrityChecker,
         InventoryCounts,
         LayerMapSource,
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     )
 
 RESULT_DXF = "result.dxf"
+MERGED_DXF = "merged_source.dxf"
 
 
 def _inventory_note(counts: InventoryCounts) -> str:
@@ -55,6 +57,8 @@ class PlanRequest:
     params: PlanParams
     # Существующие деревья по перечётной ведомости: входят в квоты разнообразия.
     inventory: InventoryCounts | None = None
+    # Остальные чертежи комплекта (геоподоснова, сети, дендроплан): склеиваются с source.
+    extra_sources: tuple[Path, ...] = ()
 
 
 @dataclass(slots=True)
@@ -82,6 +86,7 @@ class PlanSite:
         strategy: PlacementStrategy,
         writer: PlanWriter,
         integrity: IntegrityChecker,
+        merger: DrawingMerger | None = None,
     ) -> None:
         self._reader = reader
         self._converters = tuple(converters)
@@ -91,6 +96,7 @@ class PlanSite:
         self._strategy = strategy
         self._writer = writer
         self._integrity = integrity
+        self._merger = merger
 
     def execute(self, request: PlanRequest) -> RunReport:
         watch = _Stopwatch([])
@@ -99,6 +105,14 @@ class PlanSite:
 
         with watch.stage("convert"):
             source, converter = self._to_dxf(request.source, request.work_dir)
+            extras = [self._to_dxf(path, request.work_dir)[0] for path in request.extra_sources]
+        merge_notes: tuple[str, ...] = ()
+        if extras:
+            if self._merger is None:
+                raise InputError("Комплект из нескольких чертежей: склейка не подключена")
+            with watch.stage("merge"):
+                merged = self._merger.merge([source, *extras], request.work_dir / MERGED_DXF)
+                source, merge_notes = merged.path, merged.notes
         with watch.stage("load_config"):
             rulebook = self._rules.load()
             layer_map = self._layers.load()
@@ -166,7 +180,7 @@ class PlanSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             converter=converter,
-            warnings=(*scene.warnings, *plan.warnings, *integrity_notes),
+            warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
         )
 
     def _to_dxf(self, source: Path, work_dir: Path) -> tuple[Path, str | None]:

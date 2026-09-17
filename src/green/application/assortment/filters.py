@@ -15,16 +15,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from green.application.assortment.context import nearest_clearance
+from green.application.barriers import BARRIER_CONDITION, barrier_distance
 from green.application.explain import OBJECT_LABELS, citation_text
 from green.application.species_norms import species_norms
-from green.domain.norms import Severity
+from green.domain.norms import PlantingType, RestrictionKind, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import Reason
 
 if TYPE_CHECKING:
     from green.application.assortment.context import SiteContext
     from green.application.params import PlanParams
-    from green.domain.norms import DistanceRule, PlantingType, RuleBook
+    from green.domain.norms import DistanceRule, RuleBook
     from green.domain.planting import Species
 
 NORM = "norm"
@@ -92,7 +93,7 @@ def _species_norms(
     reasons: list[Reason],
 ) -> Reason | None:
     """369-ПП и 743-ПП п. 3.6.18: запрет или условие для вида, одинаковые в любой точке."""
-    verdict = species_norms(species, rulebook, params.territory)
+    verdict = species_norms(species, rulebook, params.territory, params.planting_category)
     reasons.extend(verdict.reasons)
     return verdict.blocking
 
@@ -121,7 +122,11 @@ def _distances(
         threshold = rule.min_distance_m + (extra if grows else 0.0)
         target = OBJECT_LABELS.get(rule.object_class, rule.object_class.value)
         if measured + _EPS_M < threshold:
-            return _too_close(species, rule, rulebook, measured, threshold)
+            relaxed = _with_barrier(species, rule, rulebook, measured, params)
+            if relaxed is None:
+                return _too_close(species, rule, rulebook, measured, threshold)
+            reasons.append(relaxed)
+            continue
         # «До теплосети 30 м при норме 4 м» - не основание выбрать вид, а шум: правило по
         # роду попадает в объяснение, только когда объект рядом и норма действительно решала.
         if rule.is_species_specific and measured <= threshold * _RELEVANT_FACTOR:
@@ -197,6 +202,36 @@ def _salt(
             Reason(REFERENCE, f"солеустойчив при {salt:.1f} м до проезжей части", source=source)
         )
     return None
+
+
+def _with_barrier(
+    species: Species,
+    rule: DistanceRule,
+    rulebook: RuleBook,
+    measured: float,
+    params: PlanParams,
+) -> Reason | None:
+    """Ближе нормы к сети или бордюру: допустимо ли это дерево с прикорневым барьером."""
+    if not params.root_barriers or not rule.object_class.is_barrier_relaxable:
+        return None
+    if rule.planting_type is not PlantingType.TREE:
+        return None
+    required = barrier_distance(species.height_m)
+    if required is None or measured + _EPS_M < required:
+        return None
+    target = OBJECT_LABELS.get(rule.object_class, rule.object_class.value)
+    basis = rulebook.restriction(RestrictionKind.ROOT_BARRIER)
+    return Reason(
+        NORM,
+        f"до {target} {measured:.1f} м при норме {rule.min_distance_m:.1f} м: допустимо с "
+        f"прикорневым барьером, для дерева высотой {species.height_m:.0f} м не ближе "
+        f"{required:.1f} м",
+        rule_id=basis.rule_id if basis else rule.rule_id,
+        source=citation_text(basis or rule, rulebook),
+        condition=(
+            f"{BARRIER_CONDITION} со стороны {target}, барьер не ближе 0,5 м к сети и бордюру"
+        ),
+    )
 
 
 def _too_close(

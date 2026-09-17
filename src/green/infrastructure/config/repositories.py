@@ -93,6 +93,7 @@ def _species(model: SpeciesModel) -> Species:
         care_level=model.care_level,
         pilot_streets=model.pilot_streets,
         pilot_count=model.pilot_count,
+        categories={str(key): str(value) for key, value in model.categories.items()},
         status=model.status,
         sources=dict(model.sources),
     )

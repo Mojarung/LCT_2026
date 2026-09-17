@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import shapely
 from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 
+from green.application.barriers import BARRIER_NOTE
 from green.application.explain import citation_text
 from green.application.results import SourceSnapshot
 from green.domain.planting import CheckOutcome, Verdict
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
 TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
 LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
+LAYER_TREES_BARRIER = f"{RESULT_PREFIX}TREES_BARRIER"
 LAYER_SHRUBS = f"{RESULT_PREFIX}SHRUBS"
 LAYER_SHRUBS_APPROVAL = f"{RESULT_PREFIX}SHRUBS_APPROVAL"
 LAYER_REJECT = f"{RESULT_PREFIX}REJECT"
@@ -36,6 +38,7 @@ REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 LAYER_COLORS = {
     LAYER_TREES: 3,
     LAYER_TREES_APPROVAL: 30,
+    LAYER_TREES_BARRIER: 4,
     LAYER_SHRUBS: 94,
     LAYER_SHRUBS_APPROVAL: 40,
     LAYER_REJECT: 1,
@@ -115,6 +118,8 @@ class EzdxfPlanWriter:
         allowed = placement.verdict is Verdict.ALLOWED
         if placement.species.is_shrub:
             layer = LAYER_SHRUBS if allowed else LAYER_SHRUBS_APPROVAL
+        elif allowed and BARRIER_NOTE in placement.notes:
+            layer = LAYER_TREES_BARRIER
         else:
             layer = LAYER_TREES if allowed else LAYER_TREES_APPROVAL
         ref = msp.add_blockref(

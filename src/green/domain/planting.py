@@ -26,6 +26,9 @@ class CheckOutcome(StrEnum):
     PASS = "pass"  # noqa: S105 - исход проверки, не пароль
     FAIL = "fail"
     NO_DATA = "no_data"
+    # Ближе табличной нормы, но не ближе расстояния, допустимого с прикорневым барьером
+    # (СП 42.13330.2016, табл. 9.1, прим. 5). Посадку не запрещает, барьер становится условием.
+    BARRIER = "barrier"
 
 
 class LifeForm(StrEnum):
@@ -89,6 +92,9 @@ class Species:
     care_level: int = 1  # 1 - минимальный уход, 3 - требовательный
     pilot_streets: int = 0  # в скольких паспортах пилотных улиц встречается
     pilot_count: int = 0
+    # МГСН 1.02-02, табл. В.6: категория насаждений (parks, squares, streets, yards, special) ->
+    # plus | limited | minus. Пусто - вида в таблице нет.
+    categories: Mapping[str, str] = field(default_factory=dict, compare=False)
     status: str = "draft"
     sources: Mapping[str, str] = field(default_factory=dict, compare=False)
 

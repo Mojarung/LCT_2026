@@ -68,7 +68,7 @@ def _inventory(container: Container, path: Path | None) -> InventoryCounts | Non
 def run(
     source: Path,
     /,
-    *,
+    *more: Path,
     profile: str | None = None,
     out: Path | None = None,
     inventory: Path | None = None,
@@ -79,7 +79,10 @@ def run(
     Parameters
     ----------
     source
-        Входной DXF или DWG.
+        Входной DXF или DWG: основа, в её копию записывается результат.
+    more
+        Остальные чертежи комплекта (геоподоснова, сети, дендроплан). Склеиваются с основой в
+        один документ, результат пишется в него.
     profile
         Профиль параметров из config/profiles.
     out
@@ -97,7 +100,7 @@ def run(
     work_dir = out or Path("out") / run_id
     existing = _inventory(container, inventory)
     report = container.use_case.execute(
-        PlanRequest(run_id, source, work_dir, profile_name, params, existing)
+        PlanRequest(run_id, source, work_dir, profile_name, params, existing, tuple(more))
     )
     files = container.artifacts.save(work_dir, report)
     _print(

@@ -26,7 +26,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [6, 7, 9], uses: [row, group, solitaire, grate], care_level: 1,
      pilot_streets: 4, pilot_count: 172, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Липа мелколистная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                uses: "практика московского озеленения", pilot_streets: "паспорта пилота"}}
 
   - {code: acer_platanoides, name_ru: Клён остролистный, name_lat: Acer platanoides, genus: acer,
@@ -36,7 +38,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 9, 10], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 5, pilot_count: 134, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Клен остролистный и его формы»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                pilot_streets: "паспорта пилота"}}
 
   - {code: acer_saccharinum, name_ru: Клён сахаристый, name_lat: Acer saccharinum, genus: acer,
@@ -46,7 +50,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [4, 9, 10], uses: [group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 15, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Клен серебристый»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "ломкая древесина, требует формовки у проезжей части"}}
 
   - {code: ulmus_laevis, name_ru: Вяз гладкий, name_lat: Ulmus laevis, genus: ulmus,
@@ -56,7 +62,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
      decor_months: [9, 10], uses: [row, group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 95, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: plus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Вяз гладкий»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "риск графиоза, требует наблюдения"}}
 
   - {code: betula_pendula, name_ru: Берёза повислая, name_lat: Betula pendula, genus: betula,
@@ -66,7 +74,9 @@ species:
      salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 0, allergen: 2,
      decor_months: [4, 5, 9, 10], uses: [group, solitaire, row], care_level: 1,
      pilot_streets: 2, pilot_count: 89, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Береза повислая»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                allergen: "пыльца берёзы - основной весенний аллерген средней полосы; массовая
                  аллергия при цветении, запрет по 743-ПП п. 3.6.18"}}
 
@@ -77,7 +87,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 0, allergen: 1,
      decor_months: [9, 10], uses: [solitaire, group], care_level: 1,
      pilot_streets: 1, pilot_count: 5, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: limited, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Дуб черешчатый»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                crown_mature_m: "взрослая крона более 5 м - увеличенные отступы по табл. 9.1"}}
 
   - {code: fraxinus_excelsior, name_ru: Ясень обыкновенный, name_lat: Fraxinus excelsior,
@@ -87,7 +99,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [9, 10], uses: [row, group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 34, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Ясень обыкновенный»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "ясеневая изумрудная узкотелая златка - угроза роду в Москве",
                allergen: "пыльца аллергенна, но к массовым аллергенам Москвы (берёза, ольха,
                  лещина) не относится; было 2 без источника, сверить с календарём пыления"}}
@@ -100,7 +114,9 @@ species:
      salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 9], uses: [row, solitaire, group], care_level: 3,
      pilot_streets: 1, pilot_count: 3, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Конский каштан обыкновенный»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "каштановая минирующая моль требует ежегодной обработки"}}
 
   - {code: pinus_sylvestris, name_ru: Сосна обыкновенная, name_lat: Pinus sylvestris,
@@ -130,7 +146,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [11, 12, 1, 2], uses: [group, solitaire], care_level: 1,
      pilot_streets: 2, pilot_count: 27, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: minus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Ель колючая»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                gas_tolerance: "устойчивее ели обыкновенной, применяется у магистралей"}}
 
   - {code: pseudotsuga_menziesii, name_ru: Псевдотсуга Мензиса, name_lat: Pseudotsuga menziesii,
@@ -151,7 +169,9 @@ species:
      planting_sex: male,
      decor_months: [5, 9], uses: [row, group], care_level: 2,
      pilot_streets: 4, pilot_count: 88, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Тополь китайский»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                fluff: "двудомный вид: женские экземпляры дают семенной пух",
                planting_sex: "запись допускает только мужские клоны; требование к посадочному
                  материалу по 743-ПП п. 3.6.18 попадает в условия плана"}}
@@ -163,7 +183,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1, fluff: true,
      decor_months: [5], uses: [group], care_level: 2,
      pilot_streets: 4, pilot_count: 37, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: minus, squares: limited, streets: limited, yards: plus, special: limited},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Тополь бальзамический»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                fluff: "двудомный вид: женские экземпляры дают пух; мужской клон не указан,
                  поэтому запись запрещена 743-ПП п. 3.6.18"}}
 
@@ -174,7 +196,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1, fluff: true,
      decor_months: [4, 5, 6, 7, 8, 9, 10], uses: [solitaire, group], care_level: 2,
      pilot_streets: 3, pilot_count: 22, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Ива белая»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                fluff: "двудомный род: женские экземпляры дают семенной пух; пол сорта не
                  указан, поэтому запись запрещена 743-ПП п. 3.6.18"}}
 
@@ -186,7 +210,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 1, pilot_count: 5, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Рябина обыкновенная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: prunus_maackii, name_ru: Черёмуха Маака, name_lat: Prunus maackii, genus: prunus,
      family: Rosaceae, life_form: tree_medium, height_m: 12, crown_diameter_m: 3.5,
@@ -195,7 +221,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [1, 2, 5, 12], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 1, pilot_count: 3, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Черемуха Маака»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "золотистая кора декоративна зимой"}}
 
   - {code: prunus_padus, name_ru: Черёмуха обыкновенная, name_lat: Prunus padus, genus: prunus,
@@ -205,7 +233,9 @@ species:
      salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 9], uses: [group, solitaire], care_level: 2,
      pilot_streets: 2, pilot_count: 26, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: limited, special: limited},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Черемуха обыкновенная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                care_level: "повреждается черёмуховой молью"}}
 
   - {code: tilia_platyphyllos, name_ru: Липа крупнолистная, name_lat: Tilia platyphyllos,
@@ -215,7 +245,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [6, 7, 9], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 0, pilot_count: 0, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Липа крупнолистная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   # --- Деревья третьей величины (до 10 м) ---
   - {code: acer_ginnala, name_ru: Клён Гиннала, name_lat: Acer ginnala, genus: acer,
@@ -225,7 +257,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [6, 9, 10], uses: [group, solitaire, hedge], care_level: 1,
      pilot_streets: 1, pilot_count: 68, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Клен Гиннала»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "осенняя окраска - главный декоративный эффект"}}
 
   - {code: malus_decorative, name_ru: Яблоня декоративная, name_lat: Malus, genus: malus,
@@ -235,7 +269,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 9, 10], uses: [group, solitaire], care_level: 2,
      pilot_streets: 5, pilot_count: 160, status: draft,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: minus, special: minus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Яблоня ягодная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                name_lat: "сборная запись без сорта, уточнить по ведомости"}}
 
   - {code: malus_niedzwetzkyana, name_ru: Яблоня Недзвецкого, name_lat: Malus niedzwetzkyana,
@@ -245,7 +281,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 6, 9], uses: [row, group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 130, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: minus, special: minus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Яблоня Недзведского»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "пурпурная листва и розовое цветение"}}
 
   - {code: crataegus_laevigata, name_ru: Боярышник обыкновенный, name_lat: Crataegus laevigata,
@@ -255,7 +293,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 6, 9], uses: [row, group, solitaire, hedge], care_level: 1,
      pilot_streets: 2, pilot_count: 860, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: plus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Боярышник колючий»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                thorny: "колючки - ограничение у детских площадок и путей движения"}}
 
   - {code: prunus_virginiana, name_ru: Черёмуха виргинская, name_lat: Prunus virginiana,
@@ -276,7 +316,9 @@ species:
      salt_tolerance: 0, gas_tolerance: 1, compaction_tolerance: 1, allergen: 0,
      decor_months: [11, 12, 1, 2], uses: [hedge, group, solitaire], care_level: 2,
      pilot_streets: 1, pilot_count: 4, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Туя западная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                salt_tolerance_note: "хвоя горит от реагентов, не ближе газона у дороги"}}
 
   - {code: amelanchier_spicata, name_ru: Ирга колосистая, name_lat: Amelanchier spicata,
@@ -286,7 +328,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 6, 9, 10], uses: [group, hedge, under_lines], care_level: 1,
      invasive_group: 3, pilot_streets: 1, pilot_count: 19, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Ирга (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                uses: "высота до 4 м допускает посадку в охранной зоне ВЛ",
                invasive_group: "369-ПП, приложение 1, п. 3.5",
                life_form: "кустарник по «Справочнику пород» шаблона перечётки ДПиООС
@@ -323,7 +367,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 1, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 6, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
      pilot_streets: 0, pilot_count: 0, status: reference,
-     sources: {hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/elaeagnus-angustifolia:
+     categories: {parks: plus, squares: limited, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Лох узколистный»",
+               hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/elaeagnus-angustifolia:
                  «USDA Plant Hardiness Zone: 2a ... 7b»",
                height_m: "там же: «Height: 12 ft. 0 in. - 30 ft. 0 in.» - 3,7-9,1 м, принято 7",
                crown_mature_m: "там же: «Width: 12 ft. 0 in. - 20 ft. 0 in.» - 3,7-6,1 м, принято 5",
@@ -347,7 +393,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      fruit_litter: true, decor_months: [], uses: [group], care_level: 3,
      pilot_streets: 0, pilot_count: 0, status: reference,
-     sources: {hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/ulmus-pumila:
+     categories: {parks: plus, squares: plus, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Вяз приземистый»",
+               hardiness_zone: "NC State Extension, plants.ces.ncsu.edu/plants/ulmus-pumila:
                  «USDA Plant Hardiness Zone: 4a ... 9b»",
                height_m: "там же: «Height: 50 ft. 0 in. - 70 ft. 0 in.» - 15-21 м",
                crown_mature_m: "там же: «Width: 35 ft. 0 in. - 50 ft. 0 in.» - 10,7-15 м, принято 12",
@@ -368,7 +416,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 1,
      decor_months: [5, 6], uses: [group, hedge, solitaire], care_level: 2,
      pilot_streets: 2, pilot_count: 370, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Сирень обыкновенная»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: syringa_josikaea, name_ru: Сирень венгерская, name_lat: Syringa josikaea,
      genus: syringa, family: Oleaceae, life_form: shrub_tall, height_m: 4,
@@ -377,7 +427,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
      decor_months: [6], uses: [group, hedge], care_level: 1,
      pilot_streets: 2, pilot_count: 79, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Сирень венгерская»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                uses: "рекомендуется для живых изгородей вдоль магистралей"}}
 
   - {code: cotoneaster_lucidus, name_ru: Кизильник блестящий, name_lat: Cotoneaster lucidus,
@@ -387,7 +439,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 9, 10], uses: [hedge, group, under_lines], care_level: 1,
      pilot_streets: 6, pilot_count: 79026, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: plus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Кизильник блестящий»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                pilot_count: "ведомости пилота, единицы не унифицированы"}}
 
   - {code: physocarpus_opulifolius, name_ru: Пузыреплодник калинолистный,
@@ -398,7 +452,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 6, 7, 8, 9], uses: [hedge, group, under_lines], care_level: 1,
      invasive_group: 3, pilot_streets: 6, pilot_count: 75151, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Пузыреплодник калинолистный»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "пурпурная и жёлтая листва держит цвет весь сезон",
                invasive_group: "369-ПП, приложение 1, п. 3.9"}}
 
@@ -420,7 +476,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [1, 2, 5, 9, 10, 12], uses: [group, hedge, under_lines], care_level: 1,
      invasive_group: 3, pilot_streets: 5, pilot_count: 15949, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+     categories: {parks: plus, squares: plus, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Дерен белый»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "красные побеги держат зимнюю декоративность",
                invasive_group: "369-ПП, приложение 1, п. 3.3 (в тексте «Cornus albus»)"}}
 
@@ -474,7 +532,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [6, 7], uses: [group, hedge], care_level: 1,
      pilot_streets: 2, pilot_count: 36, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: limited, streets: minus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Чубушник венечный»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: lonicera_tatarica, name_ru: Жимолость татарская, name_lat: Lonicera tatarica,
      genus: lonicera, family: Caprifoliaceae, life_form: shrub_tall, height_m: 3,
@@ -483,7 +543,9 @@ species:
      salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 0,
      decor_months: [5, 6, 7], uses: [group, hedge], care_level: 1,
      pilot_streets: 1, pilot_count: 58, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Жимолость (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: pinus_mugo, name_ru: Сосна горная, name_lat: Pinus mugo, genus: pinus,
      family: Pinaceae, life_form: tree_small, height_m: 3, crown_diameter_m: 2.0,
@@ -514,7 +576,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [4, 5], uses: [group, hedge], care_level: 2,
      pilot_streets: 1, pilot_count: 2388, status: reference,
-     sources: {hardiness_zone: "зона 5: цветочные почки подмерзают в Москве",
+     categories: {parks: plus, squares: limited, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Форзиция»",
+               hardiness_zone: "зона 5: цветочные почки подмерзают в Москве",
                salt_tolerance: "Колесников 1974"}}
 
   # --- Кустарники средние (1-2 м) ---
@@ -534,7 +598,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [5, 6], uses: [group, hedge, under_lines], care_level: 1,
      pilot_streets: 5, pilot_count: 16726, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Спирея (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: spiraea_cinerea, name_ru: Спирея серая, name_lat: Spiraea cinerea, genus: spiraea,
      family: Rosaceae, life_form: shrub_medium, height_m: 1.8, crown_diameter_m: 1.5,
@@ -543,7 +609,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [5], uses: [group, hedge, under_lines], care_level: 1,
      pilot_streets: 1, pilot_count: 100, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Спирея (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: hydrangea_arborescens, name_ru: Гортензия древовидная,
      name_lat: Hydrangea arborescens, genus: hydrangea, family: Hydrangeaceae,
@@ -595,7 +663,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [6, 7, 8], uses: [group, hedge, under_lines], care_level: 1,
      pilot_streets: 3, pilot_count: 9398, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Спирея (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: spiraea_betulifolia, name_ru: Спирея берёзолистная,
      name_lat: Spiraea betulifolia, genus: spiraea, family: Rosaceae, life_form: shrub_low,
@@ -604,7 +674,9 @@ species:
      salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
      decor_months: [6, 7, 9, 10], uses: [group, under_lines], care_level: 1,
      pilot_streets: 1, pilot_count: 6354, status: reference,
-     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
+     categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Спирея (различные виды)»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974"}}
 
   - {code: juniperus_communis_repens, name_ru: Можжевельник обыкновенный стелющийся,
      name_lat: Juniperus communis, genus: juniperus, family: Cupressaceae,

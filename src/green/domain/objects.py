@@ -48,6 +48,12 @@ class ObjectClass(StrEnum):
         return self.value.startswith("utility.") and self is not ObjectClass.UTILITY_ACCESS
 
     @property
+    def is_barrier_relaxable(self) -> bool:
+        """«Инженерные сети и бордюры улиц и дорог»: к ним прим. 5 табл. 9.1 разрешает посадку
+        дерева ближе нормы при прикорневом барьере. Колодцы, здания, опоры и тротуары - нет."""
+        return self.is_utility or self in {ObjectClass.CURB, ObjectClass.ROAD}
+
+    @property
     def is_hard_surface(self) -> bool:
         """Покрытие, внутри которого посадочное место не рассматривается вовсе."""
         return self in {

@@ -24,7 +24,8 @@ SINGLE = replace(PlanParams(), assortment_mode="single", zones=False)
     [
         ("acer_negundo", "R-INV-ACERNEG-001"),
         ("populus_balsamifera", "R-PPSEVEN-FLUFF-001"),
-        ("betula_pendula", "R-PPSEVEN-ALLERGEN-001"),
+        ("corylus_avellana", "R-PPSEVEN-ALLERGEN-001"),
+        ("elaeagnus_angustifolia", "R-MGSN-CATEGORY-001"),
     ],
 )
 def test_single_mode_refuses_a_species_forbidden_by_norms(code: str, rule_id: str) -> None:
@@ -50,15 +51,15 @@ def test_group_three_on_protected_land_is_refused_in_single_mode() -> None:
 def test_ordinary_species_passes_without_conditions() -> None:
     norms = species_norms(CATALOG.get("tilia_cordata"), RULEBOOK, "green_fund")
     assert norms.blocking is None
-    assert norms.reasons == ()
+    assert not any(reason.condition for reason in norms.reasons)
 
 
 def test_condition_is_printed_in_the_explanation() -> None:
     from green.application.explain import _reason  # noqa: PLC0415 - частная функция шаблона
 
-    norms = species_norms(CATALOG.get("amelanchier_spicata"), RULEBOOK, "green_fund")
+    norms = species_norms(CATALOG.get("amelanchier_spicata"), RULEBOOK, "green_fund", "yards")
     assert norms.blocking is None
-    (reason,) = norms.reasons
+    (reason,) = [r for r in norms.reasons if r.condition]
     text = _reason(reason)
     assert "R-INVGROUP-THREE-001" in text
     assert "условие: меры по недопущению распространения" in text

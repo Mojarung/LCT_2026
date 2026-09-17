@@ -181,13 +181,48 @@ def test_male_clone_passes_with_a_condition_on_planting_material() -> None:
     ).allowed
 
 
-@pytest.mark.parametrize("code", ["betula_pendula", "corylus_avellana"])
-def test_mass_allergens_are_rejected_by_743_pp(code: str) -> None:
-    verdict = species_verdict(CATALOG.get(code), _ctx_of(), RULEBOOK, PARAMS)
+def test_mass_allergen_without_an_act_recommendation_is_rejected_by_743_pp() -> None:
+    """Лещина: массовый аллерген по справочнику, в табл. В.6 МГСН её нет - запрет п. 3.6.18."""
+    verdict = species_verdict(CATALOG.get("corylus_avellana"), _ctx_of(), RULEBOOK, PARAMS)
     assert not verdict.allowed
     assert verdict.blocking is not None
     assert verdict.blocking.rule_id == "R-PPSEVEN-ALLERGEN-001"
     assert "отнесение вида" in verdict.blocking.text
+
+
+def test_birch_recommended_by_the_moscow_act_is_not_banned_as_an_allergen() -> None:
+    """МГСН 1.02-02 табл. В.6 и 515-ПП рекомендуют берёзу: справочная аллергенность не запрет."""
+    birch = CATALOG.get("betula_pendula")
+    for category in ("streets", "yards", "parks"):
+        verdict = species_verdict(
+            birch, _ctx_of(), RULEBOOK, replace(PARAMS, planting_category=category)
+        )
+        assert verdict.allowed, category
+        assert any("п. 3.6.18 743-ПП не применён" in r.text for r in verdict.reasons)
+
+
+def test_species_marked_minus_for_the_category_is_rejected() -> None:
+    """Лох узколистный: «-» для улиц и дорог, «+» для внутриквартальных посадок."""
+    olive = CATALOG.get("elaeagnus_angustifolia")
+    on_street = species_verdict(olive, _ctx_of(), RULEBOOK, PARAMS)
+    assert not on_street.allowed
+    assert on_street.blocking is not None
+    assert on_street.blocking.rule_id == "R-MGSN-CATEGORY-001"
+    assert "улицы и дороги" in on_street.blocking.text
+    assert "В.6" in on_street.blocking.source
+    in_yard = species_verdict(
+        olive, _ctx_of(), RULEBOOK, replace(PARAMS, planting_category="yards")
+    )
+    assert in_yard.allowed
+
+
+def test_limited_mark_is_said_in_the_reasons() -> None:
+    linden = CATALOG.get("tilia_cordata")
+    verdict = species_verdict(linden, _ctx_of(), RULEBOOK, PARAMS)
+    assert verdict.allowed
+    assert any(
+        "с ограничением" in r.text and r.rule_id == "R-MGSN-CATEGORY-001" for r in verdict.reasons
+    )
 
 
 def test_fruit_litter_is_rejected_by_743_pp() -> None:

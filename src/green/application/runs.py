@@ -47,7 +47,12 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
-    def execute(self, run_id: str, inventory_path: Path | None = None) -> RunRecord:
+    def execute(
+        self,
+        run_id: str,
+        inventory_path: Path | None = None,
+        extra_sources: tuple[Path, ...] = (),
+    ) -> RunRecord:
         """Синхронный прогон: вызывается из пула потоков, CPU-работа не блокирует event loop."""
         record = self._store.get(run_id)
         with self._slots:
@@ -68,6 +73,7 @@ class RunService:
                         profile=record.profile,
                         params=params,
                         inventory=counts,
+                        extra_sources=extra_sources,
                     )
                 )
                 saved = self._artifacts.save(run_dir, report)

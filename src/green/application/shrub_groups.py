@@ -55,6 +55,10 @@ def fill_shrub_groups(  # noqa: PLR0913 - сценарий передаёт вс
         planting_type=PlantingType.SHRUB,
         spacing_m=params.shrub_group_spacing_m,
         structure_patch_size=params.shrub_group_size**2,
+        quota_species=params.shrub_quota_species,
+        quota_genus=params.shrub_quota_genus,
+        quota_family=params.shrub_quota_family,
+        conifer_share=params.shrub_conifer_share,
     )
     points = strategy.shrub_groups(
         features,
@@ -65,7 +69,11 @@ def fill_shrub_groups(  # noqa: PLR0913 - сценарий передаёт вс
         centers=[(r.x, r.y) for r in empty],
     )
     assigned = assign_species(
-        Plan(placements=points, rejections=()), rulebook, catalog, shrub_params, existing
+        Plan(placements=points, rejections=()),
+        rulebook,
+        catalog,
+        shrub_params,
+        existing if params.shrub_quotas_use_inventory else None,
     )
     planted = assigned.placements
     reach = params.shrub_group_spacing_m * params.shrub_group_size
