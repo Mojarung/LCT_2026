@@ -20,6 +20,7 @@ from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
     from ezdxf.document import Drawing
@@ -185,7 +186,7 @@ class _Walker:
             return False
         size = self.block_sizes.get(name)
         if size is None:
-            extents = bbox.extents(block, fast=True)
+            extents = bbox.extents(_plain_entities(block, depth=0), fast=True)
             size = max(extents.size.x, extents.size.y) if extents.has_data else 0.0
             self.block_sizes[name] = size
         scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
@@ -239,6 +240,28 @@ class _Walker:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
         return messages
+
+
+def _plain_entities(entities: Iterable[DXFGraphic], *, depth: int) -> Iterator[DXFGraphic]:
+    """Сущности блока для расчёта его размера, без побочных эффектов в документе.
+
+    `bbox.extents` сам раскрывает вставки и отрисовывает выноски, а отрисовка MULTILEADER
+    создаёт в документе блок стрелки: исходник получал сущность, которой в нём не было
+    (docs/notes/22-source-document-untouched.md). Поэтому размеры, выноски и прочее из
+    `_SKIPPED` сюда не попадают, а вставки раскрываются здесь же.
+    """
+    for entity in entities:
+        kind = entity.dxftype()
+        if kind in _SKIPPED:
+            continue
+        if kind != "INSERT":
+            yield entity
+        elif depth < MAX_BLOCK_DEPTH:
+            try:
+                children = list(entity.virtual_entities())  # ty: ignore[unresolved-attribute]
+            except ValueError, TypeError, ArithmeticError:
+                continue
+            yield from _plain_entities(children, depth=depth + 1)
 
 
 def _to_metres(

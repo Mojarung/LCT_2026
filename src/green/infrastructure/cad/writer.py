@@ -81,7 +81,11 @@ class EzdxfPlanWriter:
         """
         scale = 1.0 / unit_m
         doc, _ = self._documents.take(source) if self._documents else load_document(source)
+        added = self._documents.added_since_load(doc) if self._documents else frozenset()
         digests, unexportable = fingerprints(doc)
+        # Сущность, появившаяся после загрузки, исходной не считается: проверка целостности
+        # найдёт её в результате и назовёт добавленной вне слоёв GREEN_*.
+        digests = {handle: value for handle, value in digests.items() if handle not in added}
         snapshot = SourceSnapshot(digests, unexportable)
         self._prepare(doc)
         msp = doc.modelspace()

@@ -109,3 +109,21 @@ def test_kit_from_different_places_is_reported(tmp_path: Path) -> None:
         )
     )
     assert any("перекрываются на 0%" in w and "far.dxf" in w for w in result.warnings)
+
+
+def test_kit_file_of_a_single_line_inside_the_base_is_not_reported(tmp_path: Path) -> None:
+    """Рамка нулевой площади внутри основы - не повод для предупреждения о разных листах."""
+    genplan, one_line = tmp_path / "genplan.dxf", tmp_path / "one_line.dxf"
+    _genplan(genplan)
+    doc = ezdxf.new("R2018")
+    doc.layers.add("Водопровод")
+    doc.modelspace().add_line((0, PIPE_Y), (120, PIPE_Y), dxfattribs={"layer": "Водопровод"})
+    doc.saveas(one_line)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("no_utilities", {"max_rejections": 10})
+    result = container.use_case.execute(
+        PlanRequest(
+            "line", genplan, tmp_path / "out", "no_utilities", params, extra_sources=(one_line,)
+        )
+    )
+    assert not any("перекрываются" in w for w in result.warnings)

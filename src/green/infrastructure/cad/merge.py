@@ -15,11 +15,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ezdxf import bbox, xref
+from ezdxf import xref
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.units import measure
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -36,21 +37,23 @@ type Box = tuple[float, float, float, float]
 
 
 def _extents(doc: Drawing) -> Box | None:
-    box = bbox.extents(doc.modelspace(), fast=True)
-    if not box.has_data:
-        return None
-    return (box.extmin.x, box.extmin.y, box.extmax.x, box.extmax.y)
+    """Рамка точек привязки чертежа. `ezdxf.bbox` не годится: он меняет документ."""
+    spread = measure(doc)
+    return None if spread is None else spread.bounds
 
 
 def _overlap(first: Box, second: Box) -> float:
     """Доля общей площади от меньшего из двух габаритов."""
     width = min(first[2], second[2]) - max(first[0], second[0])
     height = min(first[3], second[3]) - max(first[1], second[1])
-    if width <= 0 or height <= 0:
+    if width < 0 or height < 0:
         return 0.0
-    areas = [(b[2] - b[0]) * (b[3] - b[1]) for b in (first, second)]
-    smaller = min(areas)
-    return (width * height) / smaller if smaller > 0 else 0.0
+    smaller = min((b[2] - b[0]) * (b[3] - b[1]) for b in (first, second))
+    if smaller <= 0:
+        # Файл из одной линии или одной вставки даёт рамку нулевой площади: она либо лежит
+        # внутри второй рамки, либо нет.
+        return 1.0
+    return (width * height) / smaller
 
 
 def _user_blocks(doc: Drawing) -> set[str]:

@@ -32,12 +32,17 @@ class DocumentCache:
 
     Ключ учитывает время изменения и размер файла, поэтому изменённый файл перечитывается.
     Писатель забирает документ из кэша (take), дальше документ меняется только у него.
+
+    Кэш помнит handle всех сущностей сразу после загрузки. Всё, что появилось в документе
+    между загрузкой и записью, добавила обработка, а не заказчик: писатель исключает такие
+    сущности из отпечатков исходника, и проверка целостности называет их добавленными.
     """
 
     def __init__(self, capacity: int = 2) -> None:
         self._capacity = capacity
         self._lock = threading.Lock()
         self._items: OrderedDict[tuple[str, int, int], Loaded] = OrderedDict()
+        self._loaded_handles: dict[int, frozenset[str]] = {}
 
     def load(self, path: Path) -> Loaded:
         key = _key(path)
@@ -46,16 +51,27 @@ class DocumentCache:
         if cached is not None:
             return cached
         loaded = load_document(path)
+        handles = frozenset(loaded[0].entitydb.keys())
         with self._lock:
             self._items[key] = loaded
+            self._loaded_handles[id(loaded[0])] = handles
             while len(self._items) > self._capacity:
-                self._items.popitem(last=False)
+                _, (evicted, _) = self._items.popitem(last=False)
+                self._loaded_handles.pop(id(evicted), None)
         return loaded
 
     def take(self, path: Path) -> Loaded:
         with self._lock:
             cached = self._items.pop(_key(path), None)
         return cached if cached is not None else load_document(path)
+
+    def added_since_load(self, doc: Drawing) -> frozenset[str]:
+        """Handle сущностей, которых не было в документе сразу после загрузки."""
+        with self._lock:
+            loaded = self._loaded_handles.pop(id(doc), None)
+        if loaded is None:
+            return frozenset()
+        return frozenset(doc.entitydb.keys()) - loaded
 
 
 def _key(path: Path) -> tuple[str, int, int]:

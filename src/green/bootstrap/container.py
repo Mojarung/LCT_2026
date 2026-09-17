@@ -39,6 +39,7 @@ class Container:
     layers: YamlLayerMapSource
     species: YamlSpeciesCatalog
     reader: EzdxfSceneReader
+    documents: DocumentCache
     integrity: EzdxfIntegrityChecker
     artifacts: FileArtifactSink
     converters: tuple[Converter, ...]
@@ -86,6 +87,7 @@ def build_container(settings: Settings | None = None) -> Container:
         layers=layers,
         species=species,
         reader=reader,
+        documents=documents,
         integrity=integrity,
         artifacts=artifacts,
         converters=converters,

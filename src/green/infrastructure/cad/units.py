@@ -11,18 +11,18 @@
 
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from ezdxf import bbox
 
 from green.application.errors import InputError
 
 if TYPE_CHECKING:
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic
+    from ezdxf.layouts import BaseLayout
+    from numpy.typing import NDArray
 
 AUTO = "auto"
 EXPLICIT_UNITS = {"m": 1.0, "dm": 0.1, "cm": 0.01, "mm": 0.001}
@@ -52,8 +52,10 @@ _TEXT_HEIGHT_NOT_METRES = 20.0
 # конвертации, подпись вне листа) не должна решать за весь чертёж.
 _PERCENTILES = (2.0, 98.0)
 # На нескольких десятках точек процентили ничего не значат (лист из одних вставок XREF даёт
-# разброс 0): тогда берётся полный габарит модели.
+# разброс 0): тогда точки собираются и внутри вставок.
 _MIN_ANCHORS = 100
+_MAX_DEPTH = 4
+_MAX_POINTS = 2_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,10 +67,26 @@ class UnitDecision:
 
 
 @dataclass(frozen=True, slots=True)
-class _Geometry:
-    width: float
-    height: float
-    text_height: float | None
+class Spread:
+    """Где лежит основная масса чертежа: рамка между процентилями и медианная высота текста."""
+
+    min_x: float
+    min_y: float
+    max_x: float
+    max_y: float
+    text_height: float | None = None
+    # Полная рамка всех точек привязки. Для единиц она не годится (одна сущность в стороне
+    # решала бы за чертёж), а для вопроса «лежат ли два файла в одном месте» нужна она:
+    # рамка между процентилями у улицы из штрихов борта вырождается в линию.
+    bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
+    @property
+    def width(self) -> float:
+        return self.max_x - self.min_x
+
+    @property
+    def height(self) -> float:
+        return self.max_y - self.min_y
 
     @property
     def size(self) -> float:
@@ -91,7 +109,7 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
         unit_m = EXPLICIT_UNITS[requested]
         note = f"Единицы чертежа заданы параметром drawing_unit={requested}, заголовок: {header}."
         return UnitDecision(unit_m, (note + _RESCALED_TAIL,) if unit_m != 1.0 else ())
-    geometry = _measure(doc)
+    geometry = measure(doc)
     if geometry is None:
         return UnitDecision(1.0)
     factor = _SMALL_METRIC.get(code)
@@ -119,7 +137,7 @@ _RESCALED_TAIL = (
 )
 
 
-def _small_metric(factor: float, header: str, geometry: _Geometry) -> UnitDecision:
+def _small_metric(factor: float, header: str, geometry: Spread) -> UnitDecision:
     text_says_metres = (
         geometry.text_height is not None and geometry.text_height < _TEXT_HEIGHT_NOT_METRES
     )
@@ -134,27 +152,121 @@ def _small_metric(factor: float, header: str, geometry: _Geometry) -> UnitDecisi
     return UnitDecision(1.0, (note,))
 
 
-def _measure(doc: Drawing) -> _Geometry | None:
-    xs: list[float] = []
-    ys: list[float] = []
-    heights: list[float] = []
-    for entity in doc.modelspace():
-        point = _anchor(entity)
-        if point is not None:
-            xs.append(point[0])
-            ys.append(point[1])
-        height = _text_height(entity)
-        if height:
-            heights.append(height)
-    text_height = statistics.median(heights) if heights else None
-    if len(xs) < _MIN_ANCHORS:
-        box = bbox.extents(doc.modelspace(), fast=True)
-        if not box.has_data:
+def measure(doc: Drawing) -> Spread | None:
+    """Разброс координат модели. Документ не меняется.
+
+    `ezdxf.bbox.extents` здесь нельзя: он отрисовывает MULTILEADER, а отрисовка создаёт в документе
+    блок стрелки. Исходный чертёж получал сущность, которой в нём не было
+    (docs/notes/22-source-document-untouched.md).
+    """
+    collector = _Collector(doc)
+    collector.layout(doc.modelspace(), None, 1.0, depth=_MAX_DEPTH)  # только сама модель
+    if collector.count < _MIN_ANCHORS:
+        collector.reset()
+        collector.layout(doc.modelspace(), None, 1.0, depth=0)
+    return collector.spread()
+
+
+@dataclass(slots=True)
+class _Anchors:
+    """Точки привязки одного блока в его собственных координатах и вставки внутри него."""
+
+    points: NDArray[np.float64]
+    heights: NDArray[np.float64]
+    inserts: list[tuple[str, NDArray[np.float64], float]]
+
+
+class _Collector:
+    def __init__(self, doc: Drawing) -> None:
+        self._doc = doc
+        self._cache: dict[str, _Anchors] = {}
+        self._points: list[NDArray[np.float64]] = []
+        self._heights: list[NDArray[np.float64]] = []
+        self.count = 0
+
+    def reset(self) -> None:
+        """Собранные точки сбрасываются, разобранные блоки остаются."""
+        self._points.clear()
+        self._heights.clear()
+        self.count = 0
+
+    def layout(
+        self, layout: BaseLayout, matrix: NDArray[np.float64] | None, scale: float, *, depth: int
+    ) -> None:
+        anchors = self._anchors(layout)
+        points = anchors.points
+        if matrix is not None and len(points):
+            points = (
+                np.column_stack([points, np.zeros(len(points)), np.ones(len(points))]) @ matrix
+            )[:, :2]
+        self._points.append(points)
+        self._heights.append(anchors.heights * scale)
+        self.count += len(points)
+        if depth >= _MAX_DEPTH:
+            return
+        for name, local, local_scale in anchors.inserts:
+            if self.count > _MAX_POINTS:
+                return
+            block = self._doc.blocks.get(name)
+            if block is None:
+                continue
+            child = local if matrix is None else local @ matrix
+            self.layout(block, child, scale * local_scale, depth=depth + 1)
+
+    def _anchors(self, layout: BaseLayout) -> _Anchors:
+        cached = self._cache.get(layout.layout_key)
+        if cached is not None:
+            return cached
+        points: list[tuple[float, float]] = []
+        heights: list[float] = []
+        inserts: list[tuple[str, NDArray[np.float64], float]] = []
+        for entity in layout:
+            point = _anchor(entity)
+            if point is not None:
+                points.append(point)
+            height = _text_height(entity)
+            if height:
+                heights.append(height)
+            if entity.dxftype() == "INSERT":
+                matrix = _insert_matrix(entity)
+                if matrix is not None:
+                    scale = abs(float(entity.dxf.get("xscale", 1.0))) or 1.0
+                    inserts.append((entity.dxf.name, matrix, scale))
+        anchors = _Anchors(
+            points=np.asarray(points, dtype=np.float64).reshape(-1, 2),
+            heights=np.asarray(heights, dtype=np.float64),
+            inserts=inserts,
+        )
+        self._cache[layout.layout_key] = anchors
+        return anchors
+
+    def spread(self) -> Spread | None:
+        points = np.concatenate(self._points) if self._points else np.empty((0, 2))
+        if not len(points):
             return None
-        return _Geometry(float(box.size.x), float(box.size.y), text_height)
-    low_x, high_x = np.percentile(np.asarray(xs), _PERCENTILES)
-    low_y, high_y = np.percentile(np.asarray(ys), _PERCENTILES)
-    return _Geometry(float(high_x - low_x), float(high_y - low_y), text_height)
+        heights = np.concatenate(self._heights)
+        (low_x, low_y), (high_x, high_y) = np.percentile(points, _PERCENTILES, axis=0)
+        return Spread(
+            float(low_x),
+            float(low_y),
+            float(high_x),
+            float(high_y),
+            float(np.median(heights)) if len(heights) else None,
+            bounds=(
+                float(points[:, 0].min()),
+                float(points[:, 1].min()),
+                float(points[:, 0].max()),
+                float(points[:, 1].max()),
+            ),
+        )
+
+
+def _insert_matrix(entity: DXFGraphic) -> NDArray[np.float64] | None:
+    try:
+        rows = entity.matrix44().rows()  # ty: ignore[unresolved-attribute]
+    except ArithmeticError, ValueError, AttributeError:
+        return None
+    return np.asarray([list(row) for row in rows], dtype=np.float64)
 
 
 def _anchor(entity: DXFGraphic) -> tuple[float, float] | None:
@@ -166,10 +278,12 @@ def _anchor(entity: DXFGraphic) -> tuple[float, float] | None:
             point = dxf.start
         elif kind in {"INSERT", "TEXT", "MTEXT"}:
             point = dxf.insert
-        elif kind in {"CIRCLE", "ARC"}:
+        elif kind in {"CIRCLE", "ARC", "ELLIPSE"}:
             point = dxf.center
         elif kind == "POINT":
             point = dxf.location
+        elif kind == "POLYLINE":
+            point = entity.vertices[0].dxf.location  # ty: ignore[unresolved-attribute]
         elif kind == "LWPOLYLINE":
             first = entity.lwpoints[0]  # ty: ignore[unresolved-attribute]
             return float(first[0]), float(first[1])
