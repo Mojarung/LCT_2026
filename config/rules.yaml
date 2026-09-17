@@ -451,7 +451,8 @@ distance_rules:
 
 # 369-ПП, приложение 1: перечень инвазивных видов с группой. Текст сверен 16.09.2026 по ГАРАНТ
 # (base.garant.ru/413816164). В перечне три группы, порядок (приложение 2) описывает и группу IV.
-# quote дословный, включая «Cornus albus» и «Marsha» из опубликованного текста.
+# quote дословный, включая «Cornus albus» из опубликованного текста. У ясеня ГАРАНТ обрывает автора
+# («Marsha»), в тексте docs.cntd.ru из папки заказчика стоит «Marshall» (сверено 17.09.2026).
 invasive_species:
   - {rule_id: R-INV-AILANT-001, species_lat: Ailanthus altissima, group: 1,
      citation: {act_id: PP369_2026, clause: "приложение 1, п. 1.1: Айлант высочайший (группа I)",
@@ -516,7 +517,7 @@ invasive_species:
                 quote: "3.13 Черемуха виргинская Prunus virginiana L.", status: verified}}
   - {rule_id: R-INV-FRAPEN-001, species_lat: Fraxinus pennsylvanica, group: 3,
      citation: {act_id: PP369_2026, clause: "приложение 1, п. 3.14: Ясень пенсильванский (группа III)",
-                quote: "3.14 Ясень пенсильванский Fraxinus pennsylvanica Marsha", status: verified}}
+                quote: "3.14 Ясень пенсильванский Fraxinus pennsylvanica Marshall", status: verified}}
 
 # 369-ПП, приложение 2: где высадка вида группы запрещена, а где допускается с условием.
 # Территория вне conditional_on считается запрещённой: п. 2.4 запрещает высадку в городе.

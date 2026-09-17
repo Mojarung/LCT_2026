@@ -37,6 +37,8 @@ docs/
   architecture.md, plan.md, research-review.md   архитектура, оперативный план и разбор ресерча (Кирилл)
   spec.md                                        целевая спецификация «план-максимум» (наша)
   species.md                                     база видов: поля, шкалы, источники, пробелы
+  requirements/planting-requirements.md          требования к посадке по 10 актам заказчика: цитата, статус в сервисе, пробелы;
+                                                 quotes.yaml - цитаты, проверка tools/research/check_law_quotes.py
   plans/2026-09-16-assortment.md                 спецификация и план подбора ассортимента
   notes/01..07 (Кирилл: журнал, данные, решения, проблемы, скан DWG, карта покрытий, сверка норм),
   notes/08-dataset-map.md, notes/09-berzarina-layers-and-offsets.md (наши)
