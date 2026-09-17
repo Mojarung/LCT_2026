@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ezdxf import xref
+from ezdxf import bbox, xref
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
@@ -28,6 +28,29 @@ if TYPE_CHECKING:
     from ezdxf.document import Drawing
 
 _MIN_SOURCES = 2
+# Файл комплекта, у которого с основой общая меньше половины меньшего из двух габаритов, скорее
+# всего другой лист или другой объект: склейка пройдёт, а посадок не будет.
+_MIN_OVERLAP = 0.5
+
+type Box = tuple[float, float, float, float]
+
+
+def _extents(doc: Drawing) -> Box | None:
+    box = bbox.extents(doc.modelspace(), fast=True)
+    if not box.has_data:
+        return None
+    return (box.extmin.x, box.extmin.y, box.extmax.x, box.extmax.y)
+
+
+def _overlap(first: Box, second: Box) -> float:
+    """Доля общей площади от меньшего из двух габаритов."""
+    width = min(first[2], second[2]) - max(first[0], second[0])
+    height = min(first[3], second[3]) - max(first[1], second[1])
+    if width <= 0 or height <= 0:
+        return 0.0
+    areas = [(b[2] - b[0]) * (b[3] - b[1]) for b in (first, second)]
+    smaller = min(areas)
+    return (width * height) / smaller if smaller > 0 else 0.0
 
 
 def _user_blocks(doc: Drawing) -> set[str]:
@@ -42,11 +65,21 @@ class EzdxfDrawingMerger:
         notes = list(notes)
         counts = [len(base.modelspace())]
         units = {sources[0].name: base.header.get("$INSUNITS", 0)}
+        base_box = _extents(base)
         for path in sources[1:]:
             doc, doc_notes = load_document(path)
             notes += doc_notes
             counts.append(len(doc.modelspace()))
             units[path.name] = doc.header.get("$INSUNITS", 0)
+            box = _extents(doc)
+            if base_box is not None and box is not None:
+                shared = _overlap(base_box, box)
+                if shared < _MIN_OVERLAP:
+                    notes.append(
+                        f"Склейка: габариты {path.name} и основы {sources[0].name} "
+                        f"перекрываются на {shared:.0%} - возможно, это разные листы или "
+                        "разные объекты"
+                    )
             clash = sorted(_user_blocks(base) & _user_blocks(doc))
             policy = xref.ConflictPolicy.NUM_PREFIX if clash else xref.ConflictPolicy.KEEP
             if clash:

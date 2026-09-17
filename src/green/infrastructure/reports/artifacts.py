@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import orjson
 import shapely
 
+from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.domain.planting import Placement, Rejection
 
 if TYPE_CHECKING:
@@ -72,6 +73,9 @@ class FileArtifactSink:
             "assortment.json": _write_json(
                 directory / "assortment.json",
                 _assortment_summary(report.plan.assortment_summary),
+            ),
+            "planting_schedule.csv": _write_schedule(
+                directory / "planting_schedule.csv", report.plan
             ),
             "assortment_shrubs.json": _write_json(
                 directory / "assortment_shrubs.json",
@@ -379,6 +383,62 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> Path:
         )
         writer.writeheader()
         writer.writerows(rows)
+    return path
+
+
+SCHEDULE_COLUMNS = (
+    "№ п/п",
+    "Наименование",
+    "Латинское название",
+    "Кол-во, шт.",
+    "Стандарт",
+    "Размер кома, м",
+    "Посадочная яма, м",
+    "Площадь под посадочные ямы, м2",
+    "Условия посадки",
+)
+
+
+def _area(value: float) -> str:
+    """Площадь с десятичной запятой: ведомость открывают в Excel с русской локалью."""
+    return f"{value:.2f}".replace(".", ",")
+
+
+def _write_schedule(path: Path, plan: Plan) -> Path:
+    """Ведомость посадочного материала в графах ведомости проектировщика, с итогами."""
+    rows = build_schedule(plan.placements)
+    with path.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.writer(stream, delimiter=";")
+        writer.writerow(SCHEDULE_COLUMNS)
+        for section in SECTIONS:
+            members = [row for row in rows if row.section == section]
+            if not members:
+                continue
+            writer.writerow(["", section])
+            for row in members:
+                writer.writerow(
+                    [
+                        row.number,
+                        row.name_ru,
+                        row.name_lat,
+                        row.count,
+                        row.stock.group,
+                        row.stock.ball,
+                        row.stock.pit,
+                        _area(row.pit_area_m2),
+                        "; ".join(row.conditions),
+                    ]
+                )
+            total_area = sum(r.pit_area_m2 for r in members)
+            writer.writerow(
+                ["", "Всего:", "", sum(r.count for r in members), "", "", "", _area(total_area)]
+            )
+        trees = [r for r in rows if "деревья" in r.section]
+        shrubs = [r for r in rows if "кустарники" in r.section]
+        for label, members in (("Всего деревьев", trees), ("Всего кустарников", shrubs)):
+            area = sum(r.pit_area_m2 for r in members)
+            writer.writerow(["", label, "", sum(r.count for r in members), "", "", "", _area(area)])
+        writer.writerow(["", f"Размеры ям: {PIT_SOURCE}; стандарт саженца - параметр проекта"])
     return path
 
 

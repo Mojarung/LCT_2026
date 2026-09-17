@@ -91,3 +91,21 @@ def test_single_file_run_does_not_merge(tmp_path: Path) -> None:
     )
     assert not any("Склейка" in w for w in result.warnings)
     assert not (tmp_path / "out" / MERGED_DXF).exists()
+
+
+def test_kit_from_different_places_is_reported(tmp_path: Path) -> None:
+    """Файл с другого листа склеится, но предупреждение назовёт его: габариты не перекрываются."""
+    genplan, far_away = tmp_path / "genplan.dxf", tmp_path / "far.dxf"
+    _genplan(genplan)
+    doc = ezdxf.new("R2018")
+    doc.layers.add("Водопровод")
+    doc.modelspace().add_line((5000, 5000), (5100, 5000), dxfattribs={"layer": "Водопровод"})
+    doc.saveas(far_away)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("no_utilities", {"max_rejections": 10})
+    result = container.use_case.execute(
+        PlanRequest(
+            "far", genplan, tmp_path / "out", "no_utilities", params, extra_sources=(far_away,)
+        )
+    )
+    assert any("перекрываются на 0%" in w and "far.dxf" in w for w in result.warnings)

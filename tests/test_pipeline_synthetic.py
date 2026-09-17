@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -121,6 +122,10 @@ def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     assert first["assortment"]["factors"]
     rows = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
     assert "species" in rows
+    schedule = artifacts["planting_schedule.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    assert "Площадь под посадочные ямы" in schedule
+    assert "Всего деревьев" in schedule
+    assert not re.search(r";\d+\.\d{2}(;|$)", schedule, re.MULTILINE), "площади с запятой"
 
 
 def test_zones_and_integrity(run: dict[str, object]) -> None:
