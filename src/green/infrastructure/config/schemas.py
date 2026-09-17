@@ -229,6 +229,7 @@ class ProfileModel(_Strict):
     max_rejections: int = Field(default=2000, ge=0, le=100_000)
     require_soil: bool = True
     surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)
+    drawing_unit: Literal["auto", "m", "dm", "cm", "mm"] = "auto"
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)

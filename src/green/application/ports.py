@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class SceneReader(Protocol):
-    def read(self, path: Path) -> Scene: ...
+    def read(self, path: Path, *, unit: str = "auto") -> Scene: ...
 
 
 class DrawingConverter(Protocol):
@@ -100,7 +100,13 @@ class ProfileSource(Protocol):
 
 class PlanWriter(Protocol):
     def write(
-        self, source: Path, plan: Plan, rulebook: RuleBook, target: Path
+        self,
+        source: Path,
+        plan: Plan,
+        rulebook: RuleBook,
+        target: Path,
+        *,
+        unit_m: float = 1.0,
     ) -> SourceSnapshot: ...
 
 

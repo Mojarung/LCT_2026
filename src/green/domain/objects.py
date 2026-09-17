@@ -121,7 +121,11 @@ class TextLabel:
 
 @dataclass(frozen=True, slots=True)
 class Scene:
-    """Прочитанная подоснова: все объекты в единых координатах чертежа (метры)."""
+    """Прочитанная подоснова: все объекты в единых координатах, в метрах.
+
+    unit_m - сколько метров в единице чертежа. Сцена уже пересчитана, число нужно, чтобы
+    записать результат обратно в единицах чертежа.
+    """
 
     source_name: str
     source_sha256: str
@@ -129,3 +133,4 @@ class Scene:
     features: tuple[Feature, ...]
     labels: tuple[TextLabel, ...] = field(default=())
     warnings: tuple[str, ...] = field(default=())
+    unit_m: float = 1.0

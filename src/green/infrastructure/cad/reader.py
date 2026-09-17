@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
+import numpy as np
 import shapely
 from ezdxf import bbox
 from ezdxf.addons import geo
@@ -16,6 +17,7 @@ from shapely.geometry import LineString, Point, Polygon, shape
 
 from green.domain.objects import NO_XREF, Feature, Scene, SourceRef, TextLabel
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,19 +71,28 @@ class EzdxfSceneReader:
         self._flatten = flatten_distance_m
         self._documents = documents
 
-    def read(self, path: Path) -> Scene:
+    def read(self, path: Path, *, unit: str = AUTO) -> Scene:
         digest = _sha256(path)
         doc, warnings = self._documents.load(path) if self._documents else load_document(path)
-        walker = _Walker(doc=doc, file_sha8=digest[:8], flatten=self._flatten)
+        units = decide_units(doc, unit)
+        # Обход идёт в единицах чертежа, поэтому метровые пороги делятся на размер единицы.
+        walker = _Walker(
+            doc=doc,
+            file_sha8=digest[:8],
+            flatten=self._flatten / units.unit_m,
+            unit_m=units.unit_m,
+        )
         for entity in doc.modelspace():
             walker.visit(entity, parent_layer=None, chain=(), parent_handle="", index=0)
+        features, labels = _to_metres(walker.features, walker.labels, units.unit_m)
         return Scene(
             source_name=path.name,
             source_sha256=digest,
             dxf_version=doc.dxfversion,
-            features=tuple(walker.features),
-            labels=tuple(walker.labels),
-            warnings=(*warnings, *walker.warnings()),
+            features=features,
+            labels=labels,
+            warnings=(*warnings, *units.notes, *walker.warnings()),
+            unit_m=units.unit_m,
         )
 
 
@@ -90,6 +101,7 @@ class _Walker:
     doc: Drawing
     file_sha8: str
     flatten: float
+    unit_m: float = 1.0
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
@@ -177,7 +189,7 @@ class _Walker:
             size = max(extents.size.x, extents.size.y) if extents.has_data else 0.0
             self.block_sizes[name] = size
         scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
-        return size * scale <= SYMBOL_MAX_SIZE_M
+        return size * scale * self.unit_m <= SYMBOL_MAX_SIZE_M
 
     def _label(self, entity: DXFGraphic, ref: SourceRef, layer: str) -> None:
         text = entity.dxf.text if entity.dxftype() == "TEXT" else entity.plain_text()  # ty: ignore[unresolved-attribute]
@@ -201,7 +213,7 @@ class _Walker:
                 circle_center = Point(center.x, center.y)
                 return (
                     circle_center
-                    if radius <= SMALL_CIRCLE_RADIUS_M
+                    if radius * self.unit_m <= SMALL_CIRCLE_RADIUS_M
                     else circle_center.buffer(radius)
                 )
             if kind == "LWPOLYLINE" and not entity.has_arc:  # ty: ignore[unresolved-attribute]
@@ -227,6 +239,24 @@ class _Walker:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
         return messages
+
+
+def _to_metres(
+    features: list[Feature], labels: list[TextLabel], unit_m: float
+) -> tuple[tuple[Feature, ...], tuple[TextLabel, ...]]:
+    """Сцена в метрах: дальше по коду все пороги и нормы метровые."""
+    if unit_m == 1.0 or not features:
+        return tuple(features), tuple(labels)
+    scaled = shapely.transform(
+        np.asarray([f.geometry for f in features], dtype=object), lambda xy: xy * unit_m
+    )
+    return (
+        tuple(
+            replace(feature, geometry=geometry)
+            for feature, geometry in zip(features, scaled, strict=True)
+        ),
+        tuple(replace(label, x=label.x * unit_m, y=label.y * unit_m) for label in labels),
+    )
 
 
 def _polyline(points: list[tuple[float, float]], *, closed: bool) -> BaseGeometry | None:

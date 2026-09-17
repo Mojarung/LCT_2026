@@ -15,6 +15,7 @@ from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_docume
 from green.infrastructure.cad.integrity import fingerprints
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
     from pathlib import Path
 
     from ezdxf.document import Drawing
@@ -64,20 +65,33 @@ class EzdxfPlanWriter:
         self._height = label_height_m
         self._documents = documents
 
-    def write(self, source: Path, plan: Plan, rulebook: RuleBook, target: Path) -> SourceSnapshot:
-        """Пишет результат в копию исходника и возвращает отпечатки исходных сущностей до правок."""
+    def write(
+        self,
+        source: Path,
+        plan: Plan,
+        rulebook: RuleBook,
+        target: Path,
+        *,
+        unit_m: float = 1.0,
+    ) -> SourceSnapshot:
+        """Пишет результат в копию исходника, возвращает отпечатки исходных сущностей до правок.
+
+        План в метрах, чертёж может быть в миллиметрах: координаты делятся на unit_m, блоки
+        описаны в метрах и вставляются с масштабом 1 / unit_m.
+        """
+        scale = 1.0 / unit_m
         doc, _ = self._documents.take(source) if self._documents else load_document(source)
         digests, unexportable = fingerprints(doc)
         snapshot = SourceSnapshot(digests, unexportable)
         self._prepare(doc)
         msp = doc.modelspace()
         for zone in plan.zones:
-            self._zone(msp, zone)
+            self._zone(msp, zone, scale)
         for placement in plan.placements:
-            self._placement(doc, msp, placement)
+            self._placement(doc, msp, placement, scale)
         for rejection in plan.rejections:
-            self._rejection(msp, rejection)
-        self._legend(msp, plan, rulebook)
+            self._rejection(msp, rejection, scale)
+        self._legend(msp, plan, rulebook, scale)
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
         return snapshot
@@ -114,7 +128,7 @@ class EzdxfPlanWriter:
             )
         return name
 
-    def _placement(self, doc: Drawing, msp: Modelspace, placement: Placement) -> None:
+    def _placement(self, doc: Drawing, msp: Modelspace, placement: Placement, scale: float) -> None:
         allowed = placement.verdict is Verdict.ALLOWED
         if placement.species.is_shrub:
             layer = LAYER_SHRUBS if allowed else LAYER_SHRUBS_APPROVAL
@@ -124,8 +138,8 @@ class EzdxfPlanWriter:
             layer = LAYER_TREES if allowed else LAYER_TREES_APPROVAL
         ref = msp.add_blockref(
             self._tree_block(doc, placement.species),
-            (placement.x, placement.y),
-            dxfattribs={"layer": layer},
+            (placement.x * scale, placement.y * scale),
+            dxfattribs={"layer": layer, **_insert_scale(scale)},
         )
         tightest = sorted(
             (c for c in placement.checks if c.measured_m is not None),
@@ -153,7 +167,7 @@ class EzdxfPlanWriter:
             ],
         )
 
-    def _zone(self, msp: Modelspace, zone: Zone) -> None:
+    def _zone(self, msp: Modelspace, zone: Zone, scale: float) -> None:
         """Зона допустимости: сплошная полупрозрачная штриховка, по одной на каждый полигон."""
         layer = ZONE_LAYERS.get(zone.verdict)
         if layer is None:
@@ -166,16 +180,20 @@ class EzdxfPlanWriter:
             hatch.set_solid_fill(color=color)
             hatch.transparency = ZONE_TRANSPARENCY
             hatch.paths.add_polyline_path(
-                list(polygon.exterior.coords), is_closed=True, flags=BOUNDARY_PATH_EXTERNAL
+                _ring(polygon.exterior.coords, scale),
+                is_closed=True,
+                flags=BOUNDARY_PATH_EXTERNAL,
             )
             for ring in polygon.interiors:
                 hatch.paths.add_polyline_path(
-                    list(ring.coords), is_closed=True, flags=BOUNDARY_PATH_DEFAULT
+                    _ring(ring.coords, scale), is_closed=True, flags=BOUNDARY_PATH_DEFAULT
                 )
 
-    def _rejection(self, msp: Modelspace, rejection: Rejection) -> None:
+    def _rejection(self, msp: Modelspace, rejection: Rejection, scale: float) -> None:
         ref = msp.add_blockref(
-            REJECT_BLOCK, (rejection.x, rejection.y), dxfattribs={"layer": LAYER_REJECT}
+            REJECT_BLOCK,
+            (rejection.x * scale, rejection.y * scale),
+            dxfattribs={"layer": LAYER_REJECT, **_insert_scale(scale)},
         )
         ref.add_auto_attribs({"NUM": str(rejection.number)})
         for attrib in ref.attribs:
@@ -192,7 +210,7 @@ class EzdxfPlanWriter:
             ],
         )
 
-    def _legend(self, msp: Modelspace, plan: Plan, rulebook: RuleBook) -> None:
+    def _legend(self, msp: Modelspace, plan: Plan, rulebook: RuleBook, scale: float) -> None:
         used = sorted({c.rule_id for p in plan.placements for c in p.checks})
         used += sorted({c.rule_id for r in plan.rejections for c in r.blocking} - set(used))
         lines = ["Результат сервиса green: слои GREEN_*. Правила:"]
@@ -209,7 +227,18 @@ class EzdxfPlanWriter:
             dxfattribs={
                 "layer": LAYER_LABELS,
                 "style": TEXT_STYLE,
-                "char_height": self._height * 2,
+                "char_height": self._height * 2 * scale,
             },
         )
-        mtext.set_location((min(xs), max(ys) + 10 * self._height))
+        mtext.set_location((min(xs) * scale, (max(ys) + 10 * self._height) * scale))
+
+
+def _insert_scale(scale: float) -> dict[str, float]:
+    """Блоки описаны в метрах: в чертеже с другой единицей вставка несёт масштаб."""
+    if scale == 1.0:
+        return {}
+    return {"xscale": scale, "yscale": scale, "zscale": scale}
+
+
+def _ring(coords: Iterable[Sequence[float]], scale: float) -> list[tuple[float, float]]:
+    return [(point[0] * scale, point[1] * scale) for point in coords]

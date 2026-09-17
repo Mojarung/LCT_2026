@@ -37,6 +37,9 @@ class PlanParams:
     max_rejections: int = 2000
     require_soil: bool = True
     surface_cell_m: float = 0.5
+    # Единицы чертежа: auto - решает геометрия, заголовку $INSUNITS сервис не верит
+    # (docs/notes/19-drawing-units.md); m, dm, cm, mm - задать явно.
+    drawing_unit: str = "auto"
     # Приёмы размещения по порядку: аллея вдоль борта, затем заполнение грунта сеткой.
     modes: tuple[str, ...] = ("alley", "lawn")
     # Слой зон допустимости: сетка по грунту с вердиктом каждой ячейки по всем правилам.

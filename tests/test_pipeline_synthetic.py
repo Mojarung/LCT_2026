@@ -30,9 +30,14 @@ PIPE_DIAMETER_M = 0.3
 WATER_RULE_M = 2.0
 
 
-def _street(path: Path) -> None:
+def _street(path: Path, *, scale: float = 1.0, insunits: int = 6) -> None:
+    """Улица в метрах; scale=1000 и insunits=4 дают тот же чертёж в миллиметрах."""
+
+    def at(x: float, y: float) -> tuple[float, float]:
+        return (x * scale, y * scale)
+
     doc = ezdxf.new("R2018")
-    doc.header["$INSUNITS"] = 6
+    doc.header["$INSUNITS"] = insunits
     msp = doc.modelspace()
     for layer in (
         "Граница заказа",
@@ -44,16 +49,27 @@ def _street(path: Path) -> None:
     ):
         doc.layers.add(layer)
     msp.add_lwpolyline(
-        [(0, 0), (120, 0), (120, 60), (0, 60)], close=True, dxfattribs={"layer": "Граница заказа"}
+        [at(0, 0), at(120, 0), at(120, 60), at(0, 60)],
+        close=True,
+        dxfattribs={"layer": "Граница заказа"},
     )
     for x in range(0, 120, 1):  # штрихи борта по 0.7 м, как в топоплане
-        msp.add_line((x, CURB_Y), (x + 0.7, CURB_Y), dxfattribs={"layer": "Бортовой камень"})
-    msp.add_text("А", dxfattribs={"layer": "Граница улицы"}).set_placement((60, 10))
-    msp.add_text("ГАЗОН", dxfattribs={"layer": "Леса и газоны"}).set_placement((60, 30))
-    msp.add_line((0, PIPE_Y), (120, PIPE_Y), dxfattribs={"layer": "Водопровод"})
-    msp.add_text("d=300ст.", dxfattribs={"layer": "Водопровод"}).set_placement((60, PIPE_Y + 0.5))
+        msp.add_line(at(x, CURB_Y), at(x + 0.7, CURB_Y), dxfattribs={"layer": "Бортовой камень"})
+    height = 2.5 * scale
+    msp.add_text("А", height=height, dxfattribs={"layer": "Граница улицы"}).set_placement(
+        at(60, 10)
+    )
+    msp.add_text("ГАЗОН", height=height, dxfattribs={"layer": "Леса и газоны"}).set_placement(
+        at(60, 30)
+    )
+    msp.add_line(at(0, PIPE_Y), at(120, PIPE_Y), dxfattribs={"layer": "Водопровод"})
+    msp.add_text("d=300ст.", height=height, dxfattribs={"layer": "Водопровод"}).set_placement(
+        at(60, PIPE_Y + 0.5)
+    )
     msp.add_lwpolyline(
-        [(0, 55), (120, 55), (120, 60), (0, 60)], close=True, dxfattribs={"layer": "Здания"}
+        [at(0, 55), at(120, 55), at(120, 60), at(0, 60)],
+        close=True,
+        dxfattribs={"layer": "Здания"},
     )
     doc.saveas(path)
 

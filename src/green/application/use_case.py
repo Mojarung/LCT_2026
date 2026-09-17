@@ -118,7 +118,7 @@ class PlanSite:
             layer_map = self._layers.load()
             species = self._species.get(params.species_code)
         with watch.stage("read"):
-            scene = self._reader.read(source)
+            scene = self._reader.read(source, unit=params.drawing_unit)
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map)
             if params.unknown_lines_as_utility:
@@ -152,7 +152,7 @@ class PlanSite:
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF
         with watch.stage("write_dxf"):
-            snapshot = self._writer.write(source, plan, rulebook, output)
+            snapshot = self._writer.write(source, plan, rulebook, output, unit_m=scene.unit_m)
         with watch.stage("verify"):
             integrity = self._integrity.check(snapshot, output)
         integrity_notes: tuple[str, ...] = ()
