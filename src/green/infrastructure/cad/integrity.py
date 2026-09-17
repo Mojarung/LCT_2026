@@ -11,11 +11,17 @@ from green.application.results import IntegrityReport, SourceSnapshot
 from green.infrastructure.cad.documents import RESULT_PREFIX, load_document
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from ezdxf.document import Drawing
+    from ezdxf.lldxf.types import DXFTag
 
 REPORT_LIMIT = 100
+_TEXT_CHUNK = 3
+_TEXT_TAIL = 1
+_SURROGATE_LOW = 0xDC80
+_SURROGATE_HIGH = 0xDCFF
 
 
 class EzdxfIntegrityChecker:
@@ -66,9 +72,40 @@ def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
                 continue
             entity.export_dxf(collector)
             digests[entity.dxf.handle] = hashlib.blake2b(
-                repr(collector.tags).encode(), digest_size=16
+                repr(_canonical(entity.dxftype(), collector.tags)).encode(), digest_size=16
             ).hexdigest()
     return digests, unexportable
+
+
+def _canonical(kind: str, tags: Iterable[DXFTag]) -> list[tuple[int, object]]:
+    """Теги в виде, который не меняется от пересохранения самого по себе.
+
+    Длинный текст MTEXT лежит в DXF кусками по 250 знаков: коды 3 и замыкающий 1. LibreDWG режет
+    по байтам и рвёт двухбайтовую букву между кусками. ezdxf читает половинки как суррогаты,
+    при записи склеивает байты обратно в букву и нарезает текст заново. Содержимое то же, а теги
+    другие: на посадочном плане Берзарина так «менялись» 4 сущности из 311 432
+    (docs/notes/24-audit.md). Поэтому куски склеиваются, суррогаты сводятся к буквам.
+    """
+    items: list[tuple[int, object]] = []
+    chunks: list[str] = []
+    for tag in tags:
+        code, value = tag.code, tag.value
+        if kind == "MTEXT" and code == _TEXT_CHUNK and isinstance(value, str):
+            chunks.append(value)
+            continue
+        if kind == "MTEXT" and code == _TEXT_TAIL and isinstance(value, str):
+            value, chunks = "".join([*chunks, value]), []
+        items.append((code, _whole_characters(value) if isinstance(value, str) else value))
+    if chunks:
+        items.append((_TEXT_CHUNK, _whole_characters("".join(chunks))))
+    return items
+
+
+def _whole_characters(value: str) -> str:
+    """Суррогаты от чтения с surrogateescape обратно в байты и в буквы, если байты это UTF-8."""
+    if value.isascii() or not any(_SURROGATE_LOW <= ord(ch) <= _SURROGATE_HIGH for ch in value):
+        return value
+    return value.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
 
 
 def _is_result(layer: str, block_name: str) -> bool:
