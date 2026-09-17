@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import io
 import re
+import tempfile
 import threading
 from collections import OrderedDict
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -14,15 +16,13 @@ from ezdxf import recover
 from green.application.errors import InputError
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from ezdxf.audit import Auditor
     from ezdxf.document import Drawing
 
 RESULT_PREFIX = "GREEN_"
 APPID = "LCT_GREEN"
 _BAD_UNICODE_ESCAPE = re.compile(rb"\\U\+(?![0-9A-Fa-f]{4})")
 _GROUP_CODE = re.compile(rb"^\s*-?\d{1,4}\s*$")
+_LONE_CR = re.compile(rb"\r(?!\n)")
 
 type Loaded = tuple[Drawing, list[str]]
 
@@ -80,48 +80,73 @@ def _key(path: Path) -> tuple[str, int, int]:
 
 
 def load_document(path: Path) -> tuple[Drawing, list[str]]:
-    doc: Drawing | None = None
+    """Загрузка с нарастающей терпимостью. Всё, что сделано с файлом, попадает в заметки.
+
+    1. Строгий загрузчик ezdxf: он в два раза быстрее режима восстановления.
+    2. Ремонт строк (дефекты LibreDWG) и снова строгий загрузчик, уже на отремонтированных байтах.
+    3. Режим восстановления ezdxf на тех же байтах.
+
+    Раньше после шага 1 шёл режим восстановления на исходном файле: на генплане Берзарина он
+    16,9 с разбирал файл и падал на разорванной строке, после чего всё равно начинался ремонт
+    (docs/notes/23-load-time.md).
+    """
     try:
-        doc = ezdxf.readfile(path)
+        return _strict(path, ezdxf.readfile(path), [])
     except ezdxf.DXFStructureError, ValueError:
         pass
     except OSError as error:
         raise InputError(f"Не удалось открыть {path.name}: {error}") from error
-    if doc is not None:
-        # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
-        # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
-        auditor = doc.audit()
-        fixes = len(auditor.fixes)
-        if not fixes and not auditor.errors:
-            return doc, []
-        note = f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}"
-        return doc, [note]
-    notes: list[str] = []
+    data, notes = _repaired_bytes(path)
+    if notes:
+        doc = _read_strict(data)
+        if doc is not None:
+            return _strict(path, doc, notes)
     try:
-        doc, auditor = recover.readfile(path)
-    except ezdxf.DXFStructureError, ValueError:
-        # LibreDWG режет длинные строки посреди «\U+XXXX» (ValueError) и оставляет сырые
-        # переводы строк (DXFStructureError, пары «код-значение» съезжают): чиним и читаем снова.
-        doc, auditor, note = _recover_repaired(path)
-        notes.append(note)
+        doc, auditor = recover.read(io.BytesIO(data))
+    except (ezdxf.DXFStructureError, ValueError) as error:
+        raise InputError(f"{path.name} не является корректным DXF: {error}") from error
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
     return doc, notes
 
 
-def _recover_repaired(path: Path) -> tuple[Drawing, Auditor, str]:
+def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[str]]:
+    # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
+    # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
+    auditor = doc.audit()
+    fixes = len(auditor.fixes)
+    if fixes or auditor.errors:
+        notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
+    return doc, notes
+
+
+def _repaired_bytes(path: Path) -> tuple[bytes, list[str]]:
     """Ремонт строк, которые LibreDWG режет посреди escape-последовательности и перевода строки."""
     data, joined = _join_broken_values(path.read_bytes())
     data, replaced = _BAD_UNICODE_ESCAPE.subn(b"?", data)
-    try:
-        doc, auditor = recover.read(io.BytesIO(data))
-    except (ezdxf.DXFStructureError, ValueError) as error:
-        raise InputError(f"{path.name} не является корректным DXF: {error}") from error
+    # Одиночный CR внутри значения: текстовый режим Python считает его переводом строки, и пары
+    # «код-значение» у строгого загрузчика съезжают. Режим восстановления делит только по LF.
+    data, lone = _LONE_CR.subn(b"", data)
+    if not (joined or replaced or lone):
+        return data, []
     note = (
         f"{path.name}: восстановлено разорванных строковых значений {joined}, "
         f"заменено некорректных последовательностей \\U+ {replaced}"
     )
-    return doc, auditor, note
+    if lone:
+        note += f", убрано одиночных возвратов каретки {lone}"
+    return data, [note]
+
+
+def _read_strict(data: bytes) -> Drawing | None:
+    """Строгий загрузчик читает файл, а не байты: кодировку он определяет по заголовку сам."""
+    with tempfile.TemporaryDirectory(prefix="green_dxf_") as folder:
+        repaired = Path(folder) / "repaired.dxf"
+        repaired.write_bytes(data)
+        try:
+            return ezdxf.readfile(repaired)
+        except ezdxf.DXFStructureError, ValueError:
+            return None
 
 
 def _join_broken_values(data: bytes) -> tuple[bytes, int]:
