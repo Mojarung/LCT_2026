@@ -102,7 +102,8 @@ class GreedyPlantingStrategy:
                     f"({norms.blocking.rule_id or norms.blocking.source})"
                 )
         crown = species.crown_mature_m if single else None
-        rules = active_distance_rules(rulebook, params, species.name_lat, crown)
+        traits = species.traits if single else frozenset()
+        rules = active_distance_rules(rulebook, params, species.name_lat, crown, traits)
         index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
         if params.require_soil:
             index.surface = build_surface_map(

@@ -33,6 +33,7 @@ from green.infrastructure.config.repositories import (
 
 ROOT = Path(__file__).resolve().parents[2]
 import os
+
 CONFIG = Path(os.environ.get("GREEN_CONFIG_DIR", ROOT / "config"))
 
 
@@ -61,21 +62,39 @@ def _placements(plan: dict, catalog: YamlSpeciesCatalog, default: str) -> tuple[
             ),
             notes=tuple(item["notes"]),
         )
-        for item in plan["placements"]
+        for item in _places(plan)
     )
+
+
+def _places(plan: dict) -> list[dict]:
+    """Посадки и места, перенесённые в отказы из-за квот (у них note и пройденные проверки)."""
+    empty = [
+        {**r, "checks": r["blocking"], "notes": [], "planting_type": "tree"}
+        for r in plan["rejections"]
+        if r.get("note") and r["blocking"]
+    ]
+    trees = [p for p in plan["placements"] if p["planting_type"] == "tree"]
+    return [*trees, *empty]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("run", type=Path, help="каталог прогона с plan.json и assortment.json")
     parser.add_argument("--profile", default="strict")
-    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="переопределить параметр профиля")
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="переопределить параметр профиля",
+    )
     parser.add_argument(
         "--why", nargs="*", default=[], metavar="FAMILY", help="три главные причины отказа видов"
     )
     parser.add_argument(
         "--empty", action="store_true", help="какие виды допустимы в незанятых местах"
     )
+    parser.add_argument("--save", type=Path, help="сохранить «место - вид - расстояния» в JSON")
     args = parser.parse_args()
 
     plan_data = json.loads((args.run / "plan.json").read_text(encoding="utf-8"))
@@ -111,10 +130,14 @@ def main() -> None:
         }
         families.update(allowed)
 
-    print(f"мест: {len(placements)}, занято: {len(plan.placements)}, в отказах: {summary.no_species}")
+    print(
+        f"мест: {len(placements)}, занято: {len(plan.placements)}, в отказах: {summary.no_species}"
+    )
     for name, count in total.items():
         print(f"  {name}: занято {planted[name]} из {count}")
-    print(f"видов: {len(summary.counts)}, Шеннон: {summary.shannon}, хвойных: {summary.conifer_share:.3f}")
+    print(
+        f"видов: {len(summary.counts)}, Шеннон: {summary.shannon}, хвойных: {summary.conifer_share:.3f}"
+    )
     print(f"нарушения квот: {list(summary.quota_violations) or 'нет'}")
     print("состав:", dict(sorted(summary.counts.items(), key=lambda kv: -kv[1])))
     print("доли семейств:", summary.family_shares)
@@ -124,6 +147,19 @@ def main() -> None:
     _why(placements, catalog, rulebook, params, set(args.why))
     if args.empty:
         _empty(placements, plan, catalog, rulebook, params)
+    if args.save:
+        rows = [
+            {
+                "id": p.placement_id,
+                "species": p.species.code,
+                "mode": p.notes[0] if p.notes else "",
+                "clearance_m": {
+                    cls.value: round(value, 2) for cls, value in site_context(p).clearance_m.items()
+                },
+            }
+            for p in plan.placements
+        ]
+        args.save.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def _empty(placements, plan, catalog, rulebook, params) -> None:  # noqa: ANN001
@@ -148,7 +184,9 @@ def _empty(placements, plan, catalog, rulebook, params) -> None:  # noqa: ANN001
     for code, places in allowed_at_empty.most_common():
         family = catalog.get(code).family
         share = counts.get(code, 0) / total if total else 0
-        print(f"  {code} ({family}): допустим в {places} пустых, в плане {counts.get(code, 0)} ({share:.1%})")
+        print(
+            f"  {code} ({family}): допустим в {places} пустых, в плане {counts.get(code, 0)} ({share:.1%})"
+        )
     for families, places in families_at_empty.most_common():
         print(f"  набор семейств {sorted(families)}: {places} мест")
     # Пробный вид: без правил по роду, солеустойчивый, зимостойкий, высота 8 м. Меняется

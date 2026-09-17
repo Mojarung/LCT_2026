@@ -140,6 +140,7 @@ class YamlRuleBookSource:
                 citation=_citation(r.citation),
                 genera=frozenset(g.casefold() for g in r.genera),
                 min_crown_m=r.min_crown_m,
+                traits=frozenset(r.traits),
             )
             for r in rules_file.distance_rules
         )

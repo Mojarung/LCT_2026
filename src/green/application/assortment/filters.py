@@ -38,11 +38,12 @@ _CROWN_BASE_M = 5.0  # прим. к табл. 9.1: расстояния даны
 _TABLE_91 = "табл. 9.1"
 _SALT_CLASSES = (ObjectClass.ROAD, ObjectClass.CURB)
 _SALT_PROOF = 2
+_TRAIT_LABELS = {"thorny": "колючее", "toxic": "токсичное"}
 _RELEVANT_FACTOR = 3.0  # во сколько норм укладывается расстояние, при котором правило значимо
 # Набор правил зависит только от рода, кроны, типа посадки и содержимого rulebook, поэтому
 # кешируется по отпечатку конфигурации: иначе 44 правила перебираются заново для каждой
 # пары «посадка - вид», а пар десятки тысяч.
-_RULES_CACHE: dict[tuple[str, str, str, float, tuple[str, ...]], tuple[DistanceRule, ...]] = {}
+_RULES_CACHE: dict[tuple[object, ...], tuple[DistanceRule, ...]] = {}
 _CACHE_LIMIT = 512
 
 
@@ -123,7 +124,7 @@ def _distances(
             return _too_close(species, rule, rulebook, measured, threshold)
         # «До теплосети 30 м при норме 4 м» - не основание выбрать вид, а шум: правило по
         # роду попадает в объяснение, только когда объект рядом и норма действительно решала.
-        if (rule.genera or rule.min_crown_m) and measured <= threshold * _RELEVANT_FACTOR:
+        if rule.is_species_specific and measured <= threshold * _RELEVANT_FACTOR:
             reasons.append(
                 Reason(
                     NORM,
@@ -209,7 +210,7 @@ def _too_close(
             f"измерено {measured:.1f} м (величину увеличения акт не задаёт: принят прирост "
             "радиуса кроны, толкование проекта)"
         )
-    elif rule.genera or rule.min_crown_m:
+    elif rule.is_species_specific:
         text = (
             f"до {target} {measured:.1f} м при норме {threshold:.1f} м {_rule_scope(species, rule)}"
         )
@@ -231,6 +232,7 @@ def _forbid_rules(
         planting_type.value,
         species.genus,
         species.crown_mature_m,
+        species.traits,
         disabled,
     )
     cached = _RULES_CACHE.get(key)
@@ -240,7 +242,10 @@ def _forbid_rules(
         cached = tuple(
             rule
             for rule in rulebook.distance_rules_for(
-                planting_type, species.name_lat, crown_m=species.crown_mature_m
+                planting_type,
+                species.name_lat,
+                crown_m=species.crown_mature_m,
+                traits=species.traits,
             )
             if rule.severity is Severity.FORBID and rule.rule_id not in disabled
         )
@@ -261,4 +266,7 @@ def _rule_scope(species: Species, rule: DistanceRule) -> str:
     """К кому относится видозависимое правило: к роду или к виду с широкой кроной."""
     if rule.min_crown_m is not None:
         return f"для кроны шире {rule.min_crown_m:.0f} м (у вида {species.crown_mature_m:.0f} м)"
+    if rule.traits:
+        labels = [_TRAIT_LABELS.get(trait, trait) for trait in sorted(rule.traits)]
+        return f"для растений с признаком: {', '.join(labels)}"
     return f"для рода {species.genus.capitalize()}"

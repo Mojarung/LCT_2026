@@ -93,6 +93,12 @@ class Species:
     sources: Mapping[str, str] = field(default_factory=dict, compare=False)
 
     @property
+    def traits(self) -> frozenset[str]:
+        """Признаки, на которые ссылаются правила расстояний (поле traits правила)."""
+        flags = {"thorny": self.thorny, "toxic": self.toxic}
+        return frozenset(name for name, on in flags.items() if on)
+
+    @property
     def is_conifer(self) -> bool:
         return self.family in CONIFER_FAMILIES
 

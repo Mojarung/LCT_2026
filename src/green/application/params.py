@@ -91,7 +91,8 @@ def active_distance_rules(
     params: PlanParams,
     species_lat: str | None = None,
     crown_m: float | None = None,
+    traits: frozenset[str] = frozenset(),
 ) -> tuple[DistanceRule, ...]:
     """Правила расстояний для типа посадки и вида, без отключённых профилем."""
-    rules = rulebook.distance_rules_for(params.planting_type, species_lat, crown_m)
+    rules = rulebook.distance_rules_for(params.planting_type, species_lat, crown_m, traits)
     return tuple(rule for rule in rules if rule.rule_id not in params.disabled_rules)

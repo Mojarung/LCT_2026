@@ -173,7 +173,7 @@ def _drop_unplanted(
             x=p.x,
             y=p.y,
             verdict=p.verdict,
-            blocking=(),
+            blocking=p.checks,  # все пройдены: место допустимо по нормам, мешают только квоты
             note="; ".join(r.text for r in p.assortment.reasons) if p.assortment else "",
         )
         for offset, p in enumerate(

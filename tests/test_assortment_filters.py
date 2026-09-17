@@ -45,6 +45,8 @@ def _fix(clearances: dict[str, float]) -> list[tuple[str, float]]:
         "curb": "curb",
         "road": "road",
         "power": "utility.power_cable",
+        "sidewalk": "sidewalk",
+        "pavement": "pavement_edge",
     }
     return [(names[key], value) for key, value in clearances.items()]
 
@@ -260,3 +262,19 @@ def test_zone_five_species_need_an_explicit_regional_profile(code: str) -> None:
     assert not species_verdict(species, _ctx_of(), RULEBOOK, PARAMS).allowed
     warmer = replace(PARAMS, region_hardiness_zone=5)
     assert species_verdict(species, _ctx_of(), RULEBOOK, warmer).allowed
+
+
+def test_thorny_plants_keep_two_metres_from_pedestrian_ways() -> None:
+    """СП 82.13330.2016 п. 9.22: колючие растения не ближе 2 м от пешеходных коммуникаций."""
+    hawthorn = CATALOG.get("crataegus_laevigata")
+    assert "thorny" in hawthorn.traits
+    for where in ("sidewalk", "pavement"):
+        near = species_verdict(hawthorn, _ctx_of(**{where: 1.4}), RULEBOOK, PARAMS)
+        assert not near.allowed, where
+        assert near.blocking is not None
+        assert near.blocking.rule_id.startswith("R-THORN"), near.blocking.rule_id
+        assert "9.22" in near.blocking.source
+        assert "колючее" in near.blocking.text
+        assert species_verdict(hawthorn, _ctx_of(**{where: 2.5}), RULEBOOK, PARAMS).allowed
+    smooth = _species(crown_mature_m=4.0)
+    assert species_verdict(smooth, _ctx_of(sidewalk=1.4), RULEBOOK, PARAMS).allowed

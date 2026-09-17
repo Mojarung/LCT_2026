@@ -63,6 +63,7 @@ class DistanceRuleModel(_Strict):
     severity: Severity = Severity.FORBID
     genera: list[str] = Field(default_factory=list)
     min_crown_m: float | None = Field(default=None, gt=0, le=40)
+    traits: list[Literal["thorny", "toxic"]] = Field(default_factory=list)
     citation: CitationModel
 
 

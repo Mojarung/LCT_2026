@@ -112,7 +112,9 @@ class DistanceRule:
     как в МГСН 1.02-02 п. 4.2.8: у теплотрасс липа и клён не ближе 2 м, берёза не ближе 3-4 м.
     Пустое множество означает правило для любого вида. min_crown_m ограничивает правило видами
     с взрослой кроной шире этого значения (743-ПП, прим. 3 к табл. 3.6.1: широкая крона не
-    ближе 10 м от здания); пока вид не выбран, такое правило не применяется.
+    ближе 10 м от здания); пока вид не выбран, такое правило не применяется. traits ограничивает
+    правило видами с признаком (СП 82.13330 п. 9.22: колючие растения не ближе 2 м от
+    пешеходных путей) и тоже ждёт выбора вида.
     """
 
     rule_id: str
@@ -124,16 +126,24 @@ class DistanceRule:
     citation: Citation
     genera: frozenset[str] = field(default_factory=frozenset)
     min_crown_m: float | None = None
+    traits: frozenset[str] = field(default_factory=frozenset)
+
+    @property
+    def is_species_specific(self) -> bool:
+        return bool(self.genera or self.traits or self.min_crown_m is not None)
 
     def applies_to(
         self,
         planting_type: PlantingType,
         species_lat: str | None = None,
         crown_m: float | None = None,
+        traits: frozenset[str] = frozenset(),
     ) -> bool:
         if self.planting_type is not planting_type:
             return False
         if self.min_crown_m is not None and (crown_m is None or crown_m <= self.min_crown_m):
+            return False
+        if not self.traits <= traits:
             return False
         if not self.genera:
             return True
@@ -216,9 +226,12 @@ class RuleBook:
         planting_type: PlantingType,
         species_lat: str | None = None,
         crown_m: float | None = None,
+        traits: frozenset[str] = frozenset(),
     ) -> tuple[DistanceRule, ...]:
         return tuple(
-            r for r in self.distance_rules if r.applies_to(planting_type, species_lat, crown_m)
+            r
+            for r in self.distance_rules
+            if r.applies_to(planting_type, species_lat, crown_m, traits)
         )
 
     def act_of(self, citation: Citation) -> Act | None:
