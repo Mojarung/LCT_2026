@@ -236,6 +236,30 @@ distance_rules:
       quote: "Мачта и опора осветительной сети, трамвая, мостовая опора и эстакада | 4,0 | -"
       status: verified
       related: *table_trees
+  # Откос: условный знак топоплана (бровка и штрихи). Норма меряется от подошвы; до любого
+  # элемента знака - строже, на теле откоса посадка не предлагается.
+  - rule_id: R-SLOPE-TREE-001
+    object_class: slope
+    planting_type: tree
+    min_distance_m: 1.0
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подошва откоса, террасы и др. (расстояние считается до любого элемента условного знака откоса)"
+      quote: "Подошва откоса, террасы и др. | 1,0 | 0,5"
+      status: verified
+      related: *table_trees
+  - rule_id: R-SLOPE-SHRUB-001
+    object_class: slope
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation:
+      act_id: SP42_13330_2016
+      clause: "п. 9.6, табл. 9.1: подошва откоса, террасы и др."
+      quote: "Подошва откоса, террасы и др. | 1,0 | 0,5"
+      status: verified
+      related: *table_trees
   # Класс structure: парапеты, лестницы набережных, мосты, подземные переходы. Приняты как подпорные стенки.
   - rule_id: R-STRUCT-TREE-001
     object_class: structure

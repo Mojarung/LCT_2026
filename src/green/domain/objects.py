@@ -36,6 +36,7 @@ class ObjectClass(StrEnum):
     RAILWAY = "railway"
     BUILDING = "building"
     STRUCTURE = "structure"
+    SLOPE = "slope"
     WORK_BOUNDARY = "work_boundary"
     EXISTING_TREE = "existing_tree"
     EXISTING_SHRUB = "existing_shrub"
