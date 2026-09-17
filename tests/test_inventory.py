@@ -17,14 +17,17 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = YamlSpeciesCatalog(ROOT / "config" / "species.yaml").all()
-BERZARINA = (
-    ROOT
-    / "dataset"
-    / "streets"
-    / "Пилотный проект 20 улиц"
+_SURVEY = (
+    Path("Пилотный проект 20 улиц")
     / "16. улица Берзарина"
     / "Исходные данные"
     / "Перечетка_улица Берзарина.xls"
+)
+# Датасет в git не идёт, у участников команды он распакован в разные папки.
+_DATASET_ROOTS = (ROOT / "dataset" / "streets", ROOT / "dataset" / "Датасет")
+BERZARINA = next(
+    (root / _SURVEY for root in _DATASET_ROOTS if (root / _SURVEY).exists()),
+    _DATASET_ROOTS[0] / _SURVEY,
 )
 
 HEADER = ("№№", "Наименование", "Кол-во в шт.", "Диаметр", "Заключение")

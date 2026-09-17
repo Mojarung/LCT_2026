@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from green.application.errors import (
     ConfigurationError,
@@ -18,6 +19,8 @@ from green.application.errors import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from fastapi import FastAPI, Request
 
 PROBLEM_JSON = "application/problem+json"
@@ -50,12 +53,16 @@ def problem(
     detail: str | None,
     instance: str,
     errors: list[dict[str, object]] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     body = Problem(
         title=status.phrase, status=status.value, detail=detail, instance=instance, errors=errors
     )
     return JSONResponse(
-        body.model_dump(exclude_none=True), status_code=status.value, media_type=PROBLEM_JSON
+        body.model_dump(exclude_none=True),
+        status_code=status.value,
+        media_type=PROBLEM_JSON,
+        headers=dict(headers) if headers else None,
     )
 
 
@@ -74,7 +81,16 @@ def install_error_handlers(app: FastAPI) -> None:
             HTTPStatus.UNPROCESSABLE_ENTITY, "Некорректный запрос", request.url.path, cleaned
         )
 
+    async def on_http_error(request: Request, error: Exception) -> JSONResponse:
+        """Ответы самого фреймворка: нет маршрута, не тот метод. Формат тот же."""
+        if not isinstance(error, StarletteHTTPException):
+            return problem(HTTPStatus.INTERNAL_SERVER_ERROR, None, request.url.path)
+        status = HTTPStatus(error.status_code)
+        detail = error.detail if error.detail != status.phrase else None
+        return problem(status, detail, request.url.path, headers=error.headers)
+
     app.add_exception_handler(GreenError, on_green_error)
+    app.add_exception_handler(StarletteHTTPException, on_http_error)
     app.add_exception_handler(RequestValidationError, on_validation_error)
 
 

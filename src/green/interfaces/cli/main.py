@@ -1,4 +1,4 @@
-"""CLI: прогон, осмотр слоёв, проверка целостности, запуск API."""
+"""CLI: прогон, осмотр слоёв, проверка целостности, запуск API, выгрузка схемы API."""
 
 from __future__ import annotations
 
@@ -165,6 +165,19 @@ def serve(*, host: str = "127.0.0.1", port: int = 8000, workers: int = 1) -> Non
         port=port,
         workers=workers,
     ).serve()
+
+
+@app.command
+def openapi(*, out: Path | None = None) -> None:
+    """Выгрузить схему OpenAPI: в файл (--out docs/openapi.json) или в stdout."""
+    from green.interfaces.api.app import create_app  # noqa: PLC0415 - FastAPI нужен только здесь
+
+    schema = orjson.dumps(create_app().openapi(), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
+    if out is None:
+        sys.stdout.write(schema.decode() + "\n")
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(schema + b"\n")
 
 
 def main() -> None:
