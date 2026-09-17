@@ -1,4 +1,4 @@
-"""CLI: прогон, осмотр слоёв, проверка целостности, запуск API, выгрузка схемы API."""
+"""CLI: прогон, нормоконтроль, осмотр слоёв, проверка целостности, API, схема API."""
 
 from __future__ import annotations
 
@@ -12,10 +12,12 @@ import yaml
 from cyclopts import App, Parameter
 
 from green import __version__
+from green.application.audit import AuditRequest
 from green.application.classification import classify_scene
 from green.application.errors import GreenError, InputError
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
+from green.domain.norms import PlantingType
 from green.infrastructure.inventory import read_inventory
 
 if TYPE_CHECKING:
@@ -111,6 +113,57 @@ def run(
             "artifacts": {name: str(path) for name, path in files.items()},
         }
     )
+
+
+@app.command
+def audit(  # noqa: PLR0913 - CLI options are separate parameters by design
+    source: Path,
+    /,
+    *more: Path,
+    plantings: Annotated[str, Parameter(help="Регулярное выражение для слоёв с посадками")],
+    profile: str | None = None,
+    set_: Annotated[tuple[str, ...], Parameter(name="--set")] = (),
+    trees: Annotated[str | None, Parameter(help="Слои, где посадка точно дерево")] = None,
+    shrubs: Annotated[str | None, Parameter(help="Слои, где посадка точно кустарник")] = None,
+    min_tree_crown: float = 2.0,
+    no_crown_is: Annotated[str, Parameter(help="tree или shrub: посадка без круга кроны")] = "tree",
+    out: Path | None = None,
+) -> None:
+    """Нормоконтроль готового чертежа: посадки на слоях --plantings проверяются по нормам."""
+    container = build_container()
+    name = profile or container.settings.default_profile
+    params = container.profiles.load(name, _overrides(set_))
+    try:
+        default_type = PlantingType(no_crown_is)
+    except ValueError as error:
+        raise InputError("--no-crown-is: ожидается tree или shrub") from error
+    run_id = uuid.uuid4().hex
+    work_dir = out or container.settings.runs_dir / f"audit-{run_id}"
+    report = container.audit.execute(
+        AuditRequest(
+            run_id=run_id,
+            source=source,
+            work_dir=work_dir,
+            profile=name,
+            params=params,
+            planting_layers=plantings,
+            tree_layers=trees,
+            shrub_layers=shrubs,
+            min_tree_crown_m=min_tree_crown,
+            default_type=default_type,
+            extra_sources=tuple(more),
+        )
+    )
+    artifacts = container.audit_artifacts.save(work_dir, report)
+    _print(
+        {
+            **report.summary(),
+            "timings_ms": {t.stage: t.ms for t in report.timings},
+            "artifacts": {name: str(path) for name, path in artifacts.items()},
+        }
+    )
+    if not report.integrity.ok:
+        sys.exit(1)
 
 
 @app.command

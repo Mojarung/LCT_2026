@@ -107,6 +107,9 @@ class Feature:
     block: str | None = None
     object_class: ObjectClass = ObjectClass.UNKNOWN
     diameter_m: float | None = None
+    # Радиус исходной окружности в метрах. Кругом кроны проектировщик обозначает посадку:
+    # по нему нормоконтроль отличает дерево от кустарника.
+    circle_radius_m: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

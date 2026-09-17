@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from green.application.audit import AuditSite
 from green.application.placement import GreedyPlantingStrategy
 from green.application.runs import RunService
 from green.application.use_case import PlanSite
 from green.bootstrap.settings import Settings
+from green.infrastructure.cad.audit_writer import EzdxfAuditWriter
 from green.infrastructure.cad.documents import DocumentCache
 from green.infrastructure.cad.integrity import EzdxfIntegrityChecker
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
@@ -23,6 +25,7 @@ from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
 from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
+from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
 from green.infrastructure.storage.runs import FileSystemRunStore
 
 type Converter = LibreDwgConverter | OdaFileConverter
@@ -32,6 +35,8 @@ type Converter = LibreDwgConverter | OdaFileConverter
 class Container:
     settings: Settings
     use_case: PlanSite
+    audit: AuditSite
+    audit_artifacts: AuditArtifactSink
     runs: RunService
     store: FileSystemRunStore
     profiles: YamlProfileSource
@@ -68,6 +73,16 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         merger=EzdxfDrawingMerger(),
     )
+    audit = AuditSite(
+        reader=reader,
+        converters=converters,
+        rules=rules,
+        layers=layers,
+        species=species,
+        writer=EzdxfAuditWriter(text_font=settings.text_font, documents=documents),
+        integrity=integrity,
+        merger=EzdxfDrawingMerger(),
+    )
     store = FileSystemRunStore(settings.runs_dir)
     runs = RunService(
         store=store,
@@ -80,6 +95,8 @@ def build_container(settings: Settings | None = None) -> Container:
     return Container(
         settings=settings,
         use_case=use_case,
+        audit=audit,
+        audit_artifacts=AuditArtifactSink(),
         runs=runs,
         store=store,
         profiles=profiles,

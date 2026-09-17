@@ -21,12 +21,13 @@ src/green/
                    (STRtree+numpy), surfaces (карта покрытий, Дейкстра), placement.GreedyPlantingStrategy
                    (аллея вдоль борта + сетка по газону), zones (зоны допустимости),
                    assortment/ (подбор вида: context, structures, filters, scoring, assign (MILP),
-                   summary), explain (шаблоны), results, runs, ports
+                   summary), explain (шаблоны), results, runs, ports, audit (нормоконтроль чужого плана),
+                   schedule (ведомость), barriers, shrub_groups
   infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    reports/artifacts, logs
   bootstrap/       Settings (переменные GREEN_*), build_container
-  interfaces/      cli/main.py (`green run|inspect|verify|serve`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
+  interfaces/      cli/main.py (`green run|audit|inspect|verify|serve|openapi`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
 config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
@@ -44,17 +45,17 @@ docs/
   notes/08-dataset-map.md, notes/09-berzarina-layers-and-offsets.md (наши)
   notes/10..15 (Кирилл: подбор ассортимента, видовые нормы, каталог, пустые места, группы кустарников,
                  15-organizers-qa.md - ответы заказчика с сессии вопросов и что из них следует),
-  notes/16..23 (Кирилл: категории насаждений, квоты кустарников и прикорневые барьеры; комплект из
+  notes/16..24 (Кирилл: категории насаждений, квоты кустарников и прикорневые барьеры; комплект из
                  нескольких DXF; ведомость посадочного материала и проверка комплекта по месту;
                  единицы чертежа: заголовку $INSUNITS не верим, решает геометрия;
                  тесты HTTP API и выгрузка OpenAPI; откосы и школы; обработка не меняет исходник;
-                 время чтения и порядок загрузки)
+                 время чтения и порядок загрузки; нормоконтроль `green audit`)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
 dataset/           датасет и конвертированные DXF, в git не идёт; compose монтирует ./dataset в /dataset
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
-Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green serve` (Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
 
 ## Конвенции
 
@@ -90,6 +91,6 @@ dataset/           датасет и конвертированные DXF, в gi
 - Нормы: 75 из 76 правил со сверенным основанием (не сверена охранная зона газопровода, она отключена в профилях), дословные цитаты СП 42.13330.2016 (п. 9.6, табл. 9.1), 743-ПП (табл. 3.6.1 с прим. 3, 3.6.2, п. 3.6.18), 623-ПП (п. 4.2.4, 4.2.8), ПП РФ N 160, 369-ПП (перечень и порядок по группам) (`docs/notes/07-norms.md`, `docs/notes/11-species-norms.md`). Нет текстов СП 42.13330.2026, ПП РФ N 878, правок 743-ПП 2026 года. Тип территории по 369-ПП и пол посадочного материала тополей в чертеже не определяются, это параметр профиля и допущение каталога. Берёза запрещена как массовый аллерген (п. 3.6.18), хотя проектировщик Берзарина её сажает. ТЗ называет редакцию СП 2016, действует 2026: если эксперты ждут пункты 2026, ссылки придётся переносить.
 - Два приёма (аллея вдоль борта, сетка по газону), один вид на прогон, жадный отбор; CP-SAT, группы и подбор видов не сделаны. Эталон Олимпийской деревни: 59% деревьев проектировщика в 6 м от наших; Берзарина 301 против 318.
 - Нормы строже практики: у Берзарина 41,8% деревьев проектировщика ближе 2 м к силовому кабелю. Нужен режим прикорневых барьеров (СП 42, табл. 9.1, прим. 5 и 7).
-- Тесты: 200 (чтение блоков, аудит, ремонт строк, классификатор, целостность, сквозной прогон на синтетическом топоплане, подбор и квоты, видовые нормы, барьеры, комплект DXF, ведомость, единицы чертежа, HTTP API, откосы, неизменность исходного документа, цитаты актов при заданном `GREEN_LAWS_DIR`), `uv run pytest`. Нет тестов на реальных чертежах пилота. Нормоконтроль эталонов — прототип в `tools/research/` (Берзарина: 306 нарушений), переносить в `green audit`.
+- Тесты: 215 (чтение блоков, аудит, ремонт строк, классификатор, целостность, сквозной прогон на синтетическом топоплане, подбор и квоты, видовые нормы, барьеры, комплект DXF, ведомость, единицы чертежа, HTTP API, откосы, неизменность исходного документа, нормоконтроль, цитаты актов при заданном `GREEN_LAWS_DIR`), `uv run pytest`. Нет тестов на реальных чертежах пилота. Нормоконтроль эталонов - команда `green audit` (`docs/notes/24-audit.md`): план проектировщика Берзарина 391 посадка с нарушениями из 554, наш план 0.
 - ezdxf на генплане 309 тыс. сущностей: чтение+запись больше двух минут; на Берзарина 149 с (18.09.2026, `docs/notes/23-load-time.md`), из них чтение с ремонтом 55 с, сверка целостности 35 с. C-расширения ezdxf под Python 3.14 не собраны, математика идёт на чистом Python.
 - LibreDWG 0.14 (и Windows, и Linux-сборка в образе) режет длинные строки посреди `\U+XXXX` и оставляет сырые переводы строк: загрузчик чинит это на запасном пути и нормализует документ через запись ezdxf, пустые `REGION` без ACIS при этом отбрасываются и перечисляются в предупреждениях. Блоки `msdElementType*` разбираются на геометрию, из `DIMTXT` берётся только текст (`docs/notes/04-issues-and-fixes.md`). Результат ни разу не открывали в nanoCAD/QCAD под Linux — сам прогон в контейнере проверен (16.09.2026, `docs/notes/10-assortment-runs.md`: Берзарина в образе даёт тот же план, что на Windows, целостность цела), а просмотр DXF глазами в Linux-просмотрщике остаётся невыполненным.

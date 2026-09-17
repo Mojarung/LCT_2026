@@ -62,7 +62,7 @@ class PlanRequest:
 
 
 @dataclass(slots=True)
-class _Stopwatch:
+class Stopwatch:
     timings: list[StageTiming]
 
     @contextmanager
@@ -99,13 +99,16 @@ class PlanSite:
         self._merger = merger
 
     def execute(self, request: PlanRequest) -> RunReport:
-        watch = _Stopwatch([])
+        watch = Stopwatch([])
         params = request.params
         request.work_dir.mkdir(parents=True, exist_ok=True)
 
         with watch.stage("convert"):
-            source, converter = self._to_dxf(request.source, request.work_dir)
-            extras = [self._to_dxf(path, request.work_dir)[0] for path in request.extra_sources]
+            source, converter = to_dxf(self._converters, request.source, request.work_dir)
+            extras = [
+                to_dxf(self._converters, path, request.work_dir)[0]
+                for path in request.extra_sources
+            ]
         merge_notes: tuple[str, ...] = ()
         if extras:
             if self._merger is None:
@@ -183,17 +186,17 @@ class PlanSite:
             warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
         )
 
-    def _to_dxf(self, source: Path, work_dir: Path) -> tuple[Path, str | None]:
-        suffix = source.suffix.lower()
-        if suffix == ".dxf":
-            return source, None
-        if suffix != ".dwg":
-            raise InputError(
-                f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}"
-            )
-        for converter in self._converters:
-            if converter.available():
-                return converter.to_dxf(source, work_dir), converter.name
-        raise ConversionError(
-            "Нет доступного конвертера DWG -> DXF (LibreDWG или ODA File Converter)"
-        )
+
+def to_dxf(
+    converters: Sequence[DrawingConverter], source: Path, work_dir: Path
+) -> tuple[Path, str | None]:
+    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер."""
+    suffix = source.suffix.lower()
+    if suffix == ".dxf":
+        return source, None
+    if suffix != ".dwg":
+        raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+    for converter in converters:
+        if converter.available():
+            return converter.to_dxf(source, work_dir), converter.name
+    raise ConversionError("Нет доступного конвертера DWG -> DXF (LibreDWG или ODA File Converter)")

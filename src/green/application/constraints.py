@@ -28,7 +28,10 @@ if TYPE_CHECKING:
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
 _PASS, _FAIL, _NO_DATA, _BARRIER = 0, 1, 2, 3
-_EPS_M = 1e-6
+# Допуск сравнения с нормой: 1 мм. Генератор ставит дерево ровно на норму (2,000 м от борта),
+# после записи в DXF и чтения обратно координата отличается на доли микрона, и допуск 1e-6
+# превращал такую посадку в нарушение при нормоконтроле собственного плана.
+_EPS_M = 1e-3
 _OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA, CheckOutcome.BARRIER)
 VERDICT_ORDER = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
 _VERDICTS = VERDICT_ORDER

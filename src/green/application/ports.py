@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from green.application.audit import AuditedPlanting
     from green.application.classification import LayerMap
     from green.application.params import PlanParams
     from green.application.results import (
@@ -103,6 +104,18 @@ class PlanWriter(Protocol):
         self,
         source: Path,
         plan: Plan,
+        rulebook: RuleBook,
+        target: Path,
+        *,
+        unit_m: float = 1.0,
+    ) -> SourceSnapshot: ...
+
+
+class AuditWriter(Protocol):
+    def write(
+        self,
+        source: Path,
+        plantings: Sequence[AuditedPlanting],
         rulebook: RuleBook,
         target: Path,
         *,

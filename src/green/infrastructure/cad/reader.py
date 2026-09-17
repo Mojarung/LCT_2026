@@ -139,7 +139,10 @@ class _Walker:
             if geometry is None or geometry.is_empty:
                 self.skipped[kind] += 1
             else:
-                self.features.append(Feature(ref=ref, layer=layer, geometry=geometry))
+                radius = entity.dxf.radius * self.unit_m if kind == "CIRCLE" else None
+                self.features.append(
+                    Feature(ref=ref, layer=layer, geometry=geometry, circle_radius_m=radius)
+                )
 
     def _insert(self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...]) -> None:
         name = insert.dxf.name
