@@ -44,7 +44,7 @@ flowchart TD
     L --> M[артефакты: result.dxf, plan.json, interpretations.csv/json, zones.geojson, run_manifest.json, verify.json]
 ```
 
-Пошаговое описание с параметрами и источниками каждого решения: [algorithm.md](algorithm.md).
+Пошаговое описание с параметрами и источниками каждого решения: [algorithm.md](algorithm.md). Схема развёртывания, запуск в Docker и переменные окружения: [deploy.md](deploy.md).
 
 Вердикт точки: `forbidden` при нарушении запрещающего правила, `unknown` или `needs_approval` при отсутствии данных о сетях (выбирает профиль), `needs_approval` при нарушении правила с согласованием, иначе `allowed`.
 

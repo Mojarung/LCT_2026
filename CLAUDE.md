@@ -36,6 +36,7 @@ tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
 docs/
   architecture.md, plan.md, research-review.md   архитектура, оперативный план и разбор ресерча (Кирилл)
+  deploy.md, demo.md                             развёртывание под МосТех.ОС и сценарий показа (Кирилл, 18.09.2026)
   spec.md                                        целевая спецификация «план-максимум» (наша)
   species.md                                     база видов: поля, шкалы, источники, пробелы
   requirements/planting-requirements.md          требования к посадке по 10 актам заказчика: цитата, статус в сервисе, пробелы;
