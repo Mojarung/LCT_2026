@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from green import __version__
+from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.intake import accept_run, parse_overrides
 
@@ -28,6 +29,7 @@ router = APIRouter(include_in_schema=False)
 @router.get("/", response_class=HTMLResponse, name="web_index")
 def index(request: Request, container: ContainerDep) -> HTMLResponse:
     """Форма запуска и последние прогоны."""
+    rules = container.rules.load().all_rules
     return TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -36,6 +38,9 @@ def index(request: Request, container: ContainerDep) -> HTMLResponse:
             "profiles": list(container.profiles.names()),
             "default_profile": container.settings.default_profile,
             "runs": container.store.recent(RECENT_LIMIT),
+            "rules_total": len(rules),
+            "rules_verified": sum(r.citation.is_verified for r in rules),
+            "species_total": len(container.species.all()),
         },
     )
 
@@ -88,6 +93,21 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
     )
     url = request.url_for("web_run", run_id=record.run_id)
     return RedirectResponse(str(url), status_code=303)
+
+
+@router.post("/web/demo", name="web_demo")
+def demo(
+    request: Request, background: BackgroundTasks, container: ContainerDep
+) -> RedirectResponse:
+    """Запустить прогон на встроенном демонстрационном участке.
+
+    Чертёж строится кодом: на стенде жюри датасета нет, а показывать сервис надо с первого
+    клика, не заставляя искать DXF.
+    """
+    record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, {})
+    write_sample(container.store.input_path(record.run_id))
+    background.add_task(container.runs.execute, record.run_id, None, ())
+    return RedirectResponse(str(request.url_for("web_run", run_id=record.run_id)), status_code=303)
 
 
 @router.get("/runs/{run_id}", response_class=HTMLResponse, name="web_run")

@@ -296,10 +296,13 @@ function checkRow(check) {
   const rule = state.rules[check.rule_id] || {};
   const measured = check.measured_m == null ? null : check.measured_m.toFixed(2);
   const threshold = check.threshold_m == null ? null : check.threshold_m.toFixed(2);
-  const distance = measured && threshold ? `${measured} / ${threshold} м` : '';
+  const distance = measured && threshold
+    ? `${measured} / ${threshold} м`
+    : (threshold ? `норма ${threshold} м` : '');
   const act = [rule.act_short || rule.act_id, rule.clause].filter(Boolean).join(', ');
+  const failed = check.outcome === 'fail';
   return `
-    <li class="check-item">
+    <li class="check-item${failed ? ' failed' : ''}">
       <div class="check-rule">
         <span class="check-id">${escape(check.rule_id)}</span>
         <span class="check-dist">${escape(distance)}</span>
@@ -309,13 +312,80 @@ function checkRow(check) {
     </li>`;
 }
 
+/** Нормы, у которых в чертеже нет объекта, проверены, но решение не определяли. Смешанные
+ *  в один список с действующими ограничениями, они прячут главное: двадцать строк «5,00 м»
+ *  без замера выглядят так же весомо, как единственное нарушенное правило. */
+function splitChecks(checks) {
+  const binding = [];
+  const measured = [];
+  const absent = [];
+  for (const check of checks) {
+    if (check.outcome === 'fail' || check.outcome === 'barrier') binding.push(check);
+    else if (check.measured_m != null) measured.push(check);
+    else absent.push(check);
+  }
+  measured.sort((a, b) => (a.measured_m ?? 0) - (b.measured_m ?? 0));
+  return { binding, measured, absent };
+}
+
+/** Панель без выбранного объекта показывает состав плана: пустая колонка во всю высоту карты
+ *  ничего не сообщает, а «что посажено» - первый вопрос, который задаёт эксперт. */
+function composition() {
+  const byName = new Map();
+  for (const item of state.placements) {
+    const name = item.species_ru || 'вид не назначен';
+    const row = byName.get(name) || { name, lat: item.species_lat, count: 0 };
+    row.count += 1;
+    byName.set(name, row);
+  }
+  const rows = [...byName.values()].sort((a, b) => b.count - a.count);
+  const total = state.placements.length;
+  if (!rows.length) {
+    return `<div class="detail-empty"><p>В этом прогоне посадок нет.</p></div>`;
+  }
+  return `
+    <div class="detail-empty">
+      <p>Кликните посадку или отклонённое место на карте, чтобы увидеть норму, по которой
+         принято решение. Колесо - масштаб, перетаскивание - панорама.</p>
+    </div>
+    <h2 class="detail-heading">Состав плана · ${total}</h2>
+    <ul class="composition">
+      ${rows.map((row) => `
+        <li>
+          <span class="composition-bar" style="--share: ${(row.count / total * 100).toFixed(1)}%"></span>
+          <span class="composition-name">${escape(row.name)}</span>
+          <span class="composition-count">${row.count}</span>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function checksBlock(checks) {
+  if (!checks.length) return '<p class="hint detail-heading">Проверенных правил не записано.</p>';
+  const { binding, measured, absent } = splitChecks(checks);
+  const parts = [];
+  if (binding.length) {
+    parts.push(
+      `<h2 class="detail-heading">Ограничивают решение</h2>
+       <ul class="checks">${binding.map(checkRow).join('')}</ul>`);
+  }
+  if (measured.length) {
+    parts.push(
+      `<h2 class="detail-heading">Отступы выдержаны, от ближайшего</h2>
+       <ul class="checks">${measured.map(checkRow).join('')}</ul>`);
+  }
+  if (absent.length) {
+    parts.push(
+      `<details class="detail-full">
+         <summary>Ещё ${absent.length} норм проверено: таких объектов в чертеже нет</summary>
+         <ul class="checks" style="margin-top:12px">${absent.map(checkRow).join('')}</ul>
+       </details>`);
+  }
+  return parts.join('');
+}
+
 function showDetail(item) {
   if (!item) {
-    detail.innerHTML = `
-      <div class="detail-empty">
-        <p>Кликните посадку или отказ на карте.</p>
-        <p class="hint">В панели появится вид, отступы и пункт нормативного акта.</p>
-      </div>`;
+    detail.innerHTML = composition();
     return;
   }
   const checks = item.checks || [];
@@ -330,9 +400,7 @@ function showDetail(item) {
     <span class="verdict verdict-${escape(item.verdict)}">${escape(verdict)}</span>
     <p class="hint mono">${kind ? escape(kind) + ', ' : ''}x ${item.x.toFixed(2)}, y ${item.y.toFixed(2)}</p>
     ${item.note ? `<p class="detail-explain">${escape(item.note)}</p>` : ''}
-    ${checks.length
-      ? `<h2 class="detail-heading">Проверенные нормы</h2><ul class="checks">${checks.map(checkRow).join('')}</ul>`
-      : '<p class="hint detail-heading">Ограничивающих правил не записано.</p>'}
+    ${checksBlock(checks)}
     ${item.explanation
       ? `<details class="detail-full">
            <summary>Объяснение целиком, как в выгрузке</summary>
@@ -511,6 +579,21 @@ function bindInput() {
     schedule();
   }, { passive: false });
 
+  const zoomBy = (factor) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = rect.width / 2;
+    const py = rect.height / 2;
+    const next = Math.min(Math.max(state.scale * factor, 0.002), 400);
+    const applied = next / state.scale;
+    state.tx = px - (px - state.tx) * applied;
+    state.ty = py - (py - state.ty) * applied;
+    state.scale = next;
+    schedule();
+  };
+  document.getElementById('zoom-in')?.addEventListener('click', () => zoomBy(1.4));
+  document.getElementById('zoom-out')?.addEventListener('click', () => zoomBy(1 / 1.4));
+  document.getElementById('fit')?.addEventListener('click', () => { fitToBbox(); schedule(); });
+
   document.getElementById('layer-toggles')?.addEventListener('change', (event) => {
     const input = event.target;
     if (!input.dataset.layer) return;
@@ -608,6 +691,7 @@ async function mount() {
     resize();
     fitToBbox();
     bindInput();
+    showDetail(null);
     draw();
   } catch (error) {
     loading.innerHTML = `<span>Карта не загрузилась: ${escape(error.message)}</span>`;

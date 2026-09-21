@@ -123,6 +123,30 @@ def test_form_starts_a_run_and_redirects(client: TestClient, work: Path) -> None
     assert "План готов" in page.text
 
 
+def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
+    """Кнопка демонстрации обязана работать без единого файла на диске.
+
+    На стенде жюри датасета нет, а показывать сервис надо с первого клика: чертёж строит
+    сам сервис, поэтому проверяем весь путь, а не только код ответа.
+    """
+    created = client.post("/web/demo", follow_redirects=False)
+
+    assert created.status_code == 303
+    page = client.get(created.headers["location"])
+    assert page.status_code == 200
+    assert "План готов" in page.text
+
+    run_id = created.headers["location"].rsplit("/", 1)[-1]
+    plan = client.get(f"/api/v1/runs/{run_id}/artifacts/plan.json").json()
+    assert plan["placements"], "демонстрационный участок не дал ни одной посадки"
+    assert plan["summary"]["integrity_ok"] is True
+
+    basemap = client.get(f"/api/v1/runs/{run_id}/artifacts/basemap.geojson").json()
+    classes = {f["properties"]["class"] for f in basemap["features"]}
+    # Ради легенды на карте: образец обязан показывать разные типы сетей, а не одну трубу.
+    assert {"utility.water", "utility.sewer", "utility.gas", "utility.heat"} <= classes
+
+
 def test_finished_run_page_shows_the_map_and_artifacts(client: TestClient, work: Path) -> None:
     path = work / "street2.dxf"
     _street(path)

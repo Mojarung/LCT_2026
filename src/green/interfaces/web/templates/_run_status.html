@@ -3,11 +3,9 @@
     <span class="spinner" aria-hidden="true"></span>
     <div>
       <p class="status-title">
-        {% if run.state.value == 'queued' %}Прогон в очереди{% else %}Считаем план{% endif %}
+        {% if run.state.value == 'queued' %}В очереди{% else %}Считаем план{% endif %}
       </p>
-      <p class="hint">
-        Чтение крупного чертежа и сверка целостности занимают минуты. Страница обновится сама.
-      </p>
+      <p class="hint">Чтение чертежа и сверка целостности занимают минуты. Страница обновится сама.</p>
     </div>
   {% elif run.state.value == 'failed' %}
     <div>
@@ -17,11 +15,7 @@
   {% else %}
     <div>
       <p class="status-title">План готов</p>
-      <p class="hint">
-        {{ run.summary.get('placements', 0) }} посадок,
-        {{ run.summary.get('rejections', 0) }} отказов,
-        {{ (run.summary.get('total_ms', 0) / 1000) | round(1) }} с.
-      </p>
+      <p class="hint">Результат только на слоях GREEN_*, исходные сущности не тронуты.</p>
     </div>
   {% endif %}
 </div>

@@ -1,21 +1,53 @@
 {% extends "base.html" %}
-{% block title %}green - проектирование озеленения{% endblock %}
+{% block title %}green - проектирование озеленения улиц{% endblock %}
 
 {% block content %}
-<div class="page page-index">
+<section class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <h1>Посадки по чертежу, а не на глаз</h1>
+      <p>
+        Сервис читает геоподоснову с подземными сетями, расставляет деревья и кустарники
+        с нормативными отступами и возвращает DXF на отдельных слоях. К каждой посадке
+        и к каждому отказу прилагается пункт акта, по которому принято решение.
+      </p>
+    </div>
+    <dl class="masthead-facts">
+      <div>
+        <dt>правил в своде</dt>
+        <dd>{{ rules_total }}, из них с основанием {{ rules_verified }}</dd>
+      </div>
+      <div>
+        <dt>видов в каталоге</dt>
+        <dd>{{ species_total }}</dd>
+      </div>
+      <div>
+        <dt>слои результата</dt>
+        <dd>GREEN_*</dd>
+      </div>
+    </dl>
+  </div>
+</section>
 
-  <section class="panel panel-form">
-    <h1>Новый прогон</h1>
-    <p class="lede">
-      Чертёж на вход, план посадок на выход. Результат пишется на отдельные слои GREEN_*,
-      к каждой посадке и каждому отказу прилагается пункт нормативного акта.
-    </p>
+<div class="sheet">
+
+  <section>
+    <h2 class="section-label">Новый прогон</h2>
+
+    <form class="demo" method="post" action="/web/demo">
+      <p>
+        <strong>Посмотреть сразу</strong>
+        Встроенный участок: газон между бортом и тротуаром, пять типов подземных сетей,
+        здание и существующие деревья. Чертёж строится сервисом, файл искать не нужно.
+      </p>
+      <button type="submit" class="ghost">Прогнать демонстрационный участок</button>
+    </form>
 
     <form method="post" action="/web/runs" enctype="multipart/form-data" id="run-form">
       <div class="field">
         <label for="file">Чертёж подосновы</label>
         <input type="file" id="file" name="file" accept=".dxf,.dwg" required>
-        <p class="hint">DXF или DWG. Геоподоснова Мосгеотреста или генплан.</p>
+        <p class="hint">DXF или DWG: выгрузка Мосгеотреста, генплан, дендроплан.</p>
       </div>
 
       <div class="field-row">
@@ -26,7 +58,7 @@
             <option value="{{ name }}" {% if name == default_profile %}selected{% endif %}>{{ name }}</option>
             {% endfor %}
           </select>
-          <p class="hint">Набор включённых правил и допущений.</p>
+          <p class="hint">Какие правила включены и какие допущения приняты.</p>
         </div>
 
         <div class="field">
@@ -37,10 +69,10 @@
       </div>
 
       <fieldset class="field">
-        <legend>Приёмы</legend>
+        <legend>Приёмы размещения</legend>
         <label class="check">
           <input type="checkbox" name="shrub_groups" checked>
-          Группы кустарников на местах, не занятых деревьями
+          Группы кустарников на местах, которые квоты деревьев оставили пустыми
         </label>
         <label class="check">
           <input type="checkbox" name="root_barriers">
@@ -49,16 +81,16 @@
       </fieldset>
 
       <details class="advanced">
-        <summary>Дополнительные файлы и параметры</summary>
+        <summary>Комплект файлов и параметры</summary>
         <div class="field">
           <label for="extra">Остальные чертежи комплекта</label>
           <input type="file" id="extra" name="extra" accept=".dxf,.dwg" multiple>
-          <p class="hint">Склеиваются с основным: дендроизыскания, сети, генплан.</p>
+          <p class="hint">Склеиваются с основным: сети, дендроизыскания, генплан.</p>
         </div>
         <div class="field">
           <label for="inventory">Перечётная ведомость</label>
           <input type="file" id="inventory" name="inventory" accept=".xls,.xlsx">
-          <p class="hint">Существующие деревья учитываются в квотах разнообразия.</p>
+          <p class="hint">Растущие деревья входят в квоты разнообразия.</p>
         </div>
         <div class="field">
           <label for="overrides">Параметры поверх профиля, JSON</label>
@@ -72,8 +104,8 @@
     </form>
   </section>
 
-  <section class="panel panel-runs">
-    <h2>Последние прогоны</h2>
+  <aside>
+    <h2 class="section-label">Прогоны</h2>
     {% if runs %}
     <ul class="runs">
       {% for run in runs %}
@@ -82,7 +114,10 @@
           <span class="run-name">{{ run.source_name }}</span>
           <span class="state state-{{ run.state.value }}">{{ run.state.value }}</span>
           <span class="run-meta">
-            <span class="mono">{{ run.profile }}</span>
+            <span>{{ run.profile }}</span>
+            {% if run.summary.get('placements') is not none %}
+            <span>{{ run.summary.get('placements') }} посадок</span>
+            {% endif %}
             <time datetime="{{ run.created_at.isoformat() }}">{{ run.created_at.strftime('%d.%m %H:%M') }}</time>
           </span>
         </a>
@@ -92,10 +127,10 @@
     {% else %}
     <div class="empty">
       <p>Прогонов ещё не было.</p>
-      <p class="hint">Загрузите чертёж слева, и он появится здесь.</p>
+      <p class="hint">Нажмите «Прогнать демонстрационный участок» слева - через минуту здесь появится первый.</p>
     </div>
     {% endif %}
-  </section>
+  </aside>
 
 </div>
 {% endblock %}
@@ -103,12 +138,13 @@
 {% block scripts %}
 <script>
   // Крупный DXF грузится долго; без обратной связи пользователь жмёт кнопку второй раз.
-  const form = document.getElementById('run-form');
-  form.addEventListener('submit', (event) => {
-    const button = form.querySelector('button[type=submit]');
-    if (button.disabled) { event.preventDefault(); return; }
-    button.disabled = true;
-    button.textContent = 'Загружаем чертёж...';
-  });
+  for (const form of document.querySelectorAll('form[method=post]')) {
+    form.addEventListener('submit', (event) => {
+      const button = form.querySelector('button[type=submit]');
+      if (button.disabled) { event.preventDefault(); return; }
+      button.disabled = true;
+      button.textContent = form.id === 'run-form' ? 'Загружаем чертёж...' : 'Считаем...';
+    });
+  }
 </script>
 {% endblock %}

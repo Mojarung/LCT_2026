@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}green{% endblock %}</title>
+<meta name="description" content="Автопроектирование озеленения улиц по чертежу подосновы: план посадок на отдельных слоях с объяснением каждого решения по пунктам нормативных актов.">
+<meta name="color-scheme" content="light dark">
 <!-- Версия в адресе статики: без неё браузер после обновления сервиса показывает старый CSS. -->
 <link rel="stylesheet" href="/static/app.css?v={{ version }}">
-<link rel="icon" href="data:,">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/static/fonts/ibm-plex-sans-cyrillic-400-normal.woff2">
+<link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 <script>
   // Тему выбираем до первой отрисовки, иначе страница мигает светлым.
   try {
@@ -16,31 +19,33 @@
 </script>
 </head>
 <body>
+<a class="skip" href="#content">К содержимому</a>
+
 <header class="topbar">
-  <a class="brand" href="/">
-    <span class="brand-mark" aria-hidden="true"></span>
-    green
-  </a>
-  <span class="brand-note">автопроектирование озеленения улиц</span>
+  <a class="brand" href="/">green</a>
+  <span class="brand-note">проектирование озеленения улиц по чертежу подосновы</span>
   <nav class="topbar-nav">
     <a href="/docs">API</a>
-    <button type="button" id="theme-toggle" class="ghost" aria-label="Переключить тему">Тема</button>
+    <button type="button" id="theme-toggle" class="linkish">Тема</button>
   </nav>
 </header>
 
-<main>
+<main id="content">
   {% block content %}{% endblock %}
 </main>
 
 <footer class="footer">
-  <span>green {{ version }}</span>
+  <span class="mono">green {{ version }}</span>
   <span>результат пишется только на слои GREEN_*, исходные сущности не меняются</span>
+  <span>СП 42.13330 · 743-ПП · 623-ПП · 369-ПП</span>
 </footer>
 
 <script>
   const toggle = document.getElementById('theme-toggle');
   toggle.addEventListener('click', () => {
     const root = document.documentElement;
+    // Читаем действующую тему по её фактическому эффекту, а не по тому, что мы ей назначили:
+    // иначе переключатель может «работать», ничего не переключая.
     const dark = getComputedStyle(root).getPropertyValue('--is-dark').trim() === '1';
     const next = dark ? 'light' : 'dark';
     root.dataset.theme = next;
