@@ -31,3 +31,6 @@ var/
 *.log
 .idea/
 .vscode/
+
+# снимки и снапшоты playwright-cli при проверке вёрстки
+.playwright-cli/

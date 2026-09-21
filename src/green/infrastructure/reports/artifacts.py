@@ -1,4 +1,5 @@
-"""Запись артефактов: plan.json, interpretations.csv/json, run_manifest.json, verify.json."""
+"""Запись артефактов: plan.json, basemap.geojson, interpretations.csv/json, run_manifest.json,
+verify.json."""
 
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from green.domain.planting import Placement, Rejection
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from green.application.basemap import Basemap
     from green.application.results import RunReport
     from green.domain.norms import RuleBook
     from green.domain.planting import (
@@ -70,6 +72,8 @@ class FileArtifactSink:
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
+            "basemap.geojson": _write_json(directory / "basemap.geojson", _basemap(report.basemap)),
+            "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
             "assortment.json": _write_json(
                 directory / "assortment.json",
                 _assortment_summary(report.plan.assortment_summary),
@@ -309,6 +313,72 @@ def _plan(report: RunReport) -> dict[str, Any]:
             for r in plan.rejections
         ],
         "warnings": list(report.warnings),
+    }
+
+
+def _rules(rulebook: RuleBook) -> dict[str, Any]:
+    """Свод норм прогона: rule_id -> акт, пункт, цитата.
+
+    Отдельный маленький артефакт нужен потому, что `interpretations.json` на настоящем
+    чертеже весит десятки мегабайт: карта в браузере соединяет `rule_id` из plan.json с
+    пунктом отсюда, а не тащит все строки объяснений.
+    """
+    items = {}
+    for rule in rulebook.all_rules:
+        citation = rule.citation
+        act = rulebook.act_of(citation)
+        items[rule.rule_id] = {
+            "rule_id": rule.rule_id,
+            "object_class": getattr(getattr(rule, "object_class", None), "value", ""),
+            "min_distance_m": getattr(rule, "min_distance_m", None),
+            "measure_to": getattr(getattr(rule, "measure_to", None), "value", ""),
+            "severity": getattr(getattr(rule, "severity", None), "value", ""),
+            "act_id": citation.act_id,
+            "act_title": act.title if act else "",
+            "act_short": act.short if act else "",
+            "act_edition": act.edition if act else "",
+            "url": act.url if act else "",
+            "clause": citation.clause,
+            "quote": citation.quote,
+            "status": citation.status.value,
+            "related": [
+                f"{rulebook.label_of(ref.act_id)}, {ref.clause}" for ref in citation.related
+            ],
+        }
+    return {"fingerprint": rulebook.fingerprint, "total": len(items), "rules": items}
+
+
+def _basemap(basemap: Basemap | None) -> dict[str, Any]:
+    """Подоснова для карты в вебе, GeoJSON в координатах чертежа.
+
+    counts едет рядом с features намеренно: по трём числам видно, что отбор не потерял объект
+    молча. features_out + сумма dropped обязана равняться features_in.
+    """
+    if basemap is None:
+        return {
+            "type": "FeatureCollection",
+            "crs_note": "координаты чертежа в метрах, не WGS84",
+            "counts": {"features_in": 0, "features_out": 0, "dropped": {}},
+            "bbox": [0.0, 0.0, 0.0, 0.0],
+            "features": [],
+        }
+    return {
+        "type": "FeatureCollection",
+        "crs_note": "координаты чертежа в метрах, не WGS84",
+        "counts": {
+            "features_in": basemap.features_in,
+            "features_out": basemap.features_out,
+            "dropped": dict(basemap.dropped),
+        },
+        "bbox": list(basemap.bbox),
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"class": feature.object_class.value},
+                "geometry": orjson.loads(shapely.to_geojson(feature.geometry)),
+            }
+            for feature in basemap.features
+        ],
     }
 
 

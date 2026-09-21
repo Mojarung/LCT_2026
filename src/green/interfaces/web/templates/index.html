@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}green - проектирование озеленения{% endblock %}
+
+{% block content %}
+<div class="page page-index">
+
+  <section class="panel panel-form">
+    <h1>Новый прогон</h1>
+    <p class="lede">
+      Чертёж на вход, план посадок на выход. Результат пишется на отдельные слои GREEN_*,
+      к каждой посадке и каждому отказу прилагается пункт нормативного акта.
+    </p>
+
+    <form method="post" action="/web/runs" enctype="multipart/form-data" id="run-form">
+      <div class="field">
+        <label for="file">Чертёж подосновы</label>
+        <input type="file" id="file" name="file" accept=".dxf,.dwg" required>
+        <p class="hint">DXF или DWG. Геоподоснова Мосгеотреста или генплан.</p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="profile">Профиль норм</label>
+          <select id="profile" name="profile">
+            {% for name in profiles %}
+            <option value="{{ name }}" {% if name == default_profile %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+          <p class="hint">Набор включённых правил и допущений.</p>
+        </div>
+
+        <div class="field">
+          <label for="spacing_m">Шаг посадки, м</label>
+          <input type="number" id="spacing_m" name="spacing_m" value="6" min="2" max="20" step="0.5">
+          <p class="hint">743-ПП, табл. 3.6.2: однорядная посадка 5-6 м.</p>
+        </div>
+      </div>
+
+      <fieldset class="field">
+        <legend>Приёмы</legend>
+        <label class="check">
+          <input type="checkbox" name="shrub_groups" checked>
+          Группы кустарников на местах, не занятых деревьями
+        </label>
+        <label class="check">
+          <input type="checkbox" name="root_barriers">
+          Прикорневые барьеры: сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330
+        </label>
+      </fieldset>
+
+      <details class="advanced">
+        <summary>Дополнительные файлы и параметры</summary>
+        <div class="field">
+          <label for="extra">Остальные чертежи комплекта</label>
+          <input type="file" id="extra" name="extra" accept=".dxf,.dwg" multiple>
+          <p class="hint">Склеиваются с основным: дендроизыскания, сети, генплан.</p>
+        </div>
+        <div class="field">
+          <label for="inventory">Перечётная ведомость</label>
+          <input type="file" id="inventory" name="inventory" accept=".xls,.xlsx">
+          <p class="hint">Существующие деревья учитываются в квотах разнообразия.</p>
+        </div>
+        <div class="field">
+          <label for="overrides">Параметры поверх профиля, JSON</label>
+          <textarea id="overrides" name="overrides" rows="3" spellcheck="false"
+                    placeholder='{"species_code": "acer_platanoides", "modes": ["alley"]}'></textarea>
+          <p class="hint">Пусто - берутся значения профиля.</p>
+        </div>
+      </details>
+
+      <button type="submit" class="primary">Запустить прогон</button>
+    </form>
+  </section>
+
+  <section class="panel panel-runs">
+    <h2>Последние прогоны</h2>
+    {% if runs %}
+    <ul class="runs">
+      {% for run in runs %}
+      <li>
+        <a href="/runs/{{ run.run_id }}">
+          <span class="run-name">{{ run.source_name }}</span>
+          <span class="state state-{{ run.state.value }}">{{ run.state.value }}</span>
+          <span class="run-meta">
+            <span class="mono">{{ run.profile }}</span>
+            <time datetime="{{ run.created_at.isoformat() }}">{{ run.created_at.strftime('%d.%m %H:%M') }}</time>
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <p>Прогонов ещё не было.</p>
+      <p class="hint">Загрузите чертёж слева, и он появится здесь.</p>
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Крупный DXF грузится долго; без обратной связи пользователь жмёт кнопку второй раз.
+  const form = document.getElementById('run-form');
+  form.addEventListener('submit', (event) => {
+    const button = form.querySelector('button[type=submit]');
+    if (button.disabled) { event.preventDefault(); return; }
+    button.disabled = true;
+    button.textContent = 'Загружаем чертёж...';
+  });
+</script>
+{% endblock %}

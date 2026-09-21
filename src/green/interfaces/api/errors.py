@@ -39,11 +39,16 @@ class PayloadTooLargeError(GreenError):
     """Загружаемый файл превышает лимит."""
 
 
+class EditContextLostError(GreenError):
+    """Состояние прогона для правки не найдено в памяти сервиса."""
+
+
 _STATUS: dict[type[GreenError], HTTPStatus] = {
     NotFoundError: HTTPStatus.NOT_FOUND,
     InputError: HTTPStatus.UNPROCESSABLE_ENTITY,
     ConversionError: HTTPStatus.UNPROCESSABLE_ENTITY,
     PayloadTooLargeError: HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+    EditContextLostError: HTTPStatus.CONFLICT,
     ConfigurationError: HTTPStatus.INTERNAL_SERVER_ERROR,
 }
 

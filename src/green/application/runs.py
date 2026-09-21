@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
+    from green.application.editing import RunContextCache
     from green.application.ports import ArtifactSink, InventoryCounts, ProfileSource, RunStore
     from green.application.use_case import PlanSite
 
@@ -29,12 +30,14 @@ class RunService:
         artifacts: ArtifactSink,
         max_parallel: int,
         inventory: Callable[[Path], InventoryCounts] | None = None,
+        contexts: RunContextCache | None = None,
     ) -> None:
         self._store = store
         self._use_case = use_case
         self._profiles = profiles
         self._artifacts = artifacts
         self._inventory = inventory
+        self._contexts = contexts
         self._slots = threading.BoundedSemaphore(max_parallel)
 
     def register(
@@ -77,9 +80,44 @@ class RunService:
                     )
                 )
                 saved = self._artifacts.save(run_dir, report)
+                if self._contexts is not None and report.context is not None:
+                    self._contexts.put(report.context)
             except GreenError as error:
                 return self._transition(record, RunState.FAILED, error=str(error))
             except Exception as error:  # noqa: BLE001 - любой сбой прогона фиксируется в статусе
+                return self._transition(
+                    record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
+                )
+            return self._transition(
+                record,
+                RunState.SUCCEEDED,
+                summary=report.summary(),
+                artifacts=tuple(sorted(saved)),
+            )
+
+    def rebuild(self, run_id: str) -> RunRecord:
+        """Переписать результат по исправленному плану: тот же путь записи, что и у прогона.
+
+        Правка не имеет права писать в DXF мимо PlanWriter: гарантия «исходные слои целы»
+        держится на нём и на сверке целостности, а не на аккуратности вызывающего кода.
+        """
+        record = self._store.get(run_id)
+        if self._contexts is None:
+            return self._transition(record, RunState.FAILED, error="Правка не подключена")
+        context = self._contexts.get(run_id)
+        if context is None:
+            return self._transition(
+                record, RunState.FAILED, error="Состояние прогона для правки потеряно"
+            )
+        with self._slots:
+            record = self._transition(record, RunState.RUNNING)
+            try:
+                run_dir = self._store.run_dir(run_id)
+                report = self._use_case.rebuild(context, context.plan, run_dir)
+                saved = self._artifacts.save(run_dir, report)
+            except GreenError as error:
+                return self._transition(record, RunState.FAILED, error=str(error))
+            except Exception as error:  # noqa: BLE001 - любой сбой фиксируется в статусе
                 return self._transition(
                     record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )

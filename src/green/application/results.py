@@ -11,7 +11,9 @@ if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
 
+    from green.application.basemap import Basemap
     from green.application.classification import LayerCoverage
+    from green.application.editing import RunContext
     from green.application.params import PlanParams
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
@@ -67,6 +69,12 @@ class RunReport:
     output_dxf: Path
     converter: str | None
     warnings: tuple[str, ...] = field(default=())
+    # Подоснова для карты в вебе. Может отсутствовать: прогон из CLI её не требует, а на
+    # чертеже без классифицированных объектов рисовать нечего.
+    basemap: Basemap | None = None
+    # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
+    # сервиса ровно столько, сколько его там держат.
+    context: RunContext | None = None
 
     def summary(self) -> dict[str, object]:
         return {

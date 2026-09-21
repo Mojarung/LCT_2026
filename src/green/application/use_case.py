@@ -9,8 +9,10 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment import assign_species
+from green.application.basemap import build_basemap
 from green.application.classification import classify_scene, promote_unknown_lines
 from green.application.diameters import assign_diameters
+from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.results import RunReport, StageTiming
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
         SceneReader,
         SpeciesCatalog,
     )
+    from green.domain.planting import Plan
 
 RESULT_DXF = "result.dxf"
 MERGED_DXF = "merged_source.dxf"
@@ -153,6 +156,8 @@ class PlanSite:
             )
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
+        with watch.stage("basemap"):
+            basemap = build_basemap(features)
         output = request.work_dir / RESULT_DXF
         with watch.stage("write_dxf"):
             snapshot = self._writer.write(source, plan, rulebook, output, unit_m=scene.unit_m)
@@ -167,7 +172,7 @@ class PlanSite:
                 ),
             )
 
-        return RunReport(
+        report = RunReport(
             run_id=request.run_id,
             source_name=request.source.name,
             source_sha256=scene.source_sha256,
@@ -184,6 +189,48 @@ class PlanSite:
             output_dxf=output,
             converter=converter,
             warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
+            basemap=basemap,
+        )
+        # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
+        # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и
+        # только по требованию: прогон из CLI за правку не платит.
+        context = RunContext(
+            run_id=request.run_id,
+            features=tuple(features),
+            labels=scene.labels,
+            params=params,
+            rulebook=rulebook,
+            plan=plan,
+            source=source,
+            unit_m=scene.unit_m,
+            report=report,
+        )
+        return replace(report, context=context)
+
+    def rebuild(self, context: RunContext, plan: Plan, work_dir: Path) -> RunReport:
+        """Переписать DXF и отчёт по исправленному плану, не перечитывая чертёж.
+
+        Пересчёт норм уже сделан правкой; здесь остаётся запись и сверка целостности - то
+        есть ровно те шаги, которые обязаны выполниться заново, чтобы исходные слои остались
+        нетронутыми, а результат соответствовал плану на экране.
+        """
+        if context.report is None:
+            raise InputError("Прогон нельзя пересобрать: отчёт исходного прогона не сохранён")
+        watch = Stopwatch([])
+        output = work_dir / RESULT_DXF
+        with watch.stage("write_dxf"):
+            snapshot = self._writer.write(
+                context.source, plan, context.rulebook, output, unit_m=context.unit_m
+            )
+        with watch.stage("verify"):
+            integrity = self._integrity.check(snapshot, output)
+        return replace(
+            context.report,
+            plan=plan,
+            integrity=integrity,
+            output_dxf=output,
+            timings=tuple(watch.timings),
+            warnings=(*context.report.warnings, "План изменён вручную и пересобран."),
         )
 
 

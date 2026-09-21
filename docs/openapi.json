@@ -87,6 +87,71 @@
         "title": "Body_create_run_api_v1_runs_post",
         "type": "object"
       },
+      "CheckIn": {
+        "description": "Точка в координатах чертежа. Вид задаёт состав правил: нормы зависят от породы.",
+        "properties": {
+          "species": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CheckIn",
+        "type": "object"
+      },
+      "CheckOut": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RuleCheckOut"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "needs_barrier": {
+            "title": "Needs Barrier",
+            "type": "boolean"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "plantable": {
+            "title": "Plantable",
+            "type": "boolean"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "plantable",
+          "needs_barrier"
+        ],
+        "title": "CheckOut",
+        "type": "object"
+      },
       "ConverterOut": {
         "properties": {
           "available": {
@@ -103,6 +168,86 @@
           "available"
         ],
         "title": "ConverterOut",
+        "type": "object"
+      },
+      "EditIn": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "move",
+              "delete",
+              "add"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "placement_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placement Id"
+          },
+          "species": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "EditIn",
+        "type": "object"
+      },
+      "EditsIn": {
+        "properties": {
+          "edits": {
+            "items": {
+              "$ref": "#/components/schemas/EditIn"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Edits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "edits"
+        ],
+        "title": "EditsIn",
         "type": "object"
       },
       "HealthOut": {
@@ -178,6 +323,40 @@
         "title": "MetaOut",
         "type": "object"
       },
+      "PlanSummaryOut": {
+        "description": "Состояние плана после правки.\n\nstale означает, что файлы результата уже не соответствуют плану на экране: правки\nприняты, но DXF и объяснения пересобираются отдельной командой.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "integer"
+          },
+          "needs_approval": {
+            "title": "Needs Approval",
+            "type": "integer"
+          },
+          "placements": {
+            "title": "Placements",
+            "type": "integer"
+          },
+          "rejections": {
+            "title": "Rejections",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "placements",
+          "allowed",
+          "needs_approval",
+          "rejections",
+          "stale"
+        ],
+        "title": "PlanSummaryOut",
+        "type": "object"
+      },
       "Problem": {
         "properties": {
           "detail": {
@@ -236,6 +415,57 @@
           "status"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "RuleCheckOut": {
+        "properties": {
+          "measured_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured M"
+          },
+          "object_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Class"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "threshold_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold M"
+          }
+        },
+        "required": [
+          "rule_id",
+          "outcome"
+        ],
+        "title": "RuleCheckOut",
         "type": "object"
       },
       "RulesOut": {
@@ -656,7 +886,7 @@
     },
     "/api/v1/runs/{run_id}/artifacts/{name}": {
       "get": {
-        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.",
+        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.\n\nТекстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian\nумеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие\nmiddleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо\n1,3 МБ. Крупный result.dxf, наоборот, скачивают целиком и жать его незачем.",
         "operationId": "get_artifact_api_v1_runs__run_id__artifacts__name__get",
         "parameters": [
           {
@@ -728,6 +958,245 @@
           "runs"
         ]
       }
+    },
+    "/api/v1/runs/{run_id}/check": {
+      "post": {
+        "description": "Проверить точку по нормам: тем же индексом ограничений, что и сам прогон.",
+        "operationId": "check_api_v1_runs__run_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Check",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/edits": {
+      "post": {
+        "description": "Применить правки к плану прогона. DXF при этом не переписывается.",
+        "operationId": "edit_api_v1_runs__run_id__edits_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Edit",
+        "tags": [
+          "edits"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/rebuild": {
+      "post": {
+        "description": "Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}.",
+        "operationId": "rebuild_api_v1_runs__run_id__rebuild_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Rebuild",
+        "tags": [
+          "edits"
+        ]
+      }
     }
   },
   "tags": [
@@ -738,6 +1207,10 @@
     {
       "description": "Прогоны: загрузка DXF/DWG, статус, артефакты результата.",
       "name": "runs"
+    },
+    {
+      "description": "Правка плана на карте: проверка точки, правки, пересборка.",
+      "name": "edits"
     }
   ]
 }

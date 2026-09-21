@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from green.application.audit import AuditSite
+from green.application.editing import RunContextCache
 from green.application.placement import GreedyPlantingStrategy
 from green.application.runs import RunService
 from green.application.use_case import PlanSite
@@ -48,6 +49,8 @@ class Container:
     integrity: EzdxfIntegrityChecker
     artifacts: FileArtifactSink
     converters: tuple[Converter, ...]
+    # Контексты прогонов для правки на карте: живут в памяти, переживают запрос, но не рестарт.
+    contexts: RunContextCache
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -84,6 +87,7 @@ def build_container(settings: Settings | None = None) -> Container:
         merger=EzdxfDrawingMerger(),
     )
     store = FileSystemRunStore(settings.runs_dir)
+    contexts = RunContextCache(settings.edit_contexts)
     runs = RunService(
         store=store,
         use_case=use_case,
@@ -91,6 +95,7 @@ def build_container(settings: Settings | None = None) -> Container:
         artifacts=artifacts,
         max_parallel=settings.max_parallel_runs,
         inventory=lambda path: read_inventory(path, species.all()),
+        contexts=contexts,
     )
     return Container(
         settings=settings,
@@ -108,6 +113,7 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         artifacts=artifacts,
         converters=converters,
+        contexts=contexts,
     )
 
 

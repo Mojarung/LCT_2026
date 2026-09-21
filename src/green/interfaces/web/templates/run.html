@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}{{ run.source_name }} - green{% endblock %}
+
+{% block content %}
+<div class="page page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}">
+
+  <header class="run-head">
+    <div>
+      <a class="back" href="/">К прогонам</a>
+      <h1>{{ run.source_name }}</h1>
+      <p class="run-sub">
+        <span class="mono">{{ run.profile }}</span>
+        <span class="mono dim">{{ run.run_id }}</span>
+      </p>
+    </div>
+    <div id="status-slot">{% include "_run_status.html" %}</div>
+  </header>
+
+  {% if run.state.value in ('queued', 'running') %}
+  <section class="tiles" aria-hidden="true">
+    {% for label in ('посадок', 'без ограничений', 'требуют согласования', 'отказов', 'подоснова', 'прогон') %}
+    <div class="tile">
+      <span class="tile-value skeleton">&nbsp;</span>
+      <span class="tile-label">{{ label }}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="params">
+    <h2>Параметры прогона</h2>
+    <dl>
+      <div><dt>Чертёж</dt><dd>{{ run.source_name }}</dd></div>
+      <div><dt>Профиль</dt><dd class="mono">{{ run.profile }}</dd></div>
+      {% for key, value in run.overrides.items() %}
+      <div><dt class="mono">{{ key }}</dt><dd class="mono">{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+    <p class="hint">
+      Чтобы получить другой вариант, вернитесь к форме и запустите прогон с другими значениями.
+      Исходный чертёж при этом не меняется: результат каждый раз пишется в новый набор файлов.
+    </p>
+  </section>
+
+  {% if run.state.value == 'succeeded' %}
+  {% set s = run.summary %}
+  <section class="tiles">
+    <div class="tile">
+      <span class="tile-value mono">{{ s.get('placements', 0) }}</span>
+      <span class="tile-label">посадок</span>
+    </div>
+    <div class="tile">
+      <span class="tile-value mono">{{ s.get('allowed', 0) }}</span>
+      <span class="tile-label">без ограничений</span>
+    </div>
+    <div class="tile">
+      <span class="tile-value mono">{{ s.get('needs_approval', 0) }}</span>
+      <span class="tile-label">требуют согласования</span>
+    </div>
+    <div class="tile">
+      <span class="tile-value mono">{{ s.get('rejections', 0) }}</span>
+      <span class="tile-label">отказов</span>
+    </div>
+    <div class="tile">
+      <span class="tile-value mono">{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}</span>
+      <span class="tile-label">подоснова</span>
+    </div>
+    <div class="tile">
+      <span class="tile-value mono">{{ (s.get('total_ms', 0) / 1000) | round(1) }} с</span>
+      <span class="tile-label">прогон</span>
+    </div>
+  </section>
+
+  {% if run.summary.get('warnings') %}
+  <section class="warnings">
+    <h2>Предупреждения прогона</h2>
+    <ul>
+      {% for warning in run.summary.get('warnings') %}<li>{{ warning }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="map-section">
+    <div class="map-head">
+      <h2>План на подоснове</h2>
+      <div class="layer-toggles" id="layer-toggles">
+        <label class="check"><input type="checkbox" data-layer="utilities" checked> сети</label>
+        <label class="check"><input type="checkbox" data-layer="surfaces" checked> покрытия</label>
+        <label class="check"><input type="checkbox" data-layer="buildings" checked> здания</label>
+        <label class="check"><input type="checkbox" data-layer="existing" checked> существующие</label>
+        <label class="check"><input type="checkbox" data-layer="placements" checked> посадки</label>
+        <label class="check"><input type="checkbox" data-layer="rejections"> отказы</label>
+      </div>
+    </div>
+
+    <div class="edit-bar" id="edit-bar" data-stale="0">
+      <label class="check">
+        <input type="checkbox" id="edit-toggle">
+        Правка плана
+      </label>
+      <p class="edit-message" id="edit-message" role="status" aria-live="polite">
+        Включите правку, чтобы переносить и удалять посадки. Нормы пересчитываются в новой точке.
+      </p>
+      <button type="button" class="primary small" id="rebuild">Пересобрать DXF</button>
+    </div>
+
+    <div class="map-body">
+      <div class="map-canvas-wrap">
+        <canvas id="plan-canvas" aria-label="Карта плана посадок на подоснове"></canvas>
+        <div class="map-loading" id="map-loading">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Загружаем подоснову...</span>
+        </div>
+        <div class="map-hint" id="map-hint">Колесо - зум, перетаскивание - панорама, клик - объяснение</div>
+      </div>
+
+      <aside class="detail" id="detail" aria-live="polite">
+        <div class="detail-empty">
+          <p>Кликните посадку или отказ на карте.</p>
+          <p class="hint">В панели появится вид, отступы и пункт нормативного акта, по которому принято решение.</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="artifacts">
+    <h2>Файлы результата</h2>
+    <ul class="artifact-list">
+      {% for name in run.artifacts %}
+      <li>
+        <a href="/api/v1/runs/{{ run.run_id }}/artifacts/{{ name }}" download>
+          <span class="mono">{{ name }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/plan.js?v={{ version }}"></script>
+<script>
+  // Пока прогон идёт, обновляем только блок статуса; когда закончился - перезагружаем
+  // страницу целиком, чтобы появились плитки, карта и артефакты.
+  const page = document.querySelector('.page-run');
+  const slot = document.getElementById('status-slot');
+  if (page && ['queued', 'running'].includes(page.dataset.state)) {
+    const poll = setInterval(async () => {
+      try {
+        const response = await fetch(`/web/runs/${page.dataset.runId}/status`, { cache: 'no-store' });
+        if (!response.ok) return;
+        slot.innerHTML = await response.text();
+        const state = slot.querySelector('.status').dataset.state;
+        if (state !== 'queued' && state !== 'running') {
+          clearInterval(poll);
+          window.location.reload();
+        }
+      } catch (e) {
+        // сеть моргнула: следующий тик попробует снова
+      }
+    }, 2000);
+  }
+</script>
+{% endblock %}

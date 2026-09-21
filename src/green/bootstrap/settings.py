@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     text_font: str = "DejaVuSans.ttf"
     cors_origins: list[str] = Field(default_factory=list)
     max_upload_mb: int = Field(default=512, ge=1, le=4096)
+    # Сколько прогонов держать в памяти для правки на карте. Сцена генплана весит сотни МБ,
+    # поэтому по умолчанию один: правят тот прогон, который только что открыли.
+    edit_contexts: int = Field(default=1, ge=1, le=8)
     max_parallel_runs: int = Field(default=2, ge=1, le=64)
     log_json: bool = False
     log_level: str = "INFO"
