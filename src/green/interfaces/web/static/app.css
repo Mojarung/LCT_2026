@@ -220,7 +220,6 @@ body {
 main { display: block; }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.dim { color: var(--bone-3); }
 
 a { color: inherit; text-decoration-color: var(--hair-2); text-underline-offset: 3px; }
 a:hover { text-decoration-color: currentColor; }
@@ -357,17 +356,9 @@ input[type="file"]::file-selector-button {
 }
 input[type="file"]::file-selector-button:hover { opacity: .85; }
 
-.label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--bone-3);
-}
 .field { margin-bottom: 20px; }
-.field > label:not(.check), .field > legend { composes: label; }
+/* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field и без
+   исключения набирались бы капсом вместе с заголовками полей. */
 .field > label:not(.check), .field > legend {
   display: block;
   margin-bottom: 6px;
@@ -410,31 +401,20 @@ fieldset.field > legend { margin-bottom: 10px; }
 .advanced[open] > summary::before { content: "- "; }
 .advanced[open] > summary { color: var(--bone); margin-bottom: 16px; }
 
-/* --- страница запуска: тихая, без приёмов --- */
+/* --- страница запуска: консоль, а не лендинг --- */
 
-.launch {
-  padding: clamp(28px, 5vw, 60px) var(--gutter) 56px;
-}
+.launch { padding: clamp(24px, 4vw, 44px) var(--gutter) 56px; }
 .launch-inner {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
-  gap: clamp(28px, 5vw, 68px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: clamp(28px, 5vw, 64px);
   align-items: start;
 }
 
-.launch h1 {
-  margin: 0 0 14px;
-  font-size: clamp(26px, 3.4vw, 40px);
-  font-weight: 600;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-  max-width: 20ch;
-}
-.lede { margin: 0 0 34px; max-width: 58ch; color: var(--bone-2); font-size: 15px; line-height: 1.55; }
-
+.section-label.section-gap { margin-top: 34px; }
+h1.section-label { font-size: 10.5px; }
 .section-label {
   margin: 0 0 16px;
   font-size: 10.5px;
@@ -446,72 +426,97 @@ fieldset.field > legend { margin-bottom: 10px; }
   border-bottom: 1px solid var(--hair);
 }
 
-.demo {
-  margin: 0 0 30px;
-  padding: 16px 18px;
-  background: var(--panel);
-  border: 1px solid var(--hair-2);
-  border-radius: 3px;
+.start-title { margin: 0 0 6px; font-size: 14.5px; font-weight: 600; }
+.start-form > .start-title { margin-bottom: 16px; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Два способа начать стоят рядом как равные строки, а не «призыв к действию» в рамке. */
+.start-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 20px;
+  gap: 14px 24px;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--hair);
 }
-.demo p { margin: 0; flex: 1; min-width: 210px; font-size: 12.5px; color: var(--bone-3); }
-.demo strong { display: block; color: var(--bone); font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.start-row > div { flex: 1; min-width: 240px; }
+.start-form { padding-top: 22px; }
 
-.facts { display: grid; gap: 0; margin: 0 0 30px; border-top: 1px solid var(--hair); }
-.facts div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+.facts { display: grid; gap: 0; margin: 0 0 14px; border-top: 1px solid var(--hair); }
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hair);
+}
 .facts dt { font-size: 12.5px; color: var(--bone-3); }
-.facts dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
+.facts dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* Перечень актов - не число: моноширинный делает его тяжелее самих значений. */
+.facts dd.acts { font-family: var(--sans); font-size: 12px; color: var(--bone-2); }
 
 /* --- реестр прогонов --- */
 
-.runs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
-.runs li { border-bottom: 1px solid var(--hair); }
-.runs a {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 3px 12px;
-  padding: 11px 2px;
-  text-decoration: none;
-  transition: padding-left .14s cubic-bezier(.16,1,.3,1), background-color .14s;
-}
-.runs a:hover { background: var(--panel); padding-left: 7px; }
-.run-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; }
-.run-meta {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 12px;
-  color: var(--bone-3);
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.state {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
+.registry { width: 100%; border-collapse: collapse; font-size: 13px; }
+.registry th {
+  text-align: left;
+  padding: 0 10px 7px 0;
+  border-bottom: 1px solid var(--hair);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  white-space: nowrap;
-  padding-left: 13px;
-  position: relative;
+  color: var(--bone-3);
 }
-.state::before {
+.registry td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--hair); vertical-align: baseline; }
+.registry td:last-child, .registry th:last-child { padding-right: 0; }
+.registry .num { text-align: right; }
+.registry .nowrap { white-space: nowrap; }
+/* Ширина 100% с max-width: 0 - стандартный приём для колонки-резинки в таблице:
+   без него длинное имя чертежа переносится и ломает ритм строк. */
+.registry .name { width: 100%; max-width: 0; }
+.registry .name a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.registry td.mono { font-family: var(--mono); font-size: 12px; color: var(--bone-2); font-variant-numeric: tabular-nums; }
+.registry a { font-weight: 500; text-decoration: none; }
+.registry a:hover { text-decoration: underline; }
+.registry tr:hover td { background: var(--panel); }
+
+/* Состояние - отдельная узкая колонка с квадратом: приписанное к имени файла, оно
+   переносилось на вторую строку и выглядело случайным. */
+.registry td.state { width: 16px; padding-right: 0; position: relative; }
+.registry td.state::before {
   content: "";
   position: absolute;
+  top: 0.55em;
   left: 0;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
+  width: 7px;
+  height: 7px;
   background: currentColor;
 }
 .state-succeeded { color: var(--ok); }
 .state-failed { color: var(--bad); }
 .state-running, .state-queued { color: var(--warn); }
 
-.empty { padding: 20px 0; color: var(--bone-3); font-size: 13px; }
+.empty { padding: 18px 0; color: var(--bone-3); font-size: 13px; }
 .empty p { margin: 0 0 6px; }
 
 /* --- рабочее пространство: план во весь экран, панели поверх --- */

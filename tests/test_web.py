@@ -44,8 +44,8 @@ def test_index_renders_with_profiles(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "strict" in response.text
-    assert "Посадки по чертежу" in response.text
-    assert "Прогнать демонстрационный участок" in response.text
+    assert "Новый прогон" in response.text
+    assert "Встроенный участок улицы Берзарина" in response.text
 
 
 def test_static_files_are_served(client: TestClient) -> None:
