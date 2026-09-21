@@ -144,8 +144,19 @@ def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
 
     basemap = client.get(f"/api/v1/runs/{run_id}/artifacts/basemap.geojson").json()
     classes = {f["properties"]["class"] for f in basemap["features"]}
-    # Ради легенды на карте: образец обязан показывать разные типы сетей, а не одну трубу.
-    assert {"utility.water", "utility.sewer", "utility.gas", "utility.heat"} <= classes
+    # Образец - фрагмент настоящей улицы, а не нарисованная схема: на нём обязаны быть
+    # разные типы сетей, застройка и существующие деревья, иначе показывать нечего.
+    assert {
+        "utility.water",
+        "utility.sewer",
+        "utility.gas",
+        "utility.heat",
+        "utility.power_cable",
+        "utility.telecom",
+        "building",
+        "existing_tree",
+        "curb",
+    } <= classes, f"в демонстрационном участке не хватает классов: {classes}"
 
 
 def test_finished_run_page_shows_the_map_and_artifacts(client: TestClient, work: Path) -> None:

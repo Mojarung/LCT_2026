@@ -24,7 +24,8 @@ src/green/
                    summary), explain (шаблоны), results, runs, ports, audit (нормоконтроль чужого плана),
                    schedule (ведомость), barriers, shrub_groups, basemap (подоснова для карты),
                    editing (правка плана: проверка точки, перенос, удаление, кэш контекстов прогонов)
-  infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b), config/ (YAML-репозитории),
+  infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
+                   улицы для кнопки демонстрации), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    reports/artifacts, logs
   bootstrap/       Settings (переменные GREEN_*), build_container
@@ -37,7 +38,8 @@ config/            acts.yaml, rules.yaml (76 правил: 46 расстояни
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
-tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, research/ — наша разведка датасета
+tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, make_demo_fragment.py
+                   (вырезает демонстрационный фрагмент улицы), research/ — наша разведка датасета
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
 docs/
   architecture.md, plan.md, research-review.md   архитектура, оперативный план и разбор ресерча (Кирилл)
