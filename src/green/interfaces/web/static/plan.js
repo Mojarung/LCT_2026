@@ -88,8 +88,11 @@ const css = (token) =>
 
 /* ---------- загрузка ---------- */
 
+/** Не force-cache: он переиспользует и ошибочные ответы, поэтому 404, полученный до конца
+ *  прогона, залипал в кэше навсегда и карта у этого прогона больше не загружалась. */
 async function loadJson(name) {
-  const response = await fetch(`/api/v1/runs/${RUN_ID}/artifacts/${name}`, { cache: 'force-cache' });
+  const url = `/api/v1/runs/${RUN_ID}/artifacts/${name}`;
+  const response = await fetch(url, { cache: 'default' });
   if (!response.ok) throw new Error(`${name}: ${response.status}`);
   return response.json();
 }
@@ -147,14 +150,30 @@ function buildBuckets(features) {
 
 /* ---------- вид ---------- */
 
+/** Свободная область канвы: панели лежат поверх плана и закрывают его края, поэтому
+ *  «вписать» считается по тому прямоугольнику, который действительно видно. */
+function clearArea() {
+  const rect = canvas.getBoundingClientRect();
+  let left = 0;
+  let right = rect.width;
+  for (const panel of document.querySelectorAll('.hud-left, .hud-right')) {
+    const box = panel.getBoundingClientRect();
+    if (box.width === 0 || getComputedStyle(panel).position !== 'absolute') continue;
+    if (box.left - rect.left < rect.width / 2) left = Math.max(left, box.right - rect.left + 14);
+    else right = Math.min(right, box.left - rect.left - 14);
+  }
+  const width = Math.max(right - left, 240);
+  return { left, width, height: rect.height, rect };
+}
+
 function fitToBbox() {
   const [minX, minY, maxX, maxY] = state.bbox;
   const w = Math.max(maxX - minX, 1);
   const h = Math.max(maxY - minY, 1);
-  const rect = canvas.getBoundingClientRect();
-  state.scale = Math.min(rect.width / w, rect.height / h) * 0.94;
-  state.tx = rect.width / 2 - ((minX + maxX) / 2) * state.scale;
-  state.ty = rect.height / 2 + ((minY + maxY) / 2) * state.scale;
+  const area = clearArea();
+  state.scale = Math.min(area.width / w, area.height / h) * 0.92;
+  state.tx = area.left + area.width / 2 - ((minX + maxX) / 2) * state.scale;
+  state.ty = area.height / 2 + ((minY + maxY) / 2) * state.scale;
 }
 
 function resize() {
@@ -708,4 +727,8 @@ function boundsOfPoints(items, margin = 10) {
   return [minX - margin, minY - margin, maxX + margin, maxY + margin];
 }
 
-if (canvas && RUN_ID) mount();
+// Монтируем карту только у завершённого прогона: канва есть всегда (под ней лежит
+// блок статуса), но артефактов до конца прогона ещё нет.
+if (canvas && RUN_ID && document.querySelector(".page-run")?.dataset.state === "succeeded") {
+  mount();
+}

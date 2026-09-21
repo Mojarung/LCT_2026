@@ -44,7 +44,8 @@ def test_index_renders_with_profiles(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "strict" in response.text
-    assert "Новый прогон" in response.text
+    assert "Посадки по чертежу" in response.text
+    assert "Прогнать демонстрационный участок" in response.text
 
 
 def test_static_files_are_served(client: TestClient) -> None:
@@ -120,7 +121,7 @@ def test_form_starts_a_run_and_redirects(client: TestClient, work: Path) -> None
 
     page = client.get(location)
     assert page.status_code == 200
-    assert "План готов" in page.text
+    assert "plan-canvas" in page.text, "на готовом прогоне нет плана"
 
 
 def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
@@ -134,7 +135,7 @@ def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
     assert created.status_code == 303
     page = client.get(created.headers["location"])
     assert page.status_code == 200
-    assert "План готов" in page.text
+    assert "plan-canvas" in page.text, "на готовом прогоне нет плана"
 
     run_id = created.headers["location"].rsplit("/", 1)[-1]
     plan = client.get(f"/api/v1/runs/{run_id}/artifacts/plan.json").json()

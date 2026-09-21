@@ -2,113 +2,116 @@
 {% block title %}{{ run.source_name }} - green{% endblock %}
 
 {% block content %}
-<div class="page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}">
+{% set s = run.summary %}
+{% set done = run.state.value == 'succeeded' %}
 
-  <header class="run-head">
-    <div>
+<div class="workspace page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}">
+
+  <div class="canvas-holder">
+    <canvas id="plan-canvas" aria-label="План посадок на подоснове чертежа"></canvas>
+
+    <div class="map-loading" id="map-loading">
+      {% if done %}
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Загружаем подоснову</span>
+      {% else %}
+      <div id="status-slot">{% include "_run_status.html" %}</div>
+      {% endif %}
+    </div>
+
+    {% if done %}
+    <div class="hud hud-bottom">
+      <button type="button" id="fit" title="Вписать план в экран">вписать</button>
+      <button type="button" id="zoom-in" title="Приблизить">+</button>
+      <button type="button" id="zoom-out" title="Отдалить">−</button>
+    </div>
+
+    <div class="hud legend" aria-hidden="true">
+      <span><i style="border-color: var(--c-water)"></i>водопровод</span>
+      <span><i style="border-color: var(--c-sewer)"></i>канализация</span>
+      <span><i style="border-color: var(--c-gas)"></i>газ</span>
+      <span><i style="border-color: var(--c-heat)"></i>теплосеть</span>
+      <span><i style="border-color: var(--c-power)"></i>силовой кабель</span>
+      <span><i style="border-color: var(--c-telecom)"></i>связь</span>
+      <span><i style="border-color: var(--c-curb)"></i>борт</span>
+      <span><i class="dash" style="border-color: var(--c-boundary)"></i>граница работ</span>
+      <span><i class="dot" style="border-color: var(--ok)"></i>посадка</span>
+      <span><i class="dot" style="border-color: var(--c-existing)"></i>существующее</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="hud hud-left">
+    <div class="hud-head">
       <a class="back" href="/">← все прогоны</a>
       <h1>{{ run.source_name }}</h1>
-      <p class="run-sub">
-        <span>{{ run.profile }}</span>
-        <span class="dim">{{ run.run_id }}</span>
-      </p>
+      <p class="run-sub">{{ run.profile }} · {{ run.run_id[:8] }}</p>
     </div>
-    <div id="status-slot">{% include "_run_status.html" %}</div>
-  </header>
 
-  {% set s = run.summary %}
-  {% set done = run.state.value == 'succeeded' %}
-  <section class="summary">
-    <div class="summary-lead">
-      <b>{% if done %}{{ s.get('placements', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>посадок в плане</span>
+    <div class="hud-scroll">
+      <div class="stats">
+        <div class="stat wide">
+          <b>{% if done %}{{ s.get('placements', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
+          <span>посадок в плане</span>
+        </div>
+        <div class="stat ok">
+          <b>{% if done %}{{ s.get('allowed', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
+          <span>без ограничений</span>
+        </div>
+        <div class="stat">
+          <b>{% if done %}{{ s.get('needs_approval', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
+          <span>согласовать</span>
+        </div>
+        <div class="stat">
+          <b>{% if done %}{{ s.get('rejections', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
+          <span>отклонено мест</span>
+        </div>
+        <div class="stat {{ 'ok' if s.get('integrity_ok') else 'bad' }}">
+          <b>{% if done %}{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}{% else %}<i class="skeleton"></i>{% endif %}</b>
+          <span>подоснова</span>
+        </div>
+      </div>
+
+      {% if done %}
+      <div class="hud-block">
+        <p class="hud-label">Слои на плане</p>
+        <div class="layer-toggles" id="layer-toggles">
+          <label class="check"><input type="checkbox" data-layer="utilities" checked> подземные сети</label>
+          <label class="check"><input type="checkbox" data-layer="surfaces" checked> борта и покрытия</label>
+          <label class="check"><input type="checkbox" data-layer="buildings" checked> здания</label>
+          <label class="check"><input type="checkbox" data-layer="existing" checked> существующие деревья</label>
+          <label class="check"><input type="checkbox" data-layer="placements" checked> посадки</label>
+          <label class="check"><input type="checkbox" data-layer="rejections"> отклонённые места</label>
+        </div>
+      </div>
+
+      <div class="hud-block" id="edit-bar" data-stale="0">
+        <p class="hud-label">Правка</p>
+        <label class="check">
+          <input type="checkbox" id="edit-toggle">
+          Переносить и удалять посадки
+        </label>
+        <p class="edit-message" id="edit-message" role="status" aria-live="polite">
+          Нормы пересчитываются в новой точке. Delete удаляет выбранную.
+        </p>
+        <button type="button" class="primary small" id="rebuild">Пересобрать DXF</button>
+      </div>
+      {% endif %}
     </div>
-    <div class="summary-item ok">
-      <b>{% if done %}{{ s.get('allowed', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>без ограничений</span>
-    </div>
-    <div class="summary-item">
-      <b>{% if done %}{{ s.get('needs_approval', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>требуют согласования</span>
-    </div>
-    <div class="summary-item">
-      <b>{% if done %}{{ s.get('rejections', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>мест отклонено</span>
-    </div>
-    <div class="summary-item {{ 'ok' if s.get('integrity_ok') else 'bad' }}">
-      <b>{% if done %}{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>подоснова</span>
-    </div>
-    <div class="summary-item">
-      <b>{% if done %}{{ (s.get('total_ms', 0) / 1000) | round(1) }} с{% else %}<i class="skeleton"></i>{% endif %}</b>
-      <span>время прогона</span>
-    </div>
-  </section>
+  </aside>
 
   {% if done %}
-  <section class="map-section">
-    <div class="map-head">
-      <h2>План на подоснове</h2>
-      <div class="layer-toggles" id="layer-toggles">
-        <label class="check"><input type="checkbox" data-layer="utilities" checked> сети</label>
-        <label class="check"><input type="checkbox" data-layer="surfaces" checked> покрытия</label>
-        <label class="check"><input type="checkbox" data-layer="buildings" checked> здания</label>
-        <label class="check"><input type="checkbox" data-layer="existing" checked> существующие</label>
-        <label class="check"><input type="checkbox" data-layer="placements" checked> посадки</label>
-        <label class="check"><input type="checkbox" data-layer="rejections"> отклонённые места</label>
-      </div>
-    </div>
+  <aside class="hud hud-right detail" id="detail" aria-live="polite">
+    <div class="detail-empty"><p>Загружаем состав плана.</p></div>
+  </aside>
+  {% endif %}
 
-    <div class="edit-bar" id="edit-bar" data-stale="0">
-      <label class="check">
-        <input type="checkbox" id="edit-toggle">
-        Правка плана
-      </label>
-      <p class="edit-message" id="edit-message" role="status" aria-live="polite">
-        Включите правку, чтобы переносить и удалять посадки. Нормы пересчитываются в новой точке.
-      </p>
-      <button type="button" class="primary small" id="rebuild">Пересобрать DXF</button>
-    </div>
+</div>
 
-    <div class="map-body">
-      <div class="map-canvas-wrap">
-        <canvas id="plan-canvas" aria-label="Карта плана посадок на подоснове чертежа"></canvas>
-
-        <div class="legend" aria-hidden="true">
-          <span><i style="border-color: var(--c-water)"></i>водопровод</span>
-          <span><i style="border-color: var(--c-sewer)"></i>канализация</span>
-          <span><i style="border-color: var(--c-gas)"></i>газ</span>
-          <span><i style="border-color: var(--c-heat)"></i>теплосеть</span>
-          <span><i style="border-color: var(--c-power)"></i>силовой кабель</span>
-          <span><i style="border-color: var(--c-telecom)"></i>связь</span>
-          <span><i style="border-color: var(--c-curb)"></i>борт</span>
-          <span><i class="dash" style="border-color: var(--c-boundary)"></i>граница работ</span>
-          <span><i class="dot" style="border-color: var(--ok)"></i>посадка</span>
-          <span><i class="dot" style="border-color: var(--c-existing)"></i>существующее</span>
-        </div>
-
-        <div class="map-loading" id="map-loading">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Загружаем подоснову</span>
-        </div>
-
-        <div class="map-tools">
-          <button type="button" id="fit" title="Вписать план в экран">вписать</button>
-          <button type="button" id="zoom-in" title="Приблизить">+</button>
-          <button type="button" id="zoom-out" title="Отдалить">−</button>
-        </div>
-      </div>
-
-      <aside class="detail" id="detail" aria-live="polite">
-        <div class="detail-empty">
-          <p>Загружаем состав плана.</p>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  <div class="columns">
-    <section class="params">
+{% if done %}
+<section class="below">
+  <div class="below-inner">
+    <div class="params">
       <h2 class="section-label">Параметры прогона</h2>
       <dl>
         <div><dt>профиль</dt><dd>{{ run.profile }}</dd></div>
@@ -117,19 +120,19 @@
         {% endfor %}
       </dl>
       <p class="hint">
-        Другой вариант получают повторным прогоном с другими значениями. Исходный чертёж не
-        меняется: результат каждый раз пишется в новый набор файлов.
+        Другой вариант получают повторным прогоном с другими значениями. Исходный чертёж
+        не меняется: результат каждый раз пишется в новый набор файлов.
       </p>
-    </section>
+    </div>
 
-    <section>
+    <div>
       <h2 class="section-label">Файлы результата</h2>
       <ul class="artifact-list">
         {% for name in run.artifacts %}
         <li><a href="/api/v1/runs/{{ run.run_id }}/artifacts/{{ name }}" download>{{ name }}</a></li>
         {% endfor %}
       </ul>
-    </section>
+    </div>
 
     {% if run.summary.get('warnings') %}
     <details class="warnings">
@@ -140,19 +143,18 @@
     </details>
     {% endif %}
   </div>
-  {% endif %}
-
-</div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script type="module" src="/static/plan.js?v={{ version }}"></script>
 <script>
-  // Пока прогон идёт, обновляем только блок статуса; когда закончился - перезагружаем
-  // страницу целиком, чтобы появились карта и артефакты.
+  // Пока прогон идёт, обновляем блок статуса на месте плана; когда закончился -
+  // перезагружаем страницу целиком, чтобы появились карта и панели.
   const page = document.querySelector('.page-run');
   const slot = document.getElementById('status-slot');
-  if (page && ['queued', 'running'].includes(page.dataset.state)) {
+  if (page && slot && ['queued', 'running'].includes(page.dataset.state)) {
     const poll = setInterval(async () => {
       try {
         const response = await fetch(`/web/runs/${page.dataset.runId}/status`, { cache: 'no-store' });

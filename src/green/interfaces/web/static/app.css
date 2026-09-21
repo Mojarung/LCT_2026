@@ -1,12 +1,15 @@
-/* green - интерфейс проектировщика озеленения.
+/* green - рабочее место проектировщика озеленения.
  *
- * Язык - чертёж. Интерфейс монохромный, чернила по бумаге; единственный цвет на экране
- * принадлежит данным: типам подземных сетей и вердиктам по нормам. Это не вкусовое
- * решение - на карте эксперт различает восемь классов коммуникаций по цвету, и любой
- * декоративный акцент рядом с ними читался бы как ещё один класс.
+ * Устройство экрана: план занимает всё рабочее пространство, панели лежат поверх него.
+ * Смотреть на участок - основная работа, а не один из блоков страницы.
  *
- * Шрифт IBM Plex вендорится в static/fonts: целевая среда офлайновая, внешних запросов
- * страница не делает ни одного.
+ * Палитра «графит и кость». Цвета на карте уже заняли почти весь спектр: вода синяя,
+ * канализация коричневая, теплосеть оранжевая, газ оливковый, силовой кабель красный,
+ * связь фиолетовая, плюс зелёный, жёлтый и красный у вердиктов. Любой цветной акцент
+ * интерфейса читался бы как ещё один класс сетей, поэтому интерфейс ахроматичен:
+ * холодный графит, тёплая кость, действия - инверсией. Зелёного в интерфейсе нет.
+ *
+ * Шрифт IBM Plex вендорится в static/fonts: целевая среда офлайновая.
  */
 
 @font-face {
@@ -75,116 +78,36 @@
   font-display: swap;
 }
 
+
+
 :root {
-  color-scheme: light;
-  --is-dark: 0;
-
-  --paper: #e6e7e2;
-  --sheet: #f7f7f4;
-  --sheet-sunk: #edeee9;
-  --rule: #cfd1c9;
-  --rule-strong: #a9aca3;
-  --ink: #16180f;
-  --ink-2: #4e5248;
-  --ink-3: #62665d;
-  --ink-invert: #f7f7f4;
-
-  --ok: #2c6e49;
-  --warn: #8a5a00;
-  --bad: #a32b20;
-
-  /* Подоснова. Значения читает plan.js через getComputedStyle. */
-  --c-curb: #5d6259;
-  --c-pavement: #a3a79d;
-  --c-building: #83887e;
-  --c-building-fill: rgba(131, 136, 126, 0.16);
-  --c-lawn: rgba(96, 138, 90, 0.16);
-  --c-road: #bdc0b7;
-  --c-fence: #979b91;
-  --c-slope: #a98e6b;
-  --c-boundary: #16180f;
-  --c-water: #1f6fb2;
-  --c-sewer: #7a5c3e;
-  --c-storm: #2f8f8f;
-  --c-heat: #c1562a;
-  --c-gas: #9a8b1f;
-  --c-power: #c0392b;
-  --c-telecom: #7a4fa3;
-  --c-utility: #7d867f;
-  --c-overhead: #c0392b;
-  --c-pole: #3a4138;
-  --c-existing: #4f8d58;
-
-  --sans: "Plex", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "PlexMono", ui-monospace, Consolas, "Liberation Mono", monospace;
-  --gutter: clamp(16px, 4vw, 40px);
-}
-
-/* Тёмная тема задаётся дважды: системная настройка и ручной переключатель. Наборы обязаны
-   совпадать значение в значение - расхождение даёт третью, никем не спроектированную тему. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --is-dark: 1;
-    --paper: #0f110e;
-    --sheet: #171915;
-    --sheet-sunk: #1e211c;
-    --rule: #2f332c;
-    --rule-strong: #4b5147;
-    --ink: #e9ebe4;
-    --ink-2: #a8ada0;
-    --ink-3: #838a7c;
-    --ink-invert: #0f110e;
-    --ok: #63b083;
-    --warn: #d3a13f;
-    --bad: #e08078;
-    --c-curb: #9aa094;
-    --c-pavement: #6f746a;
-    --c-building: #787e74;
-    --c-building-fill: rgba(120, 126, 116, 0.2);
-    --c-lawn: rgba(105, 160, 100, 0.16);
-    --c-road: #4e534a;
-    --c-fence: #71776d;
-    --c-slope: #a38c6d;
-    --c-boundary: #e9ebe4;
-    --c-water: #4a9fdd;
-    --c-sewer: #a3815c;
-    --c-storm: #46b3b3;
-    --c-heat: #e0784a;
-    --c-gas: #c4b13a;
-    --c-power: #e2604f;
-    --c-telecom: #a077cc;
-    --c-utility: #99a29a;
-    --c-overhead: #e2604f;
-    --c-pole: #c3cabb;
-    --c-existing: #6bb076;
-  }
-}
-
-:root[data-theme="dark"] {
   color-scheme: dark;
   --is-dark: 1;
-  --paper: #0f110e;
-  --sheet: #171915;
-  --sheet-sunk: #1e211c;
-  --rule: #2f332c;
-  --rule-strong: #4b5147;
-  --ink: #e9ebe4;
-  --ink-2: #a8ada0;
-  --ink-3: #838a7c;
-  --ink-invert: #0f110e;
-  --ok: #63b083;
-  --warn: #d3a13f;
-  --bad: #e08078;
-  --c-curb: #9aa094;
-  --c-pavement: #6f746a;
-  --c-building: #787e74;
-  --c-building-fill: rgba(120, 126, 116, 0.2);
-  --c-lawn: rgba(105, 160, 100, 0.16);
-  --c-road: #4e534a;
-  --c-fence: #71776d;
+
+  --ground: #0e1013;
+  --panel: #171a1e;
+  --panel-2: #1e2227;
+  --hair: #272c32;
+  --hair-2: #3a4048;
+  --bone: #e9e6e0;
+  --bone-2: #a5a39d;
+  --bone-3: #8e8b84;
+  --inverse: #0e1013;
+
+  --ok: #6fae86;
+  --warn: #cfa14a;
+  --bad: #d97b6c;
+
+  /* Подоснова. Значения читает plan.js через getComputedStyle. */
+  --c-curb: #9aa0a8;
+  --c-pavement: #6c727a;
+  --c-building: #767c84;
+  --c-building-fill: rgba(118, 124, 132, 0.18);
+  --c-lawn: rgba(120, 150, 118, 0.14);
+  --c-road: #4b5158;
+  --c-fence: #6f757d;
   --c-slope: #a38c6d;
-  --c-boundary: #e9ebe4;
+  --c-boundary: #e9e6e0;
   --c-water: #4a9fdd;
   --c-sewer: #a3815c;
   --c-storm: #46b3b3;
@@ -192,105 +115,167 @@
   --c-gas: #c4b13a;
   --c-power: #e2604f;
   --c-telecom: #a077cc;
-  --c-utility: #99a29a;
+  --c-utility: #99a0a8;
   --c-overhead: #e2604f;
-  --c-pole: #c3cabb;
+  --c-pole: #c3c8cf;
   --c-existing: #6bb076;
+
+  --sans: "Plex", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "PlexMono", ui-monospace, Consolas, "Liberation Mono", monospace;
+  --gutter: clamp(16px, 3.5vw, 36px);
+  --bar: 52px;
+}
+
+/* Светлая тема - для печати, проектора и тех, кто так настроил систему. Тёмная основная:
+   план читается на ней так же, как в CAD. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --is-dark: 0;
+    --ground: #e8e7e3;
+    --panel: #f7f6f3;
+    --panel-2: #eeede9;
+    --hair: #d3d2cd;
+    --hair-2: #aeaca6;
+    --bone: #16181c;
+    --bone-2: #4c4f55;
+    --bone-3: #5d5f65;
+    --inverse: #f7f6f3;
+    --ok: #2f6b4a;
+    --warn: #85591b;
+    --bad: #a3392a;
+    --c-curb: #585d64;
+    --c-pavement: #9da2a9;
+    --c-building: #7f848b;
+    --c-building-fill: rgba(127, 132, 139, 0.16);
+    --c-lawn: rgba(110, 140, 108, 0.16);
+    --c-road: #b9bdc2;
+    --c-fence: #92979e;
+    --c-slope: #a98e6b;
+    --c-boundary: #16181c;
+    --c-water: #1f6fb2;
+    --c-sewer: #7a5c3e;
+    --c-storm: #2f8f8f;
+    --c-heat: #c1562a;
+    --c-gas: #93841d;
+    --c-power: #c0392b;
+    --c-telecom: #6f469a;
+    --c-utility: #767c84;
+    --c-overhead: #c0392b;
+    --c-pole: #3a3f45;
+    --c-existing: #43804d;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --is-dark: 0;
+  --ground: #e8e7e3;
+  --panel: #f7f6f3;
+  --panel-2: #eeede9;
+  --hair: #d3d2cd;
+  --hair-2: #aeaca6;
+  --bone: #16181c;
+  --bone-2: #4c4f55;
+  --bone-3: #5d5f65;
+  --inverse: #f7f6f3;
+  --ok: #2f6b4a;
+  --warn: #85591b;
+  --bad: #a3392a;
+  --c-curb: #585d64;
+  --c-pavement: #9da2a9;
+  --c-building: #7f848b;
+  --c-building-fill: rgba(127, 132, 139, 0.16);
+  --c-lawn: rgba(110, 140, 108, 0.16);
+  --c-road: #b9bdc2;
+  --c-fence: #92979e;
+  --c-slope: #a98e6b;
+  --c-boundary: #16181c;
+  --c-water: #1f6fb2;
+  --c-sewer: #7a5c3e;
+  --c-storm: #2f8f8f;
+  --c-heat: #c1562a;
+  --c-gas: #93841d;
+  --c-power: #c0392b;
+  --c-telecom: #6f469a;
+  --c-utility: #767c84;
+  --c-overhead: #c0392b;
+  --c-pole: #3a3f45;
+  --c-existing: #43804d;
 }
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 body {
   margin: 0;
   min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--paper);
-  /* Миллиметровка: участок проектируют на ней, и фон об этом напоминает, не мешая читать. */
-  background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--rule) 46%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--rule) 46%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
-  color: var(--ink);
+  background: var(--ground);
+  color: var(--bone);
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
-  font-feature-settings: "ss02";
   -webkit-font-smoothing: antialiased;
 }
 
-main { flex: 1; }
+main { display: block; }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.dim { color: var(--ink-3); }
+.dim { color: var(--bone-3); }
 
-a { color: inherit; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+a { color: inherit; text-decoration-color: var(--hair-2); text-underline-offset: 3px; }
 a:hover { text-decoration-color: currentColor; }
 
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
 
 .skip {
   position: absolute;
   left: -9999px;
   top: 8px;
   padding: 8px 14px;
-  background: var(--ink);
-  color: var(--ink-invert);
-  z-index: 40;
+  background: var(--bone);
+  color: var(--inverse);
+  z-index: 60;
 }
 .skip:focus { left: 8px; }
 
-/* --- шапка: строка чертёжного штампа, а не «шапка сайта» --- */
+/* --- верхняя строка --- */
 
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 14px;
-  padding: 14px var(--gutter);
-  border-bottom: 1px solid var(--ink);
-  background: var(--sheet);
+  height: var(--bar);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--hair);
+  background: var(--panel);
 }
-
 .brand {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   text-decoration: none;
 }
 .brand:hover { text-decoration: none; }
-
 .brand-note {
-  color: var(--ink-3);
-  font-size: 12.5px;
-  letter-spacing: 0.01em;
+  color: var(--bone-3);
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .topbar-nav {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 18px;
   flex-shrink: 0;
-  font-size: 12.5px;
-  letter-spacing: 0.06em;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.footer {
-  margin-top: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 24px;
-  padding: 16px var(--gutter);
-  border-top: 1px solid var(--rule);
-  color: var(--ink-3);
-  font-size: 12px;
 }
 
 /* --- элементы управления --- */
@@ -298,248 +283,218 @@ a:hover { text-decoration-color: currentColor; }
 button { font: inherit; cursor: pointer; }
 
 .primary {
-  padding: 11px 22px;
-  background: var(--ink);
-  color: var(--ink-invert);
-  border: 1px solid var(--ink);
-  border-radius: 2px;
+  padding: 9px 18px;
+  background: var(--bone);
+  color: var(--inverse);
+  border: 1px solid var(--bone);
+  border-radius: 3px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.02em;
-  transition: transform .12s cubic-bezier(.16,1,.3,1), opacity .12s;
+  transition: opacity .12s, transform .1s;
 }
-.primary:hover:not(:disabled) { opacity: .86; }
+.primary:hover:not(:disabled) { opacity: .85; }
 .primary:active:not(:disabled) { transform: translateY(1px); }
-.primary:disabled { opacity: .45; cursor: progress; }
-.primary.small { padding: 7px 14px; font-size: 13px; }
+.primary:disabled { opacity: .4; cursor: progress; }
+.primary.small { padding: 6px 12px; font-size: 12.5px; }
 
 .ghost {
-  padding: 10px 18px;
+  padding: 9px 16px;
   background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--rule-strong);
-  border-radius: 2px;
-  transition: border-color .12s, transform .12s;
+  color: var(--bone);
+  border: 1px solid var(--hair-2);
+  border-radius: 3px;
+  font-size: 13px;
+  transition: border-color .12s, background-color .12s;
 }
-.ghost:hover { border-color: var(--ink); }
-.ghost:active { transform: translateY(1px); }
+.ghost:hover { border-color: var(--bone); background: var(--panel-2); }
 
 .linkish {
   padding: 0;
   background: none;
   border: 0;
-  color: var(--ink-2);
-  font-size: 12.5px;
-  letter-spacing: 0.06em;
+  color: var(--bone-2);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.linkish:hover { color: var(--ink); }
+.linkish:hover { color: var(--bone); }
 
 input[type="text"], input[type="number"], select, textarea {
   width: 100%;
-  padding: 9px 11px;
-  background: var(--sheet);
-  color: var(--ink);
-  border: 1px solid var(--rule-strong);
-  border-radius: 2px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  color: var(--bone);
+  border: 1px solid var(--hair-2);
+  border-radius: 3px;
   font: inherit;
+  font-size: 13.5px;
   transition: border-color .12s;
 }
-input:hover, select:hover, textarea:hover { border-color: var(--ink-3); }
-input:focus, select:focus, textarea:focus { border-color: var(--ink); }
-textarea { font-family: var(--mono); font-size: 13px; resize: vertical; }
+input:hover, select:hover, textarea:hover { border-color: var(--bone-3); }
+input:focus, select:focus, textarea:focus { border-color: var(--bone); }
+textarea { font-family: var(--mono); font-size: 12.5px; resize: vertical; }
 
 input[type="file"] {
   width: 100%;
-  padding: 14px;
-  background: var(--sheet-sunk);
-  color: var(--ink-2);
-  border: 1px dashed var(--rule-strong);
-  border-radius: 2px;
-  font-size: 13px;
-  transition: border-color .12s, background-color .12s;
+  padding: 12px;
+  background: var(--panel-2);
+  color: var(--bone-2);
+  border: 1px dashed var(--hair-2);
+  border-radius: 3px;
+  font-size: 12.5px;
 }
-input[type="file"]:hover { border-color: var(--ink-3); background: var(--sheet); }
-/* Нативная кнопка выбора файла иначе остаётся единственным элементом чужого языка. */
+input[type="file"]:hover { border-color: var(--bone-3); }
 input[type="file"]::file-selector-button {
   margin-right: 12px;
-  padding: 7px 14px;
-  background: var(--ink);
-  color: var(--ink-invert);
+  padding: 6px 13px;
+  background: var(--bone);
+  color: var(--inverse);
   border: 0;
-  border-radius: 2px;
+  border-radius: 3px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
 }
-input[type="file"]::file-selector-button:hover { opacity: .86; }
+input[type="file"]::file-selector-button:hover { opacity: .85; }
 
-.field { margin-bottom: 22px; }
-/* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field и без
-   исключения набирались бы капсом вместе с заголовками полей. */
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+}
+.field { margin-bottom: 20px; }
+.field > label:not(.check), .field > legend { composes: label; }
 .field > label:not(.check), .field > legend {
   display: block;
-  margin-bottom: 7px;
-  font-size: 11.5px;
+  margin-bottom: 6px;
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-2);
+  color: var(--bone-3);
 }
-fieldset.field > legend { margin-bottom: 12px; }
 fieldset.field { border: 0; padding: 0; margin-inline: 0; }
-.hint { margin: 6px 0 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.45; max-width: 62ch; }
+fieldset.field > legend { margin-bottom: 10px; }
+.hint { margin: 6px 0 0; color: var(--bone-3); font-size: 12px; line-height: 1.45; max-width: 60ch; }
 
-.field-row { display: grid; grid-template-columns: 1fr 190px; gap: 22px; }
+.field-row { display: grid; grid-template-columns: 1fr 170px; gap: 20px; }
 
 .check {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  margin-bottom: 9px;
-  font-size: 13.5px;
-  color: var(--ink-2);
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--bone-2);
   cursor: pointer;
 }
-.check:hover { color: var(--ink); }
-.check input { margin-top: 3px; flex-shrink: 0; accent-color: var(--ink); }
+.check:hover { color: var(--bone); }
+.check input { margin-top: 3px; flex-shrink: 0; accent-color: var(--bone); }
 
-.advanced { margin-bottom: 22px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.advanced { margin-bottom: 20px; border-top: 1px solid var(--hair); padding-top: 13px; }
 .advanced > summary {
   cursor: pointer;
-  font-size: 11.5px;
-  letter-spacing: 0.1em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--bone-3);
   user-select: none;
   list-style: none;
 }
-.advanced > summary::marker, .advanced > summary::-webkit-details-marker { display: none; }
+.advanced > summary::-webkit-details-marker { display: none; }
 .advanced > summary::before { content: "+ "; font-family: var(--mono); }
 .advanced[open] > summary::before { content: "- "; }
-.advanced[open] > summary { color: var(--ink); margin-bottom: 18px; }
+.advanced[open] > summary { color: var(--bone); margin-bottom: 16px; }
 
-/* --- страница запуска --- */
+/* --- страница запуска: тихая, без приёмов --- */
 
-.masthead {
-  padding: clamp(36px, 7vw, 76px) var(--gutter) clamp(28px, 4vw, 44px);
-  border-bottom: 1px solid var(--ink);
-  background: var(--sheet);
+.launch {
+  padding: clamp(28px, 5vw, 60px) var(--gutter) 56px;
 }
-.masthead-inner {
-  max-width: 1440px;
+.launch-inner {
+  max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
-  gap: clamp(24px, 5vw, 72px);
-  align-items: end;
-}
-.masthead h1 {
-  margin: 0;
-  font-size: clamp(34px, 5.4vw, 62px);
-  font-weight: 600;
-  line-height: 1.02;
-  letter-spacing: -0.028em;
-  text-wrap: balance;
-  max-width: 17ch;
-}
-.masthead p {
-  margin: 18px 0 0;
-  max-width: 54ch;
-  color: var(--ink-2);
-  font-size: clamp(15px, 1.4vw, 17px);
-  line-height: 1.55;
-}
-.masthead-facts {
-  display: grid;
-  gap: 1px;
-  background: var(--rule);
-  border: 1px solid var(--rule);
-}
-.masthead-facts div { background: var(--sheet); padding: 11px 14px; }
-.masthead-facts dt {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.masthead-facts dd {
-  margin: 3px 0 0;
-  font-family: var(--mono);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.sheet {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: clamp(28px, 4vw, 52px) var(--gutter) 64px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
-  gap: clamp(28px, 5vw, 64px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  gap: clamp(28px, 5vw, 68px);
   align-items: start;
 }
 
+.launch h1 {
+  margin: 0 0 14px;
+  font-size: clamp(26px, 3.4vw, 40px);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+.lede { margin: 0 0 34px; max-width: 58ch; color: var(--bone-2); font-size: 15px; line-height: 1.55; }
+
 .section-label {
-  margin: 0 0 20px;
-  font-size: 11.5px;
+  margin: 0 0 16px;
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--bone-3);
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--ink);
+  border-bottom: 1px solid var(--hair);
 }
 
 .demo {
   margin: 0 0 30px;
-  padding: 18px 20px;
-  background: var(--sheet);
-  border: 1px solid var(--ink);
-  border-radius: 2px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--hair-2);
+  border-radius: 3px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 20px;
+  gap: 12px 20px;
 }
-.demo p { margin: 0; flex: 1; min-width: 220px; font-size: 13.5px; color: var(--ink-2); }
-.demo strong { display: block; color: var(--ink); font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+.demo p { margin: 0; flex: 1; min-width: 210px; font-size: 12.5px; color: var(--bone-3); }
+.demo strong { display: block; color: var(--bone); font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+
+.facts { display: grid; gap: 0; margin: 0 0 30px; border-top: 1px solid var(--hair); }
+.facts div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+.facts dt { font-size: 12.5px; color: var(--bone-3); }
+.facts dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
 
 /* --- реестр прогонов --- */
 
-.runs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
-.runs li { border-bottom: 1px solid var(--rule); }
+.runs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.runs li { border-bottom: 1px solid var(--hair); }
 .runs a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 3px 12px;
-  padding: 12px 2px;
+  padding: 11px 2px;
   text-decoration: none;
   transition: padding-left .14s cubic-bezier(.16,1,.3,1), background-color .14s;
 }
-.runs a:hover { background: var(--sheet); padding-left: 8px; }
-.run-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  font-weight: 500;
-}
+.runs a:hover { background: var(--panel); padding-left: 7px; }
+.run-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; }
 .run-meta {
   grid-column: 1 / -1;
   display: flex;
   gap: 12px;
-  color: var(--ink-3);
+  color: var(--bone-3);
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .state {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  padding-left: 14px;
+  padding-left: 13px;
   position: relative;
 }
 .state::before {
@@ -547,170 +502,163 @@ fieldset.field { border: 0; padding: 0; margin-inline: 0; }
   position: absolute;
   left: 0;
   top: 50%;
-  width: 7px;
-  height: 7px;
-  margin-top: -3.5px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
   background: currentColor;
 }
 .state-succeeded { color: var(--ok); }
 .state-failed { color: var(--bad); }
 .state-running, .state-queued { color: var(--warn); }
 
-.empty { padding: 24px 0; color: var(--ink-3); font-size: 13.5px; }
+.empty { padding: 20px 0; color: var(--bone-3); font-size: 13px; }
 .empty p { margin: 0 0 6px; }
 
-/* --- страница прогона --- */
+/* --- рабочее пространство: план во весь экран, панели поверх --- */
 
-.page-run { max-width: 1680px; margin: 0 auto; padding: 0 var(--gutter) 64px; }
-
-.run-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px 32px;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 26px 0 18px;
-  border-bottom: 1px solid var(--ink);
-}
-.back {
-  display: inline-block;
-  margin-bottom: 10px;
-  font-size: 11.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  text-decoration: none;
-}
-.back:hover { color: var(--ink); }
-.run-head h1 {
-  margin: 0;
-  font-size: clamp(22px, 2.6vw, 32px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-.run-sub {
-  margin: 8px 0 0;
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-3);
-}
-
-.status { display: flex; align-items: center; gap: 12px; min-width: 260px; }
-.status-title { margin: 0; font-weight: 600; font-size: 15px; }
-.status .hint { margin-top: 2px; }
-.error-text { margin: 4px 0 0; color: var(--bad); font-size: 13px; }
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--rule-strong);
-  border-top-color: var(--ink);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* --- сводка: одно число главное, остальные подчинены --- */
-
-.summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 38px;
-  padding: 22px 0 24px;
-  border-bottom: 1px solid var(--rule);
-}
-.summary-lead { display: flex; align-items: baseline; gap: 12px; }
-.summary-lead b {
-  font-family: var(--mono);
-  font-size: clamp(38px, 5vw, 56px);
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-.summary-lead span { font-size: 13px; color: var(--ink-2); max-width: 9ch; line-height: 1.25; }
-.summary-item { display: flex; flex-direction: column; gap: 2px; }
-.summary-item b {
-  font-family: var(--mono);
-  font-size: 19px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.summary-item span {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.summary-item.ok b { color: var(--ok); }
-.summary-item.bad b { color: var(--bad); }
-
-.skeleton {
-  display: inline-block;
-  width: 3ch;
-  height: 0.9em;
-  background: linear-gradient(90deg, var(--sheet-sunk), var(--rule), var(--sheet-sunk));
-  background-size: 200% 100%;
-  animation: shimmer 1.6s linear infinite;
-}
-@keyframes shimmer { to { background-position: -200% 0; } }
-
-/* --- карта --- */
-
-.map-section { margin: 26px 0 30px; border: 1px solid var(--ink); background: var(--sheet); }
-
-.map-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--rule);
-}
-.map-head h2 {
-  margin: 0;
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.layer-toggles { display: flex; flex-wrap: wrap; gap: 4px 18px; }
-.layer-toggles .check { margin: 0; font-size: 12.5px; }
-
-.edit-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 18px;
-  padding: 11px 18px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--sheet-sunk);
-}
-.edit-bar .check { margin: 0; font-size: 13px; color: var(--ink); font-weight: 500; }
-.edit-message { flex: 1; min-width: 220px; margin: 0; font-size: 12.5px; color: var(--ink-2); }
-.edit-message[data-kind="error"] { color: var(--bad); }
-.edit-bar[data-stale="1"] { box-shadow: inset 3px 0 0 var(--warn); }
-.edit-bar[data-stale="0"] #rebuild { background: transparent; color: var(--ink-3); border-color: var(--rule-strong); }
-
-.map-body { display: grid; grid-template-columns: minmax(0, 1fr) 350px; }
-
-.map-canvas-wrap {
+/* Рабочее место занимает ровно первый экран: план - основная работа, всё остальное
+   лежит под ним и открывается прокруткой. */
+.workspace {
   position: relative;
-  height: clamp(460px, 68vh, 820px);
-  background: var(--sheet);
+  height: calc(100dvh - var(--bar));
+  min-height: 460px;
+  background: var(--ground);
+  overflow: hidden;
 }
 #plan-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 #plan-canvas.dragging { cursor: grabbing; }
 #plan-canvas.editable { cursor: crosshair; }
+
+.hud {
+  position: absolute;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.hud-left {
+  top: 14px;
+  left: 14px;
+  width: 268px;
+  max-height: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.hud-right {
+  top: 14px;
+  right: 14px;
+  width: 330px;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+}
+.hud-bottom {
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 1px;
+  background: var(--hair);
+  overflow: hidden;
+}
+.hud-bottom button {
+  padding: 6px 12px;
+  background: var(--panel);
+  color: var(--bone-2);
+  border: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.hud-bottom button:hover { color: var(--bone); background: var(--panel-2); }
+
+.hud-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hair);
+}
+.hud-head .back {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+  text-decoration: none;
+}
+.hud-head .back:hover { color: var(--bone); }
+.hud-head h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.hud-head .run-sub {
+  margin: 5px 0 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--bone-3);
+  overflow-wrap: anywhere;
+}
+
+.hud-scroll { overflow-y: auto; padding: 12px 14px 14px; }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hair); margin-bottom: 16px; }
+.stat { background: var(--panel); padding: 9px 10px; }
+.stat b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.stat span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+}
+.stat.wide { grid-column: 1 / -1; }
+.stat.ok b { color: var(--ok); }
+.stat.bad b { color: var(--bad); }
+
+.hud-label {
+  margin: 0 0 9px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+}
+.hud-block + .hud-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair); }
+.layer-toggles { display: flex; flex-direction: column; gap: 2px; }
+.layer-toggles .check { margin: 0; font-size: 12.5px; }
+
+.edit-message { margin: 8px 0 10px; font-size: 11.5px; color: var(--bone-3); line-height: 1.4; }
+.edit-message[data-kind="error"] { color: var(--bad); }
+#rebuild { width: 100%; }
+.hud-block[data-stale="1"] #rebuild { background: var(--warn); border-color: var(--warn); color: var(--inverse); }
+
+/* Легенда: без неё цвет линии на карте ничего не сообщает. */
+.legend {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 14px;
+  font-size: 11px;
+  color: var(--bone-2);
+  pointer-events: none;
+}
+.legend span { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.legend i { width: 15px; height: 0; border-top-width: 2px; border-top-style: solid; flex-shrink: 0; }
+.legend i.dash { border-top-style: dashed; }
+.legend i.dot { height: 8px; width: 8px; border: 1.5px solid; border-radius: 50%; }
 
 .map-loading {
   position: absolute;
@@ -719,166 +667,127 @@ fieldset.field { border: 0; padding: 0; margin-inline: 0; }
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--ink-3);
+  color: var(--bone-3);
   font-size: 13px;
-  background: var(--sheet);
+  background: var(--ground);
+  z-index: 5;
 }
 .map-loading[hidden] { display: none; }
 
-.map-tools {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  display: flex;
-  gap: 6px;
+.spinner {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--hair-2);
+  border-top-color: var(--bone);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
 }
-.map-tools button {
-  padding: 5px 11px;
-  background: var(--sheet);
-  color: var(--ink-2);
-  border: 1px solid var(--rule-strong);
-  border-radius: 2px;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.map-tools button:hover { color: var(--ink); border-color: var(--ink); }
-
-/* Легенда: без неё цвет линии на карте ничего не сообщает. */
-.legend {
-  position: absolute;
-  right: 14px;
-  top: 14px;
-  padding: 11px 13px;
-  background: color-mix(in srgb, var(--sheet) 92%, transparent);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 4px 14px;
-  font-size: 11.5px;
-  color: var(--ink-2);
-  max-width: 260px;
-  pointer-events: none;
-}
-.legend span { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.legend i { width: 16px; height: 0; border-top-width: 2px; border-top-style: solid; flex-shrink: 0; }
-.legend i.dash { border-top-style: dashed; }
-.legend i.dot { height: 9px; width: 9px; border: 1.5px solid; border-radius: 50%; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* --- панель объяснения --- */
 
-.detail {
-  border-left: 1px solid var(--rule);
-  padding: 20px;
-  overflow-y: auto;
-  max-height: clamp(460px, 68vh, 820px);
-}
-.detail-empty { color: var(--ink-3); font-size: 13px; }
-.detail-empty p { margin: 0 0 8px; max-width: 34ch; }
-.detail h3 { margin: 0 0 2px; font-size: 17px; font-weight: 600; letter-spacing: -0.015em; }
-.detail-lat { margin: 0 0 14px; color: var(--ink-3); font-size: 13px; font-style: italic; }
+.detail { padding: 14px 16px 18px; }
+.detail-empty { color: var(--bone-3); font-size: 12.5px; }
+.detail-empty p { margin: 0 0 8px; }
+.detail h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.detail-lat { margin: 0 0 12px; color: var(--bone-3); font-size: 12.5px; font-style: italic; }
 .detail-heading {
-  margin: 20px 0 12px;
-  font-size: 11px;
+  margin: 18px 0 10px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--rule);
+  color: var(--bone-3);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hair);
 }
 
 .verdict {
   display: inline-block;
-  margin-bottom: 12px;
-  padding: 3px 10px;
+  margin-bottom: 10px;
+  padding: 2px 9px;
   border: 1px solid currentColor;
-  border-radius: 2px;
-  font-size: 11.5px;
+  border-radius: 3px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.04em;
 }
 .verdict-allowed { color: var(--ok); }
 .verdict-needs_approval { color: var(--warn); }
 .verdict-rejected, .verdict-forbidden { color: var(--bad); }
 
 .detail-explain {
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  background: var(--sheet-sunk);
-  border-radius: 2px;
-  font-size: 13px;
+  margin: 0 0 12px;
+  padding: 11px 12px;
+  background: var(--panel-2);
+  border-radius: 3px;
+  font-size: 12.5px;
   line-height: 1.55;
 }
-.detail-full { margin-top: 18px; }
-.detail-full > summary {
-  cursor: pointer;
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  user-select: none;
-}
-.detail-full > summary:hover { color: var(--ink); }
+.detail-full { margin-top: 16px; }
+.detail-full > summary { cursor: pointer; font-size: 11px; color: var(--bone-3); user-select: none; }
+.detail-full > summary:hover { color: var(--bone); }
 
-/* Состав плана. Доля показана заливкой строки, а не отдельной полосой с дорожкой:
-   дорожки-прогрессбары на такой панели читаются как элемент управления. */
 .composition { list-style: none; margin: 0; padding: 0; }
 .composition li {
   position: relative;
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--rule);
-  font-size: 13px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--hair);
+  font-size: 12.5px;
 }
 .composition li:last-child { border-bottom: 0; }
 .composition-bar {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  left: 0; top: 0; bottom: 0;
   width: var(--share);
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  background: var(--panel-2);
 }
 .composition-name { position: relative; flex: 1; min-width: 0; }
 .composition-count {
   position: relative;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
+  color: var(--bone-3);
 }
 
-.checks { display: flex; flex-direction: column; gap: 13px; list-style: none; margin: 0; padding: 0; }
-.check-item { padding-bottom: 13px; border-bottom: 1px solid var(--rule); }
+.checks { display: flex; flex-direction: column; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.check-item { padding-bottom: 12px; border-bottom: 1px solid var(--hair); }
 .check-item:last-child { border-bottom: 0; padding-bottom: 0; }
-.check-item.failed { padding-left: 11px; box-shadow: inset 2px 0 0 var(--bad); }
+.check-item.failed { padding-left: 10px; box-shadow: inset 2px 0 0 var(--bad); }
 .check-item.failed .check-dist { color: var(--bad); }
 .check-rule { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-.check-id { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
-.check-dist { font-family: var(--mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.check-clause { margin: 5px 0 0; font-size: 12.5px; line-height: 1.45; }
+.check-id { font-family: var(--mono); font-size: 11px; color: var(--bone-3); }
+.check-dist { font-family: var(--mono); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.check-clause { margin: 5px 0 0; font-size: 12px; line-height: 1.45; }
 .check-quote {
   margin: 6px 0 0;
-  padding-left: 11px;
-  border-left: 2px solid var(--rule-strong);
-  color: var(--ink-3);
-  font-size: 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--hair-2);
+  color: var(--bone-3);
+  font-size: 11.5px;
   line-height: 1.5;
 }
 
-/* --- нижние блоки --- */
+/* --- то, что под планом: параметры, файлы, предупреждения --- */
 
-.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px 40px; }
+.below {
+  border-top: 1px solid var(--hair);
+  background: var(--panel);
+  padding: 26px var(--gutter) 34px;
+}
+.below-inner { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 26px 40px; }
 
-.params dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 24px; margin: 0 0 14px; }
-.params dt { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-.params dd { margin: 3px 0 0; font-family: var(--mono); font-size: 13.5px; overflow-wrap: anywhere; }
+.params dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 22px; margin: 0 0 12px; }
+.params dt { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bone-3); }
+.params dd { margin: 3px 0 0; font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
 
 .warnings > summary {
   cursor: pointer;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -887,57 +796,89 @@ fieldset.field { border: 0; padding: 0; margin-inline: 0; }
   border-bottom: 1px solid var(--warn);
   user-select: none;
 }
-.warnings[open] > summary { margin-bottom: 14px; }
-.warnings ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 12.5px; }
-.warnings li + li { margin-top: 6px; }
+.warnings[open] > summary { margin-bottom: 12px; }
+.warnings ul { margin: 0; padding-left: 17px; color: var(--bone-2); font-size: 12px; }
+.warnings li + li { margin-top: 5px; }
 
-.artifact-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--rule);
-}
-.artifact-list li { border-bottom: 1px solid var(--rule); }
+.artifact-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.artifact-list li { border-bottom: 1px solid var(--hair); }
 .artifact-list a {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 2px;
+  padding: 8px 2px;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 12px;
   text-decoration: none;
   transition: padding-left .14s cubic-bezier(.16,1,.3,1);
 }
-.artifact-list a:hover { padding-left: 7px; }
-.artifact-list a::after { content: "↓"; color: var(--ink-3); }
+.artifact-list a:hover { padding-left: 6px; }
+.artifact-list a::after { content: "↓"; color: var(--bone-3); }
 
-/* --- адаптив: у карты ограничитель не ширина, а высота, поэтому точек проверки две оси --- */
+/* --- состояние прогона в шапке рабочего места --- */
 
-@media (max-width: 1180px) {
-  .masthead-inner { grid-template-columns: minmax(0, 1fr); }
-  .sheet { grid-template-columns: minmax(0, 1fr); }
-  .map-body { grid-template-columns: minmax(0, 1fr); }
-  .detail { border-left: 0; border-top: 1px solid var(--rule); max-height: none; }
+.status { display: flex; align-items: center; gap: 10px; }
+.status-title { margin: 0; font-weight: 600; font-size: 13px; }
+.status .hint { margin-top: 2px; max-width: none; }
+.error-text { margin: 4px 0 0; color: var(--bad); font-size: 12px; }
+
+.skeleton {
+  display: inline-block;
+  width: 2.5ch;
+  height: 0.85em;
+  background: linear-gradient(90deg, var(--panel-2), var(--hair), var(--panel-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 22px;
+  padding: 13px var(--gutter);
+  border-top: 1px solid var(--hair);
+  color: var(--bone-3);
+  font-size: 11.5px;
 }
 
-@media (max-width: 680px) {
-  body { background-size: 24px 24px; }
-  .brand-note { display: none; }
-  .field-row { grid-template-columns: minmax(0, 1fr); }
-  .map-canvas-wrap { height: 56vh; min-height: 330px; }
+/* --- адаптив: у рабочего места ограничитель высота, поэтому проверок две оси --- */
+
+@media (max-width: 1080px) {
+  .launch-inner { grid-template-columns: minmax(0, 1fr); }
+  .hud-left, .hud-right {
+    position: static;
+    width: auto;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    backdrop-filter: none;
+  }
+  .workspace { display: flex; flex-direction: column; overflow: visible; height: auto; min-height: 0; }
+  .workspace .hud-left { order: 1; }
+  .workspace .canvas-holder { order: 2; position: relative; height: 62vh; min-height: 340px; }
+  .workspace .hud-right { order: 3; border-top: 1px solid var(--hair); }
   .legend { display: none; }
-  .run-head { flex-direction: column; align-items: flex-start; }
-  .status { min-width: 0; }
-  .summary { gap: 16px 26px; }
+  .hud-bottom { position: absolute; }
 }
 
-@media (max-height: 720px) {
-  .map-canvas-wrap { height: 400px; }
-  .detail { max-height: 400px; }
+@media (min-width: 1081px) {
+  .canvas-holder { position: absolute; inset: 0; }
+}
+
+@media (max-width: 620px) {
+  .field-row { grid-template-columns: minmax(0, 1fr); }
+  .brand-note { display: none; }
+  .stats { grid-template-columns: 1fr; }
+}
+
+@media (max-height: 700px) and (min-width: 1081px) {
+  .hud-left { width: 240px; }
+  .hud-right { width: 300px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
   .skeleton { animation: none; }
   .spinner { animation-duration: 2.4s; }
   *, *::before, *::after { transition-duration: .01ms !important; }
