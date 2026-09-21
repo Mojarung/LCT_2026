@@ -9,13 +9,15 @@ uv run green run путь/к/файлу.dxf --inventory перечётка.xls  
 uv run green run генплан.dxf сети.dxf покрытия.dxf            # комплект DXF склеивается в один чертёж
 uv run green run путь/к/файлу.dxf --profile barriers          # с прикорневыми барьерами (СП 42, табл. 9.1, прим. 5)
 uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"   # нормоконтроль чужого плана: нарушения с пунктами актов
-uv run green serve                  # OpenAPI: http://127.0.0.1:8000/docs
-docker compose up --build           # то же в контейнере, API на :8000
+uv run green serve                  # веб-интерфейс: http://127.0.0.1:8000/ , OpenAPI: /docs
+docker compose up --build           # то же в контейнере, веб и API на :8000
 ```
 
 Вид для каждой посадки подбирается сервисом: жёсткие фильтры по нормам (369-ПП, 743-ПП п. 3.6.18, отступы по роду, крона шире 5 м, высота под ВЛ) и по справочнику (морозостойкость, реагенты), затем оценка пригодности в процентах и назначение с жёсткими квотами разнообразия 10-20-30. Перечётная ведомость через `--inventory` добавляет в квоты уже растущие деревья. База видов - [config/species.yaml](config/species.yaml), её описание - [docs/species.md](docs/species.md).
 
-Артефакты прогона: `result.dxf`, `plan.json`, `interpretations.csv` и `.json`, `assortment.json` и `assortment_shrubs.json` (состав плана: доли, разнообразие, сезонность), `planting_schedule.csv` (ведомость: количества, размер кома, площадь под посадочные ямы), `zones.geojson`, `run_manifest.json`, `verify.json`, `layers_report.json`.
+Веб-интерфейс на `/`: загрузка комплекта, карта плана на подоснове с объяснением каждой посадки по пунктам НПА, перенос и удаление посадок с пересчётом норм и пересборкой DXF. Без внешних запросов: целевая среда офлайновая. Подробности и замеры - [docs/notes/25-web-ui.md](docs/notes/25-web-ui.md).
+
+Артефакты прогона: `result.dxf`, `plan.json`, `basemap.geojson` (подоснова для карты), `rules.json` (свод норм прогона с цитатами), `interpretations.csv` и `.json`, `assortment.json` и `assortment_shrubs.json` (состав плана: доли, разнообразие, сезонность), `planting_schedule.csv` (ведомость: количества, размер кома, площадь под посадочные ямы), `zones.geojson`, `run_manifest.json`, `verify.json`, `layers_report.json`.
 
 Линтеры и тесты: `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run ty check src`, `uv run lint-imports`, `uv run pytest`.
 

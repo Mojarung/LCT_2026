@@ -22,12 +22,17 @@ src/green/
                    (аллея вдоль борта + сетка по газону), zones (зоны допустимости),
                    assortment/ (подбор вида: context, structures, filters, scoring, assign (MILP),
                    summary), explain (шаблоны), results, runs, ports, audit (нормоконтроль чужого плана),
-                   schedule (ведомость), barriers, shrub_groups
+                   schedule (ведомость), barriers, shrub_groups, basemap (подоснова для карты),
+                   editing (правка плана: проверка точки, перенос, удаление, кэш контекстов прогонов)
   infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    reports/artifacts, logs
   bootstrap/       Settings (переменные GREEN_*), build_container
-  interfaces/      cli/main.py (`green run|audit|inspect|verify|serve|openapi`, cyclopts), api/ (FastAPI /api/v1, Swagger, RFC 9457)
+  interfaces/      cli/main.py (`green run|audit|inspect|verify|serve|openapi`, cyclopts),
+                   api/ (FastAPI /api/v1, Swagger, RFC 9457; intake - общий приём файлов,
+                   routers/edits - проверка точки, правки, пересборка),
+                   web/ (Jinja2-страницы, canvas-карта плана, правка посадок; статика в
+                   web/static, внешних запросов нет, node в образе нет)
 config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
@@ -46,17 +51,18 @@ docs/
   notes/08-dataset-map.md, notes/09-berzarina-layers-and-offsets.md (наши)
   notes/10..15 (Кирилл: подбор ассортимента, видовые нормы, каталог, пустые места, группы кустарников,
                  15-organizers-qa.md - ответы заказчика с сессии вопросов и что из них следует),
-  notes/16..24 (Кирилл: категории насаждений, квоты кустарников и прикорневые барьеры; комплект из
+  notes/16..25 (Кирилл: категории насаждений, квоты кустарников и прикорневые барьеры; комплект из
                  нескольких DXF; ведомость посадочного материала и проверка комплекта по месту;
                  единицы чертежа: заголовку $INSUNITS не верим, решает геометрия;
                  тесты HTTP API и выгрузка OpenAPI; откосы и школы; обработка не меняет исходник;
-                 время чтения и порядок загрузки; нормоконтроль `green audit`)
+                 время чтения и порядок загрузки; нормоконтроль `green audit`;
+                 25-web-ui.md - веб-интерфейс, карта плана и правка посадок с замерами)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
 dataset/           датасет и конвертированные DXF, в git не идёт; compose монтирует ./dataset в /dataset
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
-Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (веб-интерфейс на `/`, Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
 
 ## Конвенции
 

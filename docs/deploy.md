@@ -8,7 +8,7 @@
 flowchart LR
     subgraph user["Рабочее место проектировщика"]
         cad["nanoCAD / QCAD / LibreCAD<br/>исходный DXF, просмотр result.dxf"]
-        browser["Браузер: Swagger /docs<br/>или curl / скрипт"]
+        browser["Браузер: веб-интерфейс /<br/>Swagger /docs, curl / скрипт"]
     end
     subgraph host["Сервер или ноутбук с Docker (МосТех.ОС)"]
         subgraph image["Образ green (Ubuntu 26.04, 640-840 МБ)"]
@@ -68,6 +68,8 @@ flowchart LR
    curl -s http://localhost:8000/api/v1/meta | head -c 400
    ```
 
+   Веб-интерфейс: `http://localhost:8000/` - загрузка чертежа, карта плана, объяснения по пунктам
+   НПА, правка посадок. Внешних запросов не делает, интернет на стенде не нужен.
    Swagger: `http://localhost:8000/docs`. Схема без запущенного сервера: `docs/openapi.json`.
 
    Сборка с ODA File Converter (точнее конвертирует DWG, лицензия ODA): `docker compose build --build-arg WITH_ODA=true`.
