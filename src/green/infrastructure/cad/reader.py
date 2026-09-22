@@ -10,33 +10,23 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf import bbox
 from ezdxf.addons import geo
 from ezdxf.path import make_path
 from shapely.geometry import LineString, Point, Polygon, shape
 
-from green.domain.objects import NO_XREF, Feature, Scene, SourceRef, TextLabel
+from green.domain.objects import NO_XREF, Feature, ReadDiagnostics, Scene, SourceRef, TextLabel
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic, Insert
-    from ezdxf.layouts import BlockLayout
     from shapely.geometry.base import BaseGeometry
 
     from green.infrastructure.cad.documents import DocumentCache
 
-SYMBOL_BLOCK_MAX_ENTITIES = 64
-# Условный знак (люк, опора, дерево) умещается в квадрат 12 м; больше - это уже геометрия.
-SYMBOL_MAX_SIZE_M = 12.0
-# Экспорт из MicroStation (выгрузки Геотреста): каждый элемент - отдельный блок, это не символ.
-# В привязанном (BIND) XREF имя блока получает префикс файла: "output[1-12]_...up$0$DIMTXT_3",
-# у XREF без привязки разделитель "|". Проверка по началу имени такие блоки не видит.
-ELEMENT_BLOCK = re.compile(r"(?:^|\$0\$|\|)msdElementType", re.IGNORECASE)
 # Подпись сети Геотреста: текст и стрелка-выноска. Стрелка не должна стать трубой.
 LABEL_BLOCK = re.compile(r"(?:^|\$0\$|\|)DIMTXT", re.IGNORECASE)
 SMALL_CIRCLE_RADIUS_M = 2.0
@@ -94,6 +84,11 @@ class EzdxfSceneReader:
             labels=labels,
             warnings=(*warnings, *units.notes, *walker.warnings()),
             unit_m=units.unit_m,
+            read_diagnostics=ReadDiagnostics(
+                visited_by_type=dict(walker.visited),
+                skipped_by_type=dict(walker.skipped),
+                unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
+            ),
         )
 
 
@@ -106,8 +101,8 @@ class _Walker:
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
+    visited: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
-    block_sizes: dict[str, float] = field(default_factory=dict)
 
     def visit(  # noqa: PLR0913 - обход передаёт контекст родителя явно
         self,
@@ -118,6 +113,7 @@ class _Walker:
         parent_handle: str,
         index: int,
         labels_only: bool = False,
+        parent_block: str | None = None,
     ) -> None:
         layer = entity.dxf.get("layer", "0")
         if layer == "0" and parent_layer is not None:
@@ -125,6 +121,7 @@ class _Walker:
         handle = entity.dxf.get("handle") or f"{parent_handle}~{index}"
         ref = SourceRef(self.file_sha8, _chain_hash(chain), handle)
         kind = entity.dxftype()
+        self.visited[kind] += 1
 
         if kind in _TEXT_ENTITIES:
             self._label(entity, ref, layer)
@@ -141,30 +138,35 @@ class _Walker:
             else:
                 radius = entity.dxf.radius * self.unit_m if kind == "CIRCLE" else None
                 self.features.append(
-                    Feature(ref=ref, layer=layer, geometry=geometry, circle_radius_m=radius)
+                    Feature(
+                        ref=ref,
+                        layer=layer,
+                        geometry=geometry,
+                        block=parent_block,
+                        circle_radius_m=radius,
+                    )
                 )
 
     def _insert(self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...]) -> None:
+        if insert.mcount > 1:
+            for position, instance in enumerate(insert.multi_insert()):
+                instance_ref = replace(ref, handle=f"{ref.handle}@{position}")
+                self._insert(instance, instance_ref, layer, chain)
+            return
         name = insert.dxf.name
         block = self.doc.blocks.get(name)
-        if block is None:
+        if block is None or block.block is None:
             self.skipped["INSERT:no-block"] += 1
             return
-        if block.block_record.is_xref and len(block) == 0:
+        if (block.block.is_xref or block.block.is_xref_overlay) and len(block) == 0:
             self.unresolved_xrefs.add(name)
             return
         labels_only = LABEL_BLOCK.search(name) is not None
-        if not labels_only and self._is_symbol(insert, block):
-            point = insert.dxf.insert
-            self.features.append(
-                Feature(ref=ref, layer=layer, geometry=Point(point.x, point.y), block=name)
-            )
-            return
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
             return
         try:
-            children = list(insert.virtual_entities())
+            children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
         except ValueError, TypeError, ArithmeticError:
             self.skipped["INSERT:not-explodable"] += 1
             return
@@ -176,24 +178,11 @@ class _Walker:
                 parent_handle=ref.handle,
                 index=position,
                 labels_only=labels_only,
+                parent_block=name,
             )
 
-    def _is_symbol(self, insert: Insert, block: BlockLayout) -> bool:
-        """Условный знак: маленький блок-не-xref, кроме элементов экспорта MicroStation."""
-        name = block.name
-        if (
-            block.block_record.is_xref
-            or len(block) > SYMBOL_BLOCK_MAX_ENTITIES
-            or ELEMENT_BLOCK.search(name) is not None
-        ):
-            return False
-        size = self.block_sizes.get(name)
-        if size is None:
-            extents = bbox.extents(_plain_entities(block, depth=0), fast=True)
-            size = max(extents.size.x, extents.size.y) if extents.has_data else 0.0
-            self.block_sizes[name] = size
-        scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
-        return size * scale * self.unit_m <= SYMBOL_MAX_SIZE_M
+    def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
+        self.skipped[f"VIRTUAL:{entity.dxftype()}:{reason}"] += 1
 
     def _label(self, entity: DXFGraphic, ref: SourceRef, layer: str) -> None:
         text = entity.dxf.text if entity.dxftype() == "TEXT" else entity.plain_text()  # ty: ignore[unresolved-attribute]
@@ -226,10 +215,11 @@ class _Walker:
             if kind in _AREA_ENTITIES:
                 area = shape(geo.proxy(entity, distance=self.flatten))
                 return area if area.is_valid else shapely.make_valid(area)
-            vertices = [(v.x, v.y) for v in make_path(entity).flattening(self.flatten)]
+            path = make_path(entity)
+            vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None
-        return _polyline(vertices, closed=False)
+        return _polyline(vertices, closed=path.is_closed)
 
     def warnings(self) -> list[str]:
         messages = []
@@ -245,33 +235,11 @@ class _Walker:
         return messages
 
 
-def _plain_entities(entities: Iterable[DXFGraphic], *, depth: int) -> Iterator[DXFGraphic]:
-    """Сущности блока для расчёта его размера, без побочных эффектов в документе.
-
-    `bbox.extents` сам раскрывает вставки и отрисовывает выноски, а отрисовка MULTILEADER
-    создаёт в документе блок стрелки: исходник получал сущность, которой в нём не было
-    (docs/notes/22-source-document-untouched.md). Поэтому размеры, выноски и прочее из
-    `_SKIPPED` сюда не попадают, а вставки раскрываются здесь же.
-    """
-    for entity in entities:
-        kind = entity.dxftype()
-        if kind in _SKIPPED:
-            continue
-        if kind != "INSERT":
-            yield entity
-        elif depth < MAX_BLOCK_DEPTH:
-            try:
-                children = list(entity.virtual_entities())  # ty: ignore[unresolved-attribute]
-            except ValueError, TypeError, ArithmeticError:
-                continue
-            yield from _plain_entities(children, depth=depth + 1)
-
-
 def _to_metres(
     features: list[Feature], labels: list[TextLabel], unit_m: float
 ) -> tuple[tuple[Feature, ...], tuple[TextLabel, ...]]:
     """Сцена в метрах: дальше по коду все пороги и нормы метровые."""
-    if unit_m == 1.0 or not features:
+    if unit_m == 1.0:
         return tuple(features), tuple(labels)
     scaled = shapely.transform(
         np.asarray([f.geometry for f in features], dtype=object), lambda xy: xy * unit_m

@@ -15,6 +15,7 @@ from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.input_quality import require_complete_blocks
 from green.application.quality import assess, site_of
 from green.application.results import RunReport, StageTiming
 from green.application.shrub_groups import fill_shrub_groups
@@ -134,6 +135,7 @@ class PlanSite:
             species = self._species.get(params.species_code)
         with watch.stage("read"):
             scene = self._reader.read(source, unit=params.drawing_unit)
+            require_complete_blocks(scene)
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map)
             if params.unknown_lines_as_utility:
@@ -207,6 +209,7 @@ class PlanSite:
             converter=converter,
             warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
             basemap=basemap,
+            read_diagnostics=scene.read_diagnostics,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и

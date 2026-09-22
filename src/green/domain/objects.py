@@ -7,6 +7,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from shapely.geometry.base import BaseGeometry
 
 NO_XREF = "00000000"
@@ -124,6 +126,26 @@ class TextLabel:
 
 
 @dataclass(frozen=True, slots=True)
+class ReadDiagnostics:
+    """Counts refer to visited modelspace entities and expanded block children.
+
+    They are an import account, not a semantic recognition accuracy score. Paperspace
+    is not part of the computational scene. Benign annotation skips are distinguished
+    from missing block contents, which make spatial checks incomplete.
+    """
+
+    visited_by_type: Mapping[str, int] = field(default_factory=dict)
+    skipped_by_type: Mapping[str, int] = field(default_factory=dict)
+    unresolved_xrefs: tuple[str, ...] = ()
+
+    @property
+    def block_failures(self) -> tuple[str, ...]:
+        return tuple(
+            kind for kind in self.skipped_by_type if kind.startswith(("INSERT:", "VIRTUAL:"))
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Scene:
     """Прочитанная подоснова: все объекты в единых координатах, в метрах.
 
@@ -138,3 +160,4 @@ class Scene:
     labels: tuple[TextLabel, ...] = field(default=())
     warnings: tuple[str, ...] = field(default=())
     unit_m: float = 1.0
+    read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from green.domain.objects import ReadDiagnostics
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
@@ -75,6 +77,7 @@ class RunReport:
     # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None
+    read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
 
     def summary(self) -> dict[str, object]:
         return {

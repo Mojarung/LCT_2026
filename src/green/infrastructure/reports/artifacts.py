@@ -73,6 +73,9 @@ class FileArtifactSink:
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
+            "input_read.json": _write_json(
+                directory / "input_read.json", asdict(report.read_diagnostics)
+            ),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
             "basemap.geojson": self.save_basemap(directory, report.basemap),
             "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
