@@ -155,16 +155,7 @@ class ConstraintIndex:
             features.append(index.features)
             if not count:
                 continue
-            pairs, distances = index.tree.query_nearest(
-                points, return_distance=True, all_matches=False
-            )
-            values = np.empty(count)
-            owners = np.empty(count, dtype=np.int64)
-            values[pairs[0]] = distances
-            owners[pairs[0]] = pairs[1]
-            if rule.measure_to is MeasureTo.OUTER_WALL:
-                values -= index.half_diameters[owners]
-            np.maximum(values, 0.0, out=values)
+            values, owners = _nearest_clearance(index, points, rule.measure_to)
             clearance[row] = values
             nearest[row] = owners
             # Допуск на округление: кандидат, поставленный ровно на норму, её не нарушает.
@@ -230,3 +221,45 @@ def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
 def _index(features: tuple[Feature, ...]) -> _ClassIndex:
     halves = np.array([(f.diameter_m or 0.0) / 2 for f in features], dtype=np.float64)
     return _ClassIndex(STRtree([f.geometry for f in features]), features, halves)
+
+
+def _nearest_clearance(
+    index: _ClassIndex, points: NDArray[np.object_], measure: MeasureTo
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """Nearest wall is not necessarily the wall of the nearest axis.
+
+    The nearest axis supplies an upper bound b on the signed wall distance.
+    A better pipe must have axis distance <= b + maximum pipe radius. Query that
+    bounded neighbourhood, then minimise exact distance-minus-radius. No polygonal
+    circle buffers or all-pairs matrix. Batches bound temporary query memory.
+    """
+    pairs, distances = index.tree.query_nearest(points, return_distance=True, all_matches=False)
+    values = np.empty(len(points))
+    owners = np.empty(len(points), dtype=np.int64)
+    values[pairs[0]] = distances
+    owners[pairs[0]] = pairs[1]
+    if measure is MeasureTo.OUTER_WALL:
+        values -= index.half_diameters[owners]
+        maximum_radius = float(index.half_diameters.max())
+        if maximum_radius > float(index.half_diameters.min()):
+            batch_size = 4096
+            for start in range(0, len(points), batch_size):
+                end = min(start + batch_size, len(points))
+                subset = points[start:end]
+                radius = np.maximum(values[start:end] + maximum_radius, 0) + 1e-9
+                point_ids, feature_ids = index.tree.query(
+                    subset, predicate="dwithin", distance=radius
+                )
+                clearance = (
+                    shapely.distance(subset[point_ids], index.tree.geometries[feature_ids])
+                    - index.half_diameters[feature_ids]
+                )
+                best = np.full(len(subset), np.inf)
+                np.minimum.at(best, point_ids, clearance)
+                winners = clearance == best[point_ids]
+                winner_ids = np.full(len(subset), len(index.features), dtype=np.int64)
+                np.minimum.at(winner_ids, point_ids[winners], feature_ids[winners])
+                values[start:end] = best
+                owners[start:end] = winner_ids
+    np.maximum(values, 0.0, out=values)
+    return values, owners

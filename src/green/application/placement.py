@@ -353,7 +353,7 @@ class _Selector:
                     if not planted.near(candidate.x, candidate.y):
                         planted.add(candidate.x, candidate.y)
                         self.placements.append(self._placement(candidate, batch, row))
-                    return
+                        return
         first, row = options[0]
         quiet = planted.near(first.x, first.y) or refused.near(first.x, first.y)
         if quiet or len(self.rejections) >= self.params.max_rejections:
