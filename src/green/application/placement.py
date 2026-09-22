@@ -115,10 +115,18 @@ class GreedyPlantingStrategy:
             rules,
             require_utility_data=params.require_utility_data,
             barrier_distance_m=barrier,
+            require_soil=params.require_soil,
+            require_work_boundary=params.require_work_boundary,
         )
         if params.require_soil:
             index.surface = build_surface_map(
-                features, labels, index.boundary, params.surface_cell_m
+                features,
+                labels,
+                index.boundary,
+                params.surface_cell_m,
+                max_distance_m=params.surface_max_distance_m,
+                ambiguity_m=params.surface_ambiguity_m,
+                tree_distance_m=params.tree_seed_distance_m,
             )
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
@@ -163,10 +171,22 @@ class GreedyPlantingStrategy:
         if not centers:
             return ()
         rules = active_distance_rules(rulebook, params)
-        index = ConstraintIndex(features, rules, require_utility_data=params.require_utility_data)
+        index = ConstraintIndex(
+            features,
+            rules,
+            require_utility_data=params.require_utility_data,
+            require_soil=params.require_soil,
+            require_work_boundary=params.require_work_boundary,
+        )
         if params.require_soil:
             index.surface = build_surface_map(
-                features, labels, index.boundary, params.surface_cell_m
+                features,
+                labels,
+                index.boundary,
+                params.surface_cell_m,
+                max_distance_m=params.surface_max_distance_m,
+                ambiguity_m=params.surface_ambiguity_m,
+                tree_distance_m=params.tree_seed_distance_m,
             )
         size = params.shrub_group_size
         offsets = [(i - (size - 1) / 2) * params.spacing_m for i in range(size)]
@@ -410,11 +430,11 @@ def _warnings(
         warnings.append(
             "Профиль отключает правила: " + ", ".join(sorted(params.disabled_rules)) + "."
         )
-    if params.require_soil and index.surface is None and not index.has_surface_polygons:
+    if params.require_soil and index.surface is None:
         warnings.append(
             "Карта покрытий не построена: в чертеже нет подписей материала покрытий "
             "(«А», «Ц», «ПЛ») или признаков грунта («ГАЗОН», существующие деревья). "
-            "Сторона борта (проезжая часть или тротуар) не различается."
+            "Пригодный грунт неизвестен: автоматическое размещение заблокировано."
         )
     if MODE_LAWN in params.modes and index.surface is None:
         warnings.append(
@@ -428,7 +448,11 @@ def _warnings(
             "посадки не допускаются или помечены 'требует согласования' (по профилю)."
         )
     if index.boundary is None:
-        warnings.append("Граница работ не найдена: размещение по всему чертежу.")
+        warnings.append(
+            "Граница работ не найдена: автоматическое размещение заблокировано."
+            if params.require_work_boundary
+            else "Граница работ не найдена: профиль явно разрешает размещение по всему чертежу."
+        )
     if len(plan_rejections) >= max_rejections:
         warnings.append(
             f"Отметок отказов больше лимита {max_rejections}: показаны только первые, "

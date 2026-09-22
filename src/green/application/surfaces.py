@@ -4,9 +4,9 @@
 меняется (борт, граница покрытия, стены, ограды, граница растительности), и подписи
 материала внутри участков («А» асфальт, «Ц» цементобетон, «ПЛ» плитка, «ГАЗОН»).
 Карта строится на растре: линии становятся барьерами, подписи и условные знаки
-деревьев источниками, каждая ячейка получает материал ближайшего источника по пути
-в обход барьеров. Разрыв в штриховой линии пропускает только то, что ближе,
-поэтому карта устойчива к разрывам на въездах и в местах стыков.
+деревьев источниками. Свидетельство действует на ограниченном расстоянии по пути
+в обход барьеров. Конкурирующие метки дают UNKNOWN, явные полигоны задают покрытие
+в своих границах. Это интерпретация чертежа, а не обследование физического грунта.
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
 MAX_CELLS = 20_000_000
 _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
+_TREE_SEED = 4
 
 
 class Material(IntEnum):
@@ -53,6 +54,9 @@ class SurfaceMap:
     cell: float
     seeds_paved: int
     seeds_soil: int
+    max_distance_m: float = 30.0
+    ambiguity_m: float = 1.0
+    tree_distance_m: float = 2.0
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
         """Материал под каждой точкой; вне растра UNKNOWN."""
@@ -72,6 +76,9 @@ class SurfaceMap:
             "cell_m": self.cell,
             "seeds_paved": self.seeds_paved,
             "seeds_soil": self.seeds_soil,
+            "max_distance_m": self.max_distance_m,
+            "ambiguity_m": self.ambiguity_m,
+            "tree_distance_m": self.tree_distance_m,
             **{f"cells_{m.name.lower()}": counted[m] for m in Material},
         }
 
@@ -81,19 +88,41 @@ class SurfaceMap:
         return rows, cols
 
 
-def build_surface_map(
+def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in metres
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
     cell_m: float,
+    *,
+    max_distance_m: float = 30.0,
+    ambiguity_m: float = 1.0,
+    tree_distance_m: float = 2.0,
 ) -> SurfaceMap | None:
-    """Строит карту, если в чертеже есть подписи покрытий и хотя бы один признак грунта."""
+    """Use explicit polygons or bounded, competing material evidence; preserve unknowns."""
+    if not np.isfinite([cell_m, max_distance_m, ambiguity_m, tree_distance_m]).all():
+        raise ValueError("Surface distances must be finite")
+    if cell_m <= 0 or max_distance_m <= 0 or ambiguity_m < 0 or tree_distance_m < 0:
+        raise ValueError("Invalid surface distance or resolution")
     seed_xy, seed_kind = _seeds(features, labels)
-    paved, soil = int((seed_kind == Material.PAVED).sum()), int((seed_kind == Material.SOIL).sum())
-    if paved == 0 or soil == 0:
+    paved = int((seed_kind == Material.PAVED).sum())
+    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED]).sum())
+    polygons = [
+        f
+        for f in features
+        if f.geometry.geom_type in _AREA_TYPES
+        and (f.object_class is ObjectClass.LAWN or f.object_class.is_hard_surface)
+    ]
+    if not len(seed_xy) and not polygons:
         return None
     barriers = _barrier_lines(features)
-    bounds = extent.bounds if extent is not None else shapely.total_bounds(barriers)
+    if extent is not None and not extent.is_empty:
+        bounds = extent.bounds
+    else:
+        geometry = [f.geometry for f in features if not f.geometry.is_empty]
+        geometry.extend(shapely.points(seed_xy))
+        bounds = tuple(shapely.total_bounds(geometry))
+    if not np.isfinite(bounds).all():
+        return None
     cell = _cell_size(bounds, cell_m)
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
@@ -103,9 +132,35 @@ def build_surface_map(
         free &= _inside(extent, origin, cell, shape)
     cols = np.floor((seed_xy[:, 0] - origin[0]) / cell).astype(np.int64)
     rows = np.floor((seed_xy[:, 1] - origin[1]) / cell).astype(np.int64)
-    grid = _assign(free, _Seeds(rows, cols, seed_kind))
+    grid = _assign(
+        free,
+        _Seeds(rows, cols, seed_kind),
+        limit=max_distance_m / cell,
+        ambiguity=ambiguity_m / cell,
+        tree_limit=tree_distance_m / cell,
+    )
     grid[barrier] = int(Material.BARRIER)
-    return SurfaceMap(grid=grid, origin=origin, cell=cell, seeds_paved=paved, seeds_soil=soil)
+    # Explicit polygons keep holes. Hard material wins over competing lawn geometry.
+    for material, predicate in (
+        (Material.SOIL, lambda f: f.object_class is ObjectClass.LAWN),
+        (Material.PAVED, lambda f: f.object_class.is_hard_surface),
+    ):
+        areas = [f.geometry for f in polygons if predicate(f)]
+        if areas:
+            mask = _inside(shapely.union_all(areas), origin, cell, shape)
+            if extent is not None:
+                mask &= _inside(extent, origin, cell, shape)
+            grid[mask] = int(material)
+    return SurfaceMap(
+        grid=grid,
+        origin=origin,
+        cell=cell,
+        seeds_paved=paved,
+        seeds_soil=soil,
+        max_distance_m=max_distance_m,
+        ambiguity_m=ambiguity_m,
+        tree_distance_m=tree_distance_m,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,8 +187,11 @@ def _seeds(
     if trees:
         centers = shapely.get_coordinates(shapely.centroid(np.array(trees, dtype=object)))
         xy.extend(map(tuple, centers))
-        kind.extend([int(Material.SOIL)] * len(centers))
-    return np.array(xy, dtype=np.float64).reshape(-1, 2), np.array(kind, dtype=np.int8)
+        kind.extend([_TREE_SEED] * len(centers))
+    coordinates = np.array(xy, dtype=np.float64).reshape(-1, 2)
+    kinds = np.array(kind, dtype=np.int8)
+    finite = np.isfinite(coordinates).all(axis=1)
+    return coordinates[finite], kinds[finite]
 
 
 def _barrier_lines(features: Sequence[Feature]) -> NDArray[np.object_]:
@@ -193,8 +251,18 @@ def _inside(
     return shapely.contains_xy(extent, xs, ys).reshape(shape)
 
 
-def _assign(free: NDArray[np.bool_], seeds: _Seeds) -> NDArray[np.int8]:
-    """Материал ближайшего по пути источника: многоисточниковый Дейкстра по сетке 4-связности."""
+def _assign(
+    free: NDArray[np.bool_],
+    seeds: _Seeds,
+    *,
+    limit: float,
+    ambiguity: float,
+    tree_limit: float,
+) -> NDArray[np.int8]:
+    """Bounded distance per material; competition is independent of seed ordering."""
+    grid = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
+    if not free.any() or not len(seeds.rows):
+        return grid
     height, width = free.shape
     index = np.full(free.shape, -1, dtype=np.int64)
     count = int(free.sum())
@@ -213,17 +281,20 @@ def _assign(free: NDArray[np.bool_], seeds: _Seeds) -> NDArray[np.int8]:
     nodes = np.full(len(rows), -1, dtype=np.int64)
     nodes[valid] = index[rows[valid], cols[valid]]
     usable = nodes >= 0
-    grid = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
     if not usable.any():
         return grid
     seed_nodes, kinds = nodes[usable], seeds.kinds[usable]
-    distances, _, sources = dijkstra(
-        graph, directed=False, indices=seed_nodes, min_only=True, return_predecessors=True
-    )
-    kind_by_node = np.zeros(count, dtype=np.int8)
-    kind_by_node[seed_nodes] = kinds
-    reached = np.isfinite(distances)
+
+    def distances(kind: int, reach: float) -> NDArray[np.float64]:
+        sources = np.unique(seed_nodes[kinds == kind])
+        if not len(sources):
+            return np.full(count, np.inf)
+        return dijkstra(graph, directed=False, indices=sources, min_only=True, limit=reach)
+
+    paved = distances(Material.PAVED, limit)
+    soil = np.minimum(distances(Material.SOIL, limit), distances(_TREE_SEED, tree_limit))
     material = np.zeros(count, dtype=np.int8)
-    material[reached] = kind_by_node[sources[reached]]
+    material[paved + ambiguity < soil] = int(Material.PAVED)
+    material[soil + ambiguity < paved] = int(Material.SOIL)
     grid[free] = material
     return grid

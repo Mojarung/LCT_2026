@@ -52,7 +52,12 @@ class PlanParams:
     label_search_radius_m: float = 3.0
     max_rejections: int = 2000
     require_soil: bool = True
+    require_work_boundary: bool = True
     surface_cell_m: float = 0.5
+    # Limits on evidence propagation are project assumptions, not soil measurements.
+    surface_max_distance_m: float = 30.0
+    surface_ambiguity_m: float = 1.0
+    tree_seed_distance_m: float = 2.0
     # Единицы чертежа: auto - решает геометрия, заголовку $INSUNITS сервис не верит
     # (docs/notes/19-drawing-units.md); m, dm, cm, mm - задать явно.
     drawing_unit: str = "auto"

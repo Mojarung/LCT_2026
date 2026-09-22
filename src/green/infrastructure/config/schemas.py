@@ -228,7 +228,11 @@ class ProfileModel(_Strict):
     label_search_radius_m: float = Field(default=3.0, gt=0, le=20)
     max_rejections: int = Field(default=2000, ge=0, le=100_000)
     require_soil: bool = True
+    require_work_boundary: bool = True
     surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)
+    surface_max_distance_m: float = Field(default=30.0, gt=0, le=500)
+    surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
+    tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm"] = "auto"
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
     zones: bool = True

@@ -1,0 +1,1108 @@
+{
+  "scope": "Synthetic material probes; not real-world recognition accuracy. Unlimited is an ablation of reach, not the original implementation.",
+  "variants": [
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0638
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0523
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0577
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0719
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0518
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.052
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0529
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0523
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0516
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0523
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0546
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0523
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0596
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0605
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0599
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0588
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0621
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.065
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.126
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.1304
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.1235
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.2112
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.1234
+    },
+    {
+      "cell_m": 0.25,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.1239
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0133
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0135
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0132
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0132
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0132
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0134
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0139
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0144
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0143
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0139
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.014
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0141
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0151
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0155
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0156
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0154
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.016
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0154
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0311
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0294
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0297
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0295
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0295
+    },
+    {
+      "cell_m": 0.5,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0291
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0044
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0043
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0043
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 15.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0044
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0045
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0047
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 30.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0047
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0058
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.005
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0049
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.005
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0048
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 60.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [],
+      "seconds": 0.0049
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0081
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.008
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 0.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.008
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0,
+        0
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.008
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        0.13,
+        0.29
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.008
+    },
+    {
+      "cell_m": 1.0,
+      "reach_m": 1000000.0,
+      "ambiguity_m": 1.0,
+      "translation": [
+        1000000,
+        -500000
+      ],
+      "probes": 11,
+      "failures": [
+        {
+          "scene": "blank-region",
+          "probe": 1,
+          "expected": 0,
+          "actual": 2
+        },
+        {
+          "scene": "isolated-tree",
+          "probe": 0,
+          "expected": 0,
+          "actual": 2
+        }
+      ],
+      "seconds": 0.0079
+    }
+  ],
+  "summary": {
+    "variants": 72,
+    "probes": 792,
+    "passing_variants": 54
+  }
+}

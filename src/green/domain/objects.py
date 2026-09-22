@@ -64,6 +64,7 @@ class ObjectClass(StrEnum):
             ObjectClass.TRAM,
             ObjectClass.RAILWAY,
             ObjectClass.BUILDING,
+            ObjectClass.SIDEWALK,
         }
 
     @property

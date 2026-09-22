@@ -86,7 +86,7 @@ class EvaluationBatch:
 class ConstraintIndex:
     """Индекс объектов подосновы по классам и правила, которые к ним применяются."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - named policies distinguish missing evidence from permission
         self,
         features: Sequence[Feature],
         rules: Sequence[DistanceRule],
@@ -94,8 +94,12 @@ class ConstraintIndex:
         require_utility_data: bool,
         surface: SurfaceMap | None = None,
         barrier_distance_m: float | None = None,
+        require_soil: bool = False,
+        require_work_boundary: bool = False,
     ) -> None:
         self.surface = surface
+        self._require_soil = require_soil
+        self._require_work_boundary = require_work_boundary
         # Наименьшее расстояние до сетей и бордюров, допустимое с прикорневым барьером; None -
         # барьеры не рассматриваются, действует только табличная норма.
         self._barrier_distance_m = barrier_distance_m
@@ -130,8 +134,12 @@ class ConstraintIndex:
     def plantable(self, points: NDArray[np.object_]) -> NDArray[np.bool_]:
         """Точка на грунте по карте покрытий, не на твёрдом покрытии и внутри границы работ."""
         mask = np.ones(len(points), dtype=bool)
+        if (self._require_soil and self.surface is None) or (
+            self._require_work_boundary and self.boundary is None
+        ):
+            return np.zeros(len(points), dtype=bool)
         if self._hard is not None and len(points):
-            inside = self._hard.query(points, predicate="within")
+            inside = self._hard.query(points, predicate="intersects")
             mask[np.unique(inside[0])] = False
         if self.boundary is not None and len(points):
             mask &= shapely.contains(self.boundary, points)

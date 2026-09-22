@@ -118,6 +118,8 @@ class RunContext:
             self.features,
             rules,
             require_utility_data=self.params.require_utility_data,
+            require_soil=self.params.require_soil,
+            require_work_boundary=self.params.require_work_boundary,
         )
         if self.params.require_soil:
             index.surface = self._surface_map(index)
@@ -127,7 +129,13 @@ class RunContext:
     def _surface_map(self, index: ConstraintIndex) -> SurfaceMap | None:
         if not self._surface_built:
             self._surface = build_surface_map(
-                self.features, self.labels, index.boundary, self.params.surface_cell_m
+                self.features,
+                self.labels,
+                index.boundary,
+                self.params.surface_cell_m,
+                max_distance_m=self.params.surface_max_distance_m,
+                ambiguity_m=self.params.surface_ambiguity_m,
+                tree_distance_m=self.params.tree_seed_distance_m,
             )
             self._surface_built = True
         return self._surface
