@@ -46,7 +46,9 @@ class MergeResult:
 
 
 class DrawingMerger(Protocol):
-    def merge(self, sources: Sequence[Path], target: Path) -> MergeResult: ...
+    def merge(
+        self, sources: Sequence[Path], target: Path, *, unit: str = "auto"
+    ) -> MergeResult: ...
 
 
 class RuleBookSource(Protocol):

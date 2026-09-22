@@ -62,8 +62,8 @@ class PlanParams:
     surface_max_distance_m: float = 30.0
     surface_ambiguity_m: float = 1.0
     tree_seed_distance_m: float = 2.0
-    # Единицы чертежа: auto - решает геометрия, заголовку $INSUNITS сервис не верит
-    # (docs/notes/19-drawing-units.md); m, dm, cm, mm - задать явно.
+    # auto uses declared $INSUNITS; unitless input needs an explicit override.
+    # An override applies to every source of a package. No guess from site size.
     drawing_unit: str = "auto"
     # Приёмы размещения по порядку: аллея вдоль борта, затем заполнение грунта сеткой.
     modes: tuple[str, ...] = ("alley", "lawn")

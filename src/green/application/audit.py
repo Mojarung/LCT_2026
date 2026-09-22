@@ -209,7 +209,9 @@ class AuditSite:
             if self._merger is None:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
             with watch.stage("merge"):
-                merged = self._merger.merge([source, *extras], request.work_dir / MERGED_DXF)
+                merged = self._merger.merge(
+                    [source, *extras], request.work_dir / MERGED_DXF, unit=params.drawing_unit
+                )
                 source, notes = merged.path, merged.notes
         with watch.stage("load_config"):
             rulebook = self._rules.load()

@@ -1,9 +1,4 @@
-"""Единицы чертежа: заголовку $INSUNITS сервис не верит, решает геометрия.
-
-В датасете 22 DWG объявляют миллиметры, дюймы или футы, а координаты у них метровые
-(docs/notes/19-drawing-units.md). Настоящий миллиметровый чертёж должен дать тот же план, что и
-метровый, а результат лечь в DXF в миллиметрах.
-"""
+"""Declared units and explicit corrections preserve the physical plan and DXF output scale."""
 
 from __future__ import annotations
 
@@ -30,11 +25,11 @@ INSUNITS_MM = 4
 INSUNITS_FEET = 2
 
 
-def _run(work: Path, name: str, **street: float) -> RunReport:
+def _run(work: Path, name: str, *, drawing_unit: str = "auto", **street: float) -> RunReport:
     source = work / f"{name}.dxf"
     _street(source, **street)  # type: ignore[arg-type]
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
-    params = container.profiles.load("strict", {"max_rejections": 50})
+    params = container.profiles.load("strict", {"max_rejections": 50, "drawing_unit": drawing_unit})
     return container.use_case.execute(
         PlanRequest(name, source, work / f"out_{name}", "strict", params)
     )
@@ -46,7 +41,7 @@ def reports(tmp_path_factory: pytest.TempPathFactory) -> dict[str, RunReport]:
     return {
         "metres": _run(work, "metres"),
         "millimetres": _run(work, "millimetres", scale=MM, insunits=INSUNITS_MM),
-        "lying_header": _run(work, "lying_header", insunits=INSUNITS_MM),
+        "lying_header": _run(work, "lying_header", drawing_unit="m", insunits=INSUNITS_MM),
     }
 
 
@@ -57,7 +52,7 @@ def test_millimetre_drawing_gives_the_same_plan(reports: dict[str, RunReport]) -
         assert math.isclose(ours.x, theirs.x, abs_tol=1e-6)
         assert math.isclose(ours.y, theirs.y, abs_tol=1e-6)
         assert ours.species.code == theirs.species.code
-    assert any("чертёж не в метрах" in w for w in reports["millimetres"].warnings)
+    assert any("приняты объявленные" in w for w in reports["millimetres"].warnings)
 
 
 def test_result_is_written_in_drawing_units(reports: dict[str, RunReport]) -> None:
@@ -78,28 +73,29 @@ def test_result_is_written_in_drawing_units(reports: dict[str, RunReport]) -> No
     assert max(xs) > MM  # зона допустимости тоже в миллиметрах
 
 
-def test_header_that_contradicts_geometry_is_ignored(reports: dict[str, RunReport]) -> None:
+def test_incorrect_header_is_corrected_only_by_explicit_override(
+    reports: dict[str, RunReport],
+) -> None:
     lying, metres = reports["lying_header"], reports["metres"]
     assert len(lying.plan.placements) == len(metres.plan.placements)
-    assert any("геометрия метровая" in w and "$INSUNITS=4" in w for w in lying.warnings)
+    assert any("drawing_unit=m" in w and "$INSUNITS=4" in w for w in lying.warnings)
     assert not any("Единицы" in w for w in metres.warnings)
 
 
-def test_imperial_header_is_reported_and_not_applied(tmp_path: Path) -> None:
+def test_imperial_header_is_reported_and_applied(tmp_path: Path) -> None:
     source = tmp_path / "feet.dxf"
     _street(source, insunits=INSUNITS_FEET)
     decision = decide_units(ezdxf.readfile(source))
-    assert decision.unit_m == 1.0
+    assert decision.unit_m == pytest.approx(0.3048)
     assert "футы" in decision.notes[0]
-    assert "не учитывается" in decision.notes[0]
+    assert "приняты объявленные" in decision.notes[0]
 
 
-def test_huge_extent_with_metre_header_asks_for_the_unit(tmp_path: Path) -> None:
+def test_unitless_input_requires_scale_instead_of_guessing_from_extent(tmp_path: Path) -> None:
     source = tmp_path / "unitless_mm.dxf"
     _street(source, scale=MM, insunits=0)
-    decision = decide_units(ezdxf.readfile(source))
-    assert decision.unit_m == 1.0
-    assert "drawing_unit=mm" in decision.notes[0]
+    with pytest.raises(InputError, match="drawing_unit"):
+        decide_units(ezdxf.readfile(source))
 
 
 def test_explicit_unit_wins_over_detection(tmp_path: Path) -> None:

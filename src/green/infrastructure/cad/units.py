@@ -1,12 +1,9 @@
-"""Единицы чертежа: заголовку `$INSUNITS` верить нельзя, решает геометрия.
+"""Declared DXF units or an explicit project override, never a guess from site size.
 
-В датасете 22 DWG из 749 объявляют миллиметры, дюймы или футы. Пять из них проверены по
-координатам (docs/notes/19-drawing-units.md): все в метрах в московской местной системе, заголовок
-остался от шаблона. Пересчёт по заголовку превратил бы лист 255 x 255 м в 25 см. Поэтому сервис
-считает чертёж метровым, пока геометрия не скажет обратное, а о расхождении пишет в предупреждения.
-
-Настоящий чертёж в миллиметрах, сантиметрах или дециметрах пересчитывается в метры при чтении,
-результат пишется обратно в единицах чертежа.
+Geometry alone cannot distinguish a small millimetre drawing from a large metre
+drawing. Pilot files with incorrect headers need an explicit override. Unitless
+input requires one too. Blocks retain their explicit INSERT scale; their unit
+metadata must not cause a second, implicit conversion (ezdxf units documentation).
 """
 
 from __future__ import annotations
@@ -15,6 +12,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from ezdxf import units
+from ezdxf.enums import InsertUnits
 
 from green.application.errors import InputError
 
@@ -25,7 +24,16 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 AUTO = "auto"
-EXPLICIT_UNITS = {"m": 1.0, "dm": 0.1, "cm": 0.01, "mm": 0.001}
+EXPLICIT_UNITS = {
+    "m": 1.0,
+    "dm": 0.1,
+    "cm": 0.01,
+    "mm": 0.001,
+    "km": 1000.0,
+    "in": 0.0254,
+    "ft": 0.3048,
+    "yd": 0.9144,
+}
 _HEADER_NAMES = {
     0: "не заданы",
     1: "дюймы",
@@ -39,15 +47,6 @@ _HEADER_NAMES = {
 }
 _METRES = 6
 _UNITLESS = 0
-# Единицы мельче метра, которые встречаются в российских чертежах: их сервис пересчитывает.
-_SMALL_METRIC = {4: 0.001, 5: 0.01, 14: 0.1}
-# Участок улицы не бывает меньше 10 м: если при пересчёте по заголовку он выходит меньше,
-# заголовок врёт.
-_MIN_SITE_M = 10.0
-# 100 км в метрах больше Москвы: такой разброс координат значит, что единица мельче метра.
-_MAX_SITE_UNITS = 100_000.0
-# Высота текста в метровом чертеже 0,5-5 единиц, в миллиметровом масштаба 1:500 от 250.
-_TEXT_HEIGHT_NOT_METRES = 20.0
 # Разброс меряется между 2-м и 98-м процентилями: одиночная сущность в стороне (мусор после
 # конвертации, подпись вне листа) не должна решать за весь чертёж.
 _PERCENTILES = (2.0, 98.0)
@@ -108,48 +107,23 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
             )
         unit_m = EXPLICIT_UNITS[requested]
         note = f"Единицы чертежа заданы параметром drawing_unit={requested}, заголовок: {header}."
-        return UnitDecision(unit_m, (note + _RESCALED_TAIL,) if unit_m != 1.0 else ())
-    geometry = measure(doc)
-    if geometry is None:
-        return UnitDecision(1.0)
-    factor = _SMALL_METRIC.get(code)
-    if factor is not None:
-        return _small_metric(factor, header, geometry)
-    if geometry.size > _MAX_SITE_UNITS:
-        note = (
-            f"Единицы: заголовок {header}, но {geometry.describe()} - для метров это больше "
-            "100 км. Координаты приняты в метрах; если чертёж в миллиметрах, задайте "
-            "drawing_unit=mm."
-        )
-        return UnitDecision(1.0, (note,))
-    if code not in {_METRES, _UNITLESS}:
-        note = (
-            f"Единицы: заголовок {header} не учитывается, геометрия метровая "
-            f"({geometry.describe()}). Координаты приняты в метрах."
-        )
-        return UnitDecision(1.0, (note,))
-    return UnitDecision(1.0)
+        return UnitDecision(unit_m, (note + _RESCALED_TAIL,))
+    if code == _UNITLESS:
+        raise InputError(f"Единицы чертежа не заданы ({header}); задайте drawing_unit явно")
+    try:
+        factor = units.conversion_factor(InsertUnits(code), InsertUnits.Meters)
+    except (ValueError, TypeError, IndexError, ZeroDivisionError) as exc:
+        raise InputError(f"Неизвестные единицы {header}; задайте drawing_unit явно") from exc
+    if not np.isfinite(factor) or factor <= 0:
+        raise InputError(f"Некорректные единицы {header}; задайте drawing_unit явно")
+    note = f"Единицы: приняты объявленные {header}; 1 единица = {factor:g} м."
+    return UnitDecision(factor, () if code == _METRES else (note + _RESCALED_TAIL,))
 
 
 _RESCALED_TAIL = (
     " Расчёт ведётся в метрах, результат записан в единицах чертежа. В plan.json, "
     "interpretations и zones.geojson координаты в метрах."
 )
-
-
-def _small_metric(factor: float, header: str, geometry: Spread) -> UnitDecision:
-    text_says_metres = (
-        geometry.text_height is not None and geometry.text_height < _TEXT_HEIGHT_NOT_METRES
-    )
-    fits_header = geometry.size * factor >= _MIN_SITE_M
-    if fits_header and (geometry.size > _MAX_SITE_UNITS or not text_says_metres):
-        note = f"Единицы: чертёж не в метрах: {header}, {geometry.describe()}." + _RESCALED_TAIL
-        return UnitDecision(factor, (note,))
-    note = (
-        f"Единицы: заголовок {header}, но геометрия метровая ({geometry.describe()}). "
-        "Координаты приняты в метрах; при ошибке задайте drawing_unit."
-    )
-    return UnitDecision(1.0, (note,))
 
 
 def measure(doc: Drawing) -> Spread | None:

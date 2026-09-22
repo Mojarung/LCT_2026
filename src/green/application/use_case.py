@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -127,7 +128,9 @@ class PlanSite:
             if self._merger is None:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
             with watch.stage("merge"):
-                merged = self._merger.merge([source, *extras], request.work_dir / MERGED_DXF)
+                merged = self._merger.merge(
+                    [source, *extras], request.work_dir / MERGED_DXF, unit=params.drawing_unit
+                )
                 source, merge_notes = merged.path, merged.notes
         with watch.stage("load_config"):
             rulebook = self._rules.load()
@@ -266,5 +269,12 @@ def to_dxf(
         raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
     for converter in converters:
         if converter.available():
-            return converter.to_dxf(source, work_dir), converter.name
+            # Packages often contain different drawings with the same basename.
+            # A content-addressed subdirectory prevents the second conversion
+            # from overwriting the already returned first path.
+            with source.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            converted_dir = work_dir / "converted" / digest[:20]
+            converted_dir.mkdir(parents=True, exist_ok=True)
+            return converter.to_dxf(source, converted_dir), converter.name
     raise ConversionError("Нет доступного конвертера DWG -> DXF (LibreDWG или ODA File Converter)")

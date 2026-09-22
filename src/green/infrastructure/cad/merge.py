@@ -15,12 +15,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ezdxf import xref
+from ezdxf import transform, xref
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
 from green.infrastructure.cad.documents import load_document
-from green.infrastructure.cad.units import measure
+from green.infrastructure.cad.units import decide_units, measure
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -78,19 +78,25 @@ def _user_blocks(doc: Drawing) -> set[str]:
 
 
 class EzdxfDrawingMerger:
-    def merge(self, sources: Sequence[Path], target: Path) -> MergeResult:
+    def merge(self, sources: Sequence[Path], target: Path, *, unit: str = "auto") -> MergeResult:
         if len(sources) < _MIN_SOURCES:
             raise InputError("Склейка: нужно не меньше двух чертежей")
         base, notes = load_document(sources[0])
         notes = list(notes)
         counts = [len(base.modelspace())]
-        units = {sources[0].name: base.header.get("$INSUNITS", 0)}
+        base_unit = decide_units(base, unit).unit_m
         base_box = _extents(base)
         for path in sources[1:]:
             doc, doc_notes = load_document(path)
             notes += doc_notes
             counts.append(len(doc.modelspace()))
-            units[path.name] = doc.header.get("$INSUNITS", 0)
+            factor = decide_units(doc, unit).unit_m / base_unit
+            if factor != 1.0:
+                _normalise(doc, factor, path.name)
+                notes.append(
+                    f"Склейка: координаты {path.name} переведены в единицы основы, "
+                    f"коэффициент {factor:g}"
+                )
             box = _extents(doc)
             # Сверяемся с тем, что уже набралось, а не только с основой. Комплект улицы -
             # это несколько планшетов Мосгеотреста, каждый на свой кусок: с основой такой
@@ -122,12 +128,18 @@ class EzdxfDrawingMerger:
                 f"Склейка: ожидалось {sum(counts)} сущностей, получено {merged} - часть сущностей "
                 "ezdxf не переносит между документами"
             )
-        if len(set(units.values())) > 1:
-            notes.append(
-                "Склейка: у файлов разные единицы чертежа ($INSUNITS): "
-                + ", ".join(f"{name}: {value}" for name, value in units.items())
-                + ". Координаты не пересчитывались"
-            )
         target.parent.mkdir(parents=True, exist_ok=True)
         base.saveas(target)
         return MergeResult(path=target, notes=tuple(notes))
+
+
+def _normalise(doc: Drawing, factor: float, name: str) -> None:
+    if factor < transform.MIN_SCALING_FACTOR:
+        raise InputError(f"Склейка: слишком малый коэффициент единиц {factor:g} для {name}")
+    # Only modelspace entities. INSERT scales its block contents exactly once;
+    # transforming block definitions as well would double-scale nested geometry.
+    errors = transform.scale_uniform(doc.modelspace(), factor)
+    if errors:
+        raise InputError(
+            f"Склейка: не удалось пересчитать единицы {name}: " + "; ".join(errors.messages()[:5])
+        )
