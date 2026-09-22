@@ -6,12 +6,12 @@ import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
 from green.application.errors import InputError, NotFoundError
-from green.application.results import RunRecord, RunState
+from green.application.results import RunProgress, RunRecord, RunState, StageTiming
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -68,6 +68,7 @@ class FileSystemRunStore:
             error=data.get("error"),
             summary=data.get("summary", {}),
             artifacts=tuple(data.get("artifacts", ())),
+            progress=_progress_from(data.get("progress")),
         )
 
     def save(self, record: RunRecord) -> None:
@@ -82,6 +83,7 @@ class FileSystemRunStore:
             "error": record.error,
             "summary": dict(record.summary),
             "artifacts": list(record.artifacts),
+            "progress": _progress_payload(record.progress),
         }
         path = self._dir(record.run_id) / STATUS
         temporary = path.with_suffix(".tmp")
@@ -108,6 +110,32 @@ class FileSystemRunStore:
         if not _RUN_ID.fullmatch(run_id):
             raise NotFoundError(f"Прогон {run_id} не найден")
         return self._root / run_id
+
+
+def _progress_payload(progress: RunProgress | None) -> dict[str, object] | None:
+    if progress is None:
+        return None
+    return {
+        "stages": list(progress.stages),
+        "stage": progress.stage,
+        "started_at": progress.started_at.isoformat(),
+        "stage_started_at": progress.stage_started_at.isoformat(),
+        "done": [{"stage": t.stage, "ms": t.ms} for t in progress.done],
+        "source_bytes": progress.source_bytes,
+    }
+
+
+def _progress_from(data: Mapping[str, Any] | None) -> RunProgress | None:
+    if not data:
+        return None
+    return RunProgress(
+        stages=tuple(str(s) for s in data["stages"]),
+        stage=data.get("stage"),
+        started_at=datetime.fromisoformat(data["started_at"]),
+        stage_started_at=datetime.fromisoformat(data["stage_started_at"]),
+        done=tuple(StageTiming(str(t["stage"]), float(t["ms"])) for t in data.get("done", ())),
+        source_bytes=int(data.get("source_bytes", 0)),
+    )
 
 
 def _safe_name(name: str) -> str:

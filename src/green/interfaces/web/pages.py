@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -16,12 +17,59 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from green import __version__
+from green.application.errors import InputError, NotFoundError
+from green.application.progress import estimate
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
-from green.interfaces.api.intake import accept_run, parse_overrides
+from green.interfaces.api.intake import accept_run, accept_street_run, parse_overrides
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 RECENT_LIMIT = 12
+
+#: Файлы, ради которых прогон и запускали. Остальные одиннадцать - служебные: в плоском
+#: списке по алфавиту `result.dxf` стоял девятым и весил столько же, сколько `zones.geojson`.
+HEADLINE_FILES = {
+    "result.dxf": "план посадок на слоях GREEN_*, исходные слои целы",
+    "interpretations.csv": "по строке на посадку: вид, отступы, пункт акта",
+}
+
+#: Предупреждения, которые меняют смысл всего плана, а не уточняют деталь. Остальные живут
+#: в свёрнутом списке; эти три - нет. На улице без границы работ (Нижние Поля: в датасете
+#: границ нет вовсе) сервис засаживает весь чертёж, и число посадок читается как результат,
+#: пока не скажешь обратного. То же с комплектом из несовпавших листов и с чертежом без сетей:
+#: план в этих случаях верен по своим данным и неверен по участку.
+KEY_WARNINGS = (
+    "Граница работ не найдена",
+    "Склейка: габариты",
+    "В чертеже нет подземных сетей",
+)
+
+_KIB = 1024
+
+
+def _human_size(size: int) -> str:
+    """Размер файла словами человека, а не байтами."""
+    if size < _KIB:
+        return f"{size} Б"
+    if size < _KIB * _KIB:
+        return f"{size / _KIB:.0f} КБ"
+    return f"{size / _KIB / _KIB:.1f} МБ".replace(".", ",")
+
+
+def plural(count: int, one: str, few: str, many: str) -> str:
+    """Русское числительное: «1 место», «2 места», «5 мест».
+
+    Без этого подписи приходится формулировать так, чтобы обойти падеж, и они кривеют.
+    """
+    tail, hundred = count % 10, count % 100
+    if tail == 1 and hundred != 11:  # noqa: PLR2004 - 11 - исключение самого правила
+        return one
+    if 2 <= tail <= 4 and not 12 <= hundred <= 14:  # noqa: PLR2004 - границы правила
+        return few
+    return many
+
+
+TEMPLATES.env.globals["plural"] = plural  # ty: ignore[invalid-assignment]
 
 router = APIRouter(include_in_schema=False)
 
@@ -38,6 +86,7 @@ def index(request: Request, container: ContainerDep) -> HTMLResponse:
             "profiles": list(container.profiles.names()),
             "default_profile": container.settings.default_profile,
             "runs": container.store.recent(RECENT_LIMIT),
+            "streets": container.streets.all(),
             "rules_total": len(rules),
             "rules_verified": sum(r.citation.is_verified for r in rules),
             "species_total": len(container.species.all()),
@@ -67,7 +116,8 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
     request: Request,
     background: BackgroundTasks,
     container: ContainerDep,
-    file: Annotated[UploadFile, File()],
+    street: Annotated[str | None, Form()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
     profile: Annotated[str | None, Form()] = None,
     overrides: Annotated[str | None, Form()] = None,
     spacing_m: Annotated[float | None, Form()] = None,
@@ -76,21 +126,40 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
     inventory: Annotated[UploadFile | None, File()] = None,
     extra: Annotated[list[UploadFile] | None, File()] = None,
 ) -> RedirectResponse:
-    """Принять комплект из формы и увести на страницу прогона."""
-    record = await accept_run(
-        container=container,
-        background=background,
-        file=file,
-        profile=profile,
-        overrides=_form_overrides(
-            overrides,
-            spacing_m=spacing_m,
-            root_barriers=root_barriers,
-            shrub_groups=shrub_groups,
-        ),
-        inventory=inventory,
-        extra=extra,
+    """Принять прогон из формы: улица из каталога или загруженный комплект.
+
+    Оба источника приходят одной формой с общими параметрами, поэтому выбор разбирается
+    здесь: выбранная улица имеет приоритет над полем файла, которое в этом случае пустое.
+    """
+    values = _form_overrides(
+        overrides,
+        spacing_m=spacing_m,
+        root_barriers=root_barriers,
+        shrub_groups=shrub_groups,
     )
+    if street:
+        source = container.streets.get(street)
+        if source is None:
+            raise InputError(f"Улицы {street} нет в каталоге")
+        record = accept_street_run(
+            container=container,
+            background=background,
+            street=source,
+            profile=profile,
+            overrides=values,
+        )
+    else:
+        if file is None or not file.filename:
+            raise InputError("Выберите улицу пилотного проекта или свой чертёж")
+        record = await accept_run(
+            container=container,
+            background=background,
+            file=file,
+            profile=profile,
+            overrides=values,
+            inventory=inventory,
+            extra=extra,
+        )
     url = request.url_for("web_run", run_id=record.run_id)
     return RedirectResponse(str(url), status_code=303)
 
@@ -101,8 +170,8 @@ def demo(
 ) -> RedirectResponse:
     """Запустить прогон на встроенном демонстрационном участке.
 
-    Чертёж строится кодом: на стенде жюри датасета нет, а показывать сервис надо с первого
-    клика, не заставляя искать DXF.
+    Фрагмент настоящей улицы лежит в пакете: на стенде жюри датасета нет, а показывать
+    сервис надо с первого клика, не заставляя искать DXF.
     """
     record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, {})
     write_sample(container.store.input_path(record.run_id))
@@ -110,22 +179,59 @@ def demo(
     return RedirectResponse(str(request.url_for("web_run", run_id=record.run_id)), status_code=303)
 
 
+def _files(container: ContainerDep, run_id: str, names: tuple[str, ...]) -> dict[str, list[dict]]:
+    """Разложить артефакты на результат и служебные, приписав размеры."""
+    headline: list[dict] = []
+    service: list[dict] = []
+    for name in names:
+        try:
+            size = container.store.artifact(run_id, name).stat().st_size
+        except OSError, ValueError:
+            continue
+        row = {"name": name, "size": _human_size(size)}
+        if name in HEADLINE_FILES:
+            headline.append(row | {"what": HEADLINE_FILES[name]})
+        else:
+            service.append(row)
+    headline.sort(key=lambda row: list(HEADLINE_FILES).index(row["name"]))
+    return {"headline": headline, "service": service}
+
+
+def _quality(container: ContainerDep, run_id: str) -> dict | None:
+    """Индекс качества прогона. У прогонов до появления индекса файла нет - блока тоже."""
+    try:
+        return orjson.loads(container.store.artifact(run_id, "quality.json").read_bytes())
+    except NotFoundError, OSError, orjson.JSONDecodeError:
+        return None
+
+
 @router.get("/runs/{run_id}", response_class=HTMLResponse, name="web_run")
 def run_page(run_id: str, request: Request, container: ContainerDep) -> HTMLResponse:
-    """Страница прогона: статус, сводка, артефакты и карта плана."""
+    """Страница прогона: статус, сводка, артефакты и карта плана.
+
+    Пока прогон идёт, страница сама опрашивает `GET /api/v1/runs/{id}`: ход расчёта и
+    момент, когда подоснова готова для карты, берутся оттуда же, откуда их берёт любой клиент.
+    Первая отрисовка полосы хода идёт с сервера, чтобы до первого опроса не мигал ноль.
+    """
     record = container.store.get(run_id)
+    progress = estimate(record.progress, datetime.now(UTC)) if record.progress else None
+    # Сводка прогона - это JSON с диска, а не типизированная структура: список
+    # предупреждений оттуда приходит как `object`.
+    raw = record.summary.get("warnings", [])
+    warnings = [str(w) for w in raw] if isinstance(raw, list) else []
     return TEMPLATES.TemplateResponse(
         request,
         "run.html",
-        {"version": __version__, "run": record, "species": container.species.all()},
+        {
+            "version": __version__,
+            "run": record,
+            "progress": progress,
+            "species": container.species.all(),
+            "files": _files(container, run_id, record.artifacts),
+            "notices": [w for w in warnings if w.startswith(KEY_WARNINGS)],
+            "quality": _quality(container, run_id),
+        },
     )
-
-
-@router.get("/web/runs/{run_id}/status", response_class=HTMLResponse, name="web_run_status")
-def run_status(run_id: str, request: Request, container: ContainerDep) -> HTMLResponse:
-    """Фрагмент статуса: его раз в две секунды забирает страница, пока прогон не закончится."""
-    record = container.store.get(run_id)
-    return TEMPLATES.TemplateResponse(request, "_run_status.html", {"run": record})
 
 
 __all__ = ["router"]

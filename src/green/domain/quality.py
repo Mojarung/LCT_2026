@@ -1,0 +1,68 @@
+"""Качество плана: сводный индекс, его слагаемые и ценность каждой посадки.
+
+Нормы отвечают на вопрос «можно ли здесь сажать», индекс - на вопрос «насколько план хорош».
+В ТЗ такой меры нет; определение хорошего плана дал заказчик на сессии вопросов: «не самый
+плотный, а функциональный: тень, пылезащита, многоярусность, биоразнообразие, пригодность к
+климату Москвы» (docs/notes/15-organizers-qa.md, вопрос 11). Слагаемые индекса взяты оттуда и
+из норм с вилкой «от и до», веса и всё, что не из акта, - параметры проекта.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+
+@dataclass(frozen=True, slots=True)
+class QualityTerm:
+    """Одно слагаемое индекса: оценка от 0 до 1 и то, из чего она получена.
+
+    score None - слагаемое не определено на этом плане (нет аллеи - нечего мерить ярусностью,
+    нет границы работ - не от чего считать долю крон); в индексе его вес делится между
+    остальными, а в отчёте стоит причина.
+    """
+
+    key: str
+    title: str
+    weight: float
+    score: float | None
+    basis: str
+    note: str
+    measure: Mapping[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class PlantingValue:
+    """Чем ценна посадка: насколько упадёт индекс, если её убрать, и за счёт чего.
+
+    delta - точная разница индекса с посадкой и без неё при тех же весах. Сумма delta по
+    посадкам индекс не даёт: разнообразие, объединение крон и вилка плотности нелинейны.
+    Отрицательная delta - посадка, без которой план лучше (сверх квоты, сверх плотности).
+    """
+
+    placement_id: str
+    delta: float
+    by_term: Mapping[str, float]
+    reasons: tuple[str, ...] = ()
+    # Доля посадок плана с вкладом не больше этого: 0,9 - вклад выше, чем у 90% посадок.
+    percentile: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class PlanQuality:
+    """Индекс плана со слагаемыми, штрафами, сводкой и ценностью каждой посадки.
+
+    index None - план не оценивается: есть нарушения норм (его надо чинить, а не сравнивать)
+    или участок не определён (нет границы работ). Причина - в gate.
+    """
+
+    index: float | None
+    gate: str
+    terms: tuple[QualityTerm, ...]
+    penalty: float
+    penalties: Mapping[str, float]
+    summary: tuple[str, ...]
+    values: Mapping[str, PlantingValue] = field(default_factory=dict, compare=False)

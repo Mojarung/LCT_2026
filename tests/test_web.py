@@ -8,15 +8,18 @@ Linux-стенд без интернета, и одна ссылка на CDN, �
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
 from test_pipeline_synthetic import ROOT, _street
 
+from green.application.results import RunState
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.interfaces.api.app import create_app
+from green.interfaces.web.pages import plural
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -33,7 +36,12 @@ def work(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture(scope="module")
 def client(work: Path) -> Iterator[TestClient]:
-    settings = Settings(config_dir=ROOT / "config", runs_dir=work / "runs")
+    # Каталог улиц намеренно пуст: этот модуль проверяет стенд без датасета, где остаётся
+    # встроенный фрагмент. Каталог по умолчанию указывает в репозиторий, и тогда тесты
+    # зависели бы от того, собирал ли разработчик датасет у себя.
+    settings = Settings(
+        config_dir=ROOT / "config", runs_dir=work / "runs", streets_dir=work / "без-каталога"
+    )
     with TestClient(create_app(build_container(settings))) as test_client:
         yield test_client
 
@@ -45,7 +53,7 @@ def test_index_renders_with_profiles(client: TestClient) -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "strict" in response.text
     assert "Новый прогон" in response.text
-    assert "Встроенный участок улицы Берзарина" in response.text
+    assert "Встроенный участок улицы Берзарина" in response.text, "без датасета показывать нечего"
 
 
 def test_static_files_are_served(client: TestClient) -> None:
@@ -175,6 +183,31 @@ def test_finished_run_page_shows_the_map_and_artifacts(client: TestClient, work:
     assert "rules.json" in page.text
 
 
+def test_run_page_shows_plan_quality_and_each_planting_has_a_value(
+    client: TestClient, work: Path
+) -> None:
+    """Нормы отвечают «можно ли», индекс - «насколько хорош план»: оба видны на странице."""
+    path = work / "street-quality.dxf"
+    _street(path)
+    created = client.post(
+        "/web/runs",
+        files={"file": ("street-quality.dxf", path.read_bytes(), "image/vnd.dxf")},
+        data={"profile": "strict"},
+        follow_redirects=False,
+    )
+    run_id = created.headers["location"].rsplit("/", 1)[-1]
+    page = client.get(created.headers["location"]).text
+    quality = client.get(f"/api/v1/runs/{run_id}/artifacts/quality.json").json()
+    plan = client.get(f"/api/v1/runs/{run_id}/artifacts/plan.json").json()
+
+    assert "индекс качества" in page
+    assert {t["key"] for t in quality["terms"]} >= {"density", "diversity", "canopy", "dust"}
+    assert all(t["basis"] for t in quality["terms"])
+    assert plan["placements"]
+    assert all(p["value"] is not None for p in plan["placements"])
+    assert all("Ценность:" in p["explanation"] for p in plan["placements"])
+
+
 def test_map_payload_is_available_and_joins_rules(client: TestClient, work: Path) -> None:
     """Карта соединяет rule_id посадки с пунктом акта: без этого интерпретируемости нет."""
     path = work / "street3.dxf"
@@ -201,3 +234,101 @@ def test_map_payload_is_available_and_joins_rules(client: TestClient, work: Path
         rule = rules[check["rule_id"]]
         assert rule["act_id"]
         assert rule["clause"]
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (1, "норма"),
+        (2, "нормы"),
+        (4, "нормы"),
+        (5, "норм"),
+        (11, "норм"),
+        (12, "норм"),
+        (14, "норм"),
+        (21, "норма"),
+        (22, "нормы"),
+        (25, "норм"),
+        (111, "норм"),
+        (0, "норм"),
+    ],
+)
+def test_plural_handles_the_teens(count: int, expected: str) -> None:
+    """Одиннадцать-четырнадцать - исключение из правила, и именно на них ошибаются."""
+    assert plural(count, "норма", "нормы", "норм") == expected
+
+
+def test_result_files_come_first_and_service_ones_are_folded(client: TestClient) -> None:
+    """Файл, ради которого запускали прогон, не должен лежать девятым по алфавиту.
+
+    На странице `result.dxf` и `interpretations.csv` названы тем, чем они являются, а
+    остальные одиннадцать уходят под раскрытие. Проверяем разделение, а не вёрстку.
+    """
+    created = client.post("/web/demo", follow_redirects=False)
+    page = client.get(created.headers["location"]).text
+
+    headline = page.index("result.dxf")
+    service = page.index("Файлы прогона")
+    assert headline < service, "result.dxf оказался ниже служебных файлов"
+    assert "план посадок на слоях GREEN_*" in page
+    # Служебные перечислены, но за раскрытием: в плоском списке они весили столько же.
+    assert '<details class="fold">' in page
+    assert page.index("basemap.geojson") > service
+
+
+def test_every_token_the_map_reads_is_defined_in_css() -> None:
+    """Карта берёт цвета из CSS-переменных, и опечатку в имени переменной ничто не ловит.
+
+    `css()` подставляет запасной серый, поэтому несуществующий токен даёт не отказ, а тихую
+    деградацию: отметка выбранной посадки рисовалась служебным серым и на общем виде
+    пропадала совсем. DOM при этом валиден, консоль чиста, скриншот выглядит нормально.
+    """
+    script = (WEB_DIR / "static" / "plan.js").read_text(encoding="utf-8")
+    styles = (WEB_DIR / "static" / "app.css").read_text(encoding="utf-8")
+
+    wanted = set(re.findall(r"""['"](--[a-z0-9-]+)['"]""", script))
+    assert wanted, "в plan.js не нашлось ни одного токена - сломался сам разбор"
+
+    declared = set(re.findall(r"^\s*(--[a-z0-9-]+)\s*:", styles, re.MULTILINE))
+    missing = sorted(wanted - declared)
+
+    assert not missing, f"plan.js читает необъявленные токены: {missing}"
+
+
+def test_the_token_check_would_notice_a_typo() -> None:
+    """Отрицательный контроль: без него проверка выше зелёная и при сломанном разборе."""
+    declared = set(re.findall(r"^\s*(--[a-z0-9-]+)\s*:", "  --bone: #fff;\n", re.MULTILINE))
+
+    assert declared == {"--bone"}
+    assert "--accent-typo" not in declared
+
+
+def test_plan_changing_warning_is_not_hidden_in_the_fold(client: TestClient) -> None:
+    """Предупреждение, меняющее смысл плана, стоит рядом с числом посадок.
+
+    У улицы без границы работ сервис засаживает весь чертёж (Нижние Поля: 18 780 посадок),
+    и число читается как результат, пока не сказано обратного. Такие предупреждения не
+    должны лежать в свёрнутом списке вместе с «аудит исправил 503 записи».
+    """
+    container = client.app.state.container  # type: ignore[attr-defined]
+    record = container.store.create("street.dxf", "strict", {})
+    finished = replace(
+        container.store.get(record.run_id),
+        state=RunState.SUCCEEDED,
+        summary={
+            "placements": 18780,
+            "rejections": 2000,
+            "integrity_ok": True,
+            "warnings": [
+                "Граница работ не найдена: размещение по всему чертежу.",
+                "street.dxf: аудит исправил записей: 503, ошибок: 0",
+            ],
+        },
+    )
+    container.store.save(finished)
+
+    page = client.get(f"/runs/{record.run_id}").text
+
+    assert '<div class="notice">' in page
+    assert page.index("Граница работ не найдена") < page.index("Предупреждения")
+    assert "аудит исправил" not in page.split('<div class="notice">')[1].split("</div>")[0]

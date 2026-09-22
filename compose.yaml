@@ -9,6 +9,9 @@ services:
     environment:
       GREEN_MAX_PARALLEL_RUNS: "2"
       GREEN_CORS_ORIGINS: '["http://localhost:5173"]'
+      # Каталог улиц пилотного проекта внутри смонтированного датасета. Датасета может не
+      # быть - тогда список улиц пуст, а форма принимает свой чертёж, как и раньше.
+      GREEN_STREETS_DIR: /dataset/streets_dxf
     volumes:
       - runs:/data/runs
       - ./dataset:/dataset:ro

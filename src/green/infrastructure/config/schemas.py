@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from green.application.classification import GeometryKind, MatchTarget
-from green.application.params import DEFAULT_WEIGHTS
+from green.application.params import DEFAULT_QUALITY_WEIGHTS, DEFAULT_WEIGHTS
 from green.domain.norms import (
     CitationStatus,
     MeasureTo,
@@ -259,6 +259,32 @@ class ProfileModel(_Strict):
     conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
     structure_patch_size: int = Field(default=10, ge=1, le=200)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+    quality_weights: dict[str, float] = Field(default_factory=dict)
+    density_trees_per_km: tuple[float, float] = Field(default=(150.0, 180.0))
+    density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
+    row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
+    canopy_target: float = Field(default=1.0, gt=0, le=5)
+    dust_target: float = Field(default=0.50, gt=0, le=1)
+    margin_target: float = Field(default=0.20, gt=0, le=5)
+    diversity_target: int = Field(default=10, ge=1, le=100)
+
+    @field_validator("density_trees_per_km", "density_shrubs_per_km", "row_spacing_m")
+    @classmethod
+    def _fork(cls, value: tuple[float, float]) -> tuple[float, float]:
+        low, high = value
+        if not 0 < low <= high:
+            raise ValueError("вилка задаётся парой 0 < от <= до")
+        return value
+
+    @field_validator("quality_weights")
+    @classmethod
+    def _quality_weights(cls, value: dict[str, float]) -> dict[str, float]:
+        unknown = sorted(set(value) - set(DEFAULT_QUALITY_WEIGHTS))
+        if unknown:
+            raise ValueError(f"quality_weights: неизвестные слагаемые {', '.join(unknown)}")
+        if any(weight < 0 for weight in value.values()):
+            raise ValueError("quality_weights: вес не может быть отрицательным")
+        return value
 
     @field_validator("disabled_rules")
     @classmethod

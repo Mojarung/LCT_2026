@@ -15,11 +15,12 @@ from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.quality import assess, site_of
 from green.application.results import RunReport, StageTiming
 from green.application.shrub_groups import fill_shrub_groups
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
     from pathlib import Path
 
     from green.application.params import PlanParams
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
         InventoryCounts,
         LayerMapSource,
         PlanWriter,
+        ProgressSink,
         RuleBookSource,
         SceneReader,
         SpeciesCatalog,
@@ -67,9 +69,14 @@ class PlanRequest:
 @dataclass(slots=True)
 class Stopwatch:
     timings: list[StageTiming]
+    # Кому объявлять начало этапа: прогон из API показывает ход человеку, прогон из CLI - нет.
+    # Тот же секундомер, что считает время, - второго списка этапов в сценарии не появляется.
+    on_stage: Callable[[str], None] | None = None
 
     @contextmanager
     def stage(self, name: str) -> Iterator[None]:
+        if self.on_stage is not None:
+            self.on_stage(name)
         started = time.perf_counter()
         try:
             yield
@@ -101,8 +108,10 @@ class PlanSite:
         self._integrity = integrity
         self._merger = merger
 
-    def execute(self, request: PlanRequest) -> RunReport:
-        watch = Stopwatch([])
+    def execute(  # noqa: PLR0915 - сценарий перечисляет этапы подряд, так он и читается
+        self, request: PlanRequest, progress: ProgressSink | None = None
+    ) -> RunReport:
+        watch = Stopwatch([], on_stage=progress.stage if progress is not None else None)
         params = request.params
         request.work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -130,6 +139,12 @@ class PlanSite:
             if params.unknown_lines_as_utility:
                 scene = promote_unknown_lines(scene)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
+        # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
+        # пока план ещё считается. Зависит она только от классифицированных объектов.
+        with watch.stage("basemap"):
+            basemap = build_basemap(features)
+            if progress is not None:
+                progress.basemap(basemap)
         with watch.stage("place"):
             plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
         with watch.stage("assort"):
@@ -154,10 +169,12 @@ class PlanSite:
                 params=params,
                 existing=inventory.matched if inventory else None,
             )
+        # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+        with watch.stage("quality"):
+            site = site_of(features)
+            plan = assess(plan, site, params)
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
-        with watch.stage("basemap"):
-            basemap = build_basemap(features)
         output = request.work_dir / RESULT_DXF
         with watch.stage("write_dxf"):
             snapshot = self._writer.write(source, plan, rulebook, output, unit_m=scene.unit_m)
@@ -204,6 +221,7 @@ class PlanSite:
             source=source,
             unit_m=scene.unit_m,
             report=report,
+            _site=site,
         )
         return replace(report, context=context)
 

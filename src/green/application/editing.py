@@ -24,6 +24,7 @@ from green.application.constraints import ConstraintIndex
 from green.application.errors import InputError
 from green.application.explain import explain
 from green.application.params import active_distance_rules
+from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome, Placement, Rejection, Verdict
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.params import PlanParams
+    from green.application.quality import Site
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
     from green.domain.norms import RuleBook
@@ -91,6 +93,13 @@ class RunContext:
     _surface: SurfaceMap | None = field(default=None, repr=False)
     _surface_built: bool = field(default=False, repr=False)
     _indexes: dict[str, ConstraintIndex] = field(default_factory=dict, repr=False)
+    # Участок для индекса качества: граница работ и борта, от вида не зависит.
+    _site: Site | None = field(default=None, repr=False)
+
+    def site(self) -> Site:
+        if self._site is None:
+            self._site = site_of(self.features)
+        return self._site
 
     def index_for(self, species: Species | None) -> ConstraintIndex:
         """Индекс ограничений для конкретного вида: состав правил зависит от вида и кроны."""
@@ -224,6 +233,8 @@ def _rebuild_plan(context: RunContext, kept: list[Placement]) -> Plan:
         placements=placements,
         rejections=(*context.plan.rejections, *moved_out),
     )
+    # Правка меняет и ценность соседей: ряд без дерева теряет шаг, вид - долю.
+    plan = assess(plan, context.site(), context.params)
     return explain(plan, context.rulebook)
 
 

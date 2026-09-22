@@ -417,6 +417,69 @@
         "title": "Problem",
         "type": "object"
       },
+      "ProgressOut": {
+        "description": "Ход прогона: есть только пока он идёт.\n\nДоля и остаток - оценка по весам этапов и прошедшему времени; подоснова для карты\n(`basemap.geojson`) появляется в `artifacts` раньше остальных файлов.",
+        "properties": {
+          "elapsed_s": {
+            "description": "Секунд с начала расчёта",
+            "title": "Elapsed S",
+            "type": "number"
+          },
+          "eta_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Оценка остатка в секундах",
+            "title": "Eta S"
+          },
+          "fraction": {
+            "description": "Доля сделанного, 0..1",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Fraction",
+            "type": "number"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Текущий этап или null до первого этапа",
+            "title": "Stage"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "title": {
+            "description": "Название этапа для человека",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "title",
+          "fraction",
+          "elapsed_s",
+          "eta_s",
+          "steps"
+        ],
+        "title": "ProgressOut",
+        "type": "object"
+      },
       "RuleCheckOut": {
         "properties": {
           "measured_m": {
@@ -545,6 +608,17 @@
             "title": "Profile",
             "type": "string"
           },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ход расчёта; null, пока прогон в очереди или уже закончен"
+          },
           "source_name": {
             "title": "Source Name",
             "type": "string"
@@ -611,6 +685,80 @@
           "crown_diameter_m"
         ],
         "title": "SpeciesOut",
+        "type": "object"
+      },
+      "StepOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Длительность завершённого этапа",
+            "title": "Ms"
+          },
+          "state": {
+            "enum": [
+              "done",
+              "active",
+              "pending"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state"
+        ],
+        "title": "StepOut",
+        "type": "object"
+      },
+      "StreetOut": {
+        "description": "Улица пилотного проекта, подготовленная в каталоге на диске.",
+        "properties": {
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "size_mb": {
+            "title": "Size Mb",
+            "type": "number"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "number",
+          "title",
+          "files",
+          "size_mb"
+        ],
+        "title": "StreetOut",
         "type": "object"
       }
     }
@@ -1195,6 +1343,32 @@
         "summary": "Rebuild",
         "tags": [
           "edits"
+        ]
+      }
+    },
+    "/api/v1/streets": {
+      "get": {
+        "description": "Улицы пилотного проекта, готовые к прогону.\n\nПустой список - обычное дело: каталог собирается из датасета, а датасет монтируется\nне везде. Прогон по улице запускается полем `street` в POST /runs.",
+        "operationId": "streets_api_v1_streets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StreetOut"
+                  },
+                  "title": "Response Streets Api V1 Streets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Streets",
+        "tags": [
+          "system"
         ]
       }
     }

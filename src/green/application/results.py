@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -97,6 +97,34 @@ class RunState(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class RunProgress:
+    """Ход прогона: план этапов, текущий этап и длительности завершённых.
+
+    Есть в записи только пока прогон идёт. Секундомер сценария объявляет и этапы, которых в
+    плане нет (конвертация у DXF, склейка у одиночного чертежа): они пропускаются, чтобы в
+    интерфейсе не мелькал шаг, которому нечего делать.
+    """
+
+    stages: tuple[str, ...]
+    started_at: datetime
+    stage_started_at: datetime
+    stage: str | None = None
+    done: tuple[StageTiming, ...] = ()
+    # Размер исходника с комплектом: по нему считается априорная длительность прогона.
+    source_bytes: int = 0
+
+    def begin(self, stage: str, now: datetime) -> RunProgress:
+        """Закрыть текущий этап и открыть следующий; чужой или тот же этап ничего не меняет."""
+        if stage not in self.stages or stage == self.stage:
+            return self
+        done = self.done
+        if self.stage is not None:
+            ms = round((now - self.stage_started_at).total_seconds() * 1000, 1)
+            done = (*done, StageTiming(self.stage, ms))
+        return replace(self, stage=stage, stage_started_at=now, done=done)
+
+
+@dataclass(frozen=True, slots=True)
 class RunRecord:
     run_id: str
     state: RunState
@@ -108,3 +136,4 @@ class RunRecord:
     error: str | None = None
     summary: Mapping[str, object] = field(default_factory=dict)
     artifacts: tuple[str, ...] = ()
+    progress: RunProgress | None = None

@@ -1,5 +1,5 @@
-"""Запись артефактов: plan.json, basemap.geojson, interpretations.csv/json, run_manifest.json,
-verify.json."""
+"""Запись артефактов: plan.json, quality.json, basemap.geojson, interpretations.csv/json,
+run_manifest.json, verify.json."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         RuleCheck,
         Species,
     )
+    from green.domain.quality import PlanQuality, PlantingValue
 
 CSV_COLUMNS = (
     "kind",
@@ -55,6 +56,7 @@ CSV_COLUMNS = (
     "quote",
     "url",
     "explanation",
+    "value",
 )
 _PACKAGES = ("green", "ezdxf", "shapely", "fastapi", "pydantic")
 
@@ -72,7 +74,7 @@ class FileArtifactSink:
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
-            "basemap.geojson": _write_json(directory / "basemap.geojson", _basemap(report.basemap)),
+            "basemap.geojson": self.save_basemap(directory, report.basemap),
             "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
             "assortment.json": _write_json(
                 directory / "assortment.json",
@@ -85,15 +87,31 @@ class FileArtifactSink:
                 directory / "assortment_shrubs.json",
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
+            "quality.json": _write_json(directory / "quality.json", _quality(report.plan.quality)),
         }
+
+    def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
+        """Подоснова отдельно от остального: карта забирает её, пока план ещё считается.
+
+        Единственный артефакт, который пишется без отступов: его читает не человек, а
+        браузер, и на Камчатской отступы раздували файл с 4 МБ до 18 МБ - четверть секунды
+        разбора на ровном месте.
+        """
+        directory.mkdir(parents=True, exist_ok=True)
+        return _write_json(directory / "basemap.geojson", _basemap(basemap), indent=False)
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
     """Одна строка на пару (решение, правило): эксперт фильтрует по номеру посадки или отказа."""
     texts = {e.subject_id: e for e in plan.explanations}
+    values = plan.quality.values if plan.quality is not None else {}
     rows: list[dict[str, Any]] = []
     for placement in plan.placements:
-        rows += _rows(placement, placement.checks, texts.get(placement.placement_id), rulebook)
+        own = _rows(placement, placement.checks, texts.get(placement.placement_id), rulebook)
+        value = values.get(placement.placement_id)
+        if value is not None:
+            own = [{**row, "value": value.delta} for row in own]
+        rows += own
     for rejection in plan.rejections:
         rows += _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
     return rows
@@ -256,6 +274,52 @@ def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
     }
 
 
+def _value(value: PlantingValue | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return {
+        "delta": value.delta,
+        "percentile": value.percentile,
+        "by_term": dict(value.by_term),
+        "reasons": list(value.reasons),
+    }
+
+
+def _quality(quality: PlanQuality | None) -> dict[str, Any]:
+    """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки."""
+    if quality is None:
+        return {"index": None, "gate": "индекс не считался"}
+    ranked = sorted(quality.values.values(), key=lambda v: -v.delta)
+    return {
+        "index": quality.index,
+        "gate": quality.gate,
+        "summary": list(quality.summary),
+        "terms": [
+            {
+                "key": t.key,
+                "title": t.title,
+                "weight": t.weight,
+                "score": t.score,
+                "basis": t.basis,
+                "note": t.note,
+                "measure": dict(t.measure),
+            }
+            for t in quality.terms
+        ],
+        "penalty": quality.penalty,
+        "penalties": dict(quality.penalties),
+        "top": [
+            {"id": v.placement_id, "delta": v.delta, "reasons": list(v.reasons)}
+            for v in ranked[:10]
+        ],
+        "negative": [
+            {"id": v.placement_id, "delta": v.delta, "reasons": list(v.reasons)}
+            for v in reversed(ranked)
+            if v.delta < 0
+        ][:50],
+    }
+
+
 def _species(species: Species) -> dict[str, Any]:
     """Краткая карточка вида: остальные поля каталога лежат в config/species.yaml."""
     return {
@@ -278,6 +342,7 @@ def _source(report: RunReport) -> dict[str, Any]:
 def _plan(report: RunReport) -> dict[str, Any]:
     plan = report.plan
     texts = {e.subject_id: e.text for e in plan.explanations}
+    values = plan.quality.values if plan.quality is not None else {}
     return {
         "run_id": report.run_id,
         "source": _source(report),
@@ -294,6 +359,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "notes": list(p.notes),
                 "explanation": texts.get(p.placement_id, ""),
                 "assortment": _assortment(p.assortment),
+                "value": _value(values.get(p.placement_id)),
                 "checks": [_check(c) for c in p.checks],
             }
             for p in plan.placements
@@ -369,6 +435,10 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             "features_in": basemap.features_in,
             "features_out": basemap.features_out,
             "dropped": dict(basemap.dropped),
+            # С какой детализацией собрана карта: на тяжёлом чертеже она огрубляется, и
+            # читатель выгрузки должен видеть, насколько, а не гадать по картинке.
+            "tolerance_m": basemap.tolerance_m,
+            "min_span_m": basemap.min_span_m,
         },
         "bbox": list(basemap.bbox),
         "features": [
@@ -441,8 +511,9 @@ def _layers(report: RunReport) -> dict[str, Any]:
     }
 
 
-def _write_json(path: Path, payload: object) -> Path:
-    path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_NON_STR_KEYS))
+def _write_json(path: Path, payload: object, *, indent: bool = True) -> Path:
+    option = orjson.OPT_NON_STR_KEYS | (orjson.OPT_INDENT_2 if indent else 0)
+    path.write_bytes(orjson.dumps(payload, option=option))
     return path
 
 

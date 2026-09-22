@@ -18,15 +18,30 @@
   } catch (e) { /* приватный режим: остаёмся на системной теме */ }
 </script>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 <a class="skip" href="#content">К содержимому</a>
 
+<!-- Шапка - одна пилюля значков поверх плана, без названия сервиса и полосы во всю ширину:
+     полоса отрезала бы от карты пятьдесят пикселей, которые на участке-ленте дороже
+     заголовка, а название на своём же экране человеку ничего не сообщает. -->
 <header class="topbar">
-  <a class="brand" href="/">green</a>
-  <span class="brand-note">проектирование озеленения улиц по чертежу подосновы</span>
   <nav class="topbar-nav">
-    <a href="/docs">API</a>
-    <button type="button" id="theme-toggle" class="linkish">Тема</button>
+    <a href="/docs" title="Документация API (Swagger)" aria-label="Документация API">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 7v14"/>
+        <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
+      </svg>
+    </a>
+    <button type="button" id="theme-toggle" title="Переключить тему" aria-label="Переключить тему">
+      <!-- Показывается тот значок, в которую тему нажатие переведёт: в тёмной - солнце. -->
+      <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+      </svg>
+      <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+      </svg>
+    </button>
   </nav>
 </header>
 
@@ -36,7 +51,6 @@
 
 <footer class="footer">
   <span class="mono">green {{ version }}</span>
-  <span>результат только на слоях GREEN_*, исходные сущности не меняются</span>
 </footer>
 
 <script>

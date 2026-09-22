@@ -30,11 +30,23 @@ HIDDEN_CLASSES = frozenset({ObjectClass.IGNORE, ObjectClass.UNKNOWN})
 
 DEGENERATE = "вырождено упрощением"
 EMPTY = "пустая геометрия"
+SMALL = "мельче видимого на карте"
 
 DEFAULT_TOLERANCE_M = 0.15
 # Сантиметр. Геоподоснова точнее не бывает, а координата с семнадцатью знаками после запятой
 # утраивает вес выгрузки: на Берзарина 33,6 МБ против 12,9 МБ при той же геометрии.
 DEFAULT_PRECISION_M = 0.01
+
+# Сколько объектов карта в браузере держит без потери отзывчивости (замеры в
+# `docs/notes/27-map-performance.md`: 56 тыс. объектов - 110 мс на кадр, 15 тыс. - 45 мс).
+# Чертёж тяжелее бюджета упрощается сильнее и теряет мелочь: на Камчатской из 56 тыс.
+# объектов 40 тыс. мельче метра, это обломки условных знаков, а не сети.
+FEATURE_BUDGET = 20_000
+# Порог мелочи при однократном превышении бюджета; растёт вместе с допуском упрощения.
+SPAN_FLOOR_M = 0.5
+# Дальше этого детализацию не режем даже на генплане: подоснова должна остаться читаемой.
+MAX_DETAIL_CUT = 2.0
+POINT_TYPES = frozenset({"Point", "MultiPoint"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +70,10 @@ class Basemap:
     features_out: int
     dropped: Mapping[str, int]
     bbox: tuple[float, float, float, float]
+    # С какой детализацией собрана эта подоснова: допуск упрощения и порог отбрасывания
+    # мелочи. Оба зависят от веса чертежа, поэтому едут вместе с данными, а не в коде.
+    tolerance_m: float = DEFAULT_TOLERANCE_M
+    min_span_m: float = 0.0
 
 
 def build_basemap(
@@ -65,14 +81,26 @@ def build_basemap(
     *,
     tolerance_m: float = DEFAULT_TOLERANCE_M,
     precision_m: float = DEFAULT_PRECISION_M,
+    feature_budget: int = FEATURE_BUDGET,
 ) -> Basemap:
     """Отобрать и упростить подоснову для отрисовки на канве.
 
     На вход идут объекты уже после классификации и присвоения диаметров - те же, по которым
     считался план: карта обязана показывать ту подоснову, на которой стоят отступы.
+
+    Детализация зависит от веса чертежа. Улица пилота даёт полсотни тысяч объектов, и карта
+    в браузере на них не едет за рукой, а выгрузка весит десятки мегабайт. Поэтому чертёж
+    тяжелее `FEATURE_BUDGET` упрощается грубее и теряет объекты мельче порога - те, что на
+    экране не отличимы от точки. Выбранные значения едут в `Basemap` и в выгрузку: читатель
+    карты должен знать, насколько она огрублена.
     """
     kept: list[BasemapFeature] = []
     dropped: Counter[str] = Counter()
+
+    visible = sum(1 for f in features if f.object_class not in HIDDEN_CLASSES)
+    cut = min(max(visible / feature_budget, 1.0) ** 0.5, MAX_DETAIL_CUT)
+    tolerance_m *= cut
+    min_span_m = SPAN_FLOOR_M * cut if cut > 1 else 0.0
 
     for feature in features:
         if feature.object_class in HIDDEN_CLASSES:
@@ -88,6 +116,9 @@ def build_basemap(
         if _is_degenerate(simplified, tolerance_m):
             dropped[DEGENERATE] += 1
             continue
+        if _is_small(simplified, min_span_m):
+            dropped[SMALL] += 1
+            continue
         kept.append(BasemapFeature(object_class=feature.object_class, geometry=simplified))
 
     return Basemap(
@@ -96,6 +127,8 @@ def build_basemap(
         features_out=len(kept),
         dropped=dict(dropped),
         bbox=_bbox(kept),
+        tolerance_m=round(tolerance_m, 3),
+        min_span_m=round(min_span_m, 3),
     )
 
 
@@ -111,6 +144,18 @@ def _snap(geometry: BaseGeometry, precision_m: float) -> BaseGeometry:
     except GEOSException, ValueError:
         return geometry
     return geometry if snapped.is_empty and not geometry.is_empty else snapped
+
+
+def _is_small(geometry: BaseGeometry, min_span_m: float) -> bool:
+    """Объект, который весь умещается в порог: на карте это точка, а места он занимает как сеть.
+
+    Точечные объекты порогом не режутся: опора, колодец и существующее дерево - это условные
+    знаки, они читаются на любом масштабе и от них считаются отступы.
+    """
+    if min_span_m <= 0 or geometry.geom_type in POINT_TYPES:
+        return False
+    left, bottom, right, top = geometry.bounds
+    return max(right - left, top - bottom) < min_span_m
 
 
 def _is_degenerate(geometry: BaseGeometry, tolerance_m: float) -> bool:

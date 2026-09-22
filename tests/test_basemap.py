@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from shapely.geometry import LineString, Point, Polygon
 
-from green.application.basemap import build_basemap
+from green.application.basemap import (
+    DEFAULT_TOLERANCE_M,
+    MAX_DETAIL_CUT,
+    SMALL,
+    SPAN_FLOOR_M,
+    build_basemap,
+)
 from green.domain.objects import Feature, ObjectClass, SourceRef
 
 
@@ -113,3 +119,56 @@ def test_empty_scene_gives_an_empty_map_without_raising() -> None:
     assert basemap.features_in == 0
     assert basemap.features_out == 0
     assert basemap.bbox == (0.0, 0.0, 0.0, 0.0)
+
+
+def _heavy(count: int) -> list[Feature]:
+    """Чертёж сверх бюджета: длинные сети вперемешку с обломками условных знаков."""
+    features: list[Feature] = []
+    for i in range(count):
+        # Обломок длиннее допуска упрощения: иначе он отсеется как вырожденный и до
+        # порога мелочи дело не дойдёт.
+        small = i % 2 == 0
+        geometry = (
+            LineString([(i, 0), (i + 0.4, 0.4)]) if small else LineString([(i, 10), (i + 30, 10)])
+        )
+        features.append(_feature(str(i), ObjectClass.UTILITY_WATER, geometry))
+    return features
+
+
+def test_light_drawing_keeps_the_default_detail() -> None:
+    """Обычный чертёж огрублять незачем: порог мелочи выключен, допуск прежний."""
+    basemap = build_basemap(_heavy(40), feature_budget=100)
+
+    assert basemap.tolerance_m == DEFAULT_TOLERANCE_M
+    assert basemap.min_span_m == 0.0
+    assert basemap.features_out == 40
+
+
+def test_heavy_drawing_is_coarser_and_drops_the_smallest() -> None:
+    """Чертёж вчетверо тяжелее бюджета теряет мелочь, и потеря посчитана, а не молчалива."""
+    basemap = build_basemap(_heavy(40), feature_budget=10)
+
+    assert basemap.tolerance_m == round(DEFAULT_TOLERANCE_M * 2, 3)
+    assert basemap.min_span_m == round(SPAN_FLOOR_M * 2, 3)
+    assert basemap.dropped[SMALL] == 20
+    assert basemap.features_out == 20
+    assert basemap.features_out + sum(basemap.dropped.values()) == basemap.features_in
+
+
+def test_detail_is_cut_no_further_than_the_limit() -> None:
+    """У генплана огрубление упирается в потолок: подоснова обязана остаться читаемой."""
+    basemap = build_basemap(_heavy(40), feature_budget=1)
+
+    assert basemap.tolerance_m == round(DEFAULT_TOLERANCE_M * MAX_DETAIL_CUT, 3)
+    assert basemap.min_span_m == round(SPAN_FLOOR_M * MAX_DETAIL_CUT, 3)
+
+
+def test_point_symbols_survive_the_size_floor() -> None:
+    """Опора и колодец мельче порога по определению, но именно от них считаются отступы."""
+    poles = [_feature(f"p{i}", ObjectClass.POLE, Point(i, 0)) for i in range(40)]
+
+    basemap = build_basemap(poles, feature_budget=10)
+
+    assert basemap.min_span_m > 0
+    assert basemap.features_out == len(poles)
+    assert SMALL not in basemap.dropped

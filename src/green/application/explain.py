@@ -12,6 +12,7 @@ from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 if TYPE_CHECKING:
     from green.domain.norms import AnyRule, RuleBook
     from green.domain.planting import Placement, Reason, Rejection, RuleCheck
+    from green.domain.quality import PlantingValue
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.UTILITY_WATER: "водопровода",
@@ -65,7 +66,8 @@ VERDICT_LABELS: dict[Verdict, str] = {
 
 
 def explain(plan: Plan, rulebook: RuleBook) -> Plan:
-    explanations = [_placement(p, rulebook) for p in plan.placements]
+    values = plan.quality.values if plan.quality is not None else {}
+    explanations = [_placement(p, rulebook, values.get(p.placement_id)) for p in plan.placements]
     explanations += [_rejection(r, rulebook) for r in plan.rejections]
     return replace(plan, explanations=tuple(explanations))
 
@@ -108,7 +110,9 @@ def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
     )
 
 
-def _placement(placement: Placement, rulebook: RuleBook) -> Explanation:
+def _placement(
+    placement: Placement, rulebook: RuleBook, value: PlantingValue | None = None
+) -> Explanation:
     measured = [c for c in placement.checks if c.measured_m is not None]
     closest = sorted(measured, key=lambda c: (c.measured_m or 0) - (c.threshold_m or 0))[:4]
     no_data = [c for c in placement.checks if c.outcome is CheckOutcome.NO_DATA][:1]
@@ -120,7 +124,33 @@ def _placement(placement: Placement, rulebook: RuleBook) -> Explanation:
         "Ближайшие ограничения: " + "; ".join(parts) + "."
     )
     text += describe_assortment(placement)
+    text += describe_value(value)
     return Explanation(placement.placement_id, placement.number, "placement", text)
+
+
+# Вклад одной посадки - десятитысячные доли индекса, поэтому он показывается в тысячных
+# (промилле): «+0,82 ‰» читается, «+0,0008» - нет. Меньше половины сотой промилле - ноль.
+PERMILLE_ZERO = 0.005
+
+
+def permille(delta: float) -> str:
+    """Вклад в индекс в тысячных долях: «+0,82 ‰»."""
+    value = delta * 1000
+    return f"{'+' if value >= 0 else '−'}{abs(value):.2f} ‰".replace(".", ",")
+
+
+def describe_value(value: PlantingValue | None) -> str:
+    """Чем ценна посадка: вклад в индекс качества и главные причины из уже посчитанного."""
+    if value is None:
+        return ""
+    why = f": {'; '.join(value.reasons)}" if value.reasons else ""
+    if abs(value.delta * 1000) < PERMILLE_ZERO:
+        return f" Ценность: вклад в индекс качества около нуля{why}."
+    if value.delta < 0:
+        higher = permille(-value.delta)[1:]
+        return f" Ценность: без этой посадки индекс качества выше на {higher}{why}."
+    rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
+    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}."
 
 
 def describe_assortment(placement: Placement) -> str:

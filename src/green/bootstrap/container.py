@@ -28,6 +28,7 @@ from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
 from green.infrastructure.storage.runs import FileSystemRunStore
+from green.infrastructure.streets import JsonStreetCatalog
 
 type Converter = LibreDwgConverter | OdaFileConverter
 
@@ -49,6 +50,7 @@ class Container:
     integrity: EzdxfIntegrityChecker
     artifacts: FileArtifactSink
     converters: tuple[Converter, ...]
+    streets: JsonStreetCatalog
     # Контексты прогонов для правки на карте: живут в памяти, переживают запрос, но не рестарт.
     contexts: RunContextCache
 
@@ -87,6 +89,7 @@ def build_container(settings: Settings | None = None) -> Container:
         merger=EzdxfDrawingMerger(),
     )
     store = FileSystemRunStore(settings.runs_dir)
+    streets = JsonStreetCatalog(settings.streets_dir)
     contexts = RunContextCache(settings.edit_contexts)
     runs = RunService(
         store=store,
@@ -113,6 +116,7 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         artifacts=artifacts,
         converters=converters,
+        streets=streets,
         contexts=contexts,
     )
 

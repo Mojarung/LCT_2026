@@ -1,32 +1,61 @@
 {% extends "base.html" %}
 {% block title %}green - проектирование озеленения улиц{% endblock %}
 
+{% macro filefield(id, name, accept, label, hint, multiple=False) %}
+<div class="field">
+  <span class="field-title" id="{{ id }}-label">{{ label }}</span>
+  <div class="filefield">
+    <input type="file" id="{{ id }}" name="{{ name }}" accept="{{ accept }}"
+           aria-labelledby="{{ id }}-label" {% if multiple %}multiple{% endif %}>
+    <label class="pick" for="{{ id }}">Выбрать</label>
+    <span class="chosen" data-for="{{ id }}">не выбран</span>
+  </div>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+
 {% block content %}
 <div class="launch">
   <div class="launch-inner">
 
-    <section>
-      <h1 class="section-label">Новый прогон</h1>
+    <section class="panel">
+      <h1 class="visually-hidden">Новый прогон</h1>
 
+      {# Встроенный фрагмент нужен там, где датасета нет: на стенде без каталога улиц иначе
+         нечего запустить. Когда улицы есть, он только отнимает первое место у формы. #}
+      {% if not streets %}
       <form class="start-row" method="post" action="/web/demo">
         <div>
           <p class="start-title">Встроенный участок улицы Берзарина</p>
-          <p class="hint">
-            Фрагмент настоящего чертежа из пилотного проекта: 300 × 140 м, десять типов
-            подземных сетей, ограды, опоры, существующие деревья. Считается около семи секунд.
-          </p>
+          <p class="hint">300 × 140 м, десять типов сетей, семь секунд. Каталог улиц не
+            подключён, поэтому прогон можно показать на встроенном фрагменте.</p>
         </div>
-        <button type="submit" class="ghost">Прогнать</button>
+        <button type="submit" class="ghost"
+                aria-label="Запустить прогон на встроенном участке">Запустить прогон</button>
       </form>
+      {% endif %}
 
       <form class="start-form" method="post" action="/web/runs" enctype="multipart/form-data" id="run-form">
-        <p class="start-title">Свой чертёж</p>
+        <p class="start-title">Новый прогон</p>
 
+        {% if streets %}
         <div class="field">
-          <label for="file">Чертёж подосновы</label>
-          <input type="file" id="file" name="file" accept=".dxf,.dwg" required>
-          <p class="hint">DXF или DWG: выгрузка Мосгеотреста, генплан, дендроплан.</p>
+          <label for="street">Улица пилотного проекта</label>
+          <select id="street" name="street">
+            <option value="">не выбрана</option>
+            {% for street in streets %}
+            <option value="{{ street.slug }}">{{ street.number }}. {{ street.title }} · {{ street.size_mb }} МБ</option>
+            {% endfor %}
+          </select>
+          <p class="hint">Подоснова с сетями, уже сконвертированная из датасета. Чертежи
+            крупнее полусотни мегабайт считаются минутами.</p>
         </div>
+
+        <p class="or">или</p>
+        {% endif %}
+
+        {{ filefield('file', 'file', '.dxf,.dwg', 'Свой чертёж подосновы',
+                     'DXF или DWG: выгрузка Мосгеотреста, генплан, дендроплан.') }}
 
         <div class="field-row">
           <div class="field">
@@ -36,7 +65,6 @@
               <option value="{{ name }}" {% if name == default_profile %}selected{% endif %}>{{ name }}</option>
               {% endfor %}
             </select>
-            <p class="hint">Какие правила включены и какие допущения приняты.</p>
           </div>
 
           <div class="field">
@@ -54,35 +82,30 @@
           </label>
           <label class="check">
             <input type="checkbox" name="root_barriers">
-            Прикорневые барьеры: сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330
+            Прикорневые барьеры
           </label>
+          <p class="hint">Сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.</p>
         </fieldset>
 
         <details class="advanced">
           <summary>Комплект файлов и параметры</summary>
-          <div class="field">
-            <label for="extra">Остальные чертежи комплекта</label>
-            <input type="file" id="extra" name="extra" accept=".dxf,.dwg" multiple>
-            <p class="hint">Склеиваются с основным: сети, дендроизыскания, генплан.</p>
-          </div>
-          <div class="field">
-            <label for="inventory">Перечётная ведомость</label>
-            <input type="file" id="inventory" name="inventory" accept=".xls,.xlsx">
-            <p class="hint">Растущие деревья входят в квоты разнообразия.</p>
-          </div>
+          {{ filefield('extra', 'extra', '.dxf,.dwg', 'Остальные чертежи комплекта',
+                       'Склеиваются с основным: сети, дендроизыскания, генплан.', multiple=True) }}
+          {{ filefield('inventory', 'inventory', '.xls,.xlsx', 'Перечётная ведомость',
+                       'Растущие деревья входят в квоты разнообразия.') }}
           <div class="field">
             <label for="overrides">Параметры поверх профиля, JSON</label>
             <textarea id="overrides" name="overrides" rows="3" spellcheck="false"
                       placeholder='{"species_code": "acer_platanoides", "modes": ["alley"]}'></textarea>
-            <p class="hint">Пусто - берутся значения профиля.</p>
           </div>
         </details>
 
+        <p class="form-error" id="source-error" role="status" aria-live="polite"></p>
         <button type="submit" class="primary">Запустить прогон</button>
       </form>
     </section>
 
-    <section>
+    <section class="panel">
       <h2 class="section-label">Прогоны</h2>
       {% if runs %}
       <table class="registry">
@@ -112,7 +135,7 @@
       {% else %}
       <div class="empty">
         <p>Прогонов ещё не было.</p>
-        <p class="hint">Нажмите «Прогнать» у встроенного участка - через несколько секунд здесь появится первый.</p>
+        <p class="hint">Запустите прогон на встроенном участке — через несколько секунд здесь появится первый.</p>
       </div>
       {% endif %}
 
@@ -123,10 +146,6 @@
         <div><dt>видов в каталоге</dt><dd>{{ species_total }}</dd></div>
         <div><dt>акты</dt><dd class="acts">СП 42.13330, 743-ПП, 623-ПП, 369-ПП</dd></div>
       </dl>
-      <p class="hint">
-        Результат пишется только на слои GREEN_*. Исходные сущности не меняются, это
-        проверяется отпечатком каждой из них до и после записи.
-      </p>
     </section>
 
   </div>
@@ -135,13 +154,51 @@
 
 {% block scripts %}
 <script>
+  // Имя выбранного файла показываем сами: системную надпись у input[type=file] нельзя
+  // ни перевести, ни набрать шрифтом страницы.
+  for (const slot of document.querySelectorAll('.chosen[data-for]')) {
+    const input = document.getElementById(slot.dataset.for);
+    input.addEventListener('change', () => {
+      const names = [...input.files].map((f) => f.name);
+      slot.textContent = names.length > 1 ? `файлов: ${names.length}` : (names[0] || 'не выбран');
+      slot.dataset.chosen = names.length ? '1' : '0';
+    });
+  }
+
+  // Источников два, обязателен ровно один: поле файла больше не required, иначе форма с
+  // выбранной улицей не отправится вовсе.
+  const streetField = document.getElementById('street');
+  const fileField = document.getElementById('file');
+  const runForm = document.getElementById('run-form');
+  const message = document.getElementById('source-error');
+
+  if (streetField) {
+    // Выбранная улица и выбранный файл - два разных прогона; показываем, что победит улица.
+    streetField.addEventListener('change', () => {
+      runForm.dataset.source = streetField.value ? 'street' : 'file';
+    });
+    fileField.addEventListener('change', () => {
+      if (fileField.files.length) streetField.value = '';
+      runForm.dataset.source = 'file';
+    });
+  }
+
   // Крупный DXF грузится долго; без обратной связи пользователь жмёт кнопку второй раз.
   for (const form of document.querySelectorAll('form[method=post]')) {
     form.addEventListener('submit', (event) => {
       const button = form.querySelector('button[type=submit]');
       if (button.disabled) { event.preventDefault(); return; }
+      if (form === runForm && !(streetField && streetField.value) && !fileField.files.length) {
+        event.preventDefault();
+        message.textContent = 'Выберите улицу пилотного проекта или свой чертёж.';
+        (streetField || fileField).focus();
+        return;
+      }
+      if (message) message.textContent = '';
       button.disabled = true;
-      button.textContent = form.id === 'run-form' ? 'Загружаем чертёж...' : 'Считаем...';
+      button.textContent = form.id === 'run-form'
+        ? (streetField && streetField.value ? 'Готовим улицу...' : 'Загружаем чертёж...')
+        : 'Считаем...';
     });
   }
 </script>

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from green.application.progress import ProgressView, estimate
 from green.application.results import RunRecord, RunState
 from green.domain.planting import Plan, RuleCheck
 
@@ -22,6 +23,16 @@ class SpeciesOut(BaseModel):
     name_ru: str
     name_lat: str
     crown_diameter_m: float
+
+
+class StreetOut(BaseModel):
+    """Улица пилотного проекта, подготовленная в каталоге на диске."""
+
+    slug: str
+    number: int
+    title: str
+    files: int
+    size_mb: float
 
 
 class ConverterOut(BaseModel):
@@ -50,6 +61,39 @@ class ArtifactOut(BaseModel):
     url: str
 
 
+class StepOut(BaseModel):
+    id: str
+    title: str
+    state: Literal["done", "active", "pending"]
+    ms: float | None = Field(default=None, description="Длительность завершённого этапа")
+
+
+class ProgressOut(BaseModel):
+    """Ход прогона: есть только пока он идёт.
+
+    Доля и остаток - оценка по весам этапов и прошедшему времени; подоснова для карты
+    (`basemap.geojson`) появляется в `artifacts` раньше остальных файлов.
+    """
+
+    stage: str | None = Field(description="Текущий этап или null до первого этапа")
+    title: str = Field(description="Название этапа для человека")
+    fraction: float = Field(ge=0, le=1, description="Доля сделанного, 0..1")
+    elapsed_s: float = Field(description="Секунд с начала расчёта")
+    eta_s: float | None = Field(description="Оценка остатка в секундах")
+    steps: list[StepOut]
+
+    @classmethod
+    def from_view(cls, view: ProgressView) -> ProgressOut:
+        return cls(
+            stage=view.stage,
+            title=view.title,
+            fraction=view.fraction,
+            elapsed_s=view.elapsed_s,
+            eta_s=view.eta_s,
+            steps=[StepOut(id=s.id, title=s.title, state=s.state, ms=s.ms) for s in view.steps],
+        )
+
+
 class RunOut(BaseModel):
     id: str
     state: RunState
@@ -61,6 +105,9 @@ class RunOut(BaseModel):
     error: str | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
     artifacts: list[ArtifactOut] = Field(default_factory=list)
+    progress: ProgressOut | None = Field(
+        default=None, description="Ход расчёта; null, пока прогон в очереди или уже закончен"
+    )
 
     @classmethod
     def from_record(cls, record: RunRecord, artifact_url: Callable[[str, str], str]) -> RunOut:
@@ -78,6 +125,11 @@ class RunOut(BaseModel):
                 ArtifactOut(name=name, url=artifact_url(record.run_id, name))
                 for name in record.artifacts
             ],
+            progress=(
+                ProgressOut.from_view(estimate(record.progress, datetime.now(UTC)))
+                if record.progress is not None
+                else None
+            ),
         )
 
 

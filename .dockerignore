@@ -9,3 +9,4 @@ out
 var
 runs
 *.log
+.playwright-cli

@@ -29,6 +29,11 @@ green = "green.interfaces.cli.main:main"
 requires = ["uv_build>=0.12.15,<0.13"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+# Служебные каталоги инструментов рядом с исходниками в пакет не попадают: снимки страниц
+# playwright-cli однажды уехали в wheel и в образ вместе со статикой веб-интерфейса.
+source-exclude = ["**/.playwright-cli/**", "**/__pycache__/**"]
+
 [tool.ruff]
 target-version = "py314"
 line-length = 100

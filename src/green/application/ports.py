@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.audit import AuditedPlanting
+    from green.application.basemap import Basemap
     from green.application.classification import LayerMap
     from green.application.params import PlanParams
     from green.application.results import (
@@ -99,6 +100,30 @@ class ProfileSource(Protocol):
     def load(self, name: str, overrides: Mapping[str, object] | None = None) -> PlanParams: ...
 
 
+@dataclass(frozen=True, slots=True)
+class StreetSource:
+    """Улица пилотного проекта, уже подготовленная на диске.
+
+    Комплект, а не один файл: у половины улиц сети лежат отдельными выгрузками
+    Мосгеотреста, и без них на плане нет половины ограничений.
+    """
+
+    slug: str
+    number: int
+    title: str
+    main: Path
+    extra: tuple[Path, ...] = ()
+    size_mb: float = 0.0
+
+
+class StreetCatalog(Protocol):
+    """Каталог улиц. Пустой каталог - нормальное состояние: датасета может не быть."""
+
+    def all(self) -> tuple[StreetSource, ...]: ...
+
+    def get(self, slug: str) -> StreetSource | None: ...
+
+
 class PlanWriter(Protocol):
     def write(
         self,
@@ -129,6 +154,20 @@ class IntegrityChecker(Protocol):
 
 class ArtifactSink(Protocol):
     def save(self, directory: Path, report: RunReport) -> dict[str, Path]: ...
+
+    def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path: ...
+
+
+class ProgressSink(Protocol):
+    """Куда сценарий сообщает о ходе: этап начался, подоснова построена.
+
+    Подоснова уходит наружу до размещения, чтобы карта показывала чертёж, пока план ещё
+    считается. Сценарий из CLI обходится без приёмника.
+    """
+
+    def stage(self, name: str) -> None: ...
+
+    def basemap(self, basemap: Basemap) -> None: ...
 
 
 class RunStore(Protocol):

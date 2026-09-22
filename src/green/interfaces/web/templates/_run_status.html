@@ -2,10 +2,10 @@
   {% if run.state.value in ('queued', 'running') %}
     <span class="spinner" aria-hidden="true"></span>
     <div>
-      <p class="status-title">
-        {% if run.state.value == 'queued' %}В очереди{% else %}Считаем план{% endif %}
+      <p class="status-title" id="status-title">
+        {% if run.state.value == 'queued' %}В очереди{% else %}Читаем чертёж{% endif %}
       </p>
-      <p class="hint">Чтение чертежа и сверка целостности занимают минуты. Страница обновится сама.</p>
+      <p class="hint">Чертёж появится здесь, как только будет прочитан; ход расчёта - в полосе внизу.</p>
     </div>
   {% elif run.state.value == 'failed' %}
     <div>

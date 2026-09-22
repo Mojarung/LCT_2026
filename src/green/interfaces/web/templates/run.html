@@ -1,15 +1,23 @@
 {% extends "base.html" %}
 {% block title %}{{ run.source_name }} - green{% endblock %}
 
-{% block content %}
 {% set s = run.summary %}
 {% set done = run.state.value == 'succeeded' %}
+{% set live = run.state.value in ('queued', 'running') %}
 
+{# Рабочее место занимает весь экран: под планом ничего нет, прокрутки у страницы нет. #}
+{% block body_class %}shell-map{% endblock %}
+
+{% block content %}
 <div class="workspace page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}">
 
   <div class="canvas-holder">
-    <canvas id="plan-canvas" aria-label="План посадок на подоснове чертежа"></canvas>
+    <canvas id="plan-canvas" {% if done %}tabindex="0"{% endif %}
+            aria-label="План посадок на подоснове чертежа. Стрелками выбирают посадку, Enter центрирует её."></canvas>
 
+    {# Подложка держится, пока карте нечего показать: у готового прогона - секунду до
+       загрузки подосновы, у идущего - до конца чтения чертежа, потом прячется, и чертёж
+       остаётся под полосой хода. #}
     <div class="map-loading" id="map-loading">
       {% if done %}
       <span class="spinner" aria-hidden="true"></span>
@@ -19,156 +27,229 @@
       {% endif %}
     </div>
 
-    {% if done %}
+    {% if done or live %}
     <div class="hud hud-bottom">
       <button type="button" id="fit" title="Вписать план в экран">вписать</button>
-      <button type="button" id="zoom-in" title="Приблизить">+</button>
-      <button type="button" id="zoom-out" title="Отдалить">−</button>
+      <button type="button" id="zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
+      {# Колесо мыши есть не у всех и не везде: на ноутбуке тачпадом масштаб ловится плохо,
+         а на защите карту крутят чужими руками. Ползунок задаёт масштаб сразу. #}
+      <input type="range" id="zoom-range" min="0" max="1000" value="500" step="1"
+             title="Масштаб" aria-label="Масштаб карты">
+      <button type="button" id="zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
+      <button type="button" id="orient" aria-pressed="true"
+              title="Развернуть вид вдоль улицы или по северу">по улице</button>
+      <button type="button" id="legend-toggle" aria-pressed="true"
+              title="Показать или скрыть условные обозначения">обозначения</button>
     </div>
 
-    <div class="hud legend" aria-hidden="true">
-      <span><i style="border-color: var(--c-water)"></i>водопровод</span>
-      <span><i style="border-color: var(--c-sewer)"></i>канализация</span>
-      <span><i style="border-color: var(--c-gas)"></i>газ</span>
-      <span><i style="border-color: var(--c-heat)"></i>теплосеть</span>
-      <span><i style="border-color: var(--c-power)"></i>силовой кабель</span>
-      <span><i style="border-color: var(--c-telecom)"></i>связь</span>
-      <span><i style="border-color: var(--c-curb)"></i>борт</span>
-      <span><i class="dash" style="border-color: var(--c-boundary)"></i>граница работ</span>
-      <span><i class="dot" style="border-color: var(--ok)"></i>посадка</span>
-      <span><i class="dot" style="border-color: var(--c-existing)"></i>существующее</span>
-    </div>
+    {# Условные обозначения - отдельная панель, а не блок в пульте: их читают, глядя на
+       карту, и они должны убираться одним движением, когда мешают. #}
+    <aside class="hud hud-legend" id="legend" aria-label="Условные обозначения">
+      <div class="legend-head">
+        <p class="hud-label">Условные обозначения</p>
+        <button type="button" class="legend-hide" id="legend-close"
+                title="Скрыть обозначения" aria-label="Скрыть условные обозначения">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      {# Галочка стоит у заголовка группы, а сами обозначения под ней: что нарисовано и
+         чем это выключается - один и тот же список, разносить его по двум панелям значит
+         заставлять человека держать связь в голове. #}
+      <div class="legend-scroll" id="layer-toggles">
+        {# Сначала то, что посчитал сервис, потом подоснова: человек приходит к карте с
+           вопросом «что здесь посадили», а цвет сетей читается и без подсказки. #}
+        {% if done %}
+        <label class="check legend-group"><input type="checkbox" data-layer="placements" checked> Посадки плана</label>
+        <div class="legend legend-plan">
+          <span><i class="dot" style="border-color: var(--ok); background: color-mix(in srgb, var(--ok) 33%, transparent)"></i><b>допускается</b></span>
+          <span><i class="dot" style="border-color: var(--warn); background: color-mix(in srgb, var(--warn) 33%, transparent)"></i><b>требует согласования</b></span>
+        </div>
+        <label class="check legend-group"><input type="checkbox" data-layer="rejections">
+          <i class="key cross"></i> Отклонённые места</label>
+        <p class="legend-note">Кружок - крона в натуральную величину: у дерева она больше,
+          у кустарника меньше.</p>
+        {% endif %}
+        <label class="check legend-group"><input type="checkbox" data-layer="utilities" checked> Подземные сети</label>
+        <div class="legend">
+          <span><i style="border-color: var(--c-water)"></i><b>водопровод</b></span>
+          <span><i style="border-color: var(--c-sewer)"></i><b>канализация</b></span>
+          <span><i style="border-color: var(--c-storm)"></i><b>ливневая</b></span>
+          <span><i style="border-color: var(--c-gas)"></i><b>газ</b></span>
+          <span><i style="border-color: var(--c-heat)"></i><b>теплосеть</b></span>
+          <span><i style="border-color: var(--c-power)"></i><b>силовой кабель</b></span>
+          <span><i style="border-color: var(--c-telecom)"></i><b>связь</b></span>
+          <span><i class="dash" style="border-color: var(--c-overhead)"></i><b>воздушная линия</b></span>
+        </div>
+
+        <label class="check legend-group"><input type="checkbox" data-layer="surfaces" checked> Борта и покрытия</label>
+        <div class="legend">
+          <span><i style="border-color: var(--c-curb)"></i><b>борт</b></span>
+          <span><i style="border-color: var(--c-pavement)"></i><b>тротуар</b></span>
+          <span><i style="border-color: var(--c-road)"></i><b>проезжая часть</b></span>
+          <span><i class="dash" style="border-color: var(--c-fence)"></i><b>ограда</b></span>
+          <span><i class="dash" style="border-color: var(--c-boundary)"></i><b>граница работ</b></span>
+        </div>
+
+        {# Группы из одного знака - строкой с галочкой: отдельный заголовок и отдельная
+           строка под ним на один символ тратят вдвое больше высоты, чем объясняют. #}
+        <label class="check legend-group"><input type="checkbox" data-layer="buildings" checked>
+          <i class="key" style="border-color: var(--c-building)"></i> Здания</label>
+        <label class="check legend-group"><input type="checkbox" data-layer="existing" checked>
+          <i class="key dot" style="border-color: var(--c-existing)"></i> Существующие деревья</label>
+
+      </div>
+    </aside>
     {% endif %}
+
   </div>
 
+  {# Ход расчёта - внизу по центру: по бокам панели заняты параметрами и составом, а низ
+     по центру - привычное место строки состояния. На узком экране полоса встаёт в поток
+     сразу под картой, чтобы не накрывать кнопки масштаба. Первые значения отрисованы
+     сервером, дальше их раз в две секунды обновляет plan.js из GET /api/v1/runs/{id}. #}
+  {% if live %}
+    {% set queued = run.state.value == 'queued' %}
+    {% set pct = ((progress.fraction * 100) | round | int) if progress else 0 %}
+    {% set active = (progress.steps | selectattr('state', 'equalto', 'active') | list | first) if progress else none %}
+    <section class="hud hud-progress" id="progress" aria-live="polite">
+      <div class="progress-head">
+        <p class="progress-title" id="progress-title">{{ 'В очереди' if queued else (progress.title if progress else 'Готовимся к расчёту') }}</p>
+        <p class="progress-pct" id="progress-pct">{{ pct }} %</p>
+      </div>
+      <div class="progress-bar" id="progress-bar" role="progressbar"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct }}"
+           aria-label="Ход расчёта"><i style="width: {{ pct }}%"></i></div>
+      <p class="progress-meta">
+        <span id="progress-step">{% if active %}этап {{ (progress.steps | list).index(active) + 1 }} из {{ progress.steps | length }}{% elif queued %}ждём свободного места{% endif %}</span>
+        <span id="progress-time"></span>
+      </p>
+    </section>
+  {% endif %}
+
   <aside class="hud hud-left">
+    {# Участок - лента: ширина экрана для плана дороже, чем список слоёв, и человек должен
+       уметь её отдать. Панели сворачиваются, состояние переживает перезагрузку. #}
+    <button type="button" class="panel-toggle" data-panel="left" aria-expanded="true"
+            title="Свернуть панель" aria-label="Свернуть панель прогона">
+      <svg class="icon chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
     <div class="hud-head">
       <a class="back" href="/">← все прогоны</a>
       <h1>{{ run.source_name }}</h1>
-      <p class="run-sub">{{ run.profile }} · {{ run.run_id[:8] }}</p>
+      <p class="run-sub">{{ run.profile }} · {{ run.run_id[:8] }}{% for key, value in run.overrides.items() %} · {{ key }} {{ value }}{% endfor %}</p>
     </div>
 
     <div class="hud-scroll">
-      <div class="stats">
-        <div class="stat wide">
-          <b>{% if done %}{{ s.get('placements', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-          <span>посадок в плане</span>
-        </div>
-        <div class="stat ok">
-          <b>{% if done %}{{ s.get('allowed', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-          <span>без ограничений</span>
-        </div>
-        <div class="stat">
-          <b>{% if done %}{{ s.get('needs_approval', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-          <span>согласовать</span>
-        </div>
-        <div class="stat">
-          <b>{% if done %}{{ s.get('rejections', 0) }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-          <span>отклонено мест</span>
-        </div>
-        <div class="stat {{ 'ok' if s.get('integrity_ok') else 'bad' }}">
-          <b>{% if done %}{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}{% else %}<i class="skeleton"></i>{% endif %}</b>
-          <span>подоснова</span>
-        </div>
-      </div>
-
       {% if done %}
-      <div class="hud-block">
-        <p class="hud-label">Слои на плане</p>
-        <div class="layer-toggles" id="layer-toggles">
-          <label class="check"><input type="checkbox" data-layer="utilities" checked> подземные сети</label>
-          <label class="check"><input type="checkbox" data-layer="surfaces" checked> борта и покрытия</label>
-          <label class="check"><input type="checkbox" data-layer="buildings" checked> здания</label>
-          <label class="check"><input type="checkbox" data-layer="existing" checked> существующие деревья</label>
-          <label class="check"><input type="checkbox" data-layer="placements" checked> посадки</label>
-          <label class="check"><input type="checkbox" data-layer="rejections"> отклонённые места</label>
-        </div>
-      </div>
+      {% set total = s.get('placements', 0) %}
+      {% set approval = s.get('needs_approval', 0) %}
+      {% set rejected = s.get('rejections', 0) %}
+      <p class="metric">
+        <b>{{ total }}</b>
+        <span>{{ plural(total, 'посадка', 'посадки', 'посадок') }} в плане{% if approval %},
+          {{ approval }} на согласование{% else %}, <em>все без ограничений</em>{% endif %}</span>
+      </p>
+      <p class="metric-sub">
+        <b>{{ rejected }}</b> {{ plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено') }} ·
+        подоснова <em {% if not s.get('integrity_ok') %}class="bad"{% endif %}>{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}</em>
+      </p>
+      {# Индекс - одной строкой рядом с числом посадок; разбор по слагаемым в панели справа,
+         где ему хватает высоты и где у выбранной посадки стоит её вклад. #}
+      {% if quality %}
+      <p class="metric-sub quality-line">
+        индекс качества {% if quality.index is not none %}<b>{{ ('%.2f' | format(quality.index)) | replace('.', ',') }}</b> из 1{% else %}<em class="bad">не выставлен</em>{% endif %}
+        · разбор в панели справа
+      </p>
+      {% endif %}
 
-      <div class="hud-block" id="edit-bar" data-stale="0">
-        <p class="hud-label">Правка</p>
-        <label class="check">
-          <input type="checkbox" id="edit-toggle">
-          Переносить и удалять посадки
-        </label>
-        <p class="edit-message" id="edit-message" role="status" aria-live="polite">
-          Нормы пересчитываются в новой точке. Delete удаляет выбранную.
-        </p>
-        <button type="button" class="primary small" id="rebuild">Пересобрать DXF</button>
+      {# Предупреждения, меняющие смысл плана целиком, стоят рядом с числом посадок, а не в
+         свёрнутом списке ниже: иначе «18 780 посадок» читается как результат работы, а не
+         как следствие того, что участок ничем не ограничен. #}
+      {% if notices %}
+      <div class="notice">
+        {% for text in notices %}<p>{{ text }}</p>{% endfor %}
       </div>
       {% endif %}
+
+      {% else %}
+      <p class="metric">
+        <b><i class="skeleton"></i></b>
+        <span>посадок в плане</span>
+      </p>
+      {% endif %}
+
+
+
+      {# Предупреждения раньше лежали отдельной секцией под планом, куда почти никто не
+         доскроливал. Здесь они рядом с самим прогоном и свёрнуты. #}
+      {% if done and s.get('warnings') %}
+      <details class="hud-block fold">
+        <summary>Предупреждения · {{ s.get('warnings') | length }}</summary>
+        <ul class="warn-list">
+          {% for warning in s.get('warnings') %}<li>{{ warning }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
     </div>
+
+    {% if done %}
+    <div class="hud-foot" id="edit-bar" data-stale="0">
+      <label class="check">
+        <input type="checkbox" id="edit-toggle">
+        Переносить и удалять посадки
+      </label>
+      <p class="edit-message" id="edit-message" role="status" aria-live="polite"></p>
+      <button type="button" class="primary small" id="rebuild">Пересобрать DXF</button>
+    </div>
+    {% endif %}
   </aside>
 
   {% if done %}
   <aside class="hud hud-right detail" id="detail" aria-live="polite">
-    <div class="detail-empty"><p>Загружаем состав плана.</p></div>
+    <button type="button" class="panel-toggle" data-panel="right" aria-expanded="true"
+            title="Свернуть панель" aria-label="Свернуть панель состава плана">
+      <svg class="icon chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+    <div class="detail-scroll"><div class="detail-empty"><p>Загружаем состав плана.</p></div></div>
+
+    {# Выгрузка - конец работы, поэтому она прибита к низу панели результата и не уезжает
+       в прокрутку вместе со списком видов. #}
+    {% if files.headline %}
+    {% set labels = {'result.dxf': 'Скачать DXF', 'interpretations.csv': 'Интерпретации, CSV'} %}
+    <div class="hud-foot downloads">
+      {% for file in files.headline %}
+      <a class="dl {{ 'primary' if loop.first else 'ghost' }}"
+         href="/api/v1/runs/{{ run.run_id }}/artifacts/{{ file.name }}" download>
+        <span>{{ labels.get(file.name, file.name) }}</span>
+        <span class="size">{{ file.size }}</span>
+      </a>
+      {% endfor %}
+      {# Что внутри файлов, говорит сам сервис (HEADLINE_FILES), а не подпись в шаблоне:
+         иначе описание и состав выгрузки разъезжаются при первой же правке. #}
+      <p class="dl-note">{% for file in files.headline %}{{ file.what }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+
+      {% if files.service %}
+      <details class="fold">
+        <summary>Файлы прогона · {{ files.service | length }}</summary>
+        <ul class="artifact-list">
+          {% for file in files.service %}
+          <li>
+            <a href="/api/v1/runs/{{ run.run_id }}/artifacts/{{ file.name }}" download>
+              <span>{{ file.name }}</span><span class="size">{{ file.size }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
   </aside>
   {% endif %}
 
 </div>
-
-{% if done %}
-<section class="below">
-  <div class="below-inner">
-    <div class="params">
-      <h2 class="section-label">Параметры прогона</h2>
-      <dl>
-        <div><dt>профиль</dt><dd>{{ run.profile }}</dd></div>
-        {% for key, value in run.overrides.items() %}
-        <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
-        {% endfor %}
-      </dl>
-      <p class="hint">
-        Другой вариант получают повторным прогоном с другими значениями. Исходный чертёж
-        не меняется: результат каждый раз пишется в новый набор файлов.
-      </p>
-    </div>
-
-    <div>
-      <h2 class="section-label">Файлы результата</h2>
-      <ul class="artifact-list">
-        {% for name in run.artifacts %}
-        <li><a href="/api/v1/runs/{{ run.run_id }}/artifacts/{{ name }}" download>{{ name }}</a></li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    {% if run.summary.get('warnings') %}
-    <details class="warnings">
-      <summary>Предупреждения прогона · {{ run.summary.get('warnings') | length }}</summary>
-      <ul>
-        {% for warning in run.summary.get('warnings') %}<li>{{ warning }}</li>{% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-  </div>
-</section>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script type="module" src="/static/plan.js?v={{ version }}"></script>
-<script>
-  // Пока прогон идёт, обновляем блок статуса на месте плана; когда закончился -
-  // перезагружаем страницу целиком, чтобы появились карта и панели.
-  const page = document.querySelector('.page-run');
-  const slot = document.getElementById('status-slot');
-  if (page && slot && ['queued', 'running'].includes(page.dataset.state)) {
-    const poll = setInterval(async () => {
-      try {
-        const response = await fetch(`/web/runs/${page.dataset.runId}/status`, { cache: 'no-store' });
-        if (!response.ok) return;
-        slot.innerHTML = await response.text();
-        const state = slot.querySelector('.status').dataset.state;
-        if (state !== 'queued' && state !== 'running') {
-          clearInterval(poll);
-          window.location.reload();
-        }
-      } catch (e) {
-        // сеть моргнула: следующий тик попробует снова
-      }
-    }, 2000);
-  }
-</script>
 {% endblock %}

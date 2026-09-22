@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     config_dir: Path = Path("config")
     runs_dir: Path = Path("var/runs")
+    # Каталог улиц пилотного проекта, подготовленный tools/prepare_streets.py.
+    # Датасета на стенде может не быть: тогда каталог просто пуст.
+    streets_dir: Path = Path("dataset/streets_dxf")
     default_profile: str = "strict"
     converter: Literal["auto", "libredwg", "oda", "none"] = "auto"
     libredwg_binary: str = "dwg2dxf"

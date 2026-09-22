@@ -210,6 +210,11 @@ class ConstraintIndex:
         return codes.astype(np.int8)
 
 
+def work_boundary(features: Sequence[Feature]) -> BaseGeometry | None:
+    """Граница работ чертежа - та же, что ограничивает размещение посадок."""
+    return _boundary([f for f in features if f.object_class is ObjectClass.WORK_BOUNDARY])
+
+
 def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
     """Граница работ из полигонов или из замкнутых линий (как «Граница заказа» Геотреста)."""
     areas = [f.geometry for f in features if f.geometry.geom_type in _AREA_TYPES]

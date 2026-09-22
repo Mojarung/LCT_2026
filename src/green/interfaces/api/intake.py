@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
     from fastapi import BackgroundTasks, UploadFile
 
+    from green.application.ports import StreetSource
     from green.application.results import RunRecord
     from green.bootstrap.container import Container
 
@@ -102,4 +104,50 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         extra_paths.append(target)
 
     background.add_task(container.runs.execute, record.run_id, inventory_path, tuple(extra_paths))
+    return record
+
+
+def _copy_and_execute(container: Container, run_id: str, street: StreetSource) -> None:
+    """Скопировать комплект улицы в прогон и посчитать его.
+
+    Копия, а не ссылка на файл каталога: прогон пишет рядом с исходником и правится на
+    карте, а каталог - общие данные, которые обязаны пережить любой прогон.
+    """
+    target = container.store.input_path(run_id)
+    try:
+        shutil.copyfile(street.main, target)
+        extra_paths: list[Path] = []
+        for position, source in enumerate(street.extra, 1):
+            copy = target.with_name(f"extra_{position}{source.suffix}")
+            shutil.copyfile(source, copy)
+            extra_paths.append(copy)
+    except OSError as error:
+        container.runs.reject(run_id, f"комплект улицы не скопирован: {error}")
+        return
+    container.runs.execute(run_id, None, tuple(extra_paths))
+
+
+def accept_street_run(
+    *,
+    container: Container,
+    background: BackgroundTasks,
+    street: StreetSource,
+    profile: str | None = None,
+    overrides: str | None = None,
+) -> RunRecord:
+    """Поставить в очередь прогон по улице из каталога.
+
+    Файлы уже лежат на диске, поэтому копирование идёт фоном вместе с самим прогоном:
+    подоснова улицы весит до двух сотен мегабайт, и копировать её в обработчике запроса
+    значит держать event loop на время копирования.
+    """
+    values = parse_overrides(overrides)
+    # Имя прогона проходит ту же проверку, что имя загруженного файла, поэтому расширение
+    # обязательно: в реестре человек ищет улицу по названию, а не по имени файла из архива.
+    record = container.runs.register(
+        f"{street.title}{street.main.suffix}",
+        profile or container.settings.default_profile,
+        values,
+    )
+    background.add_task(_copy_and_execute, container, record.run_id, street)
     return record

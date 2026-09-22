@@ -7,7 +7,14 @@ from fastapi import APIRouter
 from green import __version__
 from green.infrastructure.cad.writer import LAYER_COLORS, REJECT_BLOCK
 from green.interfaces.api.dependencies import ContainerDep
-from green.interfaces.api.schemas import ConverterOut, HealthOut, MetaOut, RulesOut, SpeciesOut
+from green.interfaces.api.schemas import (
+    ConverterOut,
+    HealthOut,
+    MetaOut,
+    RulesOut,
+    SpeciesOut,
+    StreetOut,
+)
 
 router = APIRouter(tags=["system"])
 
@@ -44,3 +51,22 @@ def meta(container: ContainerDep) -> MetaOut:
             ConverterOut(name=c.name, available=c.available()) for c in container.converters
         ],
     )
+
+
+@router.get("/streets")
+def streets(container: ContainerDep) -> list[StreetOut]:
+    """Улицы пилотного проекта, готовые к прогону.
+
+    Пустой список - обычное дело: каталог собирается из датасета, а датасет монтируется
+    не везде. Прогон по улице запускается полем `street` в POST /runs.
+    """
+    return [
+        StreetOut(
+            slug=street.slug,
+            number=street.number,
+            title=street.title,
+            files=1 + len(street.extra),
+            size_mb=street.size_mb,
+        )
+        for street in container.streets.all()
+    ]

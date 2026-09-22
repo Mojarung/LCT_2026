@@ -9,6 +9,9 @@
  * интерфейса читался бы как ещё один класс сетей, поэтому интерфейс ахроматичен:
  * холодный графит, тёплая кость, действия - инверсией. Зелёного в интерфейсе нет.
  *
+ * Кегли берутся только из шкалы --fs-*. Пол шкалы 12px: защиту смотрят с проектора
+ * с трёх метров, и подпись в 10px там не существует.
+ *
  * Шрифт IBM Plex вендорится в static/fonts: целевая среда офлайновая.
  */
 
@@ -93,6 +96,10 @@
   --bone-2: #a5a39d;
   --bone-3: #8e8b84;
   --inverse: #0e1013;
+  /* Отметка выбранного на карте. Ахроматична намеренно: любой цветной контур читался бы
+     как ещё один класс объектов. Подложка под ней - цвет фона карты. */
+  --accent: #f4f1ea;
+  --accent-halo: #0e1013;
 
   --ok: #6fae86;
   --warn: #cfa14a;
@@ -119,11 +126,40 @@
   --c-overhead: #e2604f;
   --c-pole: #c3c8cf;
   --c-existing: #6bb076;
+  /* Сетка чертёжного листа под планом: заметна только как фактура, спорить с линиями
+     подосновы ей нельзя. */
+  --grid: rgba(233, 230, 224, .052);
 
   --sans: "Plex", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "PlexMono", ui-monospace, Consolas, "Liberation Mono", monospace;
+
+  /* Шкала кеглей: шесть ступеней, половинных шагов нет, ниже 12px не опускаемся. */
+  --fs-micro: 12px;
+  --fs-small: 13px;
+  --fs-body: 14px;
+  --fs-strong: 16px;
+  --fs-title: 21px;
+  --fs-metric: 30px;
+
   --gutter: clamp(16px, 3.5vw, 36px);
-  --bar: 52px;
+  /* Высота плавающей пилюли шапки: под ней начинаются панели. */
+  --bar: 46px;
+  /* Полоса рабочих кнопок внизу карты: панели обязаны остановиться над ней. */
+  --tools: 44px;
+  /* Поле между краем экрана и всем, что лежит поверх плана. */
+  --inset: 12px;
+  /* Высота панели обозначений: значение по умолчанию до первого замера, дальше его
+     проставляет plan.js - панель у разных прогонов разной высоты, а пульт обязан под неё
+     ужаться. */
+  --legend-h: 260px;
+
+  /* Поверхности, которые парят над планом. Радиус крупный и один на всё: панель, пилюля
+     шапки и полоса кнопок - один материал, поднятый над чертежом, а не три разных блока.
+     Тень тонирована под фон, чистой чёрной её тут нет. */
+  --r-panel: 16px;
+  --r-control: 10px;
+  --glass: color-mix(in srgb, var(--panel) 84%, transparent);
+  --lift: 0 1px 1px rgba(5, 7, 10, .34), 0 14px 34px -14px rgba(5, 7, 10, .62);
 }
 
 /* Светлая тема - для печати, проектора и тех, кто так настроил систему. Тёмная основная:
@@ -141,6 +177,8 @@
     --bone-2: #4c4f55;
     --bone-3: #5d5f65;
     --inverse: #f7f6f3;
+    --accent: #101216;
+    --accent-halo: #e8e7e3;
     --ok: #2f6b4a;
     --warn: #85591b;
     --bad: #a3392a;
@@ -164,6 +202,9 @@
     --c-overhead: #c0392b;
     --c-pole: #3a3f45;
     --c-existing: #43804d;
+    --glass: color-mix(in srgb, var(--panel) 88%, transparent);
+    --lift: 0 1px 1px rgba(40, 38, 33, .12), 0 14px 30px -16px rgba(40, 38, 33, .38);
+    --grid: rgba(22, 24, 28, .07);
   }
 }
 
@@ -179,6 +220,8 @@
   --bone-2: #4c4f55;
   --bone-3: #5d5f65;
   --inverse: #f7f6f3;
+  --accent: #101216;
+  --accent-halo: #e8e7e3;
   --ok: #2f6b4a;
   --warn: #85591b;
   --bad: #a3392a;
@@ -202,22 +245,28 @@
   --c-overhead: #c0392b;
   --c-pole: #3a3f45;
   --c-existing: #43804d;
+  --glass: color-mix(in srgb, var(--panel) 88%, transparent);
+  --lift: 0 1px 1px rgba(40, 38, 33, .12), 0 14px 30px -16px rgba(40, 38, 33, .38);
+  --grid: rgba(22, 24, 28, .07);
 }
 
 * { box-sizing: border-box; }
 
+/* Подвал прижат низом окна на короткой странице и уезжает за содержимым на длинной. */
 body {
   margin: 0;
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--ground);
   color: var(--bone);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-main { display: block; }
+main { display: block; flex: 1 0 auto; }
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
@@ -237,45 +286,72 @@ a:hover { text-decoration-color: currentColor; }
 }
 .skip:focus { left: 8px; }
 
-/* --- верхняя строка --- */
+/* --- шапка: две пилюли поверх содержимого, а не полоса во всю ширину --- */
 
 .topbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: var(--bar);
   position: sticky;
   top: 0;
   z-index: 30;
-  padding: 0 var(--gutter);
-  border-bottom: 1px solid var(--hair);
-  background: var(--panel);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: var(--inset) var(--inset) 0;
+  /* Между пилюлями шапка ничего не ловит: под ней лежит план, и его надо таскать мышью. */
+  pointer-events: none;
+  flex-shrink: 0;
 }
-.brand {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  text-decoration: none;
-}
-.brand:hover { text-decoration: none; }
-.brand-note {
-  color: var(--bone-3);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.topbar > * { pointer-events: auto; }
+
 .topbar-nav {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 2px;
+  min-height: var(--bar);
+  padding: 0 5px;
   flex-shrink: 0;
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  backdrop-filter: blur(18px) saturate(140%);
 }
+/* Значок без подписи обязан быть достаточно крупной целью: 34x34 при требовании 24x24
+   (WCAG 2.5.8). Что делает кнопка, говорят title и aria-label - иначе значок молчит. */
+.topbar-nav > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--bone-2);
+  background: none;
+  border: 0;
+  border-radius: var(--r-control);
+  text-decoration: none;
+  transition: background-color .12s, color .12s;
+}
+.topbar-nav > *:hover { background: var(--panel-2); color: var(--bone); text-decoration: none; }
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Значок показывает тему, в которую переводит нажатие: в тёмной горит солнце. */
+.icon-moon { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .icon-sun { display: none; }
+  :root:not([data-theme="dark"]) .icon-moon { display: inline-block; }
+}
+:root[data-theme="light"] .icon-sun { display: none; }
+:root[data-theme="light"] .icon-moon { display: inline-block; }
 
 /* --- элементы управления --- */
 
@@ -286,91 +362,108 @@ button { font: inherit; cursor: pointer; }
   background: var(--bone);
   color: var(--inverse);
   border: 1px solid var(--bone);
-  border-radius: 3px;
-  font-size: 13px;
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
   font-weight: 500;
   transition: opacity .12s, transform .1s;
 }
 .primary:hover:not(:disabled) { opacity: .85; }
 .primary:active:not(:disabled) { transform: translateY(1px); }
 .primary:disabled { opacity: .4; cursor: progress; }
-.primary.small { padding: 6px 12px; font-size: 12.5px; }
+.primary.small { padding: 7px 12px; font-size: var(--fs-micro); }
 
 .ghost {
   padding: 9px 16px;
   background: transparent;
   color: var(--bone);
   border: 1px solid var(--hair-2);
-  border-radius: 3px;
-  font-size: 13px;
-  transition: border-color .12s, background-color .12s;
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
+  transition: border-color .12s, background-color .12s, transform .1s;
 }
 .ghost:hover { border-color: var(--bone); background: var(--panel-2); }
-
-.linkish {
-  padding: 0;
-  background: none;
-  border: 0;
-  color: var(--bone-2);
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.linkish:hover { color: var(--bone); }
+.ghost:active { transform: translateY(1px); }
 
 input[type="text"], input[type="number"], select, textarea {
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 10px;
   background: var(--panel-2);
   color: var(--bone);
   border: 1px solid var(--hair-2);
-  border-radius: 3px;
+  border-radius: var(--r-control);
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   transition: border-color .12s;
 }
 input:hover, select:hover, textarea:hover { border-color: var(--bone-3); }
 input:focus, select:focus, textarea:focus { border-color: var(--bone); }
-textarea { font-family: var(--mono); font-size: 12.5px; resize: vertical; }
+textarea { font-family: var(--mono); font-size: var(--fs-micro); resize: vertical; }
 
-input[type="file"] {
-  width: 100%;
-  padding: 12px;
-  background: var(--panel-2);
-  color: var(--bone-2);
-  border: 1px dashed var(--hair-2);
-  border-radius: 3px;
-  font-size: 12.5px;
+/* Системный select выпадает из набора: своя стрелка вместо платформенной. */
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
 }
-input[type="file"]:hover { border-color: var(--bone-3); }
-input[type="file"]::file-selector-button {
-  margin-right: 12px;
-  padding: 6px 13px;
-  background: var(--bone);
-  color: var(--inverse);
-  border: 0;
-  border-radius: 3px;
-  font: inherit;
-  font-size: 12.5px;
+
+/* Родной input[type=file] показывает системную надпись «Файл не выбран», которую нельзя
+   ни перевести, ни набрать своим шрифтом. Сам input остаётся в разметке и получает фокус,
+   видимой его частью работает подпись. */
+.filefield { position: relative; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 12px; background: var(--panel-2); border: 1px dashed var(--hair-2); border-radius: var(--r-control); }
+.filefield:hover { border-color: var(--bone-3); }
+/* Сам input растянут на всё поле и прозрачен: клик в любую точку открывает выбор файла,
+   а системная надпись рядом с кнопкой не показывается. */
+.filefield input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
 }
-input[type="file"]::file-selector-button:hover { opacity: .85; }
+.filefield:has(input[type="file"]:focus-visible) { outline: 2px solid var(--bone); outline-offset: 2px; }
+.filefield .pick {
+  padding: 7px 13px;
+  background: var(--bone);
+  color: var(--inverse);
+  border-radius: var(--r-control);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filefield:hover .pick { opacity: .85; }
+.filefield .chosen {
+  flex: 1;
+  min-width: 0;
+  color: var(--bone-3);
+  font-size: var(--fs-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filefield .chosen[data-chosen="1"] { color: var(--bone); font-family: var(--mono); }
 
 .field { margin-bottom: 20px; }
 /* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field и без
    исключения набирались бы капсом вместе с заголовками полей. */
-.field > label:not(.check), .field > legend {
+/* Подписи полей строчные: капс с разрядкой оставлен только разделам страницы, иначе он
+   перестаёт быть приёмом и становится единственным способом подписать что угодно. */
+.field > label:not(.check), .field > legend, .field > .field-title {
   display: block;
-  margin-bottom: 6px;
-  font-size: 10.5px;
+  margin-bottom: 7px;
+  font-size: var(--fs-small);
   font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--bone-3);
+  color: var(--bone-2);
 }
 fieldset.field { border: 0; padding: 0; margin-inline: 0; }
 fieldset.field > legend { margin-bottom: 10px; }
-.hint { margin: 6px 0 0; color: var(--bone-3); font-size: 12px; line-height: 1.45; max-width: 60ch; }
+.hint { margin: 6px 0 0; color: var(--bone-3); font-size: var(--fs-small); line-height: 1.45; max-width: 60ch; }
 
 .field-row { display: grid; grid-template-columns: 1fr 170px; gap: 20px; }
 
@@ -379,7 +472,7 @@ fieldset.field > legend { margin-bottom: 10px; }
   align-items: flex-start;
   gap: 9px;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: var(--fs-small);
   color: var(--bone-2);
   cursor: pointer;
 }
@@ -389,8 +482,8 @@ fieldset.field > legend { margin-bottom: 10px; }
 .advanced { margin-bottom: 20px; border-top: 1px solid var(--hair); padding-top: 13px; }
 .advanced > summary {
   cursor: pointer;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--bone-3);
   user-select: none;
@@ -403,31 +496,40 @@ fieldset.field > legend { margin-bottom: 10px; }
 
 /* --- страница запуска: консоль, а не лендинг --- */
 
-.launch { padding: clamp(24px, 4vw, 44px) var(--gutter) 56px; }
+.launch { padding: clamp(16px, 2.2vw, 24px) var(--inset) clamp(24px, 3vw, 40px); }
 .launch-inner {
-  max-width: 1280px;
+  max-width: 1400px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
-  gap: clamp(28px, 5vw, 64px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+  gap: clamp(14px, 1.6vw, 20px);
   align-items: start;
 }
 
+/* Главная сложена из тех же поверхностей, что парят над планом на странице прогона:
+   два самостоятельных модуля - «запустить» и «что уже посчитано», - а не разделы текста. */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  padding: clamp(18px, 2.2vw, 26px);
+}
+
 .section-label.section-gap { margin-top: 34px; }
-h1.section-label { font-size: 10.5px; }
 .section-label {
   margin: 0 0 16px;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--bone-3);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--hair);
 }
 
-.start-title { margin: 0 0 6px; font-size: 14.5px; font-weight: 600; }
-.start-form > .start-title { margin-bottom: 16px; }
+.start-title { margin: 0 0 7px; font-size: var(--fs-title); font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.start-form > .start-title { margin-bottom: 18px; }
 
 .visually-hidden {
   position: absolute;
@@ -450,6 +552,22 @@ h1.section-label { font-size: 10.5px; }
 .start-row > div { flex: 1; min-width: 240px; }
 .start-form { padding-top: 22px; }
 
+/* Два источника прогона в одной форме: улица из каталога или свой чертёж. */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+}
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+
+.form-error { margin: 0 0 12px; font-size: var(--fs-small); color: var(--bad); }
+.form-error:empty { margin: 0; }
+
 .facts { display: grid; gap: 0; margin: 0 0 14px; border-top: 1px solid var(--hair); }
 .facts div {
   display: flex;
@@ -458,27 +576,31 @@ h1.section-label { font-size: 10.5px; }
   padding: 8px 0;
   border-bottom: 1px solid var(--hair);
 }
-.facts dt { font-size: 12.5px; color: var(--bone-3); }
+.facts div { align-items: baseline; }
+.facts dt { font-size: var(--fs-small); color: var(--bone-3); }
 .facts dd {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-title);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-/* Перечень актов - не число: моноширинный делает его тяжелее самих значений. */
-.facts dd.acts { font-family: var(--sans); font-size: 12px; color: var(--bone-2); }
+/* Перечень актов - не число: моноширинный и крупный делают его тяжелее самих значений. */
+.facts dd.acts { font-family: var(--sans); font-size: var(--fs-small); font-weight: 400; letter-spacing: 0; color: var(--bone-2); }
 
 /* --- реестр прогонов --- */
 
-.registry { width: 100%; border-collapse: collapse; font-size: 13px; }
+.registry { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
 .registry th {
   text-align: left;
   padding: 0 10px 7px 0;
   border-bottom: 1px solid var(--hair);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--bone-3);
 }
@@ -495,7 +617,7 @@ h1.section-label { font-size: 10.5px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.registry td.mono { font-family: var(--mono); font-size: 12px; color: var(--bone-2); font-variant-numeric: tabular-nums; }
+.registry td.mono { font-family: var(--mono); font-size: var(--fs-micro); color: var(--bone-2); font-variant-numeric: tabular-nums; }
 .registry a { font-weight: 500; text-decoration: none; }
 .registry a:hover { text-decoration: underline; }
 .registry tr:hover td { background: var(--panel); }
@@ -516,75 +638,173 @@ h1.section-label { font-size: 10.5px; }
 .state-failed { color: var(--bad); }
 .state-running, .state-queued { color: var(--warn); }
 
-.empty { padding: 18px 0; color: var(--bone-3); font-size: 13px; }
+.empty { padding: 18px 0; color: var(--bone-3); font-size: var(--fs-small); }
 .empty p { margin: 0 0 6px; }
 
 /* --- рабочее пространство: план во весь экран, панели поверх --- */
 
-/* Рабочее место занимает ровно первый экран: план - основная работа, всё остальное
-   лежит под ним и открывается прокруткой. */
+/* Рабочее место - весь экран. Под планом не остаётся ни строки: всё, что раньше лежало
+   отдельной секцией снизу (файлы, предупреждения, параметры), переехало в панели, и
+   страница прогона больше не прокручивается. */
+body.shell-map { height: 100dvh; overflow: hidden; }
+body.shell-map .footer { display: none; }
+body.shell-map .topbar { position: fixed; left: 0; right: 0; }
+
 .workspace {
-  position: relative;
-  height: calc(100dvh - var(--bar));
-  min-height: 460px;
+  position: fixed;
+  inset: 0;
   background: var(--ground);
   overflow: hidden;
 }
+.workspace .canvas-holder { position: absolute; inset: 0; }
 #plan-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 #plan-canvas.dragging { cursor: grabbing; }
 #plan-canvas.editable { cursor: crosshair; }
+#plan-canvas:focus-visible { outline: 2px solid var(--bone); outline-offset: -4px; }
 
+/* Порядок слоёв рабочего места: подложка загрузки (1) под панелями (2), полоса хода (3)
+   поверх всего - она читается и до того, как появился чертёж. */
 .hud {
   position: absolute;
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  z-index: 2;
+  background: var(--glass);
   border: 1px solid var(--hair);
-  border-radius: 4px;
-  backdrop-filter: blur(8px);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  backdrop-filter: blur(18px) saturate(140%);
 }
 
-.hud-left {
-  top: 14px;
-  left: 14px;
-  width: 268px;
-  max-height: calc(100% - 28px);
+/* Панели начинаются под пилюлей шапки и останавливаются над полосой кнопок: иначе на
+   ноутбучной высоте 720 они наезжают на «вписать» и на условные обозначения. Ограничитель
+   здесь, а не в медиазапросе по высоте, - он не умеет промахиваться мимо размера окна. */
+.hud-left, .hud-right {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.hud-right {
-  top: 14px;
-  right: 14px;
-  width: 330px;
-  max-height: calc(100% - 28px);
-  overflow-y: auto;
+/* Слева над панелью ничего не висит, и она начинается у самой кромки: на ноутбучной
+   высоте 768 эти полсотни пикселей - разница между «всё видно» и обрезанным блоком.
+   Справа панель уступает место значкам. */
+.hud-left {
+  left: var(--inset);
+  top: var(--inset);
+  width: 296px;
+  max-height: calc(100% - var(--inset) * 2 - var(--tools));
 }
+.hud-right {
+  right: var(--inset);
+  top: calc(var(--inset) * 2 + var(--bar));
+  width: 356px;
+  max-height: calc(100% - var(--inset) * 3 - var(--bar) - var(--tools));
+}
+
+/* Свернуть панель - значок в её верхнем правом углу. Свёрнутая панель остаётся на месте
+   одной кнопкой, и вся ширина экрана уходит плану: на ленте улицы это решает, видно
+   чертёж или нет. */
+.panel-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--r-control);
+  color: var(--bone-3);
+  transition: background-color .12s, color .12s;
+}
+.panel-toggle:hover { background: var(--panel-2); color: var(--bone); }
+.chev { width: 16px; height: 16px; transition: transform .16s cubic-bezier(.16, 1, .3, 1); }
+.hud.collapsed .chev { transform: rotate(180deg); }
+.hud.collapsed { width: 42px; height: 42px; min-height: 0; }
+.hud.collapsed > :not(.panel-toggle) { display: none; }
+.hud.collapsed .panel-toggle { top: 5px; right: 5px; }
+/* Заголовки уступают место значку, иначе он ложится на имя чертежа и на счёт видов. */
+.hud-left .hud-head { padding-right: 42px; }
+.hud-right .detail-heading:first-child, .hud-right .detail-empty { padding-right: 34px; }
+
 .hud-bottom {
-  left: 14px;
-  bottom: 14px;
+  left: var(--inset);
+  bottom: var(--inset);
   display: flex;
-  gap: 1px;
-  background: var(--hair);
+  gap: 2px;
+  padding: 3px;
   overflow: hidden;
 }
 .hud-bottom button {
+  min-width: 36px;
+  min-height: 32px;
   padding: 6px 12px;
-  background: var(--panel);
+  background: transparent;
   color: var(--bone-2);
   border: 0;
+  border-radius: 8px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
+  transition: background-color .12s, color .12s;
 }
 .hud-bottom button:hover { color: var(--bone); background: var(--panel-2); }
+.hud-bottom button[aria-pressed="true"] { color: var(--bone); background: var(--panel-2); }
+
+/* Ползунок масштаба рядом с «+» и «−»: колесо есть не у всякой мыши, а на тачпаде масштаб
+   ловится плохо. Дорожка и бегунок рисуются вручную - у браузеров они разные. */
+#zoom-range {
+  width: 92px;
+  height: 32px;
+  margin: 0 4px;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+#zoom-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hair-2);
+}
+#zoom-range::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hair-2);
+}
+#zoom-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bone-2);
+  transition: background-color .12s;
+}
+#zoom-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bone-2);
+}
+#zoom-range:hover::-webkit-slider-thumb { background: var(--bone); }
+#zoom-range:hover::-moz-range-thumb { background: var(--bone); }
+#zoom-range:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; border-radius: 8px; }
 
 .hud-head {
-  padding: 12px 14px;
+  padding: 11px 15px 13px;
   border-bottom: 1px solid var(--hair);
+  flex-shrink: 0;
 }
 .hud-head .back {
   display: inline-block;
-  margin-bottom: 8px;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--bone-3);
   text-decoration: none;
@@ -592,78 +812,275 @@ h1.section-label { font-size: 10.5px; }
 .hud-head .back:hover { color: var(--bone); }
 .hud-head h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-title);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 .hud-head .run-sub {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--bone-3);
   overflow-wrap: anywhere;
 }
 
-.hud-scroll { overflow-y: auto; padding: 12px 14px 14px; }
+/* min-height: 0 обязателен: без него элемент с прокруткой внутри колоночного flex
+   растягивает панель вместо того, чтобы прокручиваться. */
+.hud-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 15px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+/* Молчаливое переполнение хуже обрезанного текста: на высоте 720 панель прятала полтораста
+   пикселей содержимого ровной кромкой, и это читалось как «здесь всё». Растушёвка снизу
+   ставится только когда прокрутка действительно есть - её включает plan.js. */
+.hud-scroll[data-overflow="1"], .detail-scroll[data-overflow="1"] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
+}
 
-.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hair); margin-bottom: 16px; }
-.stat { background: var(--panel); padding: 9px 10px; }
-.stat b {
+/* Действие панели прибито к её низу и в прокрутку не попадает: кнопка, которая уезжает
+   за нижний край, для судьи с проектора просто не существует. */
+.hud-foot {
+  flex-shrink: 0;
+  padding: 13px 15px 15px;
+  border-top: 1px solid var(--hair);
+  background: var(--panel);
+}
+
+/* Сводка: одно число крупно, остальное строкой под ним. Пять равных плиток превращали
+   «302 посадки» и «302 без ограничений» в два разных факта. */
+.metric { margin: 0 0 4px; }
+.metric b {
   display: block;
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: var(--fs-metric);
   font-weight: 500;
-  line-height: 1.1;
+  line-height: 1;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.stat span {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--bone-3);
+.metric span { display: block; margin-top: 6px; font-size: var(--fs-small); color: var(--bone-2); }
+.metric-sub { margin: 0; font-size: var(--fs-small); color: var(--bone-3); }
+.metric-sub b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--bone-2); }
+
+/* Предупреждение, меняющее смысл плана. Тон предупреждающий, но не тревожный: прогон
+   состоялся и числа верны, неверен участок, на котором они получены. */
+.notice {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-left: 2px solid var(--warn);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
 }
-.stat.wide { grid-column: 1 / -1; }
-.stat.ok b { color: var(--ok); }
-.stat.bad b { color: var(--bad); }
+.notice p {
+  margin: 0;
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+  color: var(--bone-2);
+}
+.notice p + p { margin-top: 6px; }
+
+/* Индекс качества: число крупно, слагаемые строкой «название - оценка - полоска». Полоска
+   без цвета вердикта: зелёный и жёлтый на карте означают «допускается» и «на согласование»,
+   и та же краска здесь читалась бы как ещё один вердикт. */
+.quality { margin-bottom: 18px; }
+.quality-index { margin: 0 0 4px; font-size: var(--fs-small); color: var(--bone-3); }
+.quality-index b {
+  font-family: var(--mono);
+  font-size: var(--fs-strong);
+  font-weight: 500;
+  color: var(--bone);
+  font-variant-numeric: tabular-nums;
+}
+.quality-gate { margin: 0 0 6px; font-size: var(--fs-micro); line-height: 1.4; color: var(--bone-2); }
+.quality-line { margin-top: 4px; }
+.quality-line b { color: var(--bone); }
+.quality-line em { font-style: normal; }
+.quality-line em.bad { color: var(--bad); }
+.quality-terms { list-style: none; margin: 8px 0 0; padding: 0; }
+.quality-terms li + li { border-top: 1px solid var(--hair); }
+.term > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+}
+.term > summary::-webkit-details-marker { display: none; }
+.term > summary:hover .term-name { color: var(--bone); }
+.term-name { color: var(--bone-2); }
+.term-score { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--bone); }
+.term-bar { height: 4px; border-radius: 2px; background: var(--hair); overflow: hidden; }
+.term-bar i { display: block; height: 100%; background: var(--bone-2); }
+.term-none .term-score, .term-none .term-name { color: var(--bone-3); }
+.term-note, .term-basis { margin: 0 0 6px; font-size: var(--fs-micro); line-height: 1.4; }
+.term-note { color: var(--bone-2); }
+.term-basis { color: var(--bone-3); }
+.quality-summary { margin-top: 8px; }
+.quality-summary p { margin: 6px 0 0; font-size: var(--fs-micro); line-height: 1.45; color: var(--bone-2); }
+
+/* Ценность посадки в карточке справа. */
+.value-delta { margin: 0 0 8px; font-size: var(--fs-small); color: var(--bone-2); line-height: 1.45; }
+.value-delta b { font-family: var(--mono); font-weight: 500; color: var(--bone); font-variant-numeric: tabular-nums; }
+.value-delta.bad b { color: var(--bad); }
+.value-reasons { margin: 0 0 4px; padding-left: 16px; font-size: var(--fs-small); line-height: 1.45; }
+.value-reasons li + li { margin-top: 4px; }
+.metric em { font-style: normal; color: var(--ok); }
+.metric em.bad { color: var(--bad); }
 
 .hud-label {
   margin: 0 0 9px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--bone-3);
 }
-.hud-block + .hud-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair); }
-.layer-toggles { display: flex; flex-direction: column; gap: 2px; }
-.layer-toggles .check { margin: 0; font-size: 12.5px; }
+/* Сводка идёт первой и отбивки не требует; всё, что после неё, отделяется линией.
+   Отбивки сжаты так, чтобы панель целиком помещалась на 1366 x 768 - это высота, на
+   которой идёт защита с проектора, и условные обозначения там нужны целиком. */
+.hud-scroll > .hud-block:not(:first-child) {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--hair);
+}
+.layer-toggles { display: flex; flex-direction: column; gap: 0; }
+.layer-toggles .check { margin: 0; font-size: var(--fs-small); line-height: 1.35; }
 
-.edit-message { margin: 8px 0 10px; font-size: 11.5px; color: var(--bone-3); line-height: 1.4; }
+.edit-message { margin: 8px 0 10px; font-size: var(--fs-micro); color: var(--bone-3); line-height: 1.4; }
+.edit-message:empty { margin: 0; }
 .edit-message[data-kind="error"] { color: var(--bad); }
 #rebuild { width: 100%; }
-.hud-block[data-stale="1"] #rebuild { background: var(--warn); border-color: var(--warn); color: var(--inverse); }
-
-/* Легенда: без неё цвет линии на карте ничего не сообщает. */
-.legend {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  padding: 10px 12px;
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 4px 14px;
-  font-size: 11px;
-  color: var(--bone-2);
-  pointer-events: none;
+/* «План изменён» говорится словом, а не цветом: --warn - это вердикт «на согласование»
+   у посадок на карте, и той же краской покрашенная кнопка читается как ещё один класс. */
+.hud-foot[data-stale="1"] #rebuild::after {
+  content: " · план изменён";
+  font-weight: 400;
+  opacity: .7;
 }
-.legend span { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.legend i { width: 15px; height: 0; border-top-width: 2px; border-top-style: solid; flex-shrink: 0; }
+
+/* Условные обозначения - своя панель у нижней кромки, над полосой кнопок. В пульте они
+   уезжали в прокрутку вместе со слоями и предупреждениями, а читают их, глядя на карту.
+   Убираются кнопкой «обозначения» и крестиком: панель не должна мешать, когда не нужна. */
+.hud-legend {
+  left: var(--inset);
+  bottom: calc(var(--inset) * 2 + var(--tools));
+  width: 300px;
+  max-height: min(420px, calc(100% - var(--inset) * 4 - var(--tools) - 110px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.hud-legend[hidden] { display: none; }
+.legend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px 0 15px;
+}
+.legend-head .hud-label { margin: 0; }
+.legend-hide {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--bone-3);
+}
+.legend-hide:hover { color: var(--bone); background: var(--panel-2); }
+.legend-hide .icon { width: 14px; height: 14px; }
+.legend-scroll {
+  padding: 10px 15px 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+/* Заголовок группы - он же её выключатель. Кегль на ступень выше подписей внутри:
+   иначе строка «Подземные сети» теряется среди восьми строк с цветами. */
+.legend-group {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+  color: var(--bone);
+}
+.legend-group:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair);
+}
+/* Знак прямо в строке группы: линия, кружок или крестик перед её названием. */
+.legend-group { align-items: center; }
+.legend-group .key { margin: 0 2px 0 0; flex-shrink: 0; }
+.legend-group .key:not(.dot):not(.cross) { width: 14px; border-top: 2px solid; }
+.legend-group .key.dot { width: 9px; height: 9px; border: 1.5px solid; border-radius: 50%; }
+.legend-group .key.cross {
+  width: 10px;
+  height: 10px;
+  color: var(--bad);
+  background:
+    linear-gradient(to bottom right, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%),
+    linear-gradient(to bottom left, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%);
+}
+/* Обозначения внутри группы отступают от её галочки, чтобы читались как её содержимое. */
+.legend-scroll .legend { margin-left: 22px; gap: 2px 12px; }
+.legend-plan i.dot { height: 11px; width: 11px; }
+.legend i.cross {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  background:
+    linear-gradient(to bottom right, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%),
+    linear-gradient(to bottom left, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%);
+}
+.legend i.cross { color: var(--bad); }
+.legend-note {
+  margin: 10px 0 0;
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+  color: var(--bone-3);
+}
+/* Пульт уступает место панели обозначений ровно на её высоту: высота зависит от прогона
+   (у идущего нет раздела «План»), поэтому её измеряет plan.js и кладёт в переменную. */
+.workspace.legend-on .hud-left {
+  max-height: calc(100% - var(--inset) * 4 - var(--tools) - var(--legend-h, 260px));
+}
+
+/* В узкой панели подписи переносятся, а не обрезаются многоточием: «силовой кабель» и
+   «требует согласования» в одну строку не помещаются, а обрезанные они бесполезны. */
+.hud-legend .legend span { align-items: flex-start; }
+.hud-legend .legend i { margin-top: 6px; }
+.hud-legend .legend i.dot, .hud-legend .legend i.cross { margin-top: 2px; }
+.hud-legend .legend b { overflow: visible; white-space: normal; text-overflow: clip; }
+/* Названия вердиктов длинные, в две колонки они не читаются. */
+.legend-plan { grid-template-columns: 1fr; gap: 5px; }
+
+.legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 12px;
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  color: var(--bone-2);
+}
+.legend span { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.legend b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend i { width: 14px; height: 0; border-top-width: 2px; border-top-style: solid; flex-shrink: 0; }
 .legend i.dash { border-top-style: dashed; }
-.legend i.dot { height: 8px; width: 8px; border: 1.5px solid; border-radius: 50%; }
+.legend i.dot { height: 9px; width: 9px; border: 1.5px solid; border-radius: 50%; }
 
 .map-loading {
   position: absolute;
@@ -673,11 +1090,63 @@ h1.section-label { font-size: 10.5px; }
   justify-content: center;
   gap: 10px;
   color: var(--bone-3);
-  font-size: 13px;
+  font-size: var(--fs-small);
   background: var(--ground);
-  z-index: 5;
+  z-index: 1;
 }
 .map-loading[hidden] { display: none; }
+/* Пока чертёж читается, подложка прозрачна: под ней сетка листа, на котором он появится. */
+.page-run[data-state="queued"] .map-loading,
+.page-run[data-state="running"] .map-loading { background: transparent; }
+
+/* --- ход расчёта --- */
+
+.hud-progress {
+  left: 50%;
+  bottom: var(--inset);
+  z-index: 3;
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - var(--inset) * 2));
+  padding: 12px 16px 13px;
+}
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 9px;
+}
+.progress-title { margin: 0; font-weight: 600; font-size: var(--fs-body); }
+.progress-pct {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-2);
+  white-space: nowrap;
+}
+.progress-bar { height: 4px; border-radius: 2px; background: var(--hair-2); overflow: hidden; }
+.progress-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--bone);
+  transition: width .6s cubic-bezier(.16, 1, .3, 1);
+}
+.progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-3);
+}
+.progress-meta span { white-space: nowrap; }
+.progress-meta span:last-child { margin-left: auto; text-align: right; }
 
 .spinner {
   width: 13px;
@@ -692,29 +1161,38 @@ h1.section-label { font-size: 10.5px; }
 
 /* --- панель объяснения --- */
 
-.detail { padding: 14px 16px 18px; }
-.detail-empty { color: var(--bone-3); font-size: 12.5px; }
+.detail { padding: 0; }
+.detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 15px 16px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+.detail-empty { color: var(--bone-3); font-size: var(--fs-small); }
 .detail-empty p { margin: 0 0 8px; }
-.detail h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.detail-lat { margin: 0 0 12px; color: var(--bone-3); font-size: 12.5px; font-style: italic; }
+.detail h2.detail-name { margin: 0 0 2px; font-size: var(--fs-strong); font-weight: 600; letter-spacing: -0.01em; }
+.detail-lat { margin: 0 0 12px; color: var(--bone-3); font-size: var(--fs-small); font-style: italic; }
 .detail-heading {
   margin: 18px 0 10px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--bone-3);
   padding-bottom: 6px;
   border-bottom: 1px solid var(--hair);
 }
+.detail-heading:first-child { margin-top: 0; }
 
 .verdict {
   display: inline-block;
   margin-bottom: 10px;
-  padding: 2px 9px;
+  padding: 3px 9px;
   border: 1px solid currentColor;
-  border-radius: 3px;
-  font-size: 11px;
+  border-radius: 6px;
+  font-size: var(--fs-micro);
   font-weight: 500;
 }
 .verdict-allowed { color: var(--ok); }
@@ -725,36 +1203,80 @@ h1.section-label { font-size: 10.5px; }
   margin: 0 0 12px;
   padding: 11px 12px;
   background: var(--panel-2);
-  border-radius: 3px;
-  font-size: 12.5px;
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
   line-height: 1.55;
 }
 .detail-full { margin-top: 16px; }
-.detail-full > summary { cursor: pointer; font-size: 11px; color: var(--bone-3); user-select: none; }
+.detail-full > summary { cursor: pointer; font-size: var(--fs-micro); color: var(--bone-3); user-select: none; }
 .detail-full > summary:hover { color: var(--bone); }
+.detail-slack { margin: 14px 0 0; font-size: var(--fs-small); color: var(--bone-2); line-height: 1.5; }
+.detail-slack b { font-family: var(--mono); font-weight: 500; color: var(--bone); font-variant-numeric: tabular-nums; }
 
+/* Состав плана: строка - кнопка, потому что она подсвечивает свой вид на карте.
+   Иначе список видов не связан с планом ничем. */
 .composition { list-style: none; margin: 0; padding: 0; }
-.composition li {
+/* Строка вида: галочка показа на карте и сама строка с долей. Галочка отдельной кнопкой,
+   а не поведением строки: клик по строке подсвечивает вид, и одно действие не должно
+   означать два разных. */
+.composition li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--hair); }
+.composition li:last-child { border-bottom: 0; }
+.composition-see { flex-shrink: 0; margin: 0 0 0 4px; }
+.composition li.off .composition-name,
+.composition li.off .composition-count { opacity: .45; }
+/* Подсказка и «показать все» над списком: без них фильтр находят случайно. */
+.detail-note {
+  margin: 0 0 10px;
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+  color: var(--bone-3);
+}
+.linkish {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bone-2);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.linkish:hover { color: var(--bone); }
+.composition button {
   position: relative;
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--hair);
-  font-size: 12.5px;
+  width: 100%;
+  padding: 7px 8px;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  font-size: var(--fs-small);
 }
-.composition li:last-child { border-bottom: 0; }
+.composition button:hover { background: var(--panel-2); }
+.composition button[aria-pressed="true"] { background: var(--panel-2); }
+.composition button[aria-pressed="true"] .composition-name { font-weight: 600; }
+/* Доля считается от самого частого вида, а не от суммы: при тринадцати видах доли от суммы
+   лежат в пределах 9,9-0,7%, и десять полос из тринадцати отличаются на четыре пикселя -
+   диаграмма читается как артефакт отрисовки. */
+/* Подчёркивание, а не заливка во всю высоту строки: при тринадцати видах с почти равными
+   долями заливка покрывает девять строк из тринадцати и читается как «всё выделено». */
 .composition-bar {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
+  left: 0;
+  bottom: 0;
+  height: 2px;
   width: var(--share);
-  background: var(--panel-2);
+  background: var(--hair-2);
 }
+.composition button[aria-pressed="true"] .composition-bar { background: var(--bone-3); }
 .composition-name { position: relative; flex: 1; min-width: 0; }
 .composition-count {
   position: relative;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   color: var(--bone-3);
 }
@@ -765,72 +1287,114 @@ h1.section-label { font-size: 10.5px; }
 .check-item.failed { padding-left: 10px; box-shadow: inset 2px 0 0 var(--bad); }
 .check-item.failed .check-dist { color: var(--bad); }
 .check-rule { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-.check-id { font-family: var(--mono); font-size: 11px; color: var(--bone-3); }
-.check-dist { font-family: var(--mono); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.check-clause { margin: 5px 0 0; font-size: 12px; line-height: 1.45; }
+.check-what { font-size: var(--fs-small); }
+.check-dist { font-family: var(--mono); font-size: var(--fs-small); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.check-clause { margin: 5px 0 0; font-size: var(--fs-small); line-height: 1.45; color: var(--bone-3); }
+.check-id { font-family: var(--mono); }
 .check-quote {
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   padding-left: 10px;
   border-left: 2px solid var(--hair-2);
-  color: var(--bone-3);
-  font-size: 11.5px;
+  color: var(--bone-2);
+  font-size: var(--fs-small);
   line-height: 1.5;
 }
-
-/* --- то, что под планом: параметры, файлы, предупреждения --- */
-
-.below {
-  border-top: 1px solid var(--hair);
-  background: var(--panel);
-  padding: 26px var(--gutter) 34px;
+/* Строка таблицы норм, разобранная на колонки. В своде она хранится как
+   «объект | до дерева | до кустарника», и напечатанная палками читается как дамп:
+   эксперт видит два числа и гадает, какое из них про ствол. */
+/* Перечень строк таблицы: слева вариант, справа число. Палками он читался как дамп. */
+.quote-rows { list-style: none; margin: 0; padding: 0; }
+.quote-rows li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
 }
-.below-inner { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 26px 40px; }
+.quote-rows li + li { border-top: 1px solid var(--hair); }
+.quote-rows b { font-family: var(--mono); font-weight: 500; color: var(--bone); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.params dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 22px; margin: 0 0 12px; }
-.params dt { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bone-3); }
-.params dd { margin: 3px 0 0; font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.quote-cols { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 5px 0 0; }
+.quote-cols span { white-space: nowrap; }
+.quote-cols b { font-family: var(--mono); font-weight: 500; color: var(--bone); font-variant-numeric: tabular-nums; }
+.quote-note { margin: 5px 0 0; color: var(--bone-3); }
 
-.warnings > summary {
-  cursor: pointer;
-  font-size: 10.5px;
+/* --- выгрузка и складки внутри панелей --- */
+
+/* Выгрузка - конец работы, и она прибита к низу панели результата. Раньше файлы лежали
+   отдельной секцией под планом: на неё приходилось догадаться прокрутить страницу. */
+.downloads { display: flex; flex-direction: column; gap: 6px; }
+.dl {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 13px;
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
   font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--warn);
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--warn);
-  user-select: none;
+  text-decoration: none;
+  transition: opacity .12s, border-color .12s, background-color .12s, transform .1s;
 }
-.warnings[open] > summary { margin-bottom: 12px; }
-.warnings ul { margin: 0; padding-left: 17px; color: var(--bone-2); font-size: 12px; }
-.warnings li + li { margin-top: 5px; }
+.dl:hover { text-decoration: none; }
+.dl:active { transform: translateY(1px); }
+.dl.primary { background: var(--bone); color: var(--inverse); border: 1px solid var(--bone); }
+.dl.primary:hover { opacity: .85; }
+.dl.ghost { background: transparent; color: var(--bone); border: 1px solid var(--hair-2); }
+.dl.ghost:hover { border-color: var(--bone); background: var(--panel-2); }
+.dl .size { font-family: var(--mono); font-size: var(--fs-micro); font-weight: 400; opacity: .7; font-variant-numeric: tabular-nums; }
+.dl-note { margin: 2px 0 0; font-size: var(--fs-micro); color: var(--bone-3); line-height: 1.4; }
 
-.artifact-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+/* Складки в панели: служебные файлы и предупреждения открываются по требованию, а в
+   свёрнутом виде стоят одной строкой, как остальные подписи блоков. */
+.fold > summary {
+  cursor: pointer;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bone-3);
+  user-select: none;
+  list-style: none;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before { content: "+ "; font-family: var(--mono); }
+.fold[open] > summary::before { content: "- "; }
+.fold > summary:hover { color: var(--bone); }
+.fold[open] > summary { color: var(--bone); }
+
+.warn-list { margin: 9px 0 0; padding-left: 16px; color: var(--bone-2); font-size: var(--fs-small); line-height: 1.45; }
+.warn-list li + li { margin-top: 5px; }
+
+/* Раскрытый список служебных файлов живёт в подвале панели и не имеет права выдавить
+   оттуда состав плана: одиннадцать строк получают свою прокрутку. */
+.hud-foot .artifact-list { max-height: 168px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--hair-2) transparent; }
+.artifact-list { list-style: none; margin: 9px 0 0; padding: 0; border-top: 1px solid var(--hair); }
 .artifact-list li { border-bottom: 1px solid var(--hair); }
 .artifact-list a {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 2px;
+  padding: 7px 2px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-micro);
   text-decoration: none;
   transition: padding-left .14s cubic-bezier(.16,1,.3,1);
 }
 .artifact-list a:hover { padding-left: 6px; }
-.artifact-list a::after { content: "↓"; color: var(--bone-3); }
+.artifact-list .size { color: var(--bone-3); font-variant-numeric: tabular-nums; }
 
 /* --- состояние прогона в шапке рабочего места --- */
 
 .status { display: flex; align-items: center; gap: 10px; }
-.status-title { margin: 0; font-weight: 600; font-size: 13px; }
+.status-title { margin: 0; font-weight: 600; font-size: var(--fs-body); }
 .status .hint { margin-top: 2px; max-width: none; }
-.error-text { margin: 4px 0 0; color: var(--bad); font-size: 12px; }
+.error-text { margin: 4px 0 0; color: var(--bad); font-size: var(--fs-small); }
 
 .skeleton {
   display: inline-block;
   width: 2.5ch;
-  height: 0.85em;
+  height: 0.8em;
   background: linear-gradient(90deg, var(--panel-2), var(--hair), var(--panel-2));
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
@@ -844,43 +1408,101 @@ h1.section-label { font-size: 10.5px; }
   padding: 13px var(--gutter);
   border-top: 1px solid var(--hair);
   color: var(--bone-3);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
+  flex-shrink: 0;
 }
 
 /* --- адаптив: у рабочего места ограничитель высота, поэтому проверок две оси --- */
 
+/* Узкий экран: карточки разворачиваются в полосы. `display: contents` у левой панели
+   разбирает её на заголовок и содержимое - иначе план оказывается под всем пультом сразу,
+   и первым, что видит человек, оказываются галочки слоёв, а не участок. */
 @media (max-width: 1080px) {
   .launch-inner { grid-template-columns: minmax(0, 1fr); }
-  .hud-left, .hud-right {
+  /* Узкий экран: рабочее место возвращается в поток страницы, план едет первым, панели
+     разворачиваются в полосы под ним. */
+  body.shell-map { height: auto; overflow: visible; }
+  body.shell-map .topbar { position: sticky; }
+  /* В полосах сворачивать нечего: ширину у плана здесь никто не отнимает. */
+  .panel-toggle { display: none; }
+  /* На узком экране в полосе кнопок ползунку места нет: остаются «+» и «−». */
+  #zoom-range { display: none; }
+  /* На узком экране обозначения остаются плавающей карточкой поверх плана: в потоке
+     страницы они уехали бы под карту, где их никто не найдёт. */
+  .hud-legend {
+    width: min(300px, calc(100% - var(--inset) * 2));
+    max-height: min(300px, 46%);
+  }
+  .hud.collapsed { width: auto; height: auto; }
+  .hud.collapsed > :not(.panel-toggle) { display: revert; }
+  .hud-left .hud-head { padding-right: var(--gutter); }
+  .hud-left { display: contents; }
+  .hud-right {
     position: static;
     width: auto;
     max-height: none;
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    border-top: 1px solid var(--hair);
+    box-shadow: none;
     backdrop-filter: none;
+    order: 5;
   }
-  .workspace { display: flex; flex-direction: column; overflow: visible; height: auto; min-height: 0; }
-  .workspace .hud-left { order: 1; }
+  .workspace {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+  }
+  .hud-head { order: 1; padding: 16px var(--gutter); }
   .workspace .canvas-holder { order: 2; position: relative; height: 62vh; min-height: 340px; }
-  .workspace .hud-right { order: 3; border-top: 1px solid var(--hair); }
-  .legend { display: none; }
+  .hud-scroll { order: 3; flex: none; overflow-y: visible; padding: 18px var(--gutter); mask-image: none; }
+  .hud-foot { order: 4; padding: 18px var(--gutter); }
+  .detail-scroll { flex: none; overflow-y: visible; padding: 18px var(--gutter); }
   .hud-bottom { position: absolute; }
-}
-
-@media (min-width: 1081px) {
-  .canvas-holder { position: absolute; inset: 0; }
+  /* Полоса хода встаёт под карту, а не поверх неё: внизу карты живут кнопки масштаба. */
+  .hud-progress {
+    position: static;
+    order: 2;
+    transform: none;
+    width: auto;
+    margin: 12px var(--gutter) 0;
+  }
 }
 
 @media (max-width: 620px) {
   .field-row { grid-template-columns: minmax(0, 1fr); }
-  .brand-note { display: none; }
-  .stats { grid-template-columns: 1fr; }
+  .legend { grid-template-columns: 1fr; }
+  /* Имя чертежа важнее профиля: втроём с ним колонки режут имя до «улица Берза...». */
+  .registry th:nth-child(3), .registry td:nth-child(3) { display: none; }
 }
 
-@media (max-height: 700px) and (min-width: 1081px) {
-  .hud-left { width: 240px; }
-  .hud-right { width: 300px; }
+/* Низкое окно: 1366 x 768 - высота защиты с проектора, и условные обозначения там нужны
+   целиком, а не за прокруткой. Панель ужимается отбивками, а не кеглем: пол шкалы 12px
+   трогать нельзя, иначе с трёх метров не читается вообще ничего. */
+@media (max-height: 800px) and (min-width: 1081px) {
+  :root { --inset: 9px; --bar: 42px; --tools: 40px; }
+  .hud-left { width: 280px; }
+  .hud-right { width: 344px; }
+  .hud-head { padding: 10px 14px 11px; }
+  .hud-head .back { margin-bottom: 5px; }
+  .hud-scroll { padding: 12px 14px 10px; }
+  .hud-scroll > .hud-block:not(:first-child) { margin-top: 11px; padding-top: 10px; }
+  .hud-label { margin-bottom: 7px; }
+  .legend { gap: 2px 10px; }
+  .layer-toggles .check { line-height: 1.3; }
+  .metric b { font-size: 26px; }
+  .metric span { margin-top: 4px; }
+  .hud-foot { padding: 10px 14px 12px; }
+  .downloads { gap: 5px; }
+  .dl { padding: 9px 12px; }
+  /* На высоте защиты с проектора обозначения уступают пульту: в них можно проскроллить,
+     а сводка прогона и предупреждения должны быть видны целиком. */
+  .hud-legend { max-height: 300px; }
+  .legend-scroll { padding: 8px 14px 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
