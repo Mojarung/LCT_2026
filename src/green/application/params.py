@@ -53,6 +53,10 @@ class PlanParams:
     max_rejections: int = 2000
     require_soil: bool = True
     require_work_boundary: bool = True
+    # Horizontal envelope of the stock schedule: tree pit 2.2 x 2.2 m fits
+    # a radius-1.6 m disk; shrub pit diameter 1 m. Not a rootable-soil volume.
+    planting_radius_m: float = 1.6
+    shrub_planting_radius_m: float = 0.5
     surface_cell_m: float = 0.5
     # Limits on evidence propagation are project assumptions, not soil measurements.
     surface_max_distance_m: float = 30.0
@@ -147,6 +151,14 @@ class PlanParams:
     # Сколько видов считать достаточным разнообразием: правило 10-20-30 требует не меньше
     # десяти. Если нормы места допускают меньше видов, цель - все допустимые.
     diversity_target: int = 10
+
+    @property
+    def footprint_radius_m(self) -> float:
+        return (
+            self.planting_radius_m
+            if self.planting_type is PlantingType.TREE
+            else self.shrub_planting_radius_m
+        )
 
 
 def active_distance_rules(

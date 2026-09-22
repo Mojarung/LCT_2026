@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import ezdxf
 import orjson
 import pytest
+from shapely.geometry import LineString, box
 
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
@@ -148,7 +149,11 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
     report = run["report"]  # type: ignore[assignment]
     assert report.integrity.ok  # type: ignore[attr-defined]
     zones = {z.verdict.value: z.area_m2 for z in report.plan.zones}  # type: ignore[attr-defined]
-    assert zones["allowed"] > 1000
+    assert zones["allowed"] > 500  # useful area remains after whole-cell certification
+    for zone in report.plan.zones:  # type: ignore[attr-defined]
+        assert box(0, 0, 120, 60).covers(zone.geometry)
+        pipe = LineString([(0, PIPE_Y), (120, PIPE_Y)])
+        assert zone.geometry.distance(pipe) - PIPE_DIAMETER_M / 2 >= WATER_RULE_M - 1e-3
     doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
     assert "GREEN_ZONE_ALLOWED" in doc.layers
     assert len(doc.modelspace().query("HATCH[layer=='GREEN_ZONE_ALLOWED']")) >= 1

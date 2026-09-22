@@ -117,6 +117,7 @@ class GreedyPlantingStrategy:
             barrier_distance_m=barrier,
             require_soil=params.require_soil,
             require_work_boundary=params.require_work_boundary,
+            planting_radius_m=params.footprint_radius_m,
         )
         if params.require_soil:
             index.surface = build_surface_map(
@@ -177,6 +178,7 @@ class GreedyPlantingStrategy:
             require_utility_data=params.require_utility_data,
             require_soil=params.require_soil,
             require_work_boundary=params.require_work_boundary,
+            planting_radius_m=params.footprint_radius_m,
         )
         if params.require_soil:
             index.surface = build_surface_map(

@@ -10,7 +10,6 @@ import numpy as np
 import shapely
 from shapely import STRtree
 
-from green.application.surfaces import Material
 from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, RuleCheck, Verdict
@@ -96,10 +95,14 @@ class ConstraintIndex:
         barrier_distance_m: float | None = None,
         require_soil: bool = False,
         require_work_boundary: bool = False,
+        planting_radius_m: float = 0.0,
     ) -> None:
         self.surface = surface
         self._require_soil = require_soil
         self._require_work_boundary = require_work_boundary
+        if not np.isfinite(planting_radius_m) or planting_radius_m < 0:
+            raise ValueError("Planting radius must be finite and non-negative")
+        self._planting_radius_m = planting_radius_m
         # Наименьшее расстояние до сетей и бордюров, допустимое с прикорневым барьером; None -
         # барьеры не рассматриваются, действует только табличная норма.
         self._barrier_distance_m = barrier_distance_m
@@ -131,9 +134,10 @@ class ConstraintIndex:
         if self.boundary is not None:
             shapely.prepare(self.boundary)
 
-    def plantable(self, points: NDArray[np.object_]) -> NDArray[np.bool_]:
-        """Точка на грунте по карте покрытий, не на твёрдом покрытии и внутри границы работ."""
+    def plantable(self, points: NDArray[np.object_], *, margin_m: float = 0.0) -> NDArray[np.bool_]:
+        """Посадочное место целиком на грунте, вне покрытий и внутри границы работ."""
         mask = np.ones(len(points), dtype=bool)
+        radius = self._planting_radius_m + margin_m
         if (self._require_soil and self.surface is None) or (
             self._require_work_boundary and self.boundary is None
         ):
@@ -141,13 +145,18 @@ class ConstraintIndex:
         if self._hard is not None and len(points):
             inside = self._hard.query(points, predicate="intersects")
             mask[np.unique(inside[0])] = False
+            if radius > 0:
+                near = self._hard.query(points, predicate="dwithin", distance=radius)
+                mask[np.unique(near[0])] = False
         if self.boundary is not None and len(points):
             mask &= shapely.contains(self.boundary, points)
+            if radius > 0:
+                mask &= shapely.distance(points, self.boundary.boundary) >= radius
         if self.surface is not None and len(points):
-            mask &= self.surface.material(points) == Material.SOIL
+            mask &= self.surface.fits_soil(points, radius)
         return mask
 
-    def evaluate(self, points: NDArray[np.object_]) -> EvaluationBatch:
+    def evaluate(self, points: NDArray[np.object_], *, margin_m: float = 0.0) -> EvaluationBatch:
         count, rules = len(points), len(self._rules)
         outcomes = np.zeros((rules, count), dtype=np.int8)
         clearance = np.full((rules, count), np.nan)
@@ -167,10 +176,12 @@ class ConstraintIndex:
             clearance[row] = values
             nearest[row] = owners
             # Допуск на округление: кандидат, поставленный ровно на норму, её не нарушает.
-            outcomes[row] = np.where(values >= rule.min_distance_m - _EPS_M, _PASS, _FAIL)
+            outcomes[row] = np.where(
+                values >= rule.min_distance_m + margin_m - _EPS_M, _PASS, _FAIL
+            )
             if self._relaxable(rule):
                 relaxed = (outcomes[row] == _FAIL) & (
-                    values >= (self._barrier_distance_m or 0.0) - _EPS_M
+                    values >= (self._barrier_distance_m or 0.0) + margin_m - _EPS_M
                 )
                 outcomes[row][relaxed] = _BARRIER
         return EvaluationBatch(

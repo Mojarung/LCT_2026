@@ -11,13 +11,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
 from scipy import sparse
+from scipy.ndimage import distance_transform_edt
 from scipy.sparse.csgraph import dijkstra
 
 from green.domain.objects import ObjectClass
@@ -57,6 +58,12 @@ class SurfaceMap:
     max_distance_m: float = 30.0
     ambiguity_m: float = 1.0
     tree_distance_m: float = 2.0
+    # Display raster and exact polygon evidence are kept separate: painting a
+    # polygon into a cell must not expand it or erase a sub-cell hole.
+    inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
+    soil_area: BaseGeometry | None = None
+    paved_area: BaseGeometry | None = None
+    _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
         """Материал под каждой точкой; вне растра UNKNOWN."""
@@ -67,8 +74,50 @@ class SurfaceMap:
             (rows >= 0) & (rows < self.grid.shape[0]) & (cols >= 0) & (cols < self.grid.shape[1])
         )
         result = np.full(len(points), int(Material.UNKNOWN), dtype=np.int8)
-        result[inside] = self.grid[rows[inside], cols[inside]]
+        grid = self.grid if self.inferred_grid is None else self.inferred_grid
+        result[inside] = grid[rows[inside], cols[inside]]
+        if self.soil_area is not None:
+            result[shapely.contains(self.soil_area, points)] = int(Material.SOIL)
+        if self.paved_area is not None:
+            result[shapely.intersects(self.paved_area, points)] = int(Material.PAVED)
         return result
+
+    def fits_soil(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
+        """A disk fits exact lawn geometry or a conservative union of inferred cells.
+
+        EDT measures centre-to-centre distance. Subtract the half-diagonal of
+        the nearest non-soil cell and the query's offset from its own centre.
+        The triangle inequality gives a lower bound on continuous clearance.
+        This is deliberately conservative at raster edges; it is not a claim
+        that the material inferred from labels is physically correct.
+        """
+        on_soil = self.material(points) == Material.SOIL
+        if radius_m <= 0 or not len(points):
+            return on_soil
+        fits = np.zeros(len(points), dtype=bool)
+        if self.soil_area is not None:
+            fits |= shapely.contains(self.soil_area, points) & (
+                shapely.distance(points, self.soil_area.boundary) >= radius_m
+            )
+        grid = self.grid if self.inferred_grid is None else self.inferred_grid
+        distances = self._soil_distances
+        if distances is None:
+            # Outside the finite raster is unknown, even if every cell is soil.
+            distances = distance_transform_edt(
+                np.pad(grid == Material.SOIL, 1), sampling=self.cell
+            )[1:-1, 1:-1]
+            object.__setattr__(self, "_soil_distances", distances)
+        xy = shapely.get_coordinates(points)
+        rows, cols = self._cells(xy)
+        inside = (rows >= 0) & (rows < grid.shape[0]) & (cols >= 0) & (cols < grid.shape[1])
+        rr, cc = rows[inside], cols[inside]
+        centers = np.column_stack((cc + 0.5, rr + 0.5)) * self.cell + self.origin
+        offset = np.linalg.norm(xy[inside] - centers, axis=1)
+        lower = distances[rr, cc] - self.cell / np.sqrt(2) - offset
+        fits[inside] |= (grid[rr, cc] == Material.SOIL) & (lower >= radius_m)
+        if self.paved_area is not None:
+            fits &= shapely.distance(points, self.paved_area) >= radius_m
+        return fits & on_soil
 
     def summary(self) -> dict[str, int | float]:
         counted = {m: int((self.grid == m).sum()) for m in Material}
@@ -140,6 +189,8 @@ def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in 
         tree_limit=tree_distance_m / cell,
     )
     grid[barrier] = int(Material.BARRIER)
+    inferred_grid = grid.copy() if polygons else None
+    soil_area, paved_area = _exact_areas(polygons, extent)
     # Explicit polygons keep holes. Hard material wins over competing lawn geometry.
     for material, predicate in (
         (Material.SOIL, lambda f: f.object_class is ObjectClass.LAWN),
@@ -160,7 +211,21 @@ def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in 
         max_distance_m=max_distance_m,
         ambiguity_m=ambiguity_m,
         tree_distance_m=tree_distance_m,
+        inferred_grid=inferred_grid,
+        soil_area=soil_area,
+        paved_area=paved_area,
     )
+
+
+def _exact_areas(
+    polygons: Sequence[Feature], extent: BaseGeometry | None
+) -> tuple[BaseGeometry | None, BaseGeometry | None]:
+    soil = shapely.union_all([f.geometry for f in polygons if f.object_class is ObjectClass.LAWN])
+    paved = shapely.union_all([f.geometry for f in polygons if f.object_class.is_hard_surface])
+    if extent is not None:
+        soil, paved = soil.intersection(extent), paved.intersection(extent)
+    soil = soil.difference(paved)
+    return (None if soil.is_empty else soil, None if paved.is_empty else paved)
 
 
 @dataclass(frozen=True, slots=True)

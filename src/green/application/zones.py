@@ -30,11 +30,15 @@ def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
     if not len(xy):
         return ()
     points = shapely.points(xy)
-    keep = index.plantable(points)
+    # Distance to a closed obstacle is 1-Lipschitz. Every point of the square
+    # lies within half its diagonal of the centre, so this margin certifies
+    # the entire cell in the configured geometric model.
+    margin = cell / np.sqrt(2)
+    keep = index.plantable(points, margin_m=margin)
     xy, points = xy[keep], points[keep]
     if not len(points):
         return ()
-    codes = index.evaluate(points).verdict_codes
+    codes = index.evaluate(points, margin_m=margin).verdict_codes
     zones = []
     half = cell / 2
     for verdict in ZONE_VERDICTS:
@@ -43,7 +47,8 @@ def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
             continue
         xs, ys = selected[:, 0], selected[:, 1]
         boxes = shapely.box(xs - half, ys - half, xs + half, ys + half)
-        merged = shapely.simplify(shapely.coverage_union_all(boxes), cell * 0.3)
+        # Simplification could expand the certified squares into forbidden space.
+        merged = shapely.union_all(boxes)
         if not merged.is_empty:
             zones.append(Zone(verdict=verdict, geometry=merged))
     return tuple(zones)

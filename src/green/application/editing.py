@@ -120,6 +120,7 @@ class RunContext:
             require_utility_data=self.params.require_utility_data,
             require_soil=self.params.require_soil,
             require_work_boundary=self.params.require_work_boundary,
+            planting_radius_m=self.params.footprint_radius_m,
         )
         if self.params.require_soil:
             index.surface = self._surface_map(index)
