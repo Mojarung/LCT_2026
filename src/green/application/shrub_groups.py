@@ -14,6 +14,8 @@ import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+import shapely
+
 from green.application.assortment import GIVEN, SINGLE, assign_species
 from green.domain.norms import PlantingType
 from green.domain.planting import SHRUB_FORMS, Plan
@@ -68,6 +70,15 @@ def fill_shrub_groups(  # noqa: PLR0913 - сценарий передаёт вс
         shrub_params,
         centers=[(r.x, r.y) for r in empty],
     )
+    if plan.placements and points:
+        trees = shapely.STRtree(shapely.points([(p.x, p.y) for p in plan.placements]))
+        hits = trees.query(
+            shapely.points([(p.x, p.y) for p in points]),
+            predicate="dwithin",
+            distance=params.planting_radius_m + params.shrub_planting_radius_m - 1e-3,
+        )
+        blocked = set(hits[0].tolist())
+        points = tuple(p for i, p in enumerate(points) if i not in blocked)
     assigned = assign_species(
         Plan(placements=points, rejections=()),
         rulebook,

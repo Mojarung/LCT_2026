@@ -20,6 +20,7 @@ from green.application.input_quality import require_complete_blocks
 from green.application.quality import assess, site_of
 from green.application.results import RunReport, StageTiming
 from green.application.shrub_groups import fill_shrub_groups
+from green.application.validation import PlanValidation, validate_plan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -175,6 +176,17 @@ class PlanSite:
                 existing=inventory.matched if inventory else None,
             )
         # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+        with watch.stage("validate_plan"):
+            validation = validate_plan(
+                plan,
+                features,
+                scene.labels,
+                rulebook,
+                params,
+                catalog=self._species.all(),
+                existing=inventory.matched if inventory else None,
+            )
+            require_valid_plan(validation)
         with watch.stage("quality"):
             site = site_of(features)
             plan = assess(plan, site, params)
@@ -213,6 +225,7 @@ class PlanSite:
             warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
             basemap=basemap,
             read_diagnostics=scene.read_diagnostics,
+            validation=validation,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и
@@ -242,6 +255,19 @@ class PlanSite:
             raise InputError("Прогон нельзя пересобрать: отчёт исходного прогона не сохранён")
         watch = Stopwatch([])
         output = work_dir / RESULT_DXF
+        with watch.stage("validate_plan"):
+            validation = validate_plan(
+                plan,
+                context.features,
+                context.labels,
+                context.rulebook,
+                context.params,
+                catalog=self._species.all(),
+                existing=context.report.plan.assortment_summary.existing
+                if context.report.plan.assortment_summary
+                else None,
+            )
+            require_valid_plan(validation)
         with watch.stage("write_dxf"):
             snapshot = self._writer.write(
                 context.source, plan, context.rulebook, output, unit_m=context.unit_m
@@ -253,9 +279,20 @@ class PlanSite:
             plan=plan,
             integrity=integrity,
             output_dxf=output,
+            validation=validation,
             timings=tuple(watch.timings),
             warnings=(*context.report.warnings, "План изменён вручную и пересобран."),
         )
+
+
+def require_valid_plan(result: PlanValidation) -> None:
+    if not result.ok:
+        detail = "; ".join(
+            f"{i.code} {','.join(i.placements[:2])} {i.rule_id}: {i.message} "
+            f"({i.measured_m}/{i.required_m})"
+            for i in result.issues[:8]
+        )
+        raise InputError(f"Финальная проверка плана: {len(result.issues)} нарушений. {detail}")
 
 
 def to_dxf(

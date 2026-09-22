@@ -15,6 +15,7 @@ from test_pipeline_synthetic import PIPE_Y, ROOT, _street
 
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
+from green.infrastructure.config.repositories import YamlSpeciesCatalog
 from green.interfaces.api.app import API_PREFIX, create_app
 
 if TYPE_CHECKING:
@@ -138,6 +139,25 @@ def test_rebuild_writes_the_edited_plan_into_the_dxf(client: TestClient, run_id:
 
     response = client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
     assert response.status_code == 202
+
+    # Removing only broadleaves can exceed the hard Pinaceae quota. The old
+    # exporter reused stale counts; final validation must refuse that export.
+    status = client.get(f"{API_PREFIX}/runs/{run_id}").json()
+    assert status["state"] == "failed"
+    assert "quota" in status["error"]
+    assert len(_plan(client, run_id)["placements"]) == len(before["placements"])
+    catalog = YamlSpeciesCatalog(ROOT / "config" / "species.yaml")
+    conifer = next(
+        p
+        for p in before["placements"][3:]
+        if catalog.get(p["species"]["code"]).family == "Pinaceae"
+    )
+    client.post(
+        f"{API_PREFIX}/runs/{run_id}/edits",
+        json={"edits": [{"kind": "delete", "placement_id": conifer["id"]}]},
+    )
+    client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
+    assert client.get(f"{API_PREFIX}/runs/{run_id}").json()["state"] == "succeeded"
 
     after = _plan(client, run_id)
     assert len(after["placements"]) < len(before["placements"])

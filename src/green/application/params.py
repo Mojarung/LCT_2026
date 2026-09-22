@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
-from green.domain.norms import PlantingType
+from green.domain.norms import PlantingType, Severity
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from green.domain.norms import DistanceRule, RuleBook
+    from green.domain.planting import Species
 
 # Веса факторов пригодности вида; сумма нормируется, поэтому важны пропорции, а не масштаб.
 DEFAULT_WEIGHTS: Mapping[str, float] = {
@@ -171,3 +172,27 @@ def active_distance_rules(
     """Правила расстояний для типа посадки и вида, без отключённых профилем."""
     rules = rulebook.distance_rules_for(params.planting_type, species_lat, crown_m, traits)
     return tuple(rule for rule in rules if rule.rule_id not in params.disabled_rules)
+
+
+def species_distance_rules(
+    rulebook: RuleBook, params: PlanParams, species: Species
+) -> tuple[DistanceRule, ...]:
+    """Actual-species thresholds, including the explicitly configured crown policy.
+
+    Final validation derives thresholds separately, so generator mistakes can be
+    detected there. Shared here only by generation and interactive point checks.
+    """
+    rules = active_distance_rules(
+        rulebook, params, species.name_lat, species.crown_mature_m, species.traits
+    )
+    extra = max(0, species.crown_mature_m - 5) * params.crown_extra_per_m
+    return tuple(
+        replace(rule, min_distance_m=rule.min_distance_m + extra)
+        if rule.severity is Severity.FORBID
+        and "табл. 9.1" in rule.citation.clause
+        and (
+            not params.crown_extra_classes or rule.object_class.value in params.crown_extra_classes
+        )
+        else rule
+        for rule in rules
+    )

@@ -72,6 +72,12 @@ class FileArtifactSink:
             "interpretations.csv": _write_csv(directory / "interpretations.csv", rows),
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
+            "validation.json": _write_json(
+                directory / "validation.json",
+                {"ok": report.validation.ok, **asdict(report.validation)}
+                if report.validation
+                else None,
+            ),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "input_read.json": _write_json(
                 directory / "input_read.json", asdict(report.read_diagnostics)

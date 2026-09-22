@@ -20,10 +20,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 
+from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
 from green.application.errors import InputError
 from green.application.explain import explain
-from green.application.params import active_distance_rules
+from green.application.params import active_distance_rules, species_distance_rules
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
 from green.domain.norms import PlantingType
@@ -60,7 +61,7 @@ class Edit:
     x: float | None = None
     y: float | None = None
     species_code: str | None = None
-    planting_type: PlantingType = PlantingType.TREE
+    planting_type: PlantingType | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,12 +108,16 @@ class RunContext:
         cached = self._indexes.get(key)
         if cached is not None:
             return cached
-        rules = active_distance_rules(
-            self.rulebook,
-            self.params,
-            species.name_lat if species else None,
-            species.crown_mature_m if species else None,
-            species.traits if species else frozenset(),
+        kind = (
+            (PlantingType.TREE if species.is_tree else PlantingType.SHRUB)
+            if species
+            else self.params.planting_type
+        )
+        params = replace(self.params, planting_type=kind)
+        rules = (
+            species_distance_rules(self.rulebook, params, species)
+            if species
+            else active_distance_rules(self.rulebook, params)
         )
         index = ConstraintIndex(
             self.features,
@@ -120,7 +125,10 @@ class RunContext:
             require_utility_data=self.params.require_utility_data,
             require_soil=self.params.require_soil,
             require_work_boundary=self.params.require_work_boundary,
-            planting_radius_m=self.params.footprint_radius_m,
+            planting_radius_m=params.footprint_radius_m,
+            barrier_distance_m=barrier_distance(species.height_m)
+            if species and params.root_barriers
+            else None,
         )
         if self.params.require_soil:
             index.surface = self._surface_map(index)
@@ -285,7 +293,11 @@ def _moved(context: RunContext, placement: Placement, edit: Edit) -> Placement:
         y=y,
         verdict=_verdict_of(verdict),
         checks=verdict.checks,
-        notes=(*notes, "Посадка перенесена вручную, нормы пересчитаны в новой точке."),
+        notes=(
+            *notes,
+            *((BARRIER_NOTE,) if verdict.needs_barrier else ()),
+            "Посадка перенесена вручную, нормы пересчитаны в новой точке.",
+        ),
     )
 
 
@@ -306,7 +318,8 @@ def _added(
     return Placement(
         placement_id=_next_id(used),
         number=0,  # нумерация выставляется после применения всех правок
-        planting_type=edit.planting_type,
+        planting_type=edit.planting_type
+        or (PlantingType.TREE if species.is_tree else PlantingType.SHRUB),
         species=species,
         x=x,
         y=y,
@@ -314,6 +327,7 @@ def _added(
         checks=verdict.checks,
         notes=(
             *((verdict.note,) if verdict.note else ()),
+            *((BARRIER_NOTE,) if verdict.needs_barrier else ()),
             "Посадка добавлена вручную, нормы проверены в этой точке.",
         ),
     )

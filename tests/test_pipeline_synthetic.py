@@ -133,6 +133,10 @@ def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     assert payload["counts"]
     assert set(payload["decor_by_month"]) == {str(month) for month in range(1, 13)}
     assert payload["solver"] in {"milp", "greedy"}
+    validation = orjson.loads(artifacts["validation.json"].read_bytes())  # type: ignore[index]
+    assert validation["ok"] is True
+    assert validation["checked_placements"] > 0
+    assert validation["assumptions"]
     plan_json = orjson.loads(artifacts["plan.json"].read_bytes())  # type: ignore[index]
     first = plan_json["placements"][0]
     assert first["assortment"]["percent"] > 0

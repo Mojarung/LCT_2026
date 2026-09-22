@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from green.application.classification import LayerCoverage
     from green.application.editing import RunContext
     from green.application.params import PlanParams
+    from green.application.validation import PlanValidation
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
 
@@ -78,6 +79,7 @@ class RunReport:
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
+    validation: PlanValidation | None = None
 
     def summary(self) -> dict[str, object]:
         return {
@@ -86,6 +88,7 @@ class RunReport:
             "needs_approval": self.plan.approval_count,
             "rejections": len(self.plan.rejections),
             "integrity_ok": self.integrity.ok,
+            "plan_valid": self.validation.ok if self.validation is not None else None,
             "total_ms": round(sum(t.ms for t in self.timings), 1),
             "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),

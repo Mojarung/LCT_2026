@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
@@ -19,7 +19,7 @@ import shapely
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
-from green.application.params import active_distance_rules
+from green.application.params import active_distance_rules, species_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.zones import build_zones
@@ -102,9 +102,11 @@ class GreedyPlantingStrategy:
                     f"Вид {species.name_lat} недопустим: {norms.blocking.text} "
                     f"({norms.blocking.rule_id or norms.blocking.source})"
                 )
-        crown = species.crown_mature_m if single else None
-        traits = species.traits if single else frozenset()
-        rules = active_distance_rules(rulebook, params, species.name_lat, crown, traits)
+        rules = (
+            species_distance_rules(rulebook, params, species)
+            if single
+            else active_distance_rules(rulebook, params, species.name_lat)
+        )
         # Пока вид не выбран, точка проверяется по самому мягкому барьерному расстоянию;
         # подбор ассортимента затем требует своё расстояние по высоте каждого вида.
         barrier = None
@@ -193,7 +195,7 @@ class GreedyPlantingStrategy:
         size = params.shrub_group_size
         offsets = [(i - (size - 1) / 2) * params.spacing_m for i in range(size)]
         candidates = [
-            _Candidate(station, MODE_SHRUB_GROUP, cx + dx, cy + dy)
+            _Candidate(station, MODE_SHRUB_GROUP, round(cx + dx, 3), round(cy + dy, 3))
             for station, (cx, cy) in enumerate(centers)
             for dx in offsets
             for dy in offsets
@@ -207,17 +209,21 @@ class GreedyPlantingStrategy:
         if params.allow_needs_approval:
             accepted.add(Verdict.NEEDS_APPROVAL)
         selector = _Selector(species=species, params=params)
-        return tuple(
-            selector._placement(candidates[position], batch, row)  # noqa: SLF001 - тот же формат
-            for row, position in enumerate(positions.tolist())
-            if batch.verdict(row) in accepted
-        )
+        occupied = _Grid(max(params.spacing_m * _SPACING_TOLERANCE, 2 * params.footprint_radius_m))
+        for row, position in enumerate(positions.tolist()):
+            candidate = candidates[position]
+            if batch.verdict(row) in accepted and not occupied.near(candidate.x, candidate.y):
+                occupied.add(candidate.x, candidate.y)
+                selector.placements.append(selector._placement(candidate, batch, row))  # noqa: SLF001 - same placement representation
+        return tuple(selector.placements)
 
 
 def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
     """Проверяет кандидатов пачкой и предлагает отборщику; возвращает число допустимых точек."""
     if not candidates:
         return 0
+    # Validate the coordinates that will actually be exported, including spacing.
+    candidates = [replace(c, x=round(c.x, 3), y=round(c.y, 3)) for c in candidates]
     points = shapely.points([(c.x, c.y) for c in candidates])
     positions = np.flatnonzero(index.plantable(points))
     if not len(positions):
@@ -357,7 +363,7 @@ class _Selector:
         if not self._options or batch is None:
             return
         options, self._options = self._options, []
-        gap = self.params.spacing_m * _SPACING_TOLERANCE
+        gap = max(self.params.spacing_m * _SPACING_TOLERANCE, 2 * self.params.footprint_radius_m)
         planted = self._planted = self._planted or _Grid(gap)
         refused = self._refused = self._refused or _Grid(gap)
         ranks = [Verdict.ALLOWED]
