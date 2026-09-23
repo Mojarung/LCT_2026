@@ -134,7 +134,10 @@ def test_artifacts_download_and_match_the_summary(
     trees = doc.modelspace().query("INSERT[layer=='GREEN_TREES']")
     plan = orjson.loads(client.get(urls["plan.json"]).content)
     assert len(plan["placements"]) == finished["summary"]["placements"]  # type: ignore[index]
-    assert len(trees) == sum(1 for p in plan["placements"] if p["verdict"] == "allowed")
+    allowed_trees = [
+        p for p in plan["placements"] if p["verdict"] == "allowed" and p["planting_type"] == "tree"
+    ]
+    assert len(trees) == len(allowed_trees)
     schedule = client.get(urls["planting_schedule.csv"])
     assert schedule.headers["content-type"].startswith("text/csv")
     assert "Всего деревьев" in schedule.content.decode("utf-8-sig")

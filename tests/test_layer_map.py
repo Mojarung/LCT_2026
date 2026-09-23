@@ -32,6 +32,14 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         (f"{GEOTREST}tp$0$Бортовой камень", ObjectClass.CURB),
         (f"{GEOTREST}up$0$Кабель электрический", ObjectClass.UTILITY_POWER),
         (f"{GEOTREST}up$0$Топливопровод", ObjectClass.UTILITY_UNKNOWN),
+        # Контур площадки со своим покрытием - граница покрытий, а не мусор (Харьковская).
+        (f"{GEOTREST}tp$2$Граница площадки", ObjectClass.PAVEMENT_EDGE),
+        ("ДВ_ПП_ДО_Тип2_Ремонт_покрытия_ПЧ_Местные", ObjectClass.ROAD),
+        ("ДВ_ПП_ДО_Тип4_Устройство_уширений_местные", ObjectClass.ROAD),
+        ("ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_2м", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип5а_Капремонт_трот", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип9_Устройство_трот_менее_2м", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип_Устройство_площадки", ObjectClass.SIDEWALK),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:

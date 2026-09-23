@@ -94,19 +94,27 @@ def index(request: Request, container: ContainerDep) -> HTMLResponse:
     )
 
 
+# Галочки формы, которые включают и выключают приём как есть (имя поля = имя параметра).
+FORM_SWITCHES = ("root_barriers", "shrub_groups", "shrub_rows", "curb_hedges", "understory")
+
+
 def _form_overrides(
-    raw: str | None, *, spacing_m: float | None, root_barriers: str | None, shrub_groups: str | None
+    raw: str | None, *, spacing_m: float | None, checks: dict[str, str | None]
 ) -> str | None:
     """Свести поля формы и «продвинутый» JSON в один набор параметров.
 
     Незаполненная галочка в HTML-форме не присылается вовсе, поэтому отсутствие значения
-    означает «выключено»: обе галочки всегда есть в разметке, третьего состояния нет.
+    означает «выключено»: все галочки всегда есть в разметке, третьего состояния нет.
+    Добор зоны меняет список приёмов, только если JSON поверх профиля его не задал.
     """
     values = parse_overrides(raw)
     if spacing_m is not None:
         values["spacing_m"] = spacing_m
-    values["root_barriers"] = root_barriers is not None
-    values["shrub_groups"] = shrub_groups is not None
+    for name in FORM_SWITCHES:
+        values[name] = checks.get(name) is not None
+    if "modes" not in values:
+        fill = checks.get("fill") is not None
+        values["modes"] = ["alley", "lawn", "fill"] if fill else ["alley", "lawn"]
     return orjson.dumps(values).decode()
 
 
@@ -123,6 +131,10 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
     spacing_m: Annotated[float | None, Form()] = None,
     root_barriers: Annotated[str | None, Form()] = None,
     shrub_groups: Annotated[str | None, Form()] = None,
+    shrub_rows: Annotated[str | None, Form()] = None,
+    curb_hedges: Annotated[str | None, Form()] = None,
+    understory: Annotated[str | None, Form()] = None,
+    fill: Annotated[str | None, Form()] = None,
     inventory: Annotated[UploadFile | None, File()] = None,
     extra: Annotated[list[UploadFile] | None, File()] = None,
 ) -> RedirectResponse:
@@ -134,8 +146,14 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
     values = _form_overrides(
         overrides,
         spacing_m=spacing_m,
-        root_barriers=root_barriers,
-        shrub_groups=shrub_groups,
+        checks={
+            "root_barriers": root_barriers,
+            "shrub_groups": shrub_groups,
+            "shrub_rows": shrub_rows,
+            "curb_hedges": curb_hedges,
+            "understory": understory,
+            "fill": fill,
+        },
     )
     if street:
         source = container.streets.get(street)

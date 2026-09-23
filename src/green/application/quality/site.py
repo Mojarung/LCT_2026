@@ -15,6 +15,7 @@ import numpy as np
 import shapely
 
 from green.application.constraints import work_boundary
+from green.application.surfaces import Material
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -23,9 +24,18 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
+    from green.application.surfaces import SurfaceMap
     from green.domain.objects import Feature
 
 CURB_STEP_M = 1.0  # шаг точек по борту: доля бортов под кронами считается в метрах
+# Шире этого граница работ уже не полоса улицы: в ней дворы или площадь, и «на 1 км улицы»
+# теряет смысл. Самый широкий профиль магистральной улицы в Москве - порядка 80 м.
+WIDE_STREET_M = 80.0
+# Полоса у борта, где кустарник закрывает борт (PlanParams.dust_strip_m по умолчанию): в ней
+# ищется грунт, чтобы понять, есть ли у борта вообще место для нижнего яруса.
+SOIL_STRIP_M = 2.0
+_PROBE_STEP_M = 0.5
+_PROBE_DIRECTIONS = 16
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 
@@ -37,6 +47,9 @@ class Site:
     boundary: BaseGeometry | None
     # Точки по бортам внутри границы работ с шагом CURB_STEP_M, координаты в метрах.
     curb_points: NDArray[np.float64]
+    # Для каждой точки борта: есть ли грунт в полосе SOIL_STRIP_M по карте покрытий. None -
+    # карты покрытий нет, и различить борта нечем.
+    curb_soil: NDArray[np.bool_] | None = None
 
     @property
     def area_m2(self) -> float:
@@ -47,9 +60,32 @@ class Site:
         return street_length(self.boundary) if self.boundary is not None else None
 
 
-def site_of(features: Sequence[Feature]) -> Site:
+def site_of(features: Sequence[Feature], surface: SurfaceMap | None = None) -> Site:
     boundary = work_boundary(features)
-    return Site(boundary=boundary, curb_points=curb_points(features, boundary))
+    points = curb_points(features, boundary)
+    return Site(
+        boundary=boundary,
+        curb_points=points,
+        curb_soil=curb_soil(points, surface) if surface is not None else None,
+    )
+
+
+def curb_soil(points: NDArray[np.float64], surface: SurfaceMap) -> NDArray[np.bool_]:
+    """Есть ли грунт в полосе до SOIL_STRIP_M от точки борта (с любой стороны).
+
+    Проба - кольца 0,5-2,0 м через 0,5 м по 16 направлениям: этого хватает, чтобы газон шириной
+    в метр у борта не проскочил между пробами при ячейке карты 0,5 м.
+    """
+    if not len(points):
+        return np.zeros(0, dtype=bool)
+    angles = np.linspace(0, 2 * np.pi, _PROBE_DIRECTIONS, endpoint=False)
+    radii = np.arange(_PROBE_STEP_M, SOIL_STRIP_M + 1e-9, _PROBE_STEP_M)
+    dx = (radii[:, None] * np.cos(angles)[None, :]).ravel()
+    dy = (radii[:, None] * np.sin(angles)[None, :]).ravel()
+    xs = (points[:, 0:1] + dx[None, :]).ravel()
+    ys = (points[:, 1:2] + dy[None, :]).ravel()
+    material = surface.material(shapely.points(np.column_stack([xs, ys])))
+    return (material == Material.SOIL).reshape(len(points), -1).any(axis=1)
 
 
 def street_length(boundary: BaseGeometry) -> float:

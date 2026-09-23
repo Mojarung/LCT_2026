@@ -95,6 +95,7 @@ def _place(  # noqa: PLR0913 - посадка для теста
                 CheckOutcome.PASS,
                 threshold_m=2.0,
                 measured_m=measured if measured is not None else 2.0 + 0.05 * number,
+                object_class=ObjectClass.UTILITY_WATER,
             ),
         ),
         notes=(note,),
@@ -212,7 +213,15 @@ def test_a_violation_closes_the_gate() -> None:
     bad = replace(
         plan.placements[0],
         verdict=Verdict.FORBIDDEN,
-        checks=(RuleCheck("R-TEST-001", CheckOutcome.FAIL, threshold_m=2.0, measured_m=1.0),),
+        checks=(
+            RuleCheck(
+                "R-TEST-001",
+                CheckOutcome.FAIL,
+                threshold_m=2.0,
+                measured_m=1.0,
+                object_class=ObjectClass.UTILITY_WATER,
+            ),
+        ),
     )
     quality = evaluate(replace(plan, placements=(bad, *plan.placements[1:])), _site(), PARAMS)
     assert quality.index is None
@@ -224,7 +233,15 @@ def test_a_soft_norm_on_approval_is_not_a_violation_but_has_no_margin() -> None:
     soft = replace(
         plan.placements[0],
         verdict=Verdict.NEEDS_APPROVAL,
-        checks=(RuleCheck("R-TEST-001", CheckOutcome.FAIL, threshold_m=2.0, measured_m=1.5),),
+        checks=(
+            RuleCheck(
+                "R-TEST-001",
+                CheckOutcome.FAIL,
+                threshold_m=2.0,
+                measured_m=1.5,
+                object_class=ObjectClass.UTILITY_WATER,
+            ),
+        ),
     )
     quality = evaluate(replace(plan, placements=(soft, *plan.placements[1:])), _site(), PARAMS)
     assert quality.index is not None
@@ -287,7 +304,7 @@ def test_value_goes_into_the_explanation_and_the_stats() -> None:
     plan = assess(_plan(), _site(), PARAMS)
     assert "quality_index" in plan.stats
     texts = explain(plan, RuleBook(acts={}, distance_rules=(), fingerprint="test")).explanations
-    assert all("Ценность:" in e.text for e in texts)
+    assert all("Ценность:" in e.text or "Слабое место" in e.text for e in texts)
     assert plan.quality is not None
     assert plan.quality.summary[0].startswith("Индекс качества плана")
 
@@ -298,4 +315,56 @@ def test_curb_under_a_gas_tolerant_crown_counts_for_dust() -> None:
     assert dust.score is not None
     assert dust.score > 0
     # Липа в 2 м от борта с кроной радиусом 3 м прикрывает около 4 м борта.
-    assert any("м борта" in r for r in quality.values["p-003"].reasons)
+    assert any("крона над бортом" in r for r in quality.values["p-003"].reasons)
+
+
+def test_a_species_the_table_is_silent_about_does_not_lower_the_category() -> None:
+    plan = _plan()
+    silent = replace(LIME, categories={})
+    quiet = replace(
+        plan,
+        placements=tuple(
+            replace(p, species=silent) if p.species.code == "lime" else p for p in plan.placements
+        ),
+    )
+    before = {t.key: t.score for t in evaluate(plan, _site(), PARAMS).terms}["category"]
+    after = {t.key: t.score for t in evaluate(quiet, _site(), PARAMS).terms}["category"]
+    assert before is not None
+    assert after is not None
+    # Липы выпали из среднего; остались клёны и спиреи «+» и дуб «с огр.», и ни одна
+    # посадка не получила штраф за молчание акта.
+    assert after == pytest.approx((6 * 1.0 + 0.5) / 7, abs=1e-4)
+
+
+def test_density_counts_only_what_the_admissible_zone_can_hold() -> None:
+    """МГСН 1.02-02, табл. В.1: «на 1 км при условии допустимости насаждений»."""
+    plan = replace(_plan(), stats={"zone_capacity_trees": 5})
+    literal = replace(PARAMS, density_admissible=False)
+    plain = {t.key: t for t in evaluate(plan, _site(), literal).terms}["density"]
+    fair = {
+        t.key: t for t in evaluate(plan, _site(), replace(PARAMS, density_admissible=True)).terms
+    }["density"]
+    assert plain.score is not None
+    assert fair.score is not None
+    # 10 деревьев на 200 м улицы - 50 на 1 км: против нормы 150 это треть, против вместимости
+    # зоны (5 деревьев - 25 на 1 км) - полная норма.
+    assert fair.score > plain.score
+    assert fair.measure["trees_capacity_per_km"] == 25.0
+    assert "допустимости" in fair.note
+
+
+def test_dust_counts_only_curbs_with_soil_beside_them() -> None:
+    site = _site()
+    near_trees = site.curb_points[:, 0] < 100.0
+    fair_site = Site(site.boundary, site.curb_points, curb_soil=near_trees)
+    plan = _plan()
+    plain = {t.key: t for t in evaluate(plan, site, replace(PARAMS, dust_admissible=False)).terms}[
+        "dust"
+    ]
+    fair = {
+        t.key: t for t in evaluate(plan, fair_site, replace(PARAMS, dust_admissible=True)).terms
+    }["dust"]
+    assert plain.score is not None
+    assert fair.score is not None
+    assert fair.score > plain.score
+    assert fair.measure["curb_total_m"] == len(site.curb_points)

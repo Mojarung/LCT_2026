@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from green.application.barriers import FAR_M, LOW_CROWN_M, NEAR_M, barrier_height_limit
 from green.domain.norms import DistanceRule
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
@@ -144,13 +145,22 @@ def describe_value(value: PlantingValue | None) -> str:
     if value is None:
         return ""
     why = f": {'; '.join(value.reasons)}" if value.reasons else ""
+    weak = f" Слабее всего: {'; '.join(value.weak)}." if value.weak else ""
     if abs(value.delta * 1000) < PERMILLE_ZERO:
-        return f" Ценность: вклад в индекс качества около нуля{why}."
+        return f" Ценность: вклад в индекс качества около нуля{why}.{weak}"
+    if value.flagged:
+        # Не «без неё план лучше»: посадка даёт зелень, но тянет вниз средний запас или
+        # пригодность. Это слабое место, которое чинится сдвигом или заменой вида.
+        gives = f" Что даёт: {'; '.join(value.reasons)}." if value.reasons else ""
+        what = "; ".join(value.weak) or "ниже среднего по плану"
+        return f" Слабое место ({permille(value.delta)} к индексу качества): {what}.{gives}"
     if value.delta < 0:
-        higher = permille(-value.delta)[1:]
-        return f" Ценность: без этой посадки индекс качества выше на {higher}{why}."
+        return (
+            f" Ценность: вклад в индекс качества {permille(value.delta)}, чуть ниже среднего по "
+            f"плану{why}.{weak}"
+        )
     rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
-    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}."
+    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}.{weak}"
 
 
 def describe_assortment(placement: Placement) -> str:
@@ -201,4 +211,24 @@ def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
         + "; ".join(parts)
         + "."
     )
+    text += describe_barrier(rejection)
     return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
+
+
+def describe_barrier(rejection: Rejection) -> str:
+    """Место, которое спас бы прикорневой барьер: при каком условии и для каких деревьев."""
+    if rejection.barrier_m is None:
+        return ""
+    height = barrier_height_limit(rejection.barrier_m)
+    allowed = NEAR_M if height <= LOW_CROWN_M else FAR_M
+    return (
+        f" С прикорневым барьером место допустимо для деревьев высотой до {height:.0f} м "
+        f"(СП 42.13330.2016, табл. 9.1, прим. 5): до сети или бордюра "
+        f"{_metres(rejection.barrier_m)} м, с барьером можно от {_metres(allowed)} м. "
+        "Условие не выполнено: барьер в этом прогоне не заложен, включается параметром "
+        "root_barriers."
+    )
+
+
+def _metres(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")

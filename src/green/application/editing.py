@@ -98,7 +98,8 @@ class RunContext:
 
     def site(self) -> Site:
         if self._site is None:
-            self._site = site_of(self.features)
+            surface = self._surface_map(self.index_for(None)) if self.params.require_soil else None
+            self._site = site_of(self.features, surface)
         return self._site
 
     def index_for(self, species: Species | None) -> ConstraintIndex:

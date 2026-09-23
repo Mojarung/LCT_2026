@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from green.application.classification import LayerCoverage
     from green.application.editing import RunContext
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
 
@@ -72,6 +73,8 @@ class RunReport:
     # Подоснова для карты в вебе. Может отсутствовать: прогон из CLI её не требует, а на
     # чертеже без классифицированных объектов рисовать нечего.
     basemap: Basemap | None = None
+    # Карта покрытий прогона: грунт и твёрдое, как их понял сервис. Уходит в веб растром.
+    surface: SurfaceMap | None = None
     # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None

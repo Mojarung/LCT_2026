@@ -69,8 +69,8 @@
 
           <div class="field">
             <label for="spacing_m">Шаг посадки, м</label>
-            <input type="number" id="spacing_m" name="spacing_m" value="6" min="2" max="20" step="0.5">
-            <p class="hint">743-ПП, табл. 3.6.2: однорядная посадка 5-6 м.</p>
+            <input type="number" id="spacing_m" name="spacing_m" value="5" min="2" max="20" step="0.5">
+            <p class="hint">743-ПП, табл. 3.6.2: однорядная посадка 5-6 м, групповая 5-7 м.</p>
           </div>
         </div>
 
@@ -79,6 +79,22 @@
           <label class="check">
             <input type="checkbox" name="shrub_groups" checked>
             Группы кустарников на местах, которые квоты деревьев оставили пустыми
+          </label>
+          <label class="check">
+            <input type="checkbox" name="fill" checked>
+            Добор зоны: узкие полосы и карманы газона, которые сетка 5-6 м пропускает
+          </label>
+          <label class="check">
+            <input type="checkbox" name="shrub_rows" checked>
+            Ряд кустарника у борта под кронами аллеи
+          </label>
+          <label class="check">
+            <input type="checkbox" name="curb_hedges" checked>
+            Живая изгородь вдоль остальных бортов с газоном, до 720 кустов на 1 км
+          </label>
+          <label class="check">
+            <input type="checkbox" name="understory" checked>
+            Кустарник под кроной дерева аллеи, где ряда нет
           </label>
           <label class="check">
             <input type="checkbox" name="root_barriers">

@@ -101,6 +101,8 @@ const MIN_CROWN_PX = 4;
 
 const state = {
   chunks: [],         // куски подосновы: класс x ячейка сетки x размерная полка
+  labels: [],         // подписи материала с чертежа: [x, y, текст, paved | soil]
+  surface: null,      // карта покрытий растром, когда прогон готов
   placements: [],
   rejections: [],
   outline: [],        // опорные точки подосновы: по ним вписывается чертёж, пока плана нет
@@ -131,7 +133,8 @@ const state = {
   dragVerdict: null,
   visible: {
     utilities: true, surfaces: true, buildings: true,
-    existing: true, placements: true, rejections: false,
+    existing: true, placements: true, rejections: false, weak: true, barrier: true,
+    surfacemap: true, labels: true,
   },
 };
 
@@ -151,6 +154,25 @@ function css(token) {
 
 /** Не force-cache: он переиспользует и ошибочные ответы, поэтому 404, полученный до конца
  *  прогона, залипал в кэше навсегда и карта у этого прогона больше не загружалась. */
+/** Карта покрытий растром: PNG и его привязка к координатам чертежа (surface.json). */
+async function loadSurface(meta) {
+  if (!meta) return null;
+  const img = new Image();
+  img.src = `/api/v1/runs/${RUN_ID}/artifacts/surface.png`;
+  try {
+    await img.decode();
+  } catch (error) {
+    return null;
+  }
+  return {
+    img,
+    x: meta.origin[0],
+    y: meta.origin[1],
+    w: meta.width * meta.cell_m,
+    h: meta.height * meta.cell_m,
+  };
+}
+
 async function loadJson(name) {
   const url = `/api/v1/runs/${RUN_ID}/artifacts/${name}`;
   const response = await fetch(url, { cache: 'default' });
@@ -477,6 +499,9 @@ function schedule() {
  */
 const PAD = 260;
 const SETTLE_MS = 110;
+// Подписи покрытий видны с этого масштаба (пикселей на метр): на общем виде тысячи «А»
+// сливаются в серую кашу и прячут сами линии.
+const LABEL_MIN_SCALE = 3;
 const base = document.createElement('canvas');
 let cache = null;
 let settleTimer = 0;
@@ -539,6 +564,14 @@ function renderBase(rect, dpr) {
   ctx.lineCap = 'butt';
 
   const view = worldBounds(-PAD, -PAD, width, height);
+  // Карта покрытий - под линиями: грунт и твёрдое так, как их понял сервис. Растр строкой 0
+  // лежит на минимальном Y, и мировая матрица с разворотом Y кладёт его как надо.
+  if (state.visible.surfacemap && state.surface) {
+    const { img, x, y, w, h } = state.surface;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.imageSmoothingEnabled = true;
+  }
   for (const chunk of state.chunks) {
     if (!state.visible[chunk.group]) continue;
     if (chunk.span * state.scale < MIN_PX) continue;
@@ -556,10 +589,34 @@ function renderBase(rect, dpr) {
       if (chunk.dash.length) ctx.setLineDash([]);
     }
   }
+  if (state.visible.labels && state.labels.length && state.scale >= LABEL_MIN_SCALE) {
+    drawLabels(ctx, view, dpr);
+  }
   cache = {
     scale: state.scale, rot: state.rot, tx: state.tx, ty: state.ty,
     dpr, width: rect.width, height: rect.height,
   };
+}
+
+/** Подписи материала с чертежа («А», «ГАЗОН», «ДЕТ.ПЛ.») в экранных пикселях: текст не
+ *  должен ни вращаться вместе с видом, ни расти с масштабом. */
+function drawLabels(ctx, view, dpr) {
+  ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+  ctx.font = `600 11px ${css('--sans')}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = css('--accent-halo');
+  const paved = css('--bone-2');
+  const soil = css('--c-existing');
+  for (const [x, y, text, material] of state.labels) {
+    if (x < view[0] || x > view[2] || y < view[1] || y > view[3]) continue;
+    const { sx, sy } = toScreen(x, y);
+    ctx.strokeText(text, sx, sy);
+    ctx.fillStyle = material === 'soil' ? soil : paved;
+    ctx.fillText(text, sx, sy);
+  }
 }
 
 /** Картинка кэша больше не закрывает окно: запас израсходован панорамой или зумом. */
@@ -607,7 +664,9 @@ function draw() {
   ctx.lineCap = 'round';
   const view = worldBounds(0, 0, rect.width, rect.height);
   if (state.visible.rejections) drawRejections(ctx, view);
+  if (state.visible.barrier) drawBarrierPlaces(ctx, view);
   if (state.visible.placements) drawPlacements(ctx, view);
+  if (state.visible.placements && state.visible.weak) drawWeak(ctx, view);
 
   // Отметка выбранного и стрелка севера рисуются в экранных пикселях: их размер не должен
   // зависеть от масштаба, иначе на общем виде обводка вырождается в волос.
@@ -751,6 +810,51 @@ function drawRejections(ctx, view) {
   ctx.strokeStyle = css('--bad');
   ctx.lineWidth = 1 / state.scale;
   ctx.stroke(path);
+}
+
+/** Слабое место: без посадки индекс чуть выше. Метка - треугольник над кроной, без цвета
+ *  вердикта: посадка допустима, слабость не в норме, а в качестве плана. */
+function isWeak(item) {
+  if (item.kind !== 'placement' || !item.value) return false;
+  // flagged - порог по размеру плана (quality.weak_threshold); у старых прогонов его нет.
+  if (typeof item.value.flagged === 'boolean') return item.value.flagged;
+  return item.value.delta * 1000 <= -0.005;
+}
+
+function drawWeak(ctx, view) {
+  const size = 4.5 / state.scale;
+  const path = new Path2D();
+  for (const p of state.placements) {
+    if (!isWeak(p) || state.speciesOff.has(p.species_code || '')) continue;
+    if (!inView(p, view, p.radius + size * 3)) continue;
+    const top = p.y + Math.max(p.radius, MIN_CROWN_PX / state.scale) + size * 1.6;
+    path.moveTo(p.x, top - size);
+    path.lineTo(p.x + size, top + size * 0.8);
+    path.lineTo(p.x - size, top + size * 0.8);
+    path.closePath();
+  }
+  ctx.lineWidth = 3 / state.scale;
+  ctx.strokeStyle = css('--accent-halo');
+  ctx.stroke(path);
+  ctx.fillStyle = css('--bone');
+  ctx.fill(path);
+}
+
+/** Отказ, который снял бы прикорневой барьер: пунктирное кольцо цвета «на согласование» -
+ *  место возможно при условии, и условие пока не выполнено. */
+function drawBarrierPlaces(ctx, view) {
+  const r = Math.max(2.2, 6 / state.scale);
+  const path = new Path2D();
+  for (const p of state.rejections) {
+    if (p.barrier_m == null || !inView(p, view, r)) continue;
+    path.moveTo(p.x + r, p.y);
+    path.arc(p.x, p.y, r, 0, Math.PI * 2);
+  }
+  ctx.setLineDash([3 / state.scale, 2.5 / state.scale]);
+  ctx.strokeStyle = css('--warn');
+  ctx.lineWidth = 1.4 / state.scale;
+  ctx.stroke(path);
+  ctx.setLineDash([]);
 }
 
 /** Кольцо с подложкой цвета фона и четыре засечки: на общем виде среди трёхсот одинаковых
@@ -1154,14 +1258,38 @@ function valueBlock(value) {
   const rank = permille > 0 && !zero && value.percentile
     ? ` Больше, чем у ${Math.round(value.percentile * 100)}% посадок плана.`
     : '';
-  const worse = permille < 0 && !zero;
-  const head = worse ? 'Без этой посадки план лучше' : 'Чем ценна посадка';
+  // Слабое место - по порогу размера плана (flagged); у старых прогонов - любой минус.
+  const worse = typeof value.flagged === 'boolean' ? value.flagged : permille < 0 && !zero;
+  const weak = (value.weak || []).map((r) => `<li>${escape(r)}</li>`).join('');
+  if (worse) {
+    // Не «без неё план лучше»: посадка даёт зелень, но тянет вниз средний запас или
+    // пригодность. Это слабое место, и чинится оно сдвигом или заменой вида.
+    return `<h3 class="detail-heading">Слабое место</h3>
+      <p class="value-delta bad">Вклад в индекс качества <b>${shown}</b>: посадка слабее
+        среднего по плану.</p>
+      ${weak ? `<ul class="value-reasons">${weak}</ul>` : ''}
+      ${reasons ? `<p class="detail-slack">Что даёт:</p><ul class="value-reasons">${reasons}</ul>` : ''}`;
+  }
   const line = zero
     ? 'Вклад в индекс качества около нуля.'
-    : `Вклад в индекс качества <b>${shown}</b>.${rank}`;
-  return `<h3 class="detail-heading">${head}</h3>
-    <p class="value-delta${worse ? ' bad' : ''}">${line}</p>
-    ${reasons ? `<ul class="value-reasons">${reasons}</ul>` : ''}`;
+    : permille < 0
+      ? `Вклад в индекс качества <b>${shown}</b>: чуть ниже среднего по плану.`
+      : `Вклад в индекс качества <b>${shown}</b>.${rank}`;
+  return `<h3 class="detail-heading">Чем ценна посадка</h3>
+    <p class="value-delta">${line}</p>
+    ${reasons ? `<ul class="value-reasons">${reasons}</ul>` : ''}
+    ${weak ? `<p class="detail-slack">Слабее всего:</p><ul class="value-reasons">${weak}</ul>` : ''}`;
+}
+
+/** Отказ, который снял бы прикорневой барьер: при каком условии и для каких деревьев. */
+function barrierBlock(item) {
+  if (item.kind === 'placement' || item.barrier_m == null) return '';
+  const distance = Number(item.barrier_m);
+  const height = distance < 1 ? 5 : 20;
+  return `<h3 class="detail-heading">Возможно с прикорневым барьером</h3>
+    <p class="detail-explain">До сети или бордюра ${meters(distance)} м. С барьером
+      (СП 42.13330.2016, табл. 9.1, прим. 5) здесь можно посадить дерево высотой до
+      ${height} м. Условие не выполнено: барьер в этом прогоне не заложен.</p>`;
 }
 
 function showDetail(item) {
@@ -1184,6 +1312,7 @@ function showDetail(item) {
     <p class="hint mono">${kind ? escape(kind) + ', ' : ''}x ${meters(item.x)}, y ${meters(item.y)}</p>
     ${item.note ? `<p class="detail-explain">${escape(item.note)}</p>` : ''}
     ${valueBlock(item.value)}
+    ${barrierBlock(item)}
     ${checksBlock(checks)}
     ${item.explanation
       ? `<details class="detail-full">
@@ -1302,7 +1431,9 @@ function orderItems() {
  */
 function shown(item) {
   if (!item) return false;
-  if (item.kind !== 'placement') return state.visible.rejections;
+  if (item.kind !== 'placement') {
+    return state.visible.rejections || (state.visible.barrier && item.barrier_m != null);
+  }
   return state.visible.placements && !state.speciesOff.has(item.species_code || '');
 }
 
@@ -1757,6 +1888,28 @@ function rememberView() {
   } catch (error) { /* приватный режим: вид соберётся заново */ }
 }
 
+/** Вид из ссылки: #x=9125.5&y=-8905.2&m=0.05 - центр в точке чертежа (метры), m метров на
+ *  пиксель, север сверху. Такой ссылкой делятся местом на плане: «посмотри вот сюда». */
+function viewFromHash() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (!params.has('x') || !params.has('y')) return false;
+  const x = Number(params.get('x'));
+  const y = Number(params.get('y'));
+  const m = Number(params.get('m') || 0.1);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !(m > 0)) return false;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  Object.assign(state, {
+    rot: 0, scale: 1 / m, tx: width / 2 - x / m, ty: height / 2 + y / m, touched: true,
+  });
+  const orient = document.getElementById('orient');
+  if (orient) {
+    orient.setAttribute('aria-pressed', 'false');
+    orient.textContent = 'по улице';
+  }
+  return true;
+}
+
 function restoreView() {
   let saved = null;
   try {
@@ -1838,6 +1991,7 @@ function renderProgress(run) {
  *  можно ездить, пока считаются посадки. */
 function showDrawing(basemap) {
   state.chunks = buildChunks(basemap.features || [], basemap.bbox);
+  state.labels = basemap.labels || [];
   // Пока посадок, по которым вписывается и разворачивается готовый план, ещё нет, ту же
   // роль играют центры объектов подосновы.
   state.outline = contentPoints(basemap.features);
@@ -1892,15 +2046,18 @@ async function live() {
 async function mount() {
   restorePanels();
   try {
-    const [basemap, plan, rules, quality] = await Promise.all([
+    const [basemap, plan, rules, quality, surface] = await Promise.all([
       loadJson('basemap.geojson'),
       loadJson('plan.json'),
       loadJson('rules.json'),
       // У прогонов до появления индекса файла нет: карта от этого не должна ломаться.
       loadJson('quality.json').catch(() => null),
+      loadJson('surface.json').catch(() => null),
     ]);
 
     state.quality = quality;
+    state.labels = basemap.labels || [];
+    state.surface = await loadSurface(surface);
 
     state.rules = rules.rules || {};
     state.chunks = buildChunks(basemap.features || [], basemap.bbox);
@@ -1931,6 +2088,7 @@ async function mount() {
       verdict: r.verdict,
       explanation: r.explanation,
       note: r.note,
+      barrier_m: r.barrier_m,
       checks: r.blocking,
     }));
 
@@ -1955,7 +2113,7 @@ async function mount() {
     sizeHolder();
     resize();
     fitToBbox();
-    restoreView();
+    if (!viewFromHash()) restoreView();
     bindInput();
     showDetail(null);
     markOverflow();

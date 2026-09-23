@@ -134,14 +134,24 @@ def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
 def test_exhausted_diversity_leaves_places_empty_instead_of_breaking_quotas() -> None:
     """Два вида, один уже выбрал долю на улице: второй один не может быть 10% плана.
 
-    Квоты жёсткие, поэтому места остаются пустыми, а не досаживаются одним видом.
-    Исключение «один экземпляр» действует только на участке меньше десяти мест.
+    Квоты жёсткие, поэтому места остаются пустыми, а не досаживаются одним видом. Один
+    экземпляр второго вида квоту не нарушает: при одной посадке доля 10% - меньше растения.
+    До 23.09.2026 это исключение действовало только на участке меньше десяти мест, и такой
+    участок оставался вовсе без деревьев (docs/notes/30-pipeline-experiments.md).
     """
     structures = _singles(30)
     candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
-    assert result.species_by_placement == {}
+    assert list(result.species_by_placement.values()) == ["acer_platanoides"]
     assert not result.quota_violations
+    old = assign(
+        candidates,
+        structures,
+        CATALOG,
+        {"tilia_cordata": 20},
+        replace(PARAMS, quota_single_places=1.0),
+    )
+    assert old.species_by_placement == {}
 
 
 def test_a_tiny_site_may_hold_one_plant_of_a_species() -> None:

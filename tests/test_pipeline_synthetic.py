@@ -80,7 +80,13 @@ def run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
     source = work / "street.dxf"
     _street(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
-    params = container.profiles.load("strict", {"max_rejections": 50})
+    # Ряд кустарника у борта, кустарник под кронами и группы на газоне проверяются своими тестами
+    # (tests/test_shrub_rows.py, tests/test_pipeline_levers.py): эти писались под план из
+    # деревьев и по нему сверяют аллею, газон и блоки видов.
+    params = container.profiles.load(
+        "strict",
+        {"max_rejections": 50, "shrub_rows": False, "understory": False, "shrub_fill": False},
+    )
     report = container.use_case.execute(PlanRequest("test", source, work / "out", "strict", params))
     artifacts = container.artifacts.save(work / "out", report)
     return {"report": report, "artifacts": artifacts, "source": source}
@@ -95,7 +101,9 @@ def test_placements_stand_on_soil_above_the_curb(run: dict[str, object]) -> None
 
 def test_both_modes_contribute(run: dict[str, object]) -> None:
     plan = run["report"].plan  # type: ignore[attr-defined]
-    modes = {note for p in plan.placements for note in p.notes}
+    # Кроме приёма, в заметках бывает сдвиг от нормы (application/refine): он не приём.
+    labels = {"аллея вдоль борта", "заполнение газона", "группа кустарников на месте дерева"}
+    modes = {note for p in plan.placements for note in p.notes if note in labels}
     assert modes == {"аллея вдоль борта", "заполнение газона"}
 
 
@@ -174,3 +182,16 @@ def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, 
         if attrib.dxf.tag == "SPECIES"
     }
     assert names == {p.species.name_ru for p in plan.placements}
+
+
+def test_moved_weak_places_keep_every_norm(run: dict[str, object]) -> None:
+    """Сдвиг слабого места (application/refine) не имеет права купить запас нарушением."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    moved = [p for p in plan.placements if any(n.startswith("сдвинута сервисом") for n in p.notes)]
+    for placement in moved:
+        assert placement.verdict.value != "forbidden"
+        assert all(c.outcome.value != "fail" for c in placement.checks)
+    assert plan.quality is not None
+    assert plan.quality.index is not None
+    if moved:
+        assert any(w.startswith("Слабые места:") for w in plan.warnings)

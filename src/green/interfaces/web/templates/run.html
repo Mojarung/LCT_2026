@@ -64,8 +64,12 @@
           <span><i class="dot" style="border-color: var(--ok); background: color-mix(in srgb, var(--ok) 33%, transparent)"></i><b>допускается</b></span>
           <span><i class="dot" style="border-color: var(--warn); background: color-mix(in srgb, var(--warn) 33%, transparent)"></i><b>требует согласования</b></span>
         </div>
+        <label class="check legend-group"><input type="checkbox" data-layer="weak" checked>
+          <i class="key tri"></i> Слабые места: без посадки индекс заметно выше</label>
         <label class="check legend-group"><input type="checkbox" data-layer="rejections">
           <i class="key cross"></i> Отклонённые места</label>
+        <label class="check legend-group"><input type="checkbox" data-layer="barrier" checked>
+          <i class="key ring"></i> Места, возможные с прикорневым барьером</label>
         <p class="legend-note">Кружок - крона в натуральную величину: у дерева она больше,
           у кустарника меньше.</p>
         {% endif %}
@@ -89,6 +93,18 @@
           <span><i class="dash" style="border-color: var(--c-fence)"></i><b>ограда</b></span>
           <span><i class="dash" style="border-color: var(--c-boundary)"></i><b>граница работ</b></span>
         </div>
+        {# Как сервис понял покрытия: по этой карте он решает, где грунт и можно сажать. Если
+           посадка встала на площадку или асфальт, здесь это видно сразу. #}
+        <label class="check legend-group"><input type="checkbox" data-layer="surfacemap" checked>
+          Покрытия, как их понял сервис</label>
+        <div class="legend">
+          <span><i class="swatch" style="background: rgba(104, 158, 104, .55)"></i><b>грунт: сажать можно</b></span>
+          <span><i class="swatch" style="background: rgba(140, 142, 150, .6)"></i><b>твёрдое покрытие</b></span>
+        </div>
+        <label class="check legend-group"><input type="checkbox" data-layer="labels" checked>
+          Подписи покрытий с чертежа</label>
+        <p class="legend-note">«А», «ГАЗОН», «ДЕТ.ПЛ.» - по ним строится карта покрытий; видны
+          при приближении.</p>
 
         {# Группы из одного знака - строкой с галочкой: отдельный заголовок и отдельная
            строка под ним на один символ тратят вдвое больше высоты, чем объясняют. #}
@@ -155,6 +171,13 @@
       </p>
       {# Индекс - одной строкой рядом с числом посадок; разбор по слагаемым в панели справа,
          где ему хватает высоты и где у выбранной посадки стоит её вклад. #}
+      {% set barrier_places = s.get('stats', {}).get('barrier_places', 0) %}
+      {% if barrier_places %}
+      <p class="metric-sub quality-line">
+        <b>{{ barrier_places }}</b> {{ plural(barrier_places, 'место станет', 'места станут', 'мест станут') }}
+        допустимыми с прикорневым барьером · на карте пунктиром
+      </p>
+      {% endif %}
       {% if quality %}
       <p class="metric-sub quality-line">
         индекс качества {% if quality.index is not none %}<b>{{ ('%.2f' | format(quality.index)) | replace('.', ',') }}</b> из 1{% else %}<em class="bad">не выставлен</em>{% endif %}

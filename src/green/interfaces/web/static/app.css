@@ -1025,7 +1025,7 @@ body.shell-map .topbar { position: fixed; left: 0; right: 0; }
 /* Знак прямо в строке группы: линия, кружок или крестик перед её названием. */
 .legend-group { align-items: center; }
 .legend-group .key { margin: 0 2px 0 0; flex-shrink: 0; }
-.legend-group .key:not(.dot):not(.cross) { width: 14px; border-top: 2px solid; }
+.legend-group .key:not(.dot):not(.cross):not(.tri):not(.ring) { width: 14px; border-top: 2px solid; }
 .legend-group .key.dot { width: 9px; height: 9px; border: 1.5px solid; border-radius: 50%; }
 .legend-group .key.cross {
   width: 10px;
@@ -1035,6 +1035,15 @@ body.shell-map .topbar { position: fixed; left: 0; right: 0; }
     linear-gradient(to bottom right, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%),
     linear-gradient(to bottom left, transparent 44%, currentColor 44%, currentColor 56%, transparent 56%);
 }
+.legend-group .key.tri {
+  width: 10px;
+  height: 9px;
+  border: 0;
+  background: var(--bone);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.legend-group .key.ring { width: 10px; height: 10px; border: 1.5px dashed var(--warn); border-radius: 50%; }
+
 /* Обозначения внутри группы отступают от её галочки, чтобы читались как её содержимое. */
 .legend-scroll .legend { margin-left: 22px; gap: 2px 12px; }
 .legend-plan i.dot { height: 11px; width: 11px; }
@@ -1081,6 +1090,7 @@ body.shell-map .topbar { position: fixed; left: 0; right: 0; }
 .legend i { width: 14px; height: 0; border-top-width: 2px; border-top-style: solid; flex-shrink: 0; }
 .legend i.dash { border-top-style: dashed; }
 .legend i.dot { height: 9px; width: 9px; border: 1.5px solid; border-radius: 50%; }
+.legend i.swatch { height: 10px; width: 14px; border: 0; border-radius: 2px; }
 
 .map-loading {
   position: absolute;

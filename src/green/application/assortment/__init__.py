@@ -118,7 +118,7 @@ def assign_species(
                     structure_id=structure.structure_id if structure else placement.placement_id,
                     structure_kind=structure.kind if structure else SINGLE,
                     species=species,
-                    score=score.total,
+                    score=score.total - _obligation(verdict, species, params),
                 )
             )
         verdicts[placement.placement_id] = allowed
@@ -157,6 +157,21 @@ def assign_species(
         assortment_summary=summary,
         warnings=tuple(warnings),
     )
+
+
+def _obligation(verdict: SpeciesVerdict, species: Species, params: PlanParams) -> float:
+    """Поправка к оценке за вид с условием посадки или слабый аллерген.
+
+    Индекс качества вычитает штраф за каждую такую посадку (quality.PENALTIES): условие -
+    обязательство на годы (барьер, мужские клоны, контроль вида группы III), слабый аллерген
+    743-ПП не запрещает, но заказчику он не нужен. Подбор узнаёт об этом той же поправкой:
+    при равных квотах берётся вид без условия.
+    """
+    penalty = params.condition_penalty
+    if penalty <= 0:
+        return 0.0
+    conditional = any(reason.condition for reason in verdict.reasons)
+    return penalty * (int(conditional) + int(species.allergen == 1))
 
 
 def _drop_unplanted(

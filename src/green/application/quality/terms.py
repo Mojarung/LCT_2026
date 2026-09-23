@@ -22,6 +22,7 @@ from scipy.spatial import KDTree
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.placement import MODE_LABELS
+from green.application.quality.site import WIDE_STREET_M
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
@@ -36,8 +37,8 @@ if TYPE_CHECKING:
 
 ALLEY_NOTE = MODE_LABELS["alley"]
 ROW_TOLERANCE = 0.05  # допуск разбивки к вилке шага ряда
+SHRUB_ROW_SPACING_M = (0.3, 1.0)  # 743-ПП, табл. 3.6.2: кустарники в ряду 0,3-0,4 и 0,5-1 м
 _CATEGORY = {"plus": 1.0, "limited": 0.5, "minus": 0.0}
-_CATEGORY_UNKNOWN = 0.25  # вида нет в табл. В.6: как в оценке подбора (assortment/scoring.py)
 _CATEGORY_WHERE = {
     "streets": "улиц",
     "yards": "дворов",
@@ -60,9 +61,6 @@ _MONTHS_IN = (
     "декабре",
 )
 _CIRCLE_SEGMENTS = 8
-# Шире этого граница работ уже не полоса улицы: в ней дворы или площадь, и «на 1 км улицы»
-# теряет смысл. Самый широкий профиль магистральной улицы в Москве - порядка 80 м.
-WIDE_STREET_M = 80.0
 _MIN_UNIQUE_M2 = 1.0
 
 
@@ -127,13 +125,22 @@ def fork(value: float, low: float, high: float, *, excess: bool = True) -> float
     return max(0.0, 1.0 - (value - high) / (2 * high))
 
 
-def density(layout: Layout, site: Site, params: PlanParams) -> TermResult:
+def density(
+    layout: Layout, site: Site, params: PlanParams, capacity_trees: float | None = None
+) -> TermResult:
     length = site.street_length_m
     if not length:
         return layout.empty("длина улицы не определена: в чертеже нет границы работ")
     km = length / 1000
     trees, shrubs = int(layout.is_tree.sum()), int(layout.is_shrub.sum())
     t_low, t_high = params.density_trees_per_km
+    capacity = None
+    if params.density_admissible and capacity_trees is not None:
+        # МГСН 1.02-02, табл. В.1, сноска **: «на 1 км при условии допустимости насаждений».
+        # Где сети и покрытия оставили место на N деревьев, нижняя граница цели - N; верхняя
+        # остаётся нормой: перебором считается только то, что больше 180 на 1 км.
+        capacity = capacity_trees / km
+        t_low = min(t_low, max(capacity, 1.0 / km))
     s_low, s_high = params.density_shrubs_per_km
     # Если граница шире улицы, в ней дворы, и число посадок на 1 км улицы завышено. Оценка
     # сверху доказывает недосадку, но не перебор: перебор здесь не штрафуется.
@@ -172,6 +179,13 @@ def density(layout: Layout, site: Site, params: PlanParams) -> TermResult:
         "trees_per_km": round(per_km_t, 1),
         "shrubs_per_km": round(per_km_s, 1),
     }
+    if capacity is not None:
+        measure["trees_capacity_per_km"] = round(capacity, 1)
+        if capacity < params.density_trees_per_km[0]:
+            note += (
+                f"; зона допустимости вмещает {capacity:.0f} деревьев на 1 км (шаг 5 м), нижняя "
+                "граница цели снижена до этого: В.1 - «при условии допустимости насаждений»"
+            )
     return TermResult(score, note, deltas, details, measure)
 
 
@@ -243,11 +257,18 @@ def rows(layout: Layout, params: PlanParams) -> TermResult:
     groups = {key: ids for key, ids in members.items() if len(ids) >= 2}  # noqa: PLR2004 - ряд
     if not groups:
         return layout.empty("рядов нет: однородность и шаг мерить не на чем")
-    low, high = params.row_spacing_m
-    band = (low * (1 - ROW_TOLERANCE), high * (1 + ROW_TOLERANCE))
+
+    def fork_of(ids: list[int]) -> tuple[float, float]:
+        # Ряд кустарника меряется своей вилкой: 743-ПП, табл. 3.6.2 - высоких 0,5-1 м, средних
+        # и низких 0,3-0,4 м.
+        return SHRUB_ROW_SPACING_M if layout.is_shrub[ids].all() else params.row_spacing_m
+
+    def band_of(ids: list[int]) -> tuple[float, float]:
+        low, high = fork_of(ids)
+        return (low * (1 - ROW_TOLERANCE), high * (1 + ROW_TOLERANCE))
 
     def score_of(ids: list[int]) -> float:
-        return _row_score(layout, ids, band)[0]
+        return _row_score(layout, ids, band_of(ids))[0]
 
     scores = {key: score_of(ids) for key, ids in groups.items()}
     total = sum(len(ids) for ids in groups.values())
@@ -265,13 +286,10 @@ def rows(layout: Layout, params: PlanParams) -> TermResult:
                 remaining = total - len(ids)
                 after = rest / remaining if remaining else 0.0
             deltas[i] = score - after
-        _row_details(layout, ids, band, (low, high), details)
-    in_band = sum(_row_score(layout, ids, band)[1] for ids in groups.values())
+        _row_details(layout, ids, band_of(ids), fork_of(ids), details)
+    in_band = sum(_row_score(layout, ids, band_of(ids))[1] for ids in groups.values())
     gaps = sum(len(ids) - 1 for ids in groups.values())
-    note = (
-        f"{len(groups)} рядов, {total} посадок; шагов в вилке {low:g}-{high:g} м: "
-        f"{in_band} из {gaps}"
-    )
+    note = f"{len(groups)} рядов, {total} посадок; шагов в вилке нормы: {in_band} из {gaps}"
     return TermResult(score, note, deltas, details, {"rows": len(groups), "gaps_in_band": in_band})
 
 
@@ -501,14 +519,19 @@ def fit(layout: Layout) -> TermResult:
 
 
 def category(layout: Layout, params: PlanParams) -> TermResult:
-    """Доля посадок, рекомендованных МГСН 1.02-02, табл. В.6 для категории территории."""
+    """Доля посадок, рекомендованных МГСН 1.02-02, табл. В.6 для категории территории.
+
+    Вид, которого в таблице нет, в среднее не входит: акт о нём молчит, а не отказывает.
+    Слабее рекомендованного он и так - на 0,25 в факторе «категория» оценки пригодности, и
+    второй штраф здесь был бы двойным счётом.
+    """
     key = params.planting_category
     where = _CATEGORY_WHERE.get(key, key)
     marks = [p.species.categories.get(key, "") for p in layout.placements]
-    values: list[float | None] = [_CATEGORY.get(mark, _CATEGORY_UNKNOWN) for mark in marks]
+    values: list[float | None] = [_CATEGORY.get(mark) for mark in marks]
     score, deltas, _, _ = _mean_term(values, str, "mean")
     if score is None:
-        return layout.empty("посадок нет")
+        return layout.empty(f"ни одного вида плана нет в табл. В.6 для {where}")
     plus = sum(1 for mark in marks if mark == "plus")
     unknown = sum(1 for mark in marks if mark not in _CATEGORY)
     phrases = {
@@ -518,7 +541,8 @@ def category(layout: Layout, params: PlanParams) -> TermResult:
     }
     details = [phrases.get(mark, "в табл. В.6 МГСН 1.02-02 вида нет") for mark in marks]
     note = (
-        f"рекомендованы для {where} {plus} из {len(marks)} посадок; вида нет в табл. В.6: {unknown}"
+        f"рекомендованы для {where} {plus} из {len(marks) - unknown} посадок с отметкой в "
+        f"табл. В.6; ещё {unknown} - виды, о которых таблица молчит, в оценку не входят"
     )
     measure = {"plus": plus, "unknown": unknown}
     return TermResult(score, note, deltas, details, measure)
@@ -529,35 +553,49 @@ def _m(value: float) -> str:
 
 
 def tightest(placement: Placement) -> tuple[float, str] | None:
-    """Относительный запас до самой тесной нормы и её описание."""
+    """Запас до самой тесной нормы до подземной сети, м (измерено минус норма), и её описание.
+
+    Только сети: СП 317.1325800.2017, п. 5.3.5.3 говорит о «скрытых точках подземных
+    сооружений». Борт, стену и ограду при посадке меряют от настоящих, их положение на плане
+    не догадка.
+    """
     best: tuple[float, str] | None = None
     for check in placement.checks:
         if check.measured_m is None or not check.threshold_m or check.threshold_m <= 0:
             continue
+        if check.object_class is None or not check.object_class.is_utility:
+            continue
         # Мягкая норма «на согласование» тоже в счёт: запас по ней отрицательный, балл ноль.
         if check.outcome is CheckOutcome.NO_DATA:
             continue
-        margin = (check.measured_m - check.threshold_m) / check.threshold_m
-        if best is None or margin < best[0]:
+        slack = check.measured_m - check.threshold_m
+        if best is None or slack < best[0]:
             text = f"{_m(check.measured_m)} м при норме {_m(check.threshold_m)} м ({check.rule_id})"
-            best = (margin, text)
+            best = (slack, text)
     return best
 
 
 def margin(layout: Layout, params: PlanParams) -> TermResult:
-    """Средний запас до ближайшей нормы: полный балл с запасом margin_target и больше."""
-    target = params.margin_target
+    """Средний запас до ближайшей подземной сети сверх нормы: полный балл с margin_target_m.
+
+    СП 317.1325800.2017, п. 5.3.5.3: на плане 1:500 положение подземных сетей может
+    расходиться с натурой до 0,5 м. Посадка ровно на норме по чертежу на месте может
+    оказаться ближе нормы; запас в полметра эту погрешность покрывает.
+    """
+    target = params.margin_target_m
     found = [tightest(p) for p in layout.placements]
     values: list[float | None] = [
         None if item is None else min(1.0, max(0.0, item[0] / target)) for item in found
     ]
     score, deltas, note, measure = _mean_term(
-        values, lambda s: f"средний запас до ближайшей нормы - {s:.0%} от цели {target:.0%}", "mean"
+        values,
+        lambda s: f"средний запас сверх нормы до подземных сетей - {s:.0%} от цели {_m(target)} м",
+        "mean",
     )
     if score is None:
-        return layout.empty("измеренных отступов нет")
+        return layout.empty("сетей рядом с посадками нет: запасу не до чего")
     details = [
-        "" if item is None else f"запас до ближайшей нормы {item[0]:.0%}: {item[1]}"
+        "" if item is None else f"запас сверх нормы до сети {_m(item[0])} м: {item[1]}"
         for item in found
     ]
     return TermResult(score, note, deltas, details, measure)
@@ -628,21 +666,36 @@ def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
     points = site.curb_points
     if not len(points):
         return layout.empty("бортов в границе работ нет: пылезащиту мерить не по чему")
+    total_curb = len(points)
+    if params.dust_admissible and site.curb_soil is not None:
+        # Только борта с грунтом в полосе у борта: там нижнему ярусу есть где встать.
+        points = points[site.curb_soil]
+        if not len(points):
+            return layout.empty("у бортов нет грунта: нижнему ярусу встать негде")
     target = params.dust_target
-    weight = np.array([p.species.gas_tolerance / 2 for p in layout.placements], dtype=np.float64)
+    # Abhijith et al. 2017: в уличном каньоне кроны над проезжей частью ухудшают воздух у
+    # земли, а работает сомкнутый низкий ярус от земли. Кустарник у борта засчитывается целиком,
+    # метр только под кроной дерева - с коэффициентом dust_crown_factor.
+    layer = np.where(layout.is_shrub, 1.0, params.dust_crown_factor)
+    weight = layer * np.array(
+        [p.species.gas_tolerance / 2 for p in layout.placements], dtype=np.float64
+    )
     best = np.zeros(len(points))
     second = np.zeros(len(points))
     owner = np.full(len(points), -1, dtype=np.int64)
     reach = np.zeros(layout.size, dtype=np.int64)
+    # Кустарник закрывает метр борта, если стоит в полосе у борта (полоса, закрытая для
+    # деревьев); дерево - только кроной над этим метром.
+    cover = np.where(layout.is_shrub, np.maximum(layout.radius, params.dust_strip_m), layout.radius)
     if layout.size:
         tree = KDTree(layout.xy)
-        hits = tree.query_ball_point(points, float(layout.radius.max()))
+        hits = tree.query_ball_point(points, float(cover.max()))
         for m, candidates in enumerate(hits):
             if not candidates:
                 continue
             near = np.array(candidates, dtype=np.int64)
             distance = np.hypot(*(layout.xy[near] - points[m]).T)
-            near = near[distance <= layout.radius[near]]
+            near = near[distance <= cover[near]]
             if not len(near):
                 continue
             reach[near] += 1
@@ -660,7 +713,10 @@ def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
     deltas = score - np.minimum(1.0, (total - loss) / count / target)
     covered = int((owner >= 0).sum())
     details = [
-        f"крона прикрывает {int(reach[i])} м борта, газоустойчивость {p.species.gas_tolerance} из 2"
+        (
+            f"{'нижний ярус у борта' if layout.is_shrub[i] else 'крона над бортом'}: "
+            f"{int(reach[i])} м, газоустойчивость {p.species.gas_tolerance} из 2"
+        )
         if reach[i]
         else ""
         for i, p in enumerate(layout.placements)
@@ -669,7 +725,11 @@ def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
         f"под кронами {covered} м бортов из {count} ({covered / count:.0%}), с поправкой на "
         f"газоустойчивость {share:.0%} при цели {target:.0%}"
     )
+    if count < total_curb:
+        note += f"; в счёт только борта с грунтом рядом, {count} м из {total_curb}"
     measure = {"curb_m": count, "covered_m": covered, "share": round(share, 4)}
+    if count < total_curb:
+        measure["curb_total_m"] = total_curb
     return TermResult(score, note, deltas, details, measure)
 
 

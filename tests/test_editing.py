@@ -22,10 +22,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 CONFLICT = 409
-# Синтетическая улица даёт 80 посадок и 40 отказов; перенос одной посадки на водопровод
-# оставляет 79 посадок и добавляет отказ.
-PLACEMENTS_AFTER_MOVE = 79
-REJECTIONS_AT_START = 40
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +89,8 @@ def test_moving_a_planting_onto_the_pipe_makes_it_a_rejection(
     Иначе она попадёт в DXF на слой «требует согласования», и в просмотрщике нарушение
     нормы прочитается как решение, которое достаточно согласовать.
     """
-    placement = _plan(client, run_id)["placements"][0]
+    plan = _plan(client, run_id)
+    placement = plan["placements"][0]
 
     response = client.post(
         f"{API_PREFIX}/runs/{run_id}/edits",
@@ -103,8 +100,9 @@ def test_moving_a_planting_onto_the_pipe_makes_it_a_rejection(
     assert response.status_code == 200
     body = response.json()
     assert body["stale"] is True
-    assert body["placements"] == PLACEMENTS_AFTER_MOVE
-    assert body["rejections"] > REJECTIONS_AT_START
+    # Перенос одной посадки на водопровод: посадок на одну меньше, отказ добавился.
+    assert body["placements"] == len(plan["placements"]) - 1
+    assert body["rejections"] > len(plan["rejections"])
 
 
 def test_deleting_a_planting_shrinks_the_plan(client: TestClient, run_id: str) -> None:

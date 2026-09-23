@@ -2,8 +2,10 @@
 
 Приём «alley»: рядовая посадка вдоль бортового камня, станции по линиям и штрихам борта,
 отступы из профиля с обеих сторон. Приём «lawn»: заполнение грунта шахматной сеткой с шагом
-посадки по карте покрытий, как сажают проектировщики во дворах. Оба приёма проверяются
-одним ConstraintIndex, посадки держат шаг между собой. Результат детерминирован.
+посадки по карте покрытий, как сажают проектировщики во дворах. Приём «fill»: добор зоны -
+сетка с шагом шесть метров пропускает узкие полосы и карманы газона, поэтому после неё
+проверяются все ячейки грунта через метр, сначала те, где запас до сетей больше. Все приёмы
+проверяются одним ConstraintIndex, посадки держат шаг между собой. Результат детерминирован.
 """
 
 from __future__ import annotations
@@ -22,9 +24,9 @@ from green.application.errors import InputError
 from green.application.params import active_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
-from green.application.zones import build_zones
+from green.application.zones import MAX_ZONE_POINTS, build_zones, zone_capacity
 from green.domain.objects import ObjectClass
-from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict
+from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,11 +42,20 @@ if TYPE_CHECKING:
 
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
+MODE_FILL = "fill"  # добор зоны; посадки подписаны как заполнение газона
 MODE_SHRUB_GROUP = "shrub_group"
+MODE_SHRUB_ROW = "shrub_row"
+MODE_CURB_HEDGE = "curb_hedge"
+MODE_UNDERSTORY = "understory"
+MODE_SHRUB_FILL = "shrub_fill"
 MODE_LABELS = {
     MODE_ALLEY: "аллея вдоль борта",
     MODE_LAWN: "заполнение газона",
     MODE_SHRUB_GROUP: "группа кустарников на месте дерева",
+    MODE_SHRUB_ROW: "ряд кустарника у борта под кронами аллеи",
+    MODE_CURB_HEDGE: "живая изгородь вдоль борта",
+    MODE_UNDERSTORY: "кустарник под кроной дерева",
+    MODE_SHRUB_FILL: "группа кустарников на газоне",
 }
 _TANGENT_STEP_M = 0.5
 _SPACING_TOLERANCE = 0.95
@@ -123,18 +134,18 @@ class GreedyPlantingStrategy:
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
         if MODE_ALLEY in params.modes:
-            candidates = _curb_candidates(_curb_lines(features), params)
+            candidates = _curb_candidates(curb_lines(features), params)
             stats["alley_candidates"] = len(candidates)
             stats["alley_plantable"] = _offer(index, selector, candidates)
         if MODE_LAWN in params.modes and index.surface is not None:
             candidates = _lawn_candidates(index.surface, params)
             stats["lawn_candidates"] = len(candidates)
             stats["lawn_plantable"] = _offer(index, selector, candidates)
-        if index.surface is not None:
-            stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
-        zones = build_zones(index, params.zone_cell_m) if params.zones else ()
-        for zone in zones:
-            stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+        if MODE_FILL in params.modes and index.surface is not None:
+            before = len(selector.placements)
+            stats["fill_candidates"] = _fill(index, selector, params)
+            stats["fill_planted"] = len(selector.placements) - before
+        zones = _zones(index, params, stats)
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
@@ -192,6 +203,22 @@ class GreedyPlantingStrategy:
         )
 
 
+def _zones(
+    index: ConstraintIndex, params: PlanParams, stats: dict[str, int | float]
+) -> tuple[Zone, ...]:
+    """Зоны допустимости и их сводка в статистике плана."""
+    if index.surface is not None:
+        stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
+    zones = build_zones(index, params.zone_cell_m) if params.zones else ()
+    for zone in zones:
+        stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+    # Вместимость зоны - свойство участка; по ней индекс меряет плотность «при условии
+    # допустимости насаждений» (МГСН 1.02-02, табл. В.1).
+    if zones:
+        stats["zone_capacity_trees"] = zone_capacity(zones)
+    return zones
+
+
 def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
     """Проверяет кандидатов пачкой и предлагает отборщику; возвращает число допустимых точек."""
     if not candidates:
@@ -207,7 +234,8 @@ def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candid
     return len(positions)
 
 
-def _curb_lines(features: Sequence[Feature]) -> list[LineString]:
+def curb_lines(features: Sequence[Feature]) -> list[LineString]:
+    """Линии бортового камня, сшитые в непрерывные куски, в порядке обхода вдоль улицы."""
     parts = []
     for feature in features:
         if feature.object_class is not ObjectClass.CURB:
@@ -281,6 +309,60 @@ def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate
             candidates.append(_Candidate(station, MODE_LAWN, x, y))
             station += 1
     return candidates
+
+
+# Запас до сети сверх этого добору уже не важен: цель запаса - полметра (СП 317.1325800.2017,
+# п. 5.3.5.3), дальше места равны и решает порядок обхода, дающий плотную упаковку.
+_FILL_SLACK_CAP_M = 1.0
+
+
+def _fill(index: ConstraintIndex, selector: _Selector, params: PlanParams) -> int:
+    """Добор зоны: каждая ячейка грунта через fill_step_m, допустимые - по убыванию запаса.
+
+    Отбираются только точки с принимаемым вердиктом: недопустимые ячейки - это зона запрета,
+    отметки отказа на каждой из них засорили бы план. Место принимается, если до всех уже
+    поставленных деревьев не меньше шага посадки (тот же отборщик, что у аллеи и газона).
+    Порядок: сначала без замечаний, затем с барьером, затем на согласование; внутри - запас
+    до сетей (до _FILL_SLACK_CAP_M), при равенстве - построчно.
+    """
+    surface = index.surface
+    if surface is None:
+        return 0
+    stride = max(1, round(params.fill_step_m / surface.cell))
+    soil = surface.grid[::stride, ::stride] == Material.SOIL
+    # Чертёж без границы работ (Нижние Поля) - это весь лист: шаг растёт, как у зон.
+    while soil.sum() > MAX_ZONE_POINTS:
+        stride *= 2
+        soil = surface.grid[::stride, ::stride] == Material.SOIL
+    rows, cols = np.nonzero(soil)
+    xy = np.column_stack(
+        [
+            surface.origin[0] + (cols * stride + 0.5) * surface.cell,
+            surface.origin[1] + (rows * stride + 0.5) * surface.cell,
+        ]
+    )
+    points = shapely.points(xy)
+    keep = np.flatnonzero(index.plantable(points))
+    if not len(keep):
+        return 0
+    xy, batch = xy[keep], index.evaluate(points[keep])
+    ranks = {Verdict.ALLOWED: 0}
+    if params.allow_needs_approval:
+        ranks[Verdict.NEEDS_APPROVAL] = 2
+    verdicts = [batch.verdict(k) for k in range(len(xy))]
+    usable = [k for k in range(len(xy)) if verdicts[k] in ranks]
+    slack = batch.slack()
+    slack = np.where(np.isfinite(slack), np.minimum(slack, _FILL_SLACK_CAP_M), _FILL_SLACK_CAP_M)
+    usable.sort(
+        key=lambda k: (ranks[verdicts[k]] + int(batch.needs_barrier(k)), -float(slack[k]), k)
+    )
+    selector.batch = batch
+    station = 2_000_000  # у аллеи и газона свои диапазоны станций
+    for k in usable:
+        selector.offer(_Candidate(station, MODE_LAWN, float(xy[k, 0]), float(xy[k, 1])), k)
+        station += 1
+    selector.flush()
+    return len(usable)
 
 
 def _coords(line: LineString, distances: NDArray[np.float64]) -> NDArray[np.float64]:

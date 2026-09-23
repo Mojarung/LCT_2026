@@ -4,22 +4,27 @@ run_manifest.json, verify.json."""
 from __future__ import annotations
 
 import csv
+import math
 import platform
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import orjson
 import shapely
 
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
+from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
+from green.infrastructure.reports.png import encode_rgba
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.basemap import Basemap
     from green.application.results import RunReport
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import RuleBook
     from green.domain.planting import (
         AssortmentInfo,
@@ -88,6 +93,7 @@ class FileArtifactSink:
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
             "quality.json": _write_json(directory / "quality.json", _quality(report.plan.quality)),
+            **_surface(directory, report.surface),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
@@ -282,6 +288,8 @@ def _value(value: PlantingValue | None) -> dict[str, Any] | None:
         "percentile": value.percentile,
         "by_term": dict(value.by_term),
         "reasons": list(value.reasons),
+        "weak": list(value.weak),
+        "flagged": value.flagged,
     }
 
 
@@ -313,7 +321,7 @@ def _quality(quality: PlanQuality | None) -> dict[str, Any]:
             for v in ranked[:10]
         ],
         "negative": [
-            {"id": v.placement_id, "delta": v.delta, "reasons": list(v.reasons)}
+            {"id": v.placement_id, "delta": v.delta, "weak": list(v.weak)}
             for v in reversed(ranked)
             if v.delta < 0
         ][:50],
@@ -373,6 +381,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
                 "y": r.y,
                 "verdict": r.verdict.value,
                 "note": r.note,
+                "barrier_m": r.barrier_m,
                 "explanation": texts.get(r.rejection_id, ""),
                 "blocking": [_check(c) for c in r.blocking],
             }
@@ -441,6 +450,12 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             "min_span_m": basemap.min_span_m,
         },
         "bbox": list(basemap.bbox),
+        # Подписи материала отдельным списком, а не объектами GeoJSON: они не участвуют в
+        # балансе отбора и рисуются текстом, а не геометрией.
+        "labels": [
+            [round(label.x, 2), round(label.y, 2), label.text, label.material]
+            for label in basemap.labels
+        ],
         "features": [
             {
                 "type": "Feature",
@@ -450,6 +465,41 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             for feature in basemap.features
         ],
     }
+
+
+# Цвета карты покрытий: грунт - зеленоватый, твёрдое - серый, полупрозрачные, чтобы линии
+# подосновы читались поверх. Барьеры и неизвестное - прозрачные.
+SURFACE_COLORS = {
+    Material.UNKNOWN: (0, 0, 0, 0),
+    Material.PAVED: (140, 142, 150, 96),
+    Material.SOIL: (104, 158, 104, 88),
+    Material.BARRIER: (0, 0, 0, 0),
+}
+SURFACE_MAX_SIDE = 4096  # пикселей по длинной стороне: больше браузеру не нужно
+
+
+def _surface(directory: Path, surface: SurfaceMap | None) -> dict[str, Path]:
+    """Карта покрытий растром: PNG и привязка к координатам чертежа."""
+    if surface is None:
+        return {}
+    grid = surface.grid
+    step = max(1, math.ceil(max(grid.shape) / SURFACE_MAX_SIDE))
+    sampled = grid[::step, ::step]
+    palette = np.zeros((max(int(m) for m in Material) + 1, 4), dtype=np.uint8)
+    for material, color in SURFACE_COLORS.items():
+        palette[int(material)] = color
+    image = directory / "surface.png"
+    image.write_bytes(encode_rgba(palette[sampled]))
+    meta = {
+        "origin": [surface.origin[0], surface.origin[1]],
+        "cell_m": surface.cell * step,
+        "width": int(sampled.shape[1]),
+        "height": int(sampled.shape[0]),
+        "row_order": "строка 0 - минимальный Y чертежа",
+        "colors": {m.name.lower(): list(c) for m, c in SURFACE_COLORS.items()},
+        "counts": {m.name.lower(): int((grid == m).sum()) for m in Material},
+    }
+    return {"surface.png": image, "surface.json": _write_json(directory / "surface.json", meta)}
 
 
 def _zones(plan: Plan) -> dict[str, Any]:

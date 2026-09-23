@@ -9,15 +9,22 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment import assign_species
+from green.application.barriers import mark_barrier_options
 from green.application.basemap import build_basemap
 from green.application.classification import classify_scene, promote_unknown_lines
+from green.application.constraints import work_boundary
 from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.quality import assess, site_of
+from green.application.refine import refine_weak
 from green.application.results import RunReport, StageTiming
+from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
+from green.application.shrub_rows import fill_shrub_rows
+from green.application.surfaces import build_surface_map
+from green.application.understory import fill_understory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -142,7 +149,7 @@ class PlanSite:
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
-            basemap = build_basemap(features)
+            basemap = build_basemap(features, scene.labels)
             if progress is not None:
                 progress.basemap(basemap)
         with watch.stage("place"):
@@ -169,10 +176,67 @@ class PlanSite:
                 params=params,
                 existing=inventory.matched if inventory else None,
             )
+        # Карта покрытий строится один раз: её читают ряд кустарника и сдвиг слабых мест, и она
+        # же уходит на карту в браузере - «как сервис понял, где грунт».
+        with watch.stage("surface"):
+            surface = (
+                build_surface_map(
+                    features, scene.labels, work_boundary(features), params.surface_cell_m
+                )
+                if params.require_soil
+                else None
+            )
+        with watch.stage("shrub_rows"):
+            plan = fill_shrub_rows(
+                plan,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                catalog=self._species.all(),
+                params=params,
+                surface=surface,
+            )
+        with watch.stage("understory"):
+            plan = fill_understory(
+                plan,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                catalog=self._species.all(),
+                params=params,
+                surface=surface,
+            )
+        with watch.stage("shrub_fill"):
+            plan = fill_shrub_gaps(
+                plan,
+                strategy=self._strategy,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                catalog=self._species.all(),
+                params=params,
+                surface=surface,
+            )
         # Индекс качества считается до объяснений: ценность посадки входит в её текст.
         with watch.stage("quality"):
-            site = site_of(features)
+            # Барьер не ставится по умолчанию, но место, которое он спас бы, видно на карте:
+            # решение за проектировщиком, а не за сервисом.
+            plan = mark_barrier_options(plan, rulebook, applied=params.root_barriers)
+            site = site_of(features, surface)
             plan = assess(plan, site, params)
+        # Слабые места - посадки впритык к норме - сервис сдвигает сам, если индекс от этого
+        # растёт. Карта покрытий, построенная для проверки грунта, уходит правке плана.
+        with watch.stage("refine"):
+            refined = refine_weak(
+                plan,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                params=params,
+                site=site,
+                surface=surface,
+            )
+            plan = refined.plan
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF
@@ -207,6 +271,7 @@ class PlanSite:
             converter=converter,
             warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
             basemap=basemap,
+            surface=surface,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и
@@ -222,6 +287,8 @@ class PlanSite:
             unit_m=scene.unit_m,
             report=report,
             _site=site,
+            _surface=surface,
+            _surface_built=params.require_soil,
         )
         return replace(report, context=context)
 

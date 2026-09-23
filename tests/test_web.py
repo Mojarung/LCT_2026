@@ -205,7 +205,10 @@ def test_run_page_shows_plan_quality_and_each_planting_has_a_value(
     assert all(t["basis"] for t in quality["terms"])
     assert plan["placements"]
     assert all(p["value"] is not None for p in plan["placements"])
-    assert all("Ценность:" in p["explanation"] for p in plan["placements"])
+    assert all(
+        "Ценность:" in p["explanation"] or "Слабое место" in p["explanation"]
+        for p in plan["placements"]
+    )
 
 
 def test_map_payload_is_available_and_joins_rules(client: TestClient, work: Path) -> None:
@@ -332,3 +335,32 @@ def test_plan_changing_warning_is_not_hidden_in_the_fold(client: TestClient) -> 
     assert '<div class="notice">' in page
     assert page.index("Граница работ не найдена") < page.index("Предупреждения")
     assert "аудит исправил" not in page.split('<div class="notice">')[1].split("</div>")[0]
+
+
+def test_the_map_gets_the_surface_map_and_the_material_labels(
+    client: TestClient, work: Path
+) -> None:
+    """Карта обязана показывать, где сервис увидел грунт: без этого посадку на площадке со
+    спецпокрытием не отличить от посадки на газоне (Харьковская, 23.09.2026)."""
+    path = work / "street-surface.dxf"
+    _street(path)
+    created = client.post(
+        "/web/runs",
+        files={"file": ("street-surface.dxf", path.read_bytes(), "image/vnd.dxf")},
+        data={"profile": "strict"},
+        follow_redirects=False,
+    )
+    run_id = created.headers["location"].rsplit("/", 1)[-1]
+    base = f"/api/v1/runs/{run_id}/artifacts"
+    meta = client.get(f"{base}/surface.json").json()
+    image = client.get(f"{base}/surface.png")
+    basemap = client.get(f"{base}/basemap.geojson").json()
+
+    assert image.status_code == 200
+    assert image.content.startswith(b"\x89PNG\r\n\x1a\n")
+    width = int.from_bytes(image.content[16:20], "big")
+    height = int.from_bytes(image.content[20:24], "big")
+    assert (width, height) == (meta["width"], meta["height"])
+    assert meta["counts"]["soil"] > 0
+    assert basemap["labels"], "подписи материала с чертежа не доехали до карты"
+    assert {label[3] for label in basemap["labels"]} <= {"paved", "soil"}

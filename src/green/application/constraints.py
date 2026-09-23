@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -61,6 +62,22 @@ class EvaluationBatch:
     def verdict(self, position: int) -> Verdict:
         return _VERDICTS[int(self.verdict_codes[position])]
 
+    def slack(self) -> NDArray[np.float64]:
+        """Запас до самой тесной нормы до подземной сети в каждой точке, м: измерено минус норма.
+
+        Только сети: их положение на плане 1:500 расходится с натурой до 0,5 м (СП
+        317.1325800.2017, п. 5.3.5.3), а борт и стену при посадке меряют от настоящих. Считаются
+        только измеренные расстояния: «сетей в чертеже нет» - не запас. Точка, где не измерено
+        ничего, получает минус бесконечность.
+        """
+        thresholds = np.array([r.min_distance_m for r in self.rules], dtype=np.float64)[:, None]
+        if not len(self.rules):
+            return np.full(len(self), -np.inf)
+        hidden = np.array([r.object_class.is_utility for r in self.rules], dtype=bool)[:, None]
+        measured = (self.nearest >= 0) & (self.outcomes != _NO_DATA) & (thresholds > 0) & hidden
+        worst = np.where(measured, self.clearance - thresholds, np.inf).min(axis=0)
+        return np.where(np.isfinite(worst), worst, -np.inf)
+
     def needs_barrier(self, position: int) -> bool:
         """Точка допустима только с прикорневым барьером хотя бы у одного объекта."""
         return bool((self.outcomes[:, position] == _BARRIER).any())
@@ -96,26 +113,18 @@ class ConstraintIndex:
         barrier_distance_m: float | None = None,
     ) -> None:
         self.surface = surface
-        # Наименьшее расстояние до сетей и бордюров, допустимое с прикорневым барьером; None -
-        # барьеры не рассматриваются, действует только табличная норма.
-        self._barrier_distance_m = barrier_distance_m
         by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
         for feature in features:
             by_class[feature.object_class].append(feature)
-
-        self._rules = tuple(rules)
-        self._forbid = np.array([r.severity is Severity.FORBID for r in self._rules], dtype=bool)
+        self._by_class = by_class
+        self._indexes: dict[ObjectClass, _ClassIndex] = {}
+        self.configure(rules, barrier_distance_m)
         self._require_utility_data = require_utility_data
         # Линии, дополненные до «сети неизвестного типа» (fail-closed), не считаются данными
         # о сетях: иначе нераспознанный слой скрывал бы отсутствие выгрузки коммуникаций.
         self.has_utility_data = any(
             cls.is_utility and cls is not ObjectClass.UTILITY_UNKNOWN for cls in by_class
         )
-        self._indexes = {
-            cls: _index(tuple(by_class[cls]))
-            for cls in {rule.object_class for rule in self._rules}
-            if by_class.get(cls)
-        }
         hard = [
             f.geometry
             for f in features
@@ -126,6 +135,34 @@ class ConstraintIndex:
         self.boundary: BaseGeometry | None = _boundary(by_class.get(ObjectClass.WORK_BOUNDARY, []))
         if self.boundary is not None:
             shapely.prepare(self.boundary)
+
+    def configure(
+        self, rules: Sequence[DistanceRule], barrier_distance_m: float | None = None
+    ) -> None:
+        """Задать набор правил; индекс класса строится один раз и запоминается.
+
+        barrier_distance_m - наименьшее расстояние до сетей и бордюров, допустимое с
+        прикорневым барьером; None - барьеры не рассматриваются, действует табличная норма.
+        """
+        self._barrier_distance_m = barrier_distance_m
+        self._rules = tuple(rules)
+        self._forbid = np.array([r.severity is Severity.FORBID for r in self._rules], dtype=bool)
+        for cls in {rule.object_class for rule in self._rules} - self._indexes.keys():
+            if self._by_class.get(cls):
+                self._indexes[cls] = _index(tuple(self._by_class[cls]))
+
+    def with_rules(
+        self, rules: Sequence[DistanceRule], *, barrier_distance_m: float | None = None
+    ) -> ConstraintIndex:
+        """Тот же чертёж с другим набором правил: деревья поиска по классам общие.
+
+        Нужен, когда точки проверяются правилами конкретной посадки (её вид, крона, род), а
+        объекты подосновы те же: на генплане в сотни тысяч объектов индекс класса строится
+        секунды, и повторять это на каждый вид незачем.
+        """
+        clone = copy.copy(self)
+        clone.configure(rules, barrier_distance_m)
+        return clone
 
     def plantable(self, points: NDArray[np.object_]) -> NDArray[np.bool_]:
         """Точка на грунте по карте покрытий, не на твёрдом покрытии и внутри границы работ."""
