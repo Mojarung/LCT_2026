@@ -12,6 +12,7 @@ const strict: ProfileParams = {
   shrub_rows: true,
   curb_hedges: true,
   understory: true,
+  shrub_fill: true,
 };
 const shrubs: ProfileParams = {
   ...strict,
@@ -37,6 +38,9 @@ describe('параметры поверх профиля', () => {
     expect(
       diffOverrides(strict, { ...form, switches: { ...form.switches, root_barriers: true } }, ''),
     ).toEqual({ root_barriers: true });
+    expect(
+      diffOverrides(strict, { ...form, switches: { ...form.switches, shrub_fill: false } }, ''),
+    ).toEqual({ shrub_fill: false });
     expect(diffOverrides(shrubs, { ...formDefaults(shrubs), fill: true }, '')).toEqual({
       modes: ['alley', 'lawn', 'fill'],
     });

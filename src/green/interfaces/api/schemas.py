@@ -72,6 +72,7 @@ class ProfileOut(BaseModel):
     shrub_rows: bool
     curb_hedges: bool
     understory: bool
+    shrub_fill: bool = Field(description="Группы кустарника на свободном газоне")
 
 
 class ArtifactOut(BaseModel):

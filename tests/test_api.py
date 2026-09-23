@@ -280,6 +280,7 @@ def test_profile_parameters_for_the_form(client: TestClient) -> None:
     assert "fill" not in shrubs["modes"]
     assert barriers["root_barriers"] is True
     assert strict["root_barriers"] is False
+    assert strict["shrub_fill"] is True, "группы кустарника на газоне тоже выключаются формой"
 
 
 def test_unknown_profile_is_not_found(client: TestClient) -> None:

@@ -4,27 +4,22 @@
  * shrubs молча терял смысл (находка аудита 23.09). Теперь форма заполняется значениями
  * выбранного профиля из GET /api/v1/profiles/{name}, а в overrides уходит разница. */
 
-export type Switch = 'root_barriers' | 'shrub_groups' | 'shrub_rows' | 'curb_hedges' | 'understory';
+import type { ProfileOut } from '../api/types';
+
+export type Switch =
+  'root_barriers' | 'shrub_groups' | 'shrub_rows' | 'curb_hedges' | 'understory' | 'shrub_fill';
 
 export const SWITCHES: readonly Switch[] = [
   'shrub_groups',
   'shrub_rows',
   'curb_hedges',
   'understory',
+  'shrub_fill',
   'root_barriers',
 ];
 
-export interface ProfileParams {
-  name: string;
-  planting_type: string;
-  spacing_m: number;
-  modes: string[];
-  root_barriers: boolean;
-  shrub_groups: boolean;
-  shrub_rows: boolean;
-  curb_hedges: boolean;
-  understory: boolean;
-}
+/** Параметры профиля из GET /api/v1/profiles/{name}. */
+export type ProfileParams = ProfileOut;
 
 export interface RunFormValues {
   spacing_m: number;
@@ -42,6 +37,7 @@ export function formDefaults(profile: ProfileParams): RunFormValues {
       shrub_rows: profile.shrub_rows,
       curb_hedges: profile.curb_hedges,
       understory: profile.understory,
+      shrub_fill: profile.shrub_fill,
     },
   };
 }

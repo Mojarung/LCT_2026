@@ -486,6 +486,11 @@
             "title": "Root Barriers",
             "type": "boolean"
           },
+          "shrub_fill": {
+            "description": "Группы кустарника на свободном газоне",
+            "title": "Shrub Fill",
+            "type": "boolean"
+          },
           "shrub_groups": {
             "title": "Shrub Groups",
             "type": "boolean"
@@ -513,7 +518,8 @@
           "shrub_groups",
           "shrub_rows",
           "curb_hedges",
-          "understory"
+          "understory",
+          "shrub_fill"
         ],
         "title": "ProfileOut",
         "type": "object"

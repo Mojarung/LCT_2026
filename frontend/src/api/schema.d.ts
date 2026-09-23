@@ -436,6 +436,11 @@ export interface components {
             planting_type: string;
             /** Root Barriers */
             root_barriers: boolean;
+            /**
+             * Shrub Fill
+             * @description Группы кустарника на свободном газоне
+             */
+            shrub_fill: boolean;
             /** Shrub Groups */
             shrub_groups: boolean;
             /** Shrub Rows */
