@@ -23,6 +23,9 @@ docker compose up --build           # то же в контейнере, веб 
 включается явно и не подтверждает семантику покрытия. Внешние сервисы не нужны.
 Текущие проверки и ограничения — [журнал](docs/research/verified-pipeline/findings.md).
 
+Краткая техническая записка о текущей цепочке и границах её проверки:
+[PDF, 5 страниц](output/pdf/pipeline-brief.pdf), [Markdown](docs/pipeline-brief.md).
+
 Артефакты прогона: `result.dxf`, `plan.json`, `basemap.geojson` (подоснова для карты), `rules.json` (свод норм прогона с цитатами), `interpretations.csv` и `.json`, `assortment.json` и `assortment_shrubs.json` (состав плана: доли, разнообразие, сезонность), `planting_schedule.csv` (ведомость: количества, размер кома, площадь под посадочные ямы), `zones.geojson`, `run_manifest.json`, `verify.json`, `layers_report.json`.
 
 Линтеры и тесты: `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run ty check src`, `uv run lint-imports`, `uv run pytest`.
