@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "e2e": "playwright test",
+    "e2e": "npm run build && playwright test",
     "gen:api": "npx --yes openapi-typescript@7.13.0 ../docs/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {

@@ -24,6 +24,8 @@ export default defineConfig({
     env: {
       GREEN_WEB_DIR: 'frontend/dist',
       GREEN_RUNS_DIR: 'var/e2e-runs',
+      // Каталога улиц нет, как на стенде жюри без датасета: консоль предлагает встроенный участок.
+      GREEN_STREETS_DIR: 'var/e2e-no-streets',
       PYTHONIOENCODING: 'utf-8',
     },
   },
