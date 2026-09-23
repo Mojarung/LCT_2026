@@ -3,6 +3,8 @@
 // обязана совпасть с ним везде, кроме осознанных правок, отмеченных в тесте.
 //
 // Запуск: node scripts/golden-quotes.mjs <plan.js> <rules.json> <out.json>
+// Старый plan.js удалён вместе с Jinja2-страницами, он есть в истории git:
+//   git show 9e0278f:src/green/interfaces/web/static/plan.js > plan.js
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const [planPath, rulesPath, outPath] = process.argv.slice(2);

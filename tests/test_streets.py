@@ -113,58 +113,8 @@ def test_api_lists_streets(client: TestClient) -> None:
     assert rows[0]["files"] == 2, "комплект считается вместе с сетями"
 
 
-def test_index_offers_the_street(client: TestClient) -> None:
-    page = client.get("/").text
-
-    assert "Улица пилотного проекта" in page
-    assert "07-test-street" in page
-
-
-def test_built_in_fragment_gives_way_to_the_catalog(client: TestClient) -> None:
-    """Когда улицы есть, встроенный фрагмент с первого экрана уходит.
-
-    Он нужен ровно там, где датасет не смонтирован: иначе он занимает первое место формы
-    и предлагает триста метров улицы вместо девятнадцати настоящих.
-    """
-    page = client.get("/").text
-
-    assert "Встроенный участок" not in page
-    assert "/web/demo" not in page
-    assert "Тестовая улица" in page
-
-
-def test_unknown_street_is_refused(client: TestClient) -> None:
-    response = client.post("/web/runs", data={"street": "нет-такой-улицы"}, follow_redirects=False)
-
-    assert response.status_code == 422
-    assert "нет в каталоге" in response.json()["detail"]
-
-
-def test_run_without_any_source_says_what_to_do(client: TestClient) -> None:
-    response = client.post("/web/runs", data={}, follow_redirects=False)
-
-    assert response.status_code == 422
-    assert "улицу" in response.json()["detail"]
-
-
-def test_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
-    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
-    created = client.post(
-        "/web/runs",
-        data={"street": "07-test-street", "profile": "strict", "spacing_m": "6"},
-        follow_redirects=False,
-    )
-
-    assert created.status_code == 303
-    run_id = created.headers["location"].rsplit("/", 1)[-1]
-    record = client.get(f"/api/v1/runs/{run_id}").json()
-    assert record["state"] == "succeeded", record.get("error")
-    assert record["summary"]["placements"] > 0
-    assert record["source_name"] == "Тестовая улица.dxf", "в реестре улица названа улицей"
-
-
 def test_api_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
-    """Улица запускается через JSON API так же, как через форму: интерфейс живёт только на API."""
+    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
     created = client.post(
         "/api/v1/runs",
         data={"street": "07-test-street", "profile": "strict", "overrides": '{"spacing_m": 6}'},

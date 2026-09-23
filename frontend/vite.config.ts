@@ -46,7 +46,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
-    css: false,
+    // Стили в тестах не нужны, кроме src/styles: их текст читает проверка CSS-переменных.
+    css: { include: [/\/src\/styles\/[^/?]+\.css/] },
     restoreMocks: true,
   },
 });

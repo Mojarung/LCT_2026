@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # Каталог улиц пилотного проекта, подготовленный tools/prepare_streets.py.
     # Датасета на стенде может не быть: тогда каталог просто пуст.
     streets_dir: Path = Path("dataset/streets_dxf")
+    # Собранный веб-интерфейс (frontend/, npm run build). В образе - /app/web.
+    web_dir: Path = Path("frontend/dist")
     default_profile: str = "strict"
     converter: Literal["auto", "libredwg", "oda", "none"] = "auto"
     libredwg_binary: str = "dwg2dxf"

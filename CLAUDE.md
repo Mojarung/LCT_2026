@@ -44,12 +44,19 @@ src/green/
   interfaces/      cli/main.py (`green run|audit|inspect|verify|serve|openapi`, cyclopts),
                    api/ (FastAPI /api/v1, Swagger, RFC 9457; intake - общий приём файлов,
                    routers/edits - проверка точки, правки, пересборка),
-                   web/ (Jinja2-страницы, canvas-карта плана с растровым кэшем и отсечением,
-                   панель обозначений со слоями, слой покрытий «как понял сервис» и подписи
-                   материала, ссылка на место (#x=..&y=..&m=..), фильтр по видам, ползунок масштаба, правка
-                   посадок; пока прогон идёт - чертёж на карте сразу после чтения и полоса
-                   хода с процентами по GET /runs/{id}; статика в web/static, внешних запросов
-                   нет, node в образе нет)
+                   web/spa.py (раздача собранного React-бандла из GREEN_WEB_DIR: файлы бандла,
+                   на маршруты клиента index.html, 404 на отсутствующий файл, 503 без сборки;
+                   /docs - Swagger UI из бандла, без CDN; ReDoc убран)
+frontend/          веб-интерфейс: React 19 + TypeScript + Vite, SPA ходит только в /api/v1
+                   (спека и план - docs/plans/2026-09-23-react-frontend-*.md, заметка notes/31).
+                   src/pages (ConsolePage - запуск и реестр прогонов, RunPage - рабочее место),
+                   src/components/{console,run,detail}, src/map (движок карты на canvas без React:
+                   чанки Path2D, растровый кэш, отсечение, ввод; view.ts - вписывание по медиане
+                   посадок), src/state (Zustand; editor.ts - правки по очереди, пересборка до
+                   нового updated_at), src/api (клиент, RFC 9457, TanStack Query), src/lib (формат,
+                   цитаты норм, переопределения профиля), src/styles (токены «графит и кость»);
+                   npm run dev (прокси /api на :8010), npm test (vitest), npm run build -> dist/,
+                   npm run e2e (Playwright на живом бэкенде :8012)
 config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
@@ -103,7 +110,7 @@ dataset/           датасет и конвертированные DXF, в gi
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
-Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (веб-интерфейс на `/` с выбором улицы пилота, Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (веб-интерфейс на `/` из `frontend/dist`: сначала `cd frontend; npm ci; npm run build`; Swagger на `/docs`; разработка фронта - `npm run dev` в `frontend/` при `green serve --port 8010`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
 
 ## Конвенции
 
