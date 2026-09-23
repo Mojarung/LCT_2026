@@ -89,7 +89,7 @@ def main() -> None:
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=OUTPUT / "runs"))
     rows = []
     for name, source, kind in cases:
-        for solver in ("greedy", "milp"):
+        for solver in ("greedy", "milp", "portfolio"):
             begin = time.perf_counter()
             params = container.profiles.load(
                 "strict", {"placement_solver": solver, "placement_time_limit_s": 5.0}
@@ -115,10 +115,14 @@ def main() -> None:
                     if plan.quality
                     else [],
                     selection=asdict(plan.selection) if plan.selection else None,
+                    portfolio=asdict(plan.portfolio) if plan.portfolio else None,
                     no_species=plan.assortment_summary.no_species
                     if plan.assortment_summary
                     else None,
-                    stages_ms={stage.stage: stage.ms for stage in report.timings},
+                    stages_ms={
+                        name: round(sum(t.ms for t in report.timings if t.stage == name), 1)
+                        for name in {t.stage for t in report.timings}
+                    },
                 )
             row["seconds"] = round(time.perf_counter() - begin, 4)
             rows.append(row)
@@ -126,11 +130,11 @@ def main() -> None:
                 {
                     k: v
                     for k, v in row.items()
-                    if k not in {"quality_terms", "selection", "stages_ms"}
+                    if k not in {"quality_terms", "selection", "portfolio", "stages_ms"}
                 },
                 flush=True,
             )
-    target = ROOT / "docs/research/verified-pipeline/placement_comparison.json"
+    target = ROOT / "docs/research/verified-pipeline/portfolio_comparison.json"
     target.write_text(
         json.dumps(
             {

@@ -75,7 +75,7 @@ def _street(path: Path, *, scale: float = 1.0, insunits: int = 6) -> None:
     doc.saveas(path)
 
 
-@pytest.fixture(scope="module", params=("greedy", "milp"))
+@pytest.fixture(scope="module", params=("greedy", "milp", "portfolio"))
 def run(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
 ) -> dict[str, object]:
@@ -96,11 +96,18 @@ def test_finite_selection_evidence_is_separate_from_final_plan(run: dict[str, ob
     payload = orjson.loads(artifacts["selection.json"].read_bytes())  # type: ignore[index]
     if run["solver"] == "greedy":
         assert payload is None
-    else:
+    elif run["solver"] == "milp":
         assert payload["objective"] >= payload["baseline_objective"]
         assert payload["upper_bound"] >= payload["objective"]
         assert payload["candidates"] >= len(payload["selected"]) > 0
         assert "before species assignment" in payload["scope"]
+    else:
+        portfolio = orjson.loads(artifacts["portfolio.json"].read_bytes())  # type: ignore[index]
+        baseline = portfolio["variants"][0]
+        chosen = next(v for v in portfolio["variants"] if v["name"] == portfolio["chosen"])
+        assert len(portfolio["variants"]) >= 4
+        assert chosen["valid"]
+        assert chosen["quality_index"] >= baseline["quality_index"]
 
 
 def test_placements_stand_on_soil_above_the_curb(run: dict[str, object]) -> None:

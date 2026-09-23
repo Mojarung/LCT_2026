@@ -44,7 +44,9 @@ def run_id(client: TestClient, work: Path) -> str:
     response = client.post(
         f"{API_PREFIX}/runs",
         files={"file": ("street.dxf", path.read_bytes(), "image/vnd.dxf")},
-        data={"profile": "strict"},
+        # Freeze the composition used by the specific quota-deletion regression below.
+        # Portfolio layouts have different counts and require different corrective edits.
+        data={"profile": "strict", "overrides": '{"placement_solver": "greedy"}'},
     )
     return str(response.json()["id"])
 

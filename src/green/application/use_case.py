@@ -17,6 +17,7 @@ from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.input_quality import require_complete_blocks
+from green.application.portfolio import choose_plan
 from green.application.quality import assess, site_of
 from green.application.results import RunReport, StageTiming
 from green.application.shrub_groups import fill_shrub_groups
@@ -160,45 +161,51 @@ class PlanSite:
             basemap = build_basemap(features)
             if progress is not None:
                 progress.basemap(basemap)
-        with watch.stage("place"):
-            plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
-        with watch.stage("assort"):
-            inventory = request.inventory
-            plan = assign_species(
-                plan,
-                rulebook,
-                self._species.all(),
-                params,
-                inventory.matched if inventory else None,
-            )
-            if inventory is not None:
-                plan = replace(plan, warnings=(*plan.warnings, _inventory_note(inventory)))
-        with watch.stage("shrub_groups"):
-            plan = fill_shrub_groups(
-                plan,
-                strategy=self._strategy,
-                features=features,
-                labels=scene.labels,
-                rulebook=rulebook,
-                catalog=self._species.all(),
-                params=params,
-                existing=inventory.matched if inventory else None,
-            )
-        # Индекс качества считается до объяснений: ценность посадки входит в её текст.
-        with watch.stage("validate_plan"):
-            validation = validate_plan(
-                plan,
-                features,
-                scene.labels,
-                rulebook,
-                params,
-                catalog=self._species.all(),
-                existing=inventory.matched if inventory else None,
-            )
-            require_valid_plan(validation)
-        with watch.stage("quality"):
-            site = site_of(features)
-            plan = assess(plan, site, params)
+        site = site_of(features)
+
+        def complete_variant(params: PlanParams) -> tuple[Plan, PlanValidation]:
+            with watch.stage("place"):
+                plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
+            with watch.stage("assort"):
+                inventory = request.inventory
+                plan = assign_species(
+                    plan,
+                    rulebook,
+                    self._species.all(),
+                    params,
+                    inventory.matched if inventory else None,
+                )
+                if inventory is not None:
+                    plan = replace(plan, warnings=(*plan.warnings, _inventory_note(inventory)))
+            with watch.stage("shrub_groups"):
+                plan = fill_shrub_groups(
+                    plan,
+                    strategy=self._strategy,
+                    features=features,
+                    labels=scene.labels,
+                    rulebook=rulebook,
+                    catalog=self._species.all(),
+                    params=params,
+                    existing=inventory.matched if inventory else None,
+                )
+            # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+            with watch.stage("validate_plan"):
+                validation = validate_plan(
+                    plan,
+                    features,
+                    scene.labels,
+                    rulebook,
+                    params,
+                    catalog=self._species.all(),
+                    existing=inventory.matched if inventory else None,
+                )
+            with watch.stage("quality"):
+                if validation.ok:
+                    plan = assess(plan, site, params)
+            return plan, validation
+
+        plan, validation = choose_plan(complete_variant, params, features)
+        require_valid_plan(validation)
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

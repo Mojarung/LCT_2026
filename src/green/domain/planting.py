@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from green.domain.norms import PlantingType
     from green.domain.objects import ObjectClass, SourceRef
+    from green.domain.portfolio import PortfolioReport
     from green.domain.quality import PlanQuality
     from green.domain.selection import SelectionReport
 
@@ -258,6 +259,7 @@ class Plan:
     quality: PlanQuality | None = None
     # Historical generation-stage evidence; not a certificate for later edits or species quotas.
     selection: SelectionReport | None = None
+    portfolio: PortfolioReport | None = None
 
     @property
     def allowed_count(self) -> int:

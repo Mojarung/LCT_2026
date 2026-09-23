@@ -68,11 +68,13 @@ class PlanParams:
     drawing_unit: str = "auto"
     # Приёмы размещения по порядку: аллея вдоль борта, затем заполнение грунта сеткой.
     modes: tuple[str, ...] = ("alley", "lawn")
-    # Experimental finite candidate comparison; default keeps the existing composition.
-    placement_solver: str = "greedy"
+    # Compare complete validated layouts; baseline always remains an alternative.
+    placement_solver: str = "portfolio"
     placement_time_limit_s: float = 5.0
     placement_max_candidates: int = 6000
     placement_max_conflicts: int = 200_000
+    lawn_phase: tuple[float, float] = (0.0, 0.0)
+    lawn_rotation_deg: float = 0.0
     # Слой зон допустимости: сетка по грунту с вердиктом каждой ячейки по всем правилам.
     zones: bool = True
     zone_cell_m: float = 1.0

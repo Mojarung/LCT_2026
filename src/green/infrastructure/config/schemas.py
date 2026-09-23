@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -237,10 +237,15 @@ class ProfileModel(_Strict):
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
-    placement_solver: Literal["greedy", "milp"] = "greedy"
+    placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
     placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)
+    lawn_phase: tuple[Annotated[float, Field(ge=0, lt=1)], Annotated[float, Field(ge=0, lt=1)]] = (
+        0.0,
+        0.0,
+    )
+    lawn_rotation_deg: float = Field(default=0.0, ge=-180, le=180)
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
     assortment_mode: Literal["auto", "given", "single"] = "auto"

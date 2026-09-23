@@ -107,6 +107,10 @@ class FileArtifactSink:
                 directory / "selection.json",
                 asdict(report.plan.selection) if report.plan.selection is not None else None,
             ),
+            "portfolio.json": _write_json(
+                directory / "portfolio.json",
+                asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
+            ),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
