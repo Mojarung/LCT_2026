@@ -109,6 +109,7 @@ dataset/           датасет и конвертированные DXF, в gi
 
 - Python 3.14, uv ≥0.12.15 (сборка через `uv_build`), ruff `select = ["ALL"]` с исключениями из `pyproject.toml`, тайпчекер ty, import-linter — всё должно быть зелёным перед коммитом.
 - Ветки от `main`, conventional commits (у Кирилла: `feat(placement): …`, `docs: …`), squash в main. Ветка наших доков — `docs/dataset-research`.
+- **Веб-интерфейс — только React** (SPA в `frontend/`: React 19 + TypeScript + Vite), бэкенд отдаёт JSON API и собранный бандл. Jinja2 и прочие серверные шаблоны не используем (решение команды 23.09.2026, спека `docs/plans/2026-09-23-react-frontend-design.md`).
 - Датасет и ТЗ в git не кладём. Результаты прогонов — `runs/`, `out/` (игнорируются).
 - Windows-грабли: `PYTHONIOENCODING=utf-8` для кириллицы в консоли; Git Bash переписывает аргументы с двоеточием (`origin/main:.gitignore`) — `MSYS_NO_PATHCONV=1`.
 
