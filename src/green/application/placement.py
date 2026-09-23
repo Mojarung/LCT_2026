@@ -132,6 +132,7 @@ class GreedyPlantingStrategy:
                 max_distance_m=params.surface_max_distance_m,
                 ambiguity_m=params.surface_ambiguity_m,
                 tree_distance_m=params.tree_seed_distance_m,
+                inference_mode=params.surface_inference_mode,
             )
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
@@ -195,6 +196,7 @@ class GreedyPlantingStrategy:
                 max_distance_m=params.surface_max_distance_m,
                 ambiguity_m=params.surface_ambiguity_m,
                 tree_distance_m=params.tree_seed_distance_m,
+                inference_mode=params.surface_inference_mode,
             )
         size = params.shrub_group_size
         offsets = [(i - (size - 1) / 2) * params.spacing_m for i in range(size)]
@@ -511,15 +513,15 @@ def _warnings(
     params: PlanParams,
 ) -> tuple[str, ...]:
     max_rejections = params.max_rejections
-    warnings = []
+    warnings = list(index.surface.review_notes()) if index.surface is not None else []
     if params.disabled_rules:
         warnings.append(
             "Профиль отключает правила: " + ", ".join(sorted(params.disabled_rules)) + "."
         )
     if params.require_soil and index.surface is None:
         warnings.append(
-            "Карта покрытий не построена: в чертеже нет подписей материала покрытий "
-            "(«А», «Ц», «ПЛ») или признаков грунта («ГАЗОН», существующие деревья). "
+            "Карта покрытий не построена: нет пригодных площадей или подписей покрытия. "
+            "Существующее дерево само по себе не определяет грунт вокруг него. "
             "Пригодный грунт неизвестен: автоматическое размещение заблокировано."
         )
     if MODE_LAWN in params.modes and index.surface is None:

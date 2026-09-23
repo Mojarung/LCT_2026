@@ -104,6 +104,8 @@ class RunReport:
             "semantic_assignments_complete": self.classification.ready
             if self.classification
             else None,
+            "surface_inference_review_required": self.params.require_soil
+            and self.params.surface_inference_mode == "distance",
             "allowed": self.plan.allowed_count,
             "needs_approval": self.plan.approval_count,
             "rejections": len(self.plan.rejections),

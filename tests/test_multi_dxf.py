@@ -32,6 +32,11 @@ def _genplan(path: Path) -> None:
     )
     for x in range(0, 120, 1):
         msp.add_line((x, CURB_Y), (x + 0.7, CURB_Y), dxfattribs={"layer": "Бортовой камень"})
+    msp.add_lwpolyline(
+        [(0, CURB_Y), (120, CURB_Y), (120, 55), (0, 55)],
+        close=True,
+        dxfattribs={"layer": "Леса и газоны"},
+    )
     msp.add_text("А", dxfattribs={"layer": "Граница улицы"}).set_placement((60, 10))
     msp.add_text("ГАЗОН", dxfattribs={"layer": "Леса и газоны"}).set_placement((60, 30))
     msp.add_lwpolyline(

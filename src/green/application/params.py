@@ -65,6 +65,9 @@ class PlanParams:
     planting_radius_m: float = 1.6
     shrub_planting_radius_m: float = 0.5
     surface_cell_m: float = 0.5
+    # Default: a material label can classify only a closed material face.
+    # Distance propagation is an explicitly requested exploratory assumption.
+    surface_inference_mode: str = "closed_faces"
     # Limits on evidence propagation are project assumptions, not soil measurements.
     surface_max_distance_m: float = 30.0
     surface_ambiguity_m: float = 1.0

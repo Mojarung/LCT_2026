@@ -1,17 +1,13 @@
-"""Карта покрытий из топоплана: где грунт, а где асфальт, плитка или проезжая часть.
+"""Покрытия из площадей или замкнутых контуров с непротиворечивыми подписями.
 
-Топоплан Геотреста не содержит полигонов покрытий: есть линии, по которым покрытие
-меняется (борт, граница покрытия, стены, ограды, граница растительности), и подписи
-материала внутри участков («А» асфальт, «Ц» цементобетон, «ПЛ» плитка, «ГАЗОН»).
-Карта строится на растре: линии становятся барьерами, подписи и условные знаки
-деревьев источниками. Свидетельство действует на ограниченном расстоянии по пути
-в обход барьеров. Конкурирующие метки дают UNKNOWN, явные полигоны задают покрытие
-в своих границах. Это интерпретация чертежа, а не обследование физического грунта.
+Граница работ не заменяет границы материала. Дерево не доказывает наличие грунта.
+Политика distance сохранена для явно запрошенного исследовательского эскиза.
+Это интерпретация чертежа, а не обследование физического грунта.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
@@ -22,6 +18,7 @@ from scipy.ndimage import distance_transform_edt
 from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
+from green.application.surface_faces import FaceMaterials, closed_face_materials
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -59,6 +56,11 @@ class SurfaceMap:
     max_distance_m: float = 30.0
     ambiguity_m: float = 1.0
     tree_distance_m: float = 2.0
+    closed_faces_mode: bool = True
+    closed_faces: int = 0
+    conflicting_faces: int = 0
+    unassigned_labels: int = 0
+    open_edges: int = 0
     # Display raster and exact polygon evidence are kept separate: painting a
     # polygon into a cell must not expand it or erase a sub-cell hole.
     inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
@@ -134,8 +136,34 @@ class SurfaceMap:
             "max_distance_m": self.max_distance_m,
             "ambiguity_m": self.ambiguity_m,
             "tree_distance_m": self.tree_distance_m,
+            "closed_faces_mode": int(self.closed_faces_mode),
+            "closed_faces": self.closed_faces,
+            "conflicting_faces": self.conflicting_faces,
+            "unassigned_labels": self.unassigned_labels,
+            "open_edges": self.open_edges,
             **{f"cells_{m.name.lower()}": counted[m] for m in Material},
         }
+
+    def review_notes(self) -> tuple[str, ...]:
+        if not self.closed_faces_mode:
+            return ()
+        notes = []
+        if self.soil_area is None or self.soil_area.is_empty:
+            notes.append(
+                "Грунт не определён: нужны площади озеленения или замкнутые границы "
+                "покрытий с непротиворечивыми подписями."
+            )
+        if self.conflicting_faces:
+            notes.append(
+                f"Контуров с противоречивыми подписями покрытий: {self.conflicting_faces}; "
+                "грунт в них требует уточнения."
+            )
+        if self.unassigned_labels:
+            notes.append(
+                f"Подписей без определённого замкнутого контура: {self.unassigned_labels}; "
+                "они не разрешают посадку в соседнем пространстве."
+            )
+        return tuple(notes)
 
     def _cells(self, xy: NDArray[np.float64]) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
         cols = np.floor((xy[:, 0] - self.origin[0]) / self.cell).astype(np.int64)
@@ -152,13 +180,19 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
     max_distance_m: float = 30.0,
     ambiguity_m: float = 1.0,
     tree_distance_m: float = 2.0,
+    inference_mode: str = "closed_faces",
 ) -> SurfaceMap | None:
     """Use explicit polygons or bounded, competing material evidence; preserve unknowns."""
     if not np.isfinite([cell_m, max_distance_m, ambiguity_m, tree_distance_m]).all():
         raise ValueError("Surface distances must be finite")
     if cell_m <= 0 or max_distance_m <= 0 or ambiguity_m < 0 or tree_distance_m < 0:
         raise ValueError("Invalid surface distance or resolution")
+    if inference_mode not in {"closed_faces", "distance"}:
+        raise ValueError("Unknown surface inference mode")
     seed_xy, seed_kind = _seeds(features, labels)
+    if inference_mode == "closed_faces":
+        keep = seed_kind != _TREE_SEED
+        seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
     paved = int((seed_kind == Material.PAVED).sum())
     soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED]).sum())
     polygons = [
@@ -181,36 +215,33 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
     cell = _cell_size(bounds, cell_m)
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
-    barrier = _rasterize(barriers, origin, cell, shape)
     uncertain = _uncertainty_area(features)
-    if uncertain is not None:
-        # Cells touching the possible location of a curved boundary cannot carry
-        # material evidence across it, even if their centres miss the narrow band.
-        barrier |= _inside(reserved_buffer(uncertain, cell / np.sqrt(2)), origin, cell, shape)
+    barrier = _rasterize(barriers, origin, cell, shape, uncertain=uncertain)
     free = ~barrier
     if extent is not None:
         free &= _inside(extent, origin, cell, shape)
-    cols = np.floor((seed_xy[:, 0] - origin[0]) / cell).astype(np.int64)
-    rows = np.floor((seed_xy[:, 1] - origin[1]) / cell).astype(np.int64)
-    grid = _assign(
-        free,
-        _Seeds(rows, cols, seed_kind),
-        limit=max_distance_m / cell,
-        ambiguity=ambiguity_m / cell,
-        tree_limit=tree_distance_m / cell,
-    )
-    grid[barrier] = int(Material.BARRIER)
-    inferred_grid = grid.copy() if polygons else None
     soil_area, paved_area = _exact_areas(polygons, extent)
-    # Explicit polygons keep holes. Hard material wins over competing lawn geometry.
-    for material, area in ((Material.SOIL, soil_area), (Material.PAVED, paved_area)):
-        if area is not None:
-            mask = _inside(area, origin, cell, shape)
-            if extent is not None:
-                mask &= _inside(extent, origin, cell, shape)
-            grid[mask] = int(material)
-    if uncertain is not None:
-        grid[_inside(uncertain, origin, cell, shape)] = int(Material.UNKNOWN)
+    faces = None
+    if inference_mode == "closed_faces":
+        faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
+        soil_area = _merge_material_area(soil_area, faces.soil, extent)
+        if soil_area is not None:
+            soil_area = soil_area.difference(faces.unresolved)
+        paved_area = _merge_material_area(paved_area, faces.paved, extent)
+        grid = np.full(shape, int(Material.UNKNOWN), dtype=np.int8)
+    else:
+        cols = np.floor((seed_xy[:, 0] - origin[0]) / cell).astype(np.int64)
+        rows = np.floor((seed_xy[:, 1] - origin[1]) / cell).astype(np.int64)
+        grid = _assign(
+            free,
+            _Seeds(rows, cols, seed_kind),
+            limit=max_distance_m / cell,
+            ambiguity=ambiguity_m / cell,
+            tree_limit=tree_distance_m / cell,
+        )
+    grid[barrier] = int(Material.BARRIER)
+    inferred_grid = grid.copy()
+    _paint_materials(grid, (soil_area, paved_area, uncertain), origin, cell)
     return SurfaceMap(
         grid=grid,
         origin=origin,
@@ -224,7 +255,58 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
+        closed_faces_mode=inference_mode == "closed_faces",
+        closed_faces=faces.count if faces else 0,
+        conflicting_faces=faces.conflicts if faces else 0,
+        unassigned_labels=faces.unassigned_labels if faces else 0,
+        open_edges=faces.open_edges if faces else 0,
     )
+
+
+def _paint_materials(
+    grid: NDArray[np.int8],
+    areas: tuple[BaseGeometry | None, BaseGeometry | None, BaseGeometry | None],
+    origin: tuple[float, float],
+    cell: float,
+) -> None:
+    # Areas have already been clipped to the work extent. Exact query geometry
+    # stays separate from this display raster, including sub-cell holes.
+    for material, area in zip(
+        (Material.SOIL, Material.PAVED, Material.UNKNOWN), areas, strict=True
+    ):
+        if area is not None:
+            grid[_inside(area, origin, cell, grid.shape)] = int(material)
+
+
+def _closed_materials(
+    features: Sequence[Feature],
+    seed_xy: NDArray[np.float64],
+    seed_kind: NDArray[np.int8],
+    uncertain: BaseGeometry | None,
+) -> FaceMaterials:
+    certain = (
+        ~shapely.intersects(uncertain, shapely.points(seed_xy))
+        if uncertain is not None
+        else np.ones(len(seed_xy), dtype=bool)
+    )
+    material_lines = _barrier_lines(
+        [f for f in features if f.object_class is not ObjectClass.WORK_BOUNDARY]
+    )
+    faces = closed_face_materials(
+        material_lines,
+        seed_xy[certain & (seed_kind == Material.SOIL)],
+        seed_xy[certain & (seed_kind == Material.PAVED)],
+    )
+    return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
+
+
+def _merge_material_area(
+    explicit: BaseGeometry | None, inferred: BaseGeometry, extent: BaseGeometry | None
+) -> BaseGeometry | None:
+    area = shapely.union_all([explicit, inferred])
+    if extent is not None:
+        area = area.intersection(extent)
+    return None if area.is_empty else area
 
 
 def _exact_areas(
@@ -309,9 +391,14 @@ def _rasterize(
     origin: tuple[float, float],
     cell: float,
     shape: tuple[int, int],
+    *,
+    uncertain: BaseGeometry | None = None,
 ) -> NDArray[np.bool_]:
     """Отмечает ячейки под линиями; шаг выборки меньше половины ячейки даёт 8-связную цепочку."""
     barrier = np.zeros(shape, dtype=bool)
+    if uncertain is not None:
+        # The entire cell must avoid the possible position of a curved border.
+        barrier |= _inside(reserved_buffer(uncertain, cell / np.sqrt(2)), origin, cell, shape)
     if not len(lines):
         return barrier
     lengths = shapely.length(lines)

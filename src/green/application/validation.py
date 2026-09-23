@@ -160,6 +160,7 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             max_distance_m=params.surface_max_distance_m,
             ambiguity_m=params.surface_ambiguity_m,
             tree_distance_m=params.tree_seed_distance_m,
+            inference_mode=params.surface_inference_mode,
         )
         if params.require_soil
         else None

@@ -179,7 +179,11 @@ def demo(
     """
     # The real fragment has unresolved spatial layers. Only an explicitly requested
     # sketch may bypass semantic review; uploads and ordinary demo requests stay strict.
-    overrides = {"require_known_objects": False} if exploratory else {}
+    overrides = (
+        {"require_known_objects": False, "surface_inference_mode": "distance"}
+        if exploratory
+        else {}
+    )
     record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, overrides)
     write_sample(container.store.input_path(record.run_id))
     background.add_task(container.runs.execute, record.run_id, None, ())

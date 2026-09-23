@@ -121,7 +121,7 @@ class PlanSite:
         self._integrity = integrity
         self._merger = merger
 
-    def execute(  # noqa: PLR0915 - сценарий перечисляет этапы подряд, так он и читается
+    def execute(  # noqa: C901, PLR0915 - explicit pipeline and evidence gates
         self, request: PlanRequest, progress: ProgressSink | None = None
     ) -> RunReport:
         watch = Stopwatch([], on_stage=progress.stage if progress is not None else None)
@@ -167,6 +167,17 @@ class PlanSite:
             scene, coverage = classify_scene(scene, layer_map, params)
             semantics = classification_report(scene, layer_map, params)
             require_classified(semantics, params)
+            if params.require_soil and params.surface_inference_mode == "distance":
+                scene = replace(
+                    scene,
+                    warnings=(
+                        *scene.warnings,
+                        (
+                            "Исследовательский режим покрытий: распространение подписей по "
+                            "расстоянию не подтверждает границы грунта; требуется уточнение."
+                        ),
+                    ),
+                )
             if not semantics.ready:
                 scene = replace(
                     scene,

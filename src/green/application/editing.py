@@ -145,6 +145,7 @@ class RunContext:
                 max_distance_m=self.params.surface_max_distance_m,
                 ambiguity_m=self.params.surface_ambiguity_m,
                 tree_distance_m=self.params.tree_seed_distance_m,
+                inference_mode=self.params.surface_inference_mode,
             )
             self._surface_built = True
         return self._surface

@@ -1,0 +1,113 @@
+"""A material label needs a closed material boundary, not merely a nearby point."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+import pytest
+import shapely
+from shapely.affinity import rotate, translate
+from shapely.geometry import LineString, Point, box
+from test_surface_uncertainty import feature, label, material
+
+from green.application.surfaces import Material, build_surface_map
+from green.domain.objects import ObjectClass
+
+
+def test_unbounded_label_does_not_turn_nearby_blank_space_into_soil() -> None:
+    surface = build_surface_map([], [label("ГАЗОН", 5, 5)], box(0, 0, 20, 20), 0.5)
+    assert material(surface, 7, 5) is Material.UNKNOWN
+
+
+def test_project_boundary_does_not_close_a_material_region() -> None:
+    boundary = feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 20, 20))
+    curb = feature(ObjectClass.CURB, LineString([(0, 10), (20, 10)]))
+    surface = build_surface_map([boundary, curb], [label("ГАЗОН", 5, 5)], boundary.geometry, 0.5)
+    assert material(surface, 7, 5) is Material.UNKNOWN
+
+
+def test_tree_in_a_grate_does_not_establish_surrounding_soil() -> None:
+    tree = feature(ObjectClass.EXISTING_TREE, Point(5, 5))
+    surface = build_surface_map([tree], [], box(0, 0, 20, 20), 0.5)
+    assert surface is None or material(surface, 5.1, 5.1) is Material.UNKNOWN
+
+
+def test_two_conflicting_labels_do_not_split_one_material_region_by_distance() -> None:
+    border = feature(ObjectClass.PAVEMENT_EDGE, box(0, 0, 100, 20).boundary)
+    surface = build_surface_map(
+        [border], [label("ГАЗОН", 5, 10), label("А", 95, 10)], box(-5, -5, 105, 25), 0.5
+    )
+    assert material(surface, 6, 10) is Material.UNKNOWN
+    assert material(surface, 94, 10) is Material.UNKNOWN
+
+
+def test_unclosed_curb_gap_does_not_create_a_soil_region() -> None:
+    border = feature(ObjectClass.CURB, LineString([(0, 1), (0, 20), (20, 20), (20, 0), (1, 0)]))
+    surface = build_surface_map([border], [label("ГАЗОН", 5, 5)], box(-5, -5, 25, 25), 0.5)
+    assert material(surface, 7, 5) is Material.UNKNOWN
+
+
+@pytest.mark.parametrize("angle", [0, 23, 91])
+@pytest.mark.parametrize("offset", [0, 1_000_000])
+def test_closed_material_faces_preserve_holes_and_transforms(angle: float, offset: float) -> None:
+    outer, hole = box(0, 0, 100, 40).boundary, box(40, 10, 60, 30).boundary
+
+    def transform(geometry: shapely.Geometry) -> shapely.Geometry:
+        return translate(rotate(geometry, angle, origin=(0, 0)), offset, -offset)
+
+    features = [
+        feature(ObjectClass.CURB, transform(g), str(i)) for i, g in enumerate([outer, hole])
+    ]
+    anchor = transform(Point(5, 5))
+    soil_label = label("ГАЗОН", anchor.x, anchor.y)
+    extent = transform(box(-5, -5, 105, 45))
+    surface = build_surface_map(features, [soil_label], extent, 0.5)
+    assert surface is not None
+    points = shapely.points(
+        [transform(Point(x, y)).coords[0] for x, y in [(90, 35), (50, 20), (-2, 5)]]
+    )
+    assert surface.material(points).tolist() == [Material.SOIL, Material.UNKNOWN, Material.UNKNOWN]
+    assert surface.fits_soil(points[:1], 1.6).tolist() == [True]
+
+
+def test_label_in_curve_uncertainty_band_cannot_assign_either_face() -> None:
+    border = replace(feature(ObjectClass.CURB, box(0, 0, 20, 20).boundary), geometry_error_m=0.2)
+    surface = build_surface_map([border], [label("ГАЗОН", 0.1, 10)], box(-5, -5, 25, 25), 0.5)
+    assert material(surface, 5, 10) is Material.UNKNOWN
+
+
+def test_straight_polygonized_edges_assign_adjacent_regions_without_leakage() -> None:
+    lines = [box(0, 0, 20, 10).boundary, LineString([(10, 0), (10, 10)])]
+    features = [feature(ObjectClass.PAVEMENT_EDGE, g, str(i)) for i, g in enumerate(lines)]
+    surface = build_surface_map(
+        features, [label("ГАЗОН", 5, 5), label("А", 15, 5)], box(-5, -5, 25, 15), 0.5
+    )
+    assert material(surface, 5, 5) is Material.SOIL
+    assert material(surface, 15, 5) is Material.PAVED
+    assert material(surface, 22, 5) is Material.UNKNOWN
+
+
+def test_unfinished_internal_boundary_does_not_authorize_the_whole_outer_face() -> None:
+    features = [
+        feature(ObjectClass.CURB, box(0, 0, 20, 10).boundary, "outer"),
+        feature(ObjectClass.CURB, LineString([(10, 0), (10, 8)]), "unfinished"),
+    ]
+    surface = build_surface_map(features, [label("ГАЗОН", 5, 5)], box(-5, -5, 25, 15), 0.5)
+    assert material(surface, 15, 5) is Material.UNKNOWN
+
+
+def test_conflicting_labels_also_require_review_of_a_named_lawn_polygon() -> None:
+    features = [feature(ObjectClass.LAWN, box(0, 0, 20, 10))]
+    surface = build_surface_map(
+        features, [label("ГАЗОН", 5, 5), label("А", 15, 5)], box(-5, -5, 25, 15), 0.5
+    )
+    assert material(surface, 5, 5) is Material.UNKNOWN
+
+
+def test_external_dangling_line_touching_the_border_does_not_invalidate_the_face() -> None:
+    features = [
+        feature(ObjectClass.CURB, box(0, 0, 20, 10).boundary, "outer"),
+        feature(ObjectClass.CURB, LineString([(10, 0), (10, -8)]), "outside"),
+    ]
+    surface = build_surface_map(features, [label("ГАЗОН", 5, 5)], box(-5, -10, 25, 15), 0.5)
+    assert material(surface, 15, 5) is Material.SOIL

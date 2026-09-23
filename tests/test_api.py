@@ -131,10 +131,12 @@ def test_artifacts_download_and_match_the_summary(
     target = work / "downloaded.dxf"
     target.write_bytes(drawing.content)
     doc = ezdxf.readfile(target)
-    trees = doc.modelspace().query("INSERT[layer=='GREEN_TREES']")
     plan = orjson.loads(client.get(urls["plan.json"]).content)
     assert len(plan["placements"]) == finished["summary"]["placements"]  # type: ignore[index]
-    assert len(trees) == sum(1 for p in plan["placements"] if p["verdict"] == "allowed")
+    for layer, kind in (("GREEN_TREES", "tree"), ("GREEN_SHRUBS", "shrub")):
+        assert len(doc.modelspace().query(f"INSERT[layer=='{layer}']")) == sum(
+            p["verdict"] == "allowed" and p["planting_type"] == kind for p in plan["placements"]
+        )
     schedule = client.get(urls["planting_schedule.csv"])
     assert schedule.headers["content-type"].startswith("text/csv")
     assert "Всего деревьев" in schedule.content.decode("utf-8-sig")

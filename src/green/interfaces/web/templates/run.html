@@ -141,10 +141,10 @@
 
     <div class="hud-scroll">
       {% if done %}
-      {% if s.get('semantic_assignments_complete') == false %}
+      {% if s.get('semantic_assignments_complete') == false or s.get('surface_inference_review_required') %}
       <div class="notice">
         <p><b>Исследовательский эскиз</b></p>
-        <p>Допустимость посадок не подтверждена: есть неуточнённые объекты.</p>
+        <p>Допустимость посадок не подтверждена: требуется уточнить объекты или границы покрытий.</p>
         <a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Отчёт распознавания объектов</a>
       </div>
       {% endif %}
@@ -154,7 +154,7 @@
       <p class="metric">
         <b>{{ total }}</b>
         <span>{{ plural(total, 'посадка', 'посадки', 'посадок') }} в плане{% if approval %},
-          {{ approval }} на согласование{% elif s.get('semantic_assignments_complete') == false %},
+          {{ approval }} на согласование{% elif s.get('semantic_assignments_complete') == false or s.get('surface_inference_review_required') %},
           <em>допустимость не подтверждена</em>{% else %}, <em>проверены по заданным правилам</em>{% endif %}</span>
       </p>
       <p class="metric-sub">

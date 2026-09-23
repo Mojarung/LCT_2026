@@ -1,0 +1,33 @@
+{
+  "scope": "Local topology coverage under current automatic name/text assumptions. Unresolved semantics remain unresolved: this is not a planting certificate or measurement of material recognition accuracy.",
+  "rows": [
+    {
+      "name": "цвет_output[1-7]_3_ДЖКХ-25_00694up.dxf",
+      "sha256": "50a9dcef7eaeabfa89b3bc2286b3a463a91d2ecf202234f1e8fb9fdb23f480fd",
+      "semantic_unresolved_features": 122,
+      "material_labels": 0,
+      "closed_faces": 0,
+      "conflicting_faces": 0,
+      "unassigned_labels": 0,
+      "open_edges": 0,
+      "inferred_soil_m2": 0.0,
+      "inferred_paved_m2": 0.0,
+      "unresolved_face_m2": 0.0,
+      "seconds": 5.4716
+    },
+    {
+      "name": "berzarina_fragment.dxf",
+      "sha256": "f54238c9cc648fd0b4917580ea477c8f645b1f572598fa3f88c90136ffb77035",
+      "semantic_unresolved_features": 1152,
+      "material_labels": 85,
+      "closed_faces": 7688,
+      "conflicting_faces": 0,
+      "unassigned_labels": 64,
+      "open_edges": 4827,
+      "inferred_soil_m2": 0.0,
+      "inferred_paved_m2": 137.56474148226454,
+      "unresolved_face_m2": 6227.160657002084,
+      "seconds": 1.2602
+    }
+  ]
+}

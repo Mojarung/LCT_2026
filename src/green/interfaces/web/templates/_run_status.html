@@ -17,9 +17,9 @@
     </div>
   {% else %}
     <div>
-      {% if run.summary.get('semantic_assignments_complete') == false %}
+      {% if run.summary.get('semantic_assignments_complete') == false or run.summary.get('surface_inference_review_required') %}
       <p class="status-title">Исследовательский эскиз</p>
-      <p class="error-text">Есть неуточнённые объекты. Допустимость посадок не подтверждена.</p>
+      <p class="error-text">Требуется уточнить объекты или границы покрытий. Допустимость посадок не подтверждена.</p>
       <p><a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Отчёт распознавания объектов</a></p>
       {% else %}
       <p class="status-title">План готов</p>

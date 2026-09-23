@@ -72,9 +72,13 @@ def test_lawn_holes_are_not_soil() -> None:
     assert material(surface, 10, 10) is Material.UNKNOWN
 
 
-def test_nearby_soil_label_cannot_fill_a_large_unlabelled_region() -> None:
+def test_exploratory_distance_mode_limits_label_reach() -> None:
     surface = build_surface_map(
-        [], [label("ГАЗОН", 10, 10), label("А", 10, 90)], box(0, 0, 200, 100), 0.5
+        [],
+        [label("ГАЗОН", 10, 10), label("А", 10, 90)],
+        box(0, 0, 200, 100),
+        0.5,
+        inference_mode="distance",
     )
     assert material(surface, 150, 10) is Material.UNKNOWN
     assert material(surface, 12, 10) is Material.SOIL

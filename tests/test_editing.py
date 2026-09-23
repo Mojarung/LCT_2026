@@ -40,13 +40,16 @@ def client(work: Path) -> Iterator[TestClient]:
 @pytest.fixture(scope="module")
 def run_id(client: TestClient, work: Path) -> str:
     path = work / "street.dxf"
-    _street(path)
+    _street(path, material_areas=False)
     response = client.post(
         f"{API_PREFIX}/runs",
         files={"file": ("street.dxf", path.read_bytes(), "image/vnd.dxf")},
-        # Freeze the composition used by the specific quota-deletion regression below.
-        # Portfolio layouts have different counts and require different corrective edits.
-        data={"profile": "strict", "overrides": '{"placement_solver": "greedy"}'},
+        # Preserve the historical exploratory layout for this quota-deletion
+        # regression. Strict surface evidence has separate end-to-end coverage.
+        data={
+            "profile": "strict",
+            "overrides": '{"placement_solver":"greedy","surface_inference_mode":"distance"}',
+        },
     )
     return str(response.json()["id"])
 

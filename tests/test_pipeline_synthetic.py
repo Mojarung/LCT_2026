@@ -1,7 +1,8 @@
 """Сквозной прогон на синтетическом топоплане в конвенциях Геотреста.
 
 Улица шириной 60 м: проезжая часть внизу («А»), борт по y=20, газон выше («ГАЗОН»),
-водопровод d=300 по y=40, здание вверху. Проверяется: посадки только на грунте выше борта,
+водопровод d=300 по y=40, здание вверху. Материалы имеют замкнутые границы.
+Проверяется: посадки только на грунте выше борта,
 отступ до водопровода мерится до наружной стенки трубы, оба приёма дали посадки,
 слои зон записаны, исходные сущности не тронуты.
 """
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING
 import ezdxf
 import orjson
 import pytest
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, MultiLineString, Point, box
 
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
@@ -31,7 +32,9 @@ PIPE_DIAMETER_M = 0.3
 WATER_RULE_M = 2.0
 
 
-def _street(path: Path, *, scale: float = 1.0, insunits: int = 6) -> None:
+def _street(
+    path: Path, *, scale: float = 1.0, insunits: int = 6, material_areas: bool = True
+) -> None:
     """Улица в метрах; scale=1000 и insunits=4 дают тот же чертёж в миллиметрах."""
 
     def at(x: float, y: float) -> tuple[float, float]:
@@ -56,6 +59,12 @@ def _street(path: Path, *, scale: float = 1.0, insunits: int = 6) -> None:
     )
     for x in range(0, 120, 1):  # штрихи борта по 0.7 м, как в топоплане
         msp.add_line(at(x, CURB_Y), at(x + 0.7, CURB_Y), dxfattribs={"layer": "Бортовой камень"})
+    if material_areas:
+        msp.add_lwpolyline(
+            [at(0, CURB_Y), at(120, CURB_Y), at(120, 55), at(0, 55)],
+            close=True,
+            dxfattribs={"layer": "Леса и газоны"},
+        )
     height = 2.5 * scale
     msp.add_text("А", height=height, dxfattribs={"layer": "Граница улицы"}).set_placement(
         at(60, 10)
@@ -113,19 +122,27 @@ def test_finite_selection_evidence_is_separate_from_final_plan(run: dict[str, ob
 def test_placements_stand_on_soil_above_the_curb(run: dict[str, object]) -> None:
     plan = run["report"].plan  # type: ignore[attr-defined]
     assert len(plan.placements) >= 10
-    assert all(p.y > CURB_Y + WATER_RULE_M - 1e-6 for p in plan.placements)
+    assert sum(p.species.is_tree for p in plan.placements) >= 10
+    curb = MultiLineString([[(x, CURB_Y), (x + 0.7, CURB_Y)] for x in range(120)])
+    for p in plan.placements:
+        assert p.y >= CURB_Y + (1.6 if p.species.is_tree else 0.5) - 1e-6
+        assert curb.distance(Point(p.x, p.y)) >= (2.0 if p.species.is_tree else 1.0) - 1e-3
     assert all(p.verdict.value == "allowed" for p in plan.placements)
 
 
 def test_both_modes_contribute(run: dict[str, object]) -> None:
     plan = run["report"].plan  # type: ignore[attr-defined]
     modes = {note for p in plan.placements for note in p.notes}
-    assert modes == {"аллея вдоль борта", "заполнение газона"}
+    assert {"аллея вдоль борта", "заполнение газона"} <= modes
+    if any(p.species.is_shrub for p in plan.placements):
+        assert "группа кустарников на месте дерева" in modes
 
 
 def test_water_distance_is_measured_to_pipe_wall(run: dict[str, object]) -> None:
     plan = run["report"].plan  # type: ignore[attr-defined]
     for placement in plan.placements:
+        if not placement.species.is_tree:
+            continue  # this table has no shrub-water distance requirement
         axis = abs(placement.y - PIPE_Y)
         assert axis - PIPE_DIAMETER_M / 2 >= WATER_RULE_M - 1e-3
         water = next(c for c in placement.checks if c.rule_id == "R-WATER-TREE-001")
@@ -144,8 +161,12 @@ def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
     summary = plan.assortment_summary
     assert summary is not None
     assert summary.shannon > 0
-    assert sum(summary.counts.values()) == len(plan.placements)
+    assert sum(summary.counts.values()) == sum(p.species.is_tree for p in plan.placements)
     assert not summary.quota_violations
+    shrubs = plan.shrub_assortment_summary
+    if any(p.species.is_shrub for p in plan.placements):
+        assert shrubs is not None
+        assert sum(shrubs.counts.values()) == sum(p.species.is_shrub for p in plan.placements)
 
 
 def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
@@ -187,9 +208,11 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
     doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
     assert "GREEN_ZONE_ALLOWED" in doc.layers
     assert len(doc.modelspace().query("HATCH[layer=='GREEN_ZONE_ALLOWED']")) >= 1
-    assert len(doc.modelspace().query("INSERT[layer=='GREEN_TREES']")) == len(
-        report.plan.placements  # type: ignore[attr-defined]
-    )
+    for layer, is_tree in (("GREEN_TREES", True), ("GREEN_SHRUBS", False)):
+        assert len(doc.modelspace().query(f"INSERT[layer=='{layer}']")) == sum(
+            p.species.is_tree == is_tree
+            for p in report.plan.placements  # type: ignore[attr-defined]
+        )
     assert run["artifacts"]["zones.geojson"].exists()  # type: ignore[index]
 
 
@@ -200,12 +223,42 @@ def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, 
     doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
     codes = {p.species.code for p in plan.placements}
     assert len(codes) > 1
-    blocks = {name for name in (b.name for b in doc.blocks) if name.startswith("GREEN_TREE_")}
-    assert {f"GREEN_TREE_{code.upper()}" for code in codes} <= blocks
+    blocks = {b.name for b in doc.blocks}
+    for p in plan.placements:
+        prefix = "GREEN_TREE" if p.species.is_tree else "GREEN_SHRUB"
+        assert f"{prefix}_{p.species.code.upper()}" in blocks
     names = {
         attrib.dxf.text
-        for insert in doc.modelspace().query("INSERT[layer=='GREEN_TREES']")
+        for insert in doc.modelspace().query("INSERT")
+        if insert.dxf.layer in {"GREEN_TREES", "GREEN_SHRUBS"}
         for attrib in insert.attribs
         if attrib.dxf.tag == "SPECIES"
     }
     assert names == {p.species.name_ru for p in plan.placements}
+
+
+def test_unfinished_material_contours_produce_no_confirmed_planting(tmp_path: Path) -> None:
+    source = tmp_path / "open-materials.dxf"
+    _street(source, material_areas=False)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    report = container.use_case.execute(
+        PlanRequest("open", source, tmp_path / "out", "strict", params)
+    )
+    assert not report.plan.placements
+    assert any("замкнут" in warning for warning in report.warnings)
+
+
+def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> None:
+    source = tmp_path / "exploratory.dxf"
+    _street(source, material_areas=False)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load(
+        "strict", {"placement_solver": "greedy", "surface_inference_mode": "distance"}
+    )
+    report = container.use_case.execute(
+        PlanRequest("sketch", source, tmp_path / "out", "strict", params)
+    )
+    assert report.plan.placements
+    assert report.summary()["surface_inference_review_required"] is True
+    assert any("Исследовательский режим покрытий" in warning for warning in report.warnings)

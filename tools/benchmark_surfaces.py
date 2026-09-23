@@ -92,6 +92,7 @@ def main() -> None:
                 max_distance_m=reach,
                 ambiguity_m=ambiguity,
                 tree_distance_m=2.0 if reach < 1_000_000 else reach,
+                inference_mode="distance",  # historical propagation ablation, not strict topology
             )
             points = shapely.points([(x + dx, y + dy) for x, y, _ in expected])
             actual = surface.material(points).tolist() if surface else [UNKNOWN] * len(points)
