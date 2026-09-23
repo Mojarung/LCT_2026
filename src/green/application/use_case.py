@@ -16,7 +16,7 @@ from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
-from green.application.input_quality import require_complete_blocks
+from green.application.input_quality import require_complete_geometry
 from green.application.portfolio import choose_plan
 from green.application.quality import assess, site_of
 from green.application.results import RunReport, StageTiming
@@ -149,7 +149,7 @@ class PlanSite:
             species = self._species.get(params.species_code)
         with watch.stage("read"):
             scene = self._reader.read(source, unit=params.drawing_unit)
-            require_complete_blocks(scene)
+            require_complete_geometry(scene)
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map)
             if params.unknown_lines_as_utility:
@@ -217,15 +217,6 @@ class PlanSite:
             export_validation = self._integrity.check_plan(pending, plan, unit_m=scene.unit_m)
             require_valid_export(integrity, export_validation)
             pending.replace(output)
-        integrity_notes: tuple[str, ...] = ()
-        if integrity.unexportable:
-            integrity_notes = (
-                (
-                    f"В исходнике {integrity.unexportable} сущностей без данных (REGION без ACIS "
-                    "после конвертации DWG): ezdxf их не сохраняет, в сверку они не входят."
-                ),
-            )
-
         report = RunReport(
             run_id=request.run_id,
             source_name=request.source.name,
@@ -242,7 +233,7 @@ class PlanSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             converter=converter,
-            warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
+            warnings=(*merge_notes, *scene.warnings, *plan.warnings),
             basemap=basemap,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,
@@ -318,7 +309,8 @@ def require_valid_export(integrity: IntegrityReport, exported: PlanExportReport)
     raise InputError(
         "Записанный DXF не прошёл проверку исходника/посадок: "
         f"изменено {len(integrity.changed)}, пропало {len(integrity.missing)}, "
-        f"добавлено вне результата {len(integrity.added_outside_result_layers)}. {detail}"
+        f"добавлено вне результата {len(integrity.added_outside_result_layers)}, "
+        f"не сохраняются {integrity.unexportable}. {detail}"
     )
 
 

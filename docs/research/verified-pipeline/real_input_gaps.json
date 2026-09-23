@@ -1,0 +1,140 @@
+[
+  {
+    "file": "04_10001636-АПОТ-ГЧ-17.01.26.dxf",
+    "complete": false,
+    "load_error": "04_10001636-АПОТ-ГЧ-17.01.26.dxf: аудит DXF обнаружил потерю/изменение геометрии или неисправленные ошибки: 11: Removed invalid DXF entity ACAD_TABLE(#1376BA) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#1376BA) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#1376BB) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#1376BB) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#1381B6) from BLOCK '*Paper_Space613'.; 16: Removed DXF entity ACAD_TABLE(#1381B6) with invalid owner handle (#None != #D7A02) from BLOCK '*Paper_Space613'.; 11: Removed invalid DXF entity ACAD_TABLE(#1381B7) from BLOCK '*Paper_Space613'.; 16: Removed DXF entity ACAD_TABLE(#1381B7) with invalid owner handle (#None != #D7A02) from BLOCK '*Paper_Space613'.. Нужен исправленный исходник."
+  },
+  {
+    "file": "XREF_ИГДИ_Камчатская улица.dxf",
+    "gaps": [
+      {
+        "entity_type": "REGION",
+        "layer": "0",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 159,
+        "source_refs": [
+          "b36c2105:00000000:3639F",
+          "b36c2105:00000000:363A4",
+          "b36c2105:00000000:363A6",
+          "b36c2105:00000000:363A8",
+          "b36c2105:00000000:363AA"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Красные линии",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 4053,
+        "source_refs": [
+          "b36c2105:00000000:369E0",
+          "b36c2105:00000000:369E2",
+          "b36c2105:00000000:369E4",
+          "b36c2105:00000000:369E6",
+          "b36c2105:00000000:369E8"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Леса и газоны",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 85,
+        "source_refs": [
+          "b36c2105:00000000:382C6",
+          "b36c2105:00000000:382CF",
+          "b36c2105:00000000:384EA",
+          "b36c2105:00000000:384F3",
+          "b36c2105:00000000:38E11"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Лестницы набережных",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 13,
+        "source_refs": [
+          "b36c2105:00000000:39E35",
+          "b36c2105:00000000:39E37",
+          "b36c2105:00000000:39E39",
+          "b36c2105:00000000:39E3B",
+          "b36c2105:00000000:39E3D"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Полоса деревьев",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 2,
+        "source_refs": [
+          "b36c2105:00000000:3B0E0",
+          "b36c2105:00000000:5AA39"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Вышки",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 5,
+        "source_refs": [
+          "b36c2105:00000000:3BFB2",
+          "b36c2105:00000000:4EF80",
+          "b36c2105:00000000:4F46F",
+          "b36c2105:00000000:5A4B8",
+          "b36c2105:00000000:5B596"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Граница растительности и грунта",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 1,
+        "source_refs": [
+          "b36c2105:00000000:3C4FA"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Газопровод",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 2,
+        "source_refs": [
+          "b36c2105:00000000:3DA05",
+          "b36c2105:00000000:3DA07"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Кабели",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 4,
+        "source_refs": [
+          "b36c2105:00000000:3DB9B",
+          "b36c2105:00000000:5E187",
+          "b36c2105:00000000:5E2EB",
+          "b36c2105:00000000:5E473"
+        ]
+      },
+      {
+        "entity_type": "REGION",
+        "layer": "Теплосеть",
+        "block": null,
+        "reason": "missing-acis-data",
+        "count": 1,
+        "source_refs": [
+          "b36c2105:00000000:40FBD"
+        ]
+      }
+    ],
+    "unresolved_xrefs": [],
+    "complete": false,
+    "error": "Неполная геометрия входного чертежа: REGION, слой '0', блок None: 159 (missing-acis-data), примеры b36c2105:00000000:3639F, b36c2105:00000000:363A4; REGION, слой 'Красные линии', блок None: 4053 (missing-acis-data), примеры b36c2105:00000000:369E0, b36c2105:00000000:369E2; REGION, слой 'Леса и газоны', блок None: 85 (missing-acis-data), примеры b36c2105:00000000:382C6, b36c2105:00000000:382CF; REGION, слой 'Лестницы набережных', блок None: 13 (missing-acis-data), примеры b36c2105:00000000:39E35, b36c2105:00000000:39E37; REGION, слой 'Полоса деревьев', блок None: 2 (missing-acis-data), примеры b36c2105:00000000:3B0E0, b36c2105:00000000:5AA39; REGION, слой 'Вышки', блок None: 5 (missing-acis-data), примеры b36c2105:00000000:3BFB2, b36c2105:00000000:4EF80; REGION, слой 'Граница растительности и грунта', блок None: 1 (missing-acis-data), примеры b36c2105:00000000:3C4FA; REGION, слой 'Газопровод', блок None: 2 (missing-acis-data), примеры b36c2105:00000000:3DA05, b36c2105:00000000:3DA07; REGION, слой 'Кабели', блок None: 4 (missing-acis-data), примеры b36c2105:00000000:3DB9B, b36c2105:00000000:5E187; REGION, слой 'Теплосеть', блок None: 1 (missing-acis-data), примеры b36c2105:00000000:40FBD. Расчёт остановлен: загрузите внешние ссылки и предоставьте DXF с сохранённой пространственной геометрией (для неподдерживаемых объектов — полилинии/штриховки). Наличие других сетей не заменяет потерянные данные."
+  }
+]

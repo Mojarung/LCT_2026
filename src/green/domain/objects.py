@@ -127,6 +127,18 @@ class TextLabel:
 
 
 @dataclass(frozen=True, slots=True)
+class GeometryGap:
+    """Aggregated import loss with bounded examples for actionable diagnosis."""
+
+    entity_type: str
+    layer: str
+    block: str | None
+    reason: str
+    count: int
+    source_refs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ReadDiagnostics:
     """Counts refer to visited modelspace entities and expanded block children.
 
@@ -138,6 +150,7 @@ class ReadDiagnostics:
     visited_by_type: Mapping[str, int] = field(default_factory=dict)
     skipped_by_type: Mapping[str, int] = field(default_factory=dict)
     unresolved_xrefs: tuple[str, ...] = ()
+    geometry_gaps: tuple[GeometryGap, ...] = ()
 
     @property
     def block_failures(self) -> tuple[str, ...]:

@@ -46,12 +46,14 @@ class IntegrityReport:
     missing: tuple[str, ...]
     added_outside_result_layers: tuple[str, ...]
     # Сущности исходника, которые ezdxf не экспортирует (REGION без ACIS-данных из LibreDWG):
-    # их нет и не может быть в результате, поэтому они не считаются потерянными.
+    # их невозможно сохранить, поэтому такой результат не проходит проверку.
     unexportable: int = 0
 
     @property
     def ok(self) -> bool:
-        return not (self.changed or self.missing or self.added_outside_result_layers)
+        return not (
+            self.changed or self.missing or self.added_outside_result_layers or self.unexportable
+        )
 
 
 @dataclass(frozen=True, slots=True)

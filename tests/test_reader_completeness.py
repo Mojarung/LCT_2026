@@ -164,5 +164,5 @@ def test_recursive_block_is_a_reported_gap(tmp_path: Path) -> None:
     doc.modelspace().add_blockref("cycle", (0, 0))
     path = tmp_path / "cycle.dxf"
     doc.saveas(path)
-    scene = EzdxfSceneReader().read(path, unit="m")
-    assert "INSERT:too-deep" in scene.read_diagnostics.block_failures
+    with pytest.raises(InputError, match="block reference cycle"):
+        EzdxfSceneReader().read(path, unit="m")

@@ -20,6 +20,7 @@ from ezdxf import transform, xref
 from green.application.errors import InputError
 from green.application.ports import MergeResult
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
 
 if TYPE_CHECKING:
@@ -82,12 +83,14 @@ class EzdxfDrawingMerger:
         if len(sources) < _MIN_SOURCES:
             raise InputError("Склейка: нужно не меньше двух чертежей")
         base, notes = load_document(sources[0])
+        require_exportable_document(base, sources[0].name)
         notes = list(notes)
         counts = [len(base.modelspace())]
         base_unit = decide_units(base, unit).unit_m
         base_box = _extents(base)
         for path in sources[1:]:
             doc, doc_notes = load_document(path)
+            require_exportable_document(doc, path.name)
             notes += doc_notes
             counts.append(len(doc.modelspace()))
             factor = decide_units(doc, unit).unit_m / base_unit
@@ -124,9 +127,9 @@ class EzdxfDrawingMerger:
         listed = ", ".join(f"{p.name}: {n}" for p, n in zip(sources, counts, strict=True))
         notes.append(f"Склейка комплекта: {listed}; в объединённом чертеже {merged} сущностей")
         if merged != sum(counts):
-            notes.append(
+            raise InputError(
                 f"Склейка: ожидалось {sum(counts)} сущностей, получено {merged} - часть сущностей "
-                "ezdxf не переносит между документами"
+                "не перенесена. Расчёт на неполном комплекте остановлен."
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         base.saveas(target)

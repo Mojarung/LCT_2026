@@ -33,7 +33,7 @@ from green.application.classification import classify_scene
 from green.application.constraints import ConstraintIndex
 from green.application.diameters import assign_diameters
 from green.application.errors import InputError
-from green.application.input_quality import require_complete_blocks
+from green.application.input_quality import require_complete_geometry
 from green.application.params import active_distance_rules
 from green.application.use_case import MERGED_DXF, Stopwatch, to_dxf
 from green.domain.norms import PlantingType, Severity
@@ -219,7 +219,7 @@ class AuditSite:
             typer = _PlantingTyper(request, self._species.all())
         with watch.stage("read"):
             scene = self._reader.read(source, unit=params.drawing_unit)
-            require_complete_blocks(scene)
+            require_complete_geometry(scene)
         with watch.stage("classify"):
             on_layers = [f for f in scene.features if pattern.search(_short(f.layer))]
             if not on_layers:

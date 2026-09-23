@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from ezdxf.lldxf.tagwriter import TagCollector
 
+from green.application.errors import InputError
 from green.application.results import IntegrityReport, SourceSnapshot
 from green.infrastructure.cad.documents import RESULT_PREFIX, load_document
 from green.infrastructure.cad.export_validation import check_written_plan
@@ -56,6 +57,28 @@ class EzdxfIntegrityChecker:
 
     def check_plan(self, result: Path, plan: Plan, *, unit_m: float) -> PlanExportReport:
         return check_written_plan(result, plan, unit_m=unit_m)
+
+
+def require_exportable_document(doc: Drawing, name: str) -> None:
+    """Catch data loss before an intermediate save can erase its evidence."""
+    missing = []
+    count = 0
+    for block in doc.blocks:
+        for entity in block:
+            collector = TagCollector(dxfversion=doc.dxfversion, optional=False)
+            if entity.preprocess_export(collector):
+                continue
+            count += 1
+            if len(missing) < REPORT_LIMIT:
+                missing.append(
+                    f"{entity.dxftype()} {entity.dxf.handle}, слой {entity.dxf.get('layer', '0')!r}"
+                )
+    if count:
+        raise InputError(
+            f"{name}: {count} исходных сущностей невозможно сохранить: "
+            + "; ".join(missing[:10])
+            + ". Нужен DXF с полными данными; склейка не должна скрывать их потерю."
+        )
 
 
 def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:

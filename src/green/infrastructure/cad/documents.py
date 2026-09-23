@@ -12,11 +12,13 @@ from typing import TYPE_CHECKING
 
 import ezdxf
 from ezdxf import recover
+from ezdxf.audit import AuditError
 
 from green.application.errors import InputError
 from green.infrastructure.cad.structure import require_complete_container
 
 if TYPE_CHECKING:
+    from ezdxf.audit import Auditor
     from ezdxf.document import Drawing
 
 RESULT_PREFIX = "GREEN_"
@@ -24,6 +26,33 @@ APPID = "LCT_GREEN"
 _BAD_UNICODE_ESCAPE = re.compile(rb"\\U\+(?![0-9A-Fa-f]{4})")
 _GROUP_CODE = re.compile(rb"^\s*-?\d{1,4}\s*$")
 _LONE_CR = re.compile(rb"\r(?!\n)")
+_SPATIAL_REPAIRS = frozenset(
+    {
+        AuditError.REMOVED_INVALID_GRAPHIC_ENTITY,
+        AuditError.REMOVED_ENTITY_WITH_INVALID_OWNER_HANDLE,
+        AuditError.UNDEFINED_BLOCK,
+        AuditError.UNDEFINED_BLOCK_NAME,
+        AuditError.INVALID_BLOCK_REFERENCE_CYCLE,
+        AuditError.INVALID_INTEGER_VALUE,
+        AuditError.INVALID_FLOATING_POINT_VALUE,
+        AuditError.INVALID_LAYER_NAME,
+        AuditError.INVALID_EXTRUSION_VECTOR,
+        AuditError.INVALID_MAJOR_AXIS,
+        AuditError.INVALID_VERTEX_COUNT,
+        AuditError.INVALID_MLINE_VERTEX,
+        AuditError.INVALID_MLINESTYLE_ELEMENT_COUNT,
+        AuditError.INVALID_SPLINE_DEFINITION,
+        AuditError.INVALID_SPLINE_CONTROL_POINT_COUNT,
+        AuditError.INVALID_SPLINE_FIT_POINT_COUNT,
+        AuditError.INVALID_SPLINE_KNOT_VALUE_COUNT,
+        AuditError.INVALID_SPLINE_WEIGHT_COUNT,
+        AuditError.INVALID_CREASE_VALUE_COUNT,
+        AuditError.INVALID_ELLIPSE_RATIO,
+        AuditError.INVALID_HATCH_BOUNDARY_PATH,
+        AuditError.TAG_ATTRIBUTE_MISSING,
+        AuditError.INVALID_MESH_DATA,
+    }
+)
 
 type Loaded = tuple[Drawing, list[str]]
 
@@ -107,6 +136,7 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
         doc, auditor = recover.read(io.BytesIO(data))
     except (ezdxf.DXFStructureError, ValueError) as error:
         raise InputError(f"{path.name} не является корректным DXF: {error}") from error
+    _require_safe_audit(path, auditor)
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
     return doc, notes
@@ -116,10 +146,24 @@ def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[s
     # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
     # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
     auditor = doc.audit()
+    _require_safe_audit(path, auditor)
     fixes = len(auditor.fixes)
     if fixes or auditor.errors:
         notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
     return doc, notes
+
+
+def _require_safe_audit(path: Path, auditor: Auditor) -> None:
+    # ezdxf can delete an INSERT with a missing definition before the walker ever
+    # sees it, or repair a hatch/curve into different geometry. A warning is not
+    # enough to certify clearance against that altered scene.
+    problems = [*auditor.errors, *(f for f in auditor.fixes if f.code in _SPATIAL_REPAIRS)]
+    if problems:
+        detail = "; ".join(f"{entry.code}: {entry.message}" for entry in problems[:10])
+        raise InputError(
+            f"{path.name}: аудит DXF обнаружил потерю/изменение геометрии или "
+            f"неисправленные ошибки: {detail}. Нужен исправленный исходник."
+        )
 
 
 def _repaired_bytes(path: Path) -> tuple[bytes, list[str]]:

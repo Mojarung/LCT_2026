@@ -18,7 +18,7 @@ from pathlib import Path
 
 from green.application.classification import classify_scene
 from green.application.errors import ConversionError, InputError
-from green.application.input_quality import require_complete_blocks
+from green.application.input_quality import require_complete_geometry
 from green.infrastructure.cad.reader import EzdxfSceneReader
 from green.infrastructure.config.repositories import YamlLayerMapSource
 from green.infrastructure.convert.libredwg import LibreDwgConverter
@@ -56,7 +56,7 @@ def survey(source: Path) -> dict[str, object]:
         row["classes"] = dict(Counter(f.object_class.value for f in scene.features))
         row["geometry_types"] = dict(Counter(f.geometry.geom_type for f in scene.features))
         try:
-            require_complete_blocks(scene)
+            require_complete_geometry(scene)
         except InputError as error:
             row["block_check"] = str(error)
         else:

@@ -11,11 +11,19 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 from ezdxf.addons import geo
-from ezdxf.entities import Circle, LWPolyline
+from ezdxf.entities import Body, Circle, LWPolyline
 from ezdxf.path import make_path
 from shapely.geometry import LineString, Point, Polygon, shape
 
-from green.domain.objects import NO_XREF, Feature, ReadDiagnostics, Scene, SourceRef, TextLabel
+from green.domain.objects import (
+    NO_XREF,
+    Feature,
+    GeometryGap,
+    ReadDiagnostics,
+    Scene,
+    SourceRef,
+    TextLabel,
+)
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.units import AUTO, decide_units
 
@@ -33,6 +41,8 @@ LABEL_BLOCK = re.compile(r"(?:^|\$0\$|\|)DIMTXT", re.IGNORECASE)
 MAX_BLOCK_DEPTH = 8
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
+_ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
+_GAP_EXAMPLES = 5
 _SKIPPED = frozenset(
     {
         "ATTDEF",
@@ -87,6 +97,7 @@ class EzdxfSceneReader:
                 visited_by_type=dict(walker.visited),
                 skipped_by_type=dict(walker.skipped),
                 unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
+                geometry_gaps=walker.geometry_gaps(),
             ),
         )
 
@@ -102,6 +113,8 @@ class _Walker:
     skipped: Counter[str] = field(default_factory=Counter)
     visited: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
+    gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
+    gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
 
     def visit(  # noqa: PLR0913 - обход передаёт контекст родителя явно
         self,
@@ -130,10 +143,19 @@ class _Walker:
             self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
             self.skipped[kind] += 1
+            if kind not in _ANNOTATIONS:
+                reason = "unsupported-spatial-entity"
+                if isinstance(entity, Body) and not entity.acis_data:
+                    reason = "missing-acis-data"
+                self._gap(kind, layer, parent_block, reason, ref)
         else:
             geometry = self._geometry(entity)
             if geometry is None or geometry.is_empty:
                 self.skipped[kind] += 1
+                self._gap(kind, layer, parent_block, "geometry-not-readable", ref)
+            elif not np.isfinite(shapely.get_coordinates(geometry)).all():
+                self.skipped[kind] += 1
+                self._gap(kind, layer, parent_block, "non-finite-coordinates", ref)
             else:
                 radius = entity.dxf.radius * self.unit_m if kind == "CIRCLE" else None
                 self.features.append(
@@ -145,6 +167,20 @@ class _Walker:
                         circle_radius_m=radius,
                     )
                 )
+
+    def _gap(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> None:
+        key = (kind, layer, block, reason)
+        self.gaps[key] += 1
+        examples = self.gap_refs.setdefault(key, [])
+        if len(examples) < _GAP_EXAMPLES:
+            examples.append(str(ref))
+
+    def geometry_gaps(self) -> tuple[GeometryGap, ...]:
+        return tuple(
+            GeometryGap(kind, layer, block, reason, count, tuple(self.gap_refs[key]))
+            for key, count in self.gaps.items()
+            for kind, layer, block, reason in [key]
+        )
 
     def _insert(self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...]) -> None:
         if insert.mcount > 1:
