@@ -22,6 +22,8 @@ from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_LAWN, MODE
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from numpy.typing import NDArray
+
     from green.domain.planting import Placement
 
 ROW = "row"
@@ -31,6 +33,9 @@ _LINK_FACTOR = 1.5  # во сколько шагов посадки уклады
 _MIN_ROW = 2  # два дерева вдоль борта - уже ряд
 _MIN_GROUP = 3  # две точки на газоне - ещё не группа
 _LABEL_MODES = {label: mode for mode, label in MODE_LABELS.items()}
+_FRAME_DECIMALS = 6  # micrometre ordering tolerance; physical coordinates are untouched
+_COINCIDENT_M2 = 1e-12
+_ISOTROPY_REL = 1e-8
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,14 +82,42 @@ def _patches(
     """Деление кластера пополам по длинной оси, пока участок не влезет в patch_size."""
     if len(ids) <= max(patch_size, _MIN_ROW):
         return [ids]
-    xs = [points[i][0] for i in ids]
-    ys = [points[i][1] for i in ids]
-    axis = 0 if (max(xs) - min(xs)) >= (max(ys) - min(ys)) else 1
-    ordered = sorted(ids, key=lambda i: (points[i][axis], points[i][1 - axis], i))
+    local = _principal_coordinates(np.array([points[i] for i in ids], dtype=float))
+    ordered = [ids[i] for i in sorted(range(len(ids)), key=lambda i: (*local[i], ids[i]))]
     half = len(ordered) // 2
     left = tuple(sorted(ordered[:half]))
     right = tuple(sorted(ordered[half:]))
     return _patches(left, points, patch_size) + _patches(right, points, patch_size)
+
+
+def _principal_coordinates(xy: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Order patches in their own axes; no geometry or feasibility is rounded.
+
+    Axis signs are arbitrary in an eigensolver. Anchor each sign to the farthest
+    projected member, breaking geometric ties by the stable input id order.
+    Isotropic groups have no principal direction: use an actual radial member
+    instead of the eigensolver's world-axis choice. Fully coincident points keep
+    id order. These symmetry choices require the same member identities.
+    """
+    relative = xy - xy[0]
+    centered = relative - relative.mean(axis=0)
+    values, vectors = np.linalg.eigh(centered.T @ centered)
+    if values[-1] <= _COINCIDENT_M2:
+        return np.zeros_like(centered)
+    if values[-1] - values[0] <= _ISOTROPY_REL * values[-1]:
+        lengths = np.linalg.norm(centered, axis=1)
+        anchor = int(np.argmax(np.round(lengths, _FRAME_DECIMALS)))
+        direction = centered[anchor] / lengths[anchor]
+    else:
+        direction = vectors[:, -1]
+    frame = np.column_stack((direction, (-direction[1], direction[0])))
+    # Ignore sub-micrometre projection noise only in ordering, never in checks.
+    local = np.round(centered @ frame, _FRAME_DECIMALS)
+    for axis in range(2):
+        anchor = int(np.argmax(np.abs(local[:, axis])))
+        if local[anchor, axis] < 0:
+            local[:, axis] *= -1
+    return local
 
 
 def _mode_of(placement: Placement) -> str:
