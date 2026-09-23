@@ -60,7 +60,8 @@ frontend/          веб-интерфейс: React 19 + TypeScript + Vite, SPA 
 config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
-docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
+docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset;
+                   стадия node:24-slim собирает frontend/ в /app/web (GREEN_WEB_DIR), node в образе нет
 docker/cadcheck/   образ проверки DXF в LibreCAD под Linux: Xvfb + xdotool, два снимка на файл (docs/deploy.md)
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); quality_weights.py (веса по анкетам);
                    research/quality_robustness.py (Монте-Карло по весам); research/pipeline_lab.py
