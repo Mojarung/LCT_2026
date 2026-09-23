@@ -43,7 +43,7 @@ export function formDefaults(profile: ProfileParams): RunFormValues {
 }
 
 /** «Продвинутый» JSON поверх профиля. Сообщения те же, что у сервера (parse_overrides). */
-function parseAdvanced(raw: string): Record<string, unknown> {
+export function parseAdvanced(raw: string): Record<string, unknown> {
   if (!raw.trim()) return {};
   let value: unknown;
   try {

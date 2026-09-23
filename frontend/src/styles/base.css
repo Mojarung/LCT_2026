@@ -359,10 +359,9 @@ fieldset.field > legend {
 }
 .advanced > summary {
   cursor: pointer;
-  font-size: var(--fs-micro);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--bone-3);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone-2);
   user-select: none;
   list-style: none;
 }
