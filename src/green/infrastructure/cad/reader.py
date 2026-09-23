@@ -9,12 +9,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.addons import geo
 from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, Polyline
-from ezdxf.entities.boundary_paths import EdgePath, LineEdge, PolylinePath
 from ezdxf.path import make_path
 from ezdxf.xclip import XClip
-from shapely.geometry import LineString, Point, Polygon, shape
+from shapely.geometry import LineString, Point, Polygon
 
 from green.domain.objects import (
     NO_XREF,
@@ -25,8 +23,13 @@ from green.domain.objects import (
     SourceRef,
     TextLabel,
 )
-from green.infrastructure.cad.curve_paths import ellipse_vertices, polyline_vertices
+from green.infrastructure.cad.curve_paths import (
+    circle_vertices,
+    ellipse_vertices,
+    polyline_vertices,
+)
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
@@ -68,6 +71,8 @@ class EzdxfSceneReader:
     def __init__(
         self, *, flatten_distance_m: float = 0.1, documents: DocumentCache | None = None
     ) -> None:
+        if not np.isfinite(flatten_distance_m) or flatten_distance_m <= 0:
+            raise ValueError("Curve tolerance must be finite and positive")
         self._flatten = flatten_distance_m
         self._documents = documents
 
@@ -120,7 +125,7 @@ class _Walker:
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
     gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
 
-    def visit(  # noqa: C901, PLR0913 - entity dispatch with explicit loss accounting
+    def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
         entity: DXFGraphic,
         *,
@@ -150,7 +155,12 @@ class _Walker:
                     reason = "missing-acis-data"
                 self._gap(kind, layer, parent_block, reason, ref)
         else:
-            geometry, error = self._geometry(entity)
+            try:
+                geometry, error = self._geometry(entity)
+            except HatchGeometryError as exc:
+                self.skipped[kind] += 1
+                self._gap(kind, layer, parent_block, str(exc), ref)
+                return
             if geometry is None or geometry.is_empty:
                 self.skipped[kind] += 1
                 self._gap(kind, layer, parent_block, "geometry-not-readable", ref)
@@ -258,7 +268,7 @@ class _Walker:
                 TextLabel(ref=ref, layer=layer, x=point.x, y=point.y, text=text.strip())
             )
 
-    def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: PLR0911 - one branch per entity type
+    def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type
         kind = entity.dxftype()
         try:
             if kind == "LINE":
@@ -270,8 +280,8 @@ class _Walker:
             if isinstance(entity, Circle):
                 # ARC inherits Circle but is open: closing it would invent a
                 # chord and a filled area, including false positive lawn evidence.
-                tolerance = min(self.flatten, abs(entity.dxf.radius) / 64)
-                points = [(v.x, v.y) for v in entity.flattening(tolerance)]
+                vertices, tolerance = circle_vertices(entity, self.flatten)
+                points = [(v.x, v.y) for v in vertices]
                 return _polyline(points, closed=kind == "CIRCLE"), tolerance
             if isinstance(entity, Ellipse):
                 points, closed = ellipse_vertices(entity, self.flatten)
@@ -287,20 +297,11 @@ class _Walker:
                     error = None  # fit/spline-generated vertices need separate semantics
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
-                proxy = geo.proxy(entity, distance=self.flatten)
-                proxy.places = 15
-                area = shape(proxy)
-                # Curve -> cubic -> chords is not an established error bound.
-                # Keep the display geometry but block certification until supported.
-                paths = entity.paths  # ty: ignore[unresolved-attribute]
-                straight = all(
-                    (isinstance(p, PolylinePath) and not p.has_bulge())
-                    or (isinstance(p, EdgePath) and all(isinstance(e, LineEdge) for e in p.edges))
-                    for p in paths
-                )
-                return area, 0.0 if straight else None
+                return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
+        except HatchGeometryError:
+            raise
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None
         return _polyline(vertices, closed=path.is_closed), None if path.has_curves else 0.0
