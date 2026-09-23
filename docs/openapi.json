@@ -7,6 +7,18 @@
             "title": "Name",
             "type": "string"
           },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Размер файла; null, если его нет",
+            "title": "Size Bytes"
+          },
           "url": {
             "title": "Url",
             "type": "string"

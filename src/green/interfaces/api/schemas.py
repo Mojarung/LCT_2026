@@ -59,6 +59,7 @@ class MetaOut(BaseModel):
 class ArtifactOut(BaseModel):
     name: str
     url: str
+    size_bytes: int | None = Field(default=None, description="Размер файла; null, если его нет")
 
 
 class StepOut(BaseModel):
@@ -110,7 +111,13 @@ class RunOut(BaseModel):
     )
 
     @classmethod
-    def from_record(cls, record: RunRecord, artifact_url: Callable[[str, str], str]) -> RunOut:
+    def from_record(
+        cls,
+        record: RunRecord,
+        artifact_url: Callable[[str, str], str],
+        artifact_size: Callable[[str, str], int | None] | None = None,
+    ) -> RunOut:
+        size = artifact_size or (lambda _run_id, _name: None)
         return cls(
             id=record.run_id,
             state=record.state,
@@ -122,7 +129,11 @@ class RunOut(BaseModel):
             error=record.error,
             summary=dict(record.summary),
             artifacts=[
-                ArtifactOut(name=name, url=artifact_url(record.run_id, name))
+                ArtifactOut(
+                    name=name,
+                    url=artifact_url(record.run_id, name),
+                    size_bytes=size(record.run_id, name),
+                )
                 for name in record.artifacts
             ],
             progress=(

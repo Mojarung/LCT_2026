@@ -255,3 +255,13 @@ def test_unknown_runs_and_artifacts_are_not_found(
 ) -> None:
     response = client.get(f"{API_PREFIX}{path.format(run=finished['id'])}")
     _assert_problem(response, 404)
+
+
+def test_artifacts_carry_their_size(finished: dict[str, object]) -> None:
+    """Размер файла нужен списку «Файлы результата»: DXF на сотню мегабайт качают осознанно."""
+    artifacts = finished["artifacts"]
+    assert isinstance(artifacts, list)
+    sizes = {a["name"]: a["size_bytes"] for a in artifacts}
+
+    assert sizes["result.dxf"] > 0
+    assert sizes["plan.json"] > 0
