@@ -237,6 +237,10 @@ class ProfileModel(_Strict):
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
     modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
+    placement_solver: Literal["greedy", "milp"] = "greedy"
+    placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
+    placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
+    placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
     assortment_mode: Literal["auto", "given", "single"] = "auto"

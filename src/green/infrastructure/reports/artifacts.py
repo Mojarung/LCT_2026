@@ -103,6 +103,10 @@ class FileArtifactSink:
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
             "quality.json": _write_json(directory / "quality.json", _quality(report.plan.quality)),
+            "selection.json": _write_json(
+                directory / "selection.json",
+                asdict(report.plan.selection) if report.plan.selection is not None else None,
+            ),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:

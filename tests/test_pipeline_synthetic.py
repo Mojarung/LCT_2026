@@ -75,16 +75,32 @@ def _street(path: Path, *, scale: float = 1.0, insunits: int = 6) -> None:
     doc.saveas(path)
 
 
-@pytest.fixture(scope="module")
-def run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+@pytest.fixture(scope="module", params=("greedy", "milp"))
+def run(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> dict[str, object]:
     work = tmp_path_factory.mktemp("street")
     source = work / "street.dxf"
     _street(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
-    params = container.profiles.load("strict", {"max_rejections": 50})
+    params = container.profiles.load(
+        "strict", {"max_rejections": 50, "placement_solver": request.param}
+    )
     report = container.use_case.execute(PlanRequest("test", source, work / "out", "strict", params))
     artifacts = container.artifacts.save(work / "out", report)
-    return {"report": report, "artifacts": artifacts, "source": source}
+    return {"report": report, "artifacts": artifacts, "source": source, "solver": request.param}
+
+
+def test_finite_selection_evidence_is_separate_from_final_plan(run: dict[str, object]) -> None:
+    artifacts = run["artifacts"]
+    payload = orjson.loads(artifacts["selection.json"].read_bytes())  # type: ignore[index]
+    if run["solver"] == "greedy":
+        assert payload is None
+    else:
+        assert payload["objective"] >= payload["baseline_objective"]
+        assert payload["upper_bound"] >= payload["objective"]
+        assert payload["candidates"] >= len(payload["selected"]) > 0
+        assert "before species assignment" in payload["scope"]
 
 
 def test_placements_stand_on_soil_above_the_curb(run: dict[str, object]) -> None:

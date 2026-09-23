@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from green.domain.norms import PlantingType
     from green.domain.objects import ObjectClass, SourceRef
     from green.domain.quality import PlanQuality
+    from green.domain.selection import SelectionReport
 
 
 class Verdict(StrEnum):
@@ -255,6 +256,8 @@ class Plan:
     shrub_assortment_summary: AssortmentSummary | None = None
     # Насколько план хорош, а не только допустим: индекс и ценность каждой посадки.
     quality: PlanQuality | None = None
+    # Historical generation-stage evidence; not a certificate for later edits or species quotas.
+    selection: SelectionReport | None = None
 
     @property
     def allowed_count(self) -> int:

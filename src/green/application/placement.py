@@ -17,6 +17,7 @@ import numpy as np
 import shapely
 
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
+from green.application.candidate_selection import SelectionProblem, select_candidates
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
 from green.application.params import active_distance_rules, species_distance_rules
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from green.domain.norms import RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Species
+    from green.domain.selection import SelectionReport
 
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
@@ -141,6 +143,7 @@ class GreedyPlantingStrategy:
             candidates = _lawn_candidates(index.surface, params)
             stats["lawn_candidates"] = len(candidates)
             stats["lawn_plantable"] = _offer(index, selector, candidates)
+        selection = selector.optimize() if params.placement_solver == "milp" else None
         if index.surface is not None:
             stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
         zones = build_zones(index, params.zone_cell_m) if params.zones else ()
@@ -152,6 +155,7 @@ class GreedyPlantingStrategy:
             warnings=_warnings(features, index, selector.rejections, params),
             stats=stats,
             zones=zones,
+            selection=selection,
         )
 
     def shrub_groups(  # noqa: PLR0913 - те же входы, что у plan, плюс центры групп
@@ -351,12 +355,21 @@ class _Selector:
     _options: list[tuple[_Candidate, int]] = field(default_factory=list)
     _planted: _Grid | None = None
     _refused: _Grid | None = None
+    _eligible: list[tuple[_Candidate, EvaluationBatch, int]] = field(default_factory=list)
+    _chosen: list[_Candidate] = field(default_factory=list)
 
     def offer(self, candidate: _Candidate, row: int) -> None:
         if candidate.station != self._station:
             self.flush()
             self._station = candidate.station
         self._options.append((candidate, row))
+        batch = self.batch
+        if self.params.placement_solver == "milp" and batch is not None:
+            accepted = {Verdict.ALLOWED}
+            if self.params.allow_needs_approval:
+                accepted.add(Verdict.NEEDS_APPROVAL)
+            if batch.verdict(row) in accepted:
+                self._eligible.append((candidate, batch, row))
 
     def flush(self) -> None:
         batch = self.batch
@@ -381,6 +394,7 @@ class _Selector:
                     if not planted.near(candidate.x, candidate.y):
                         planted.add(candidate.x, candidate.y)
                         self.placements.append(self._placement(candidate, batch, row))
+                        self._chosen.append(candidate)
                         return
         first, row = options[0]
         quiet = planted.near(first.x, first.y) or refused.near(first.x, first.y)
@@ -388,6 +402,49 @@ class _Selector:
             return
         refused.add(first.x, first.y)
         self.rejections.append(self._rejection(first, batch, row))
+
+    def optimize(self) -> SelectionReport:
+        pool = self._eligible
+        indices = {id(candidate): i for i, (candidate, _, _) in enumerate(pool)}
+        baseline = tuple(indices[id(candidate)] for candidate in self._chosen)
+        # One extra place outweighs the sum of all secondary preferences. These are
+        # project preferences, not law and not a measured ecological benefit.
+        base = 14 * len(pool) + 1
+        problem = SelectionProblem(
+            xy=tuple((c.x, c.y) for c, _, _ in pool),
+            stations=tuple(f"{c.mode}:{c.station}" for c, _, _ in pool),
+            weights=tuple(
+                base
+                + 8 * (batch.verdict(row) is Verdict.ALLOWED)
+                + 4 * (not batch.needs_barrier(row))
+                + 2 * (c.mode == MODE_ALLEY)
+                for c, batch, row in pool
+            ),
+            min_gap_m=max(
+                self.params.spacing_m * _SPACING_TOLERANCE, 2 * self.params.footprint_radius_m
+            ),
+            objective_description=(
+                "First maximize eligible places; then sum preferences: allowed=8, "
+                "no root barrier=4, alley=2. Species feasibility and aesthetic quality "
+                "are not part of this objective."
+            ),
+        )
+        report = select_candidates(
+            problem,
+            baseline,
+            time_limit_s=self.params.placement_time_limit_s,
+            max_candidates=self.params.placement_max_candidates,
+            max_conflicts=self.params.placement_max_conflicts,
+        )
+        self.placements = [
+            replace(self._placement(*pool[i]), number=number)
+            for number, i in enumerate(report.selected, 1)
+        ]
+        occupied = _Grid(problem.min_gap_m)
+        for placement in self.placements:
+            occupied.add(placement.x, placement.y)
+        self.rejections = [r for r in self.rejections if not occupied.near(r.x, r.y)]
+        return report
 
     def _placement(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> Placement:
         return Placement(
