@@ -52,6 +52,7 @@ class Case:
     nested: bool
     single_layer: bool
     version: str
+    curb_shape: str = "line"
 
     def world(self, x: float, y: float) -> tuple[float, float]:
         c, s = math.cos(math.radians(self.angle)), math.sin(math.radians(self.angle))
@@ -98,6 +99,9 @@ def drawing(path: Path, case: Case) -> list[str]:
     area("road", 0, 20)
     area("building", 55, 60)
     for role, y in (("curb", 20), ("utility.water", 40)):
+        if role == "curb" and case.curb_shape == "ring":
+            area(role, 20, 55)
+            continue
         target.add_line(coordinate(0, y), coordinate(120, y), dxfattribs={"layer": layer(role)})
         roles.append(role)
     for text, y, role in (("M-017", 30, "lawn"), ("d=300ст.", 40.5, "utility.water")):
@@ -135,6 +139,11 @@ def oracle(report: RunReport, case: Case) -> list[str]:  # noqa: C901 - independ
             failures.append(f"{p.placement_id}: planting footprint outside declared soil")
         if y - 20 < (2 if p.species.is_tree else 1) - EPSILON_M:
             failures.append(f"{p.placement_id}: curb clearance")
+        if (
+            case.curb_shape == "ring"
+            and min(x, 120 - x, 55 - y) < (2 if p.species.is_tree else 1) - EPSILON_M
+        ):
+            failures.append(f"{p.placement_id}: closed curb clearance")
         if 55 - y < (5 if p.species.is_tree else 1.5) - EPSILON_M:
             failures.append(f"{p.placement_id}: building clearance")
         if p.species.is_tree and abs(y - 40) - 0.15 < 2 - EPSILON_M:
@@ -192,6 +201,7 @@ def arguments() -> argparse.Namespace:
         "--solver", choices=("mixed", "greedy", "milp", "portfolio"), default="mixed"
     )
     parser.add_argument("--work-dir", type=Path, default=OUTPUT)
+    parser.add_argument("--curb-shape", choices=("line", "ring"), default="line")
     parser.add_argument(
         "--check-existing",
         action="store_true",
@@ -212,6 +222,7 @@ def check_representations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for row in rows:
         if row["ok"]:
             key = tuple(row[k] for k in ("material", "angle", "shift", "mirror", "solver"))
+            key += (row.get("curb_shape", "line"),)
             groups.setdefault(key, []).append(row)
     summary = []
     for key, group in groups.items():
@@ -246,7 +257,13 @@ def run_matrix(args: argparse.Namespace) -> None:
         if args.limit and number >= args.limit:
             break
         case = Case(
-            material, *units, *pose, nested, single_layer, "R2000" if number % 2 else "R2018"
+            material,
+            *units,
+            *pose,
+            nested,
+            single_layer,
+            "R2000" if number % 2 else "R2018",
+            args.curb_shape,
         )
         name = f"case-{number:03d}"
         work = args.work_dir / name

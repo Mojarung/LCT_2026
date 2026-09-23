@@ -6,10 +6,10 @@ import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import shapely
+import numpy as np
 
 from green.application.errors import InputError
-from green.domain.objects import ObjectClass
+from green.application.quality.site import site_of
 from green.domain.portfolio import PortfolioReport, VariantResult
 
 if TYPE_CHECKING:
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from green.application.validation import PlanValidation
     from green.domain.objects import Feature
     from green.domain.planting import Plan
+
+_AXIS_ANGLE_EPS_DEG = 1e-6
 
 
 def choose_plan(
@@ -110,18 +112,25 @@ def _variants(params: PlanParams, features: Sequence[Feature]) -> list[tuple[str
 
 
 def _curb_angle(features: Sequence[Feature]) -> float | None:
-    lines = []
-    for feature in features:
-        if feature.object_class is ObjectClass.CURB:
-            geometry = feature.geometry
-            if geometry.geom_type in {"Polygon", "MultiPolygon"}:
-                geometry = geometry.boundary
-            lines.extend(p for p in shapely.get_parts(geometry) if p.geom_type == "LineString")
-    if not lines:
+    # The same unique, clipped linework used for quality: distant annotations and
+    # a curb's continuation outside the work site must not choose the local axis.
+    segments = site_of(features).curb_segments
+    if not len(segments):
         return None
-    # Join dashed/segmented curbs before choosing a stable dominant street direction.
-    merged = shapely.line_merge(shapely.union_all(lines))
-    longest = max(shapely.get_parts(merged), key=lambda p: p.length)
-    xy = shapely.get_coordinates(longest)
-    dx, dy = xy[-1] - xy[0]
-    return math.degrees(math.atan2(dy, dx)) % 180 if math.hypot(dx, dy) > 0 else None
+    # Integrate the axial direction tensor along unique physical linework. Opposite
+    # directions reinforce one another; closing/reversing/splitting a line cannot
+    # cancel its orientation or give a short, densely segmented side more votes.
+    vectors = segments[:, 1] - segments[:, 0]
+    lengths = np.linalg.norm(vectors, axis=1)
+    vectors, lengths = vectors[lengths > 0], lengths[lengths > 0]
+    if not len(lengths):
+        return None
+    dx, dy = vectors.T
+    axial_x = math.fsum(((dx * dx - dy * dy) / lengths).tolist())
+    axial_y = math.fsum((2 * dx * dy / lengths).tolist())
+    # A square/circle has no dominant axis. This only suppresses numerical noise;
+    # the direction is a candidate heuristic and never changes feasibility rules.
+    if math.hypot(axial_x, axial_y) <= 1e-8 * math.fsum(lengths.tolist()):
+        return None
+    angle = (math.degrees(math.atan2(axial_y, axial_x)) / 2) % 180
+    return 0.0 if min(angle, 180 - angle) <= _AXIS_ANGLE_EPS_DEG else angle

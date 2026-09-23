@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
+# Quality/axis measurement only: protect coincident edges against overlay roundoff.
+# Never used by planting footprint checks or regulatory distances.
+CURB_CLIP_MARGIN_M = 1e-6
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +88,7 @@ def curb_segments(
         return np.zeros((0, 2, 2), dtype=np.float64)
     geometry = shapely.union_all(lines)
     if boundary is not None:
-        geometry = shapely.intersection(geometry, boundary)
+        geometry = shapely.intersection(geometry, boundary.buffer(CURB_CLIP_MARGIN_M))
     segments = []
     pending = list(shapely.get_parts(geometry))
     while pending:

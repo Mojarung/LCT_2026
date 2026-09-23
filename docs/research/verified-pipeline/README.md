@@ -90,3 +90,6 @@
 `universal_portfolio.json`; снимок до исправления покрытия бортов —
 `universal_portfolio_before_coverage.json`. Это проверки заданных конструкций,
 а не точность распознавания незнакомых реальных улиц.
+Кольцевой борт и устойчивость на границе участка E26:
+`universal_closed_curb.json`, контрпример до исправления —
+`universal_closed_curb_before_clip.json`.

@@ -6,9 +6,10 @@ import math
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
+import numpy as np
 import orjson
 import pytest
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Polygon, box
 
 from green.application.params import PlanParams
 from green.application.quality.site import site_of
@@ -120,8 +121,9 @@ def test_boundary_hole_and_tangent_parts_add_no_connecting_segment() -> None:
     boundary = box(0, -5, 10, 5).difference(box(4, -1, 6, 1))
     lines = [LineString([(-1, 0), (11, 0)]), LineString([(-1, 4), (0, 5), (-1, 6)])]
     result = _result([_tree(1, 5, 0, 1)], lines, boundary)
-    assert result.measure["curb_m"] == 8
-    assert result.score == 0
+    # Micrometre clipping margin affects the four cut ends and the tangent corner.
+    assert result.measure["curb_m"] == pytest.approx(8, abs=1e-5)
+    assert result.score == pytest.approx(0, abs=1e-6)
 
 
 def test_equal_weight_overlap_has_no_loss_until_one_crown_is_removed() -> None:
@@ -136,3 +138,41 @@ def test_empty_plan_still_scores_zero_on_a_known_curb() -> None:
     assert result.score == 0
     assert result.measure["curb_m"] == pytest.approx(0.1)
     assert result.measure["covered_m"] == 0
+
+
+@pytest.mark.parametrize("angle", [0, 37, 113])
+@pytest.mark.parametrize("shift", [0, 1_000_000])
+@pytest.mark.parametrize("unit_m", [1, 0.001, 0.3048])
+def test_curb_on_boundary_is_not_cut_away_by_coordinate_roundoff(
+    angle: int, shift: int, unit_m: float
+) -> None:
+    c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+
+    def xy(x: float, y: float) -> tuple[float, float]:
+        return (
+            (shift + x * c - y * s) / unit_m * unit_m,
+            (-shift + x * s + y * c) / unit_m * unit_m,
+        )
+
+    boundary = Polygon([xy(0, 0), xy(120, 0), xy(120, 60), xy(0, 60)])
+    curb = LineString([xy(0, 20), xy(120, 20), xy(120, 55), xy(0, 55), xy(0, 20)])
+    features = [
+        Feature(SourceRef("in", "c", "c"), "curb", curb, object_class=ObjectClass.CURB),
+        Feature(
+            SourceRef("in", "b", "b"), "work", boundary, object_class=ObjectClass.WORK_BOUNDARY
+        ),
+    ]
+    site = site_of(features)
+    assert site.boundary is not None
+    assert site.boundary.equals(boundary)
+    segments = site.curb_segments
+    assert np.linalg.norm(segments[:, 1] - segments[:, 0], axis=1).sum() == pytest.approx(
+        310, abs=1e-5
+    )
+
+
+def test_quality_clip_tolerance_does_not_include_a_curb_one_mm_outside() -> None:
+    result = _result(
+        [_tree(1, 0, 5, 2.5)], [LineString([(-0.001, 0), (-0.001, 10)])], box(0, 0, 10, 10)
+    )
+    assert result.score is None
