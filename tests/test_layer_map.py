@@ -20,8 +20,8 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
 @pytest.mark.parametrize(
     ("layer", "expected"),
     [
-        (f"{DESIGNER}ДВ_ПП_Газон_У за счет АБ_ПЧ", ObjectClass.LAWN),
-        (f"{DESIGNER}ДВ_ПП_Газон_Р", ObjectClass.LAWN),
+        (f"{DESIGNER}ДВ_ПП_Газон_У за счет АБ_ПЧ", ObjectClass.UNKNOWN),
+        (f"{DESIGNER}ДВ_ПП_Газон_Р", ObjectClass.UNKNOWN),
         (f"{DESIGNER}ДВ_ПП_Тип4_У_ПЧ за счет Газона", ObjectClass.ROAD),
         (f"{DESIGNER}ДВ_ПП_Тип2_Р_покрытия_ПЧ_Местные", ObjectClass.ROAD),
         (f"{DESIGNER}ДВ_ПП_Тип6_У_ТР_3м за счет Газона", ObjectClass.SIDEWALK),

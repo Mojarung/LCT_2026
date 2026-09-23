@@ -1,0 +1,317 @@
+{
+  "scope": "Selected material plans, fresh conversion/read only. No inferred ground truth or full-package certification.",
+  "rows": [
+    {
+      "name": "ЗАЛИВКА.dwg",
+      "source_sha256": "7f2edaabc50bee266cf90190c695afcde7792f7b06cadcaff8e58eb8df08454d",
+      "bytes": 271740,
+      "conversion_seconds": 0.0863,
+      "dxf_bytes": 1149813,
+      "read_seconds": 0.2058,
+      "unit_m_from_header": 1.0,
+      "read_diagnostics": {
+        "visited_by_type": {
+          "HATCH": 446,
+          "LWPOLYLINE": 1
+        },
+        "skipped_by_type": {
+          "HATCH": 13
+        },
+        "unresolved_xrefs": [],
+        "geometry_gaps": [
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м на месте цб",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 2,
+            "source_refs": [
+              "732d5f39:00000000:466",
+              "732d5f39:00000000:502C"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 3,
+            "source_refs": [
+              "732d5f39:00000000:46D",
+              "732d5f39:00000000:48A",
+              "732d5f39:00000000:49D"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м",
+            "block": null,
+            "reason": "hatch-intersecting-boundaries",
+            "count": 1,
+            "source_refs": [
+              "732d5f39:00000000:47B"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ГП_П_Газон_Рулонный",
+            "block": null,
+            "reason": "hatch-intersecting-boundaries",
+            "count": 2,
+            "source_refs": [
+              "732d5f39:00000000:4C8",
+              "732d5f39:00000000:507"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_ДО_Тип1_Ремонт_покрытия_ПЧ_магистральные",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 1,
+            "source_refs": [
+              "732d5f39:00000000:2C72"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_П_Газон новый на трот аб",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 1,
+            "source_refs": [
+              "732d5f39:00000000:5CC0"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_П_Газон новый на ПР Ч",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 1,
+            "source_refs": [
+              "732d5f39:00000000:6477"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ГП_П_Газон_Рулонный",
+            "block": null,
+            "reason": "hatch-open-boundary",
+            "count": 2,
+            "source_refs": [
+              "732d5f39:00000000:8523",
+              "732d5f39:00000000:10994"
+            ]
+          },
+          {
+            "entity_type": "LWPOLYLINE",
+            "layer": "Defpoints",
+            "block": null,
+            "reason": "approximation-error-not-bounded",
+            "count": 1,
+            "source_refs": [
+              "732d5f39:00000000:11440"
+            ]
+          }
+        ],
+        "approximation_features": 379,
+        "max_approximation_error_m": 0.10000000025518696
+      },
+      "warnings": [
+        "Пропущены сущности без геометрии для расчёта: HATCH: 13"
+      ],
+      "features": 434,
+      "labels": 0,
+      "classes": {
+        "unknown": 160,
+        "lawn": 274
+      },
+      "geometry_types": {
+        "Polygon": 420,
+        "MultiPolygon": 13,
+        "GeometryCollection": 1
+      },
+      "block_check": "Неполная геометрия входного чертежа: HATCH, слой 'ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м на месте цб', блок None: 2 (hatch-invalid-ring), примеры 732d5f39:00000000:466, 732d5f39:00000000:502C; HATCH, слой 'ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м', блок None: 3 (hatch-invalid-ring), примеры 732d5f39:00000000:46D, 732d5f39:00000000:48A; HATCH, слой 'ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_3м', блок None: 1 (hatch-intersecting-boundaries), примеры 732d5f39:00000000:47B; HATCH, слой 'ДВ_ГП_П_Газон_Рулонный', блок None: 2 (hatch-intersecting-boundaries), примеры 732d5f39:00000000:4C8, 732d5f39:00000000:507; HATCH, слой 'ДВ_ПП_ДО_Тип1_Ремонт_покрытия_ПЧ_магистральные', блок None: 1 (hatch-invalid-ring), примеры 732d5f39:00000000:2C72; HATCH, слой 'ДВ_ПП_П_Газон новый на трот аб', блок None: 1 (hatch-invalid-ring), примеры 732d5f39:00000000:5CC0; HATCH, слой 'ДВ_ПП_П_Газон новый на ПР Ч', блок None: 1 (hatch-invalid-ring), примеры 732d5f39:00000000:6477; HATCH, слой 'ДВ_ГП_П_Газон_Рулонный', блок None: 2 (hatch-open-boundary), примеры 732d5f39:00000000:8523, 732d5f39:00000000:10994; LWPOLYLINE, слой 'Defpoints', блок None: 1 (approximation-error-not-bounded), примеры 732d5f39:00000000:11440. Расчёт остановлен: загрузите внешние ссылки и предоставьте DXF с сохранённой пространственной геометрией (для неподдерживаемых объектов — полилинии/штриховки). Наличие других сетей не заменяет потерянные данные.",
+      "read_status": "completed",
+      "seconds": 0.3025
+    },
+    {
+      "name": "03_10004141_Проектные решения.dwg",
+      "source_sha256": "cb589299f9e5d7595c5e055b587105bf71db9eff260e27a4710cc2e0fe3c1bc7",
+      "bytes": 1580469,
+      "conversion_seconds": 0.217,
+      "dxf_bytes": 7618691,
+      "read_seconds": 1.4817,
+      "unit_m_from_header": 1.0,
+      "read_diagnostics": {
+        "visited_by_type": {
+          "HATCH": 1562,
+          "INSERT": 82,
+          "LWPOLYLINE": 1230,
+          "LINE": 312,
+          "ARC": 48,
+          "CIRCLE": 50,
+          "MLINE": 49,
+          "MULTILEADER": 9,
+          "MTEXT": 92,
+          "DIMENSION": 707
+        },
+        "skipped_by_type": {
+          "HATCH": 35,
+          "MLINE": 49,
+          "MULTILEADER": 9,
+          "DIMENSION": 707
+        },
+        "unresolved_xrefs": [
+          "00.1_10004141_Топография",
+          "00.2_10004141_Сети"
+        ],
+        "geometry_gaps": [
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_Тип0_Газон за ПЧ",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 18,
+            "source_refs": [
+              "ec295d1d:00000000:15CC",
+              "ec295d1d:00000000:15D0",
+              "ec295d1d:00000000:1680",
+              "ec295d1d:00000000:16B9",
+              "ec295d1d:00000000:17B8"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_АКР_Лестница",
+            "block": null,
+            "reason": "hatch-intersecting-boundaries",
+            "count": 1,
+            "source_refs": [
+              "ec295d1d:00000000:1691"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_Тип4_ПЧ местные за Газон",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 3,
+            "source_refs": [
+              "ec295d1d:00000000:16A2",
+              "ec295d1d:00000000:17A9",
+              "ec295d1d:00000000:1984"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_Тип7_Тротуар АБ менее 2м за ПЧ",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 5,
+            "source_refs": [
+              "ec295d1d:00000000:1712",
+              "ec295d1d:00000000:17AF",
+              "ec295d1d:00000000:17B0",
+              "ec295d1d:00000000:190F",
+              "ec295d1d:00000000:1972"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_Тип0_Газон за Тротуар АБ",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 5,
+            "source_refs": [
+              "ec295d1d:00000000:177B",
+              "ec295d1d:00000000:179D",
+              "ec295d1d:00000000:17E9",
+              "ec295d1d:00000000:18BD",
+              "ec295d1d:00000000:1B50"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "ДВ_ПП_Тип7_Тротуар АБ менее 2м за Газон",
+            "block": null,
+            "reason": "hatch-invalid-ring",
+            "count": 2,
+            "source_refs": [
+              "ec295d1d:00000000:1966",
+              "ec295d1d:00000000:2DCAD9"
+            ]
+          },
+          {
+            "entity_type": "MLINE",
+            "layer": "ДВ_ГП_П_Водоотводные_лотки",
+            "block": null,
+            "reason": "geometry-not-readable",
+            "count": 49,
+            "source_refs": [
+              "ec295d1d:00000000:1F59",
+              "ec295d1d:00000000:1F5A",
+              "ec295d1d:00000000:1F5B",
+              "ec295d1d:00000000:1F5C",
+              "ec295d1d:00000000:1F5D"
+            ]
+          },
+          {
+            "entity_type": "HATCH",
+            "layer": "_ГП_Граница проектирования (штриховка)",
+            "block": null,
+            "reason": "hatch-open-boundary",
+            "count": 1,
+            "source_refs": [
+              "ec295d1d:00000000:2918D5"
+            ]
+          }
+        ],
+        "approximation_features": 1560,
+        "max_approximation_error_m": 0.10000000001459729
+      },
+      "warnings": [
+        "03_10004141_Проектные решения.dxf: аудит исправил записей: 305, ошибок: 0",
+        "Внешние ссылки не загружены (2): 00.1_10004141_Топография, 00.2_10004141_Сети. Объекты из них не учтены, сети могли быть потеряны.",
+        "Пропущены сущности без геометрии для расчёта: DIMENSION: 707, MLINE: 49, HATCH: 35, MULTILEADER: 9"
+      ],
+      "features": 3167,
+      "labels": 92,
+      "classes": {
+        "unknown": 1636,
+        "sidewalk": 286,
+        "lawn": 513,
+        "ignore": 144,
+        "curb": 588
+      },
+      "geometry_types": {
+        "Polygon": 1848,
+        "LineString": 1319
+      },
+      "block_check": "Неполная геометрия входного чертежа: XREF 00.1_10004141_Топография; XREF 00.2_10004141_Сети; HATCH, слой 'ДВ_ПП_Тип0_Газон за ПЧ', блок None: 18 (hatch-invalid-ring), примеры ec295d1d:00000000:15CC, ec295d1d:00000000:15D0; HATCH, слой 'ДВ_АКР_Лестница', блок None: 1 (hatch-intersecting-boundaries), примеры ec295d1d:00000000:1691; HATCH, слой 'ДВ_ПП_Тип4_ПЧ местные за Газон', блок None: 3 (hatch-invalid-ring), примеры ec295d1d:00000000:16A2, ec295d1d:00000000:17A9; HATCH, слой 'ДВ_ПП_Тип7_Тротуар АБ менее 2м за ПЧ', блок None: 5 (hatch-invalid-ring), примеры ec295d1d:00000000:1712, ec295d1d:00000000:17AF; HATCH, слой 'ДВ_ПП_Тип0_Газон за Тротуар АБ', блок None: 5 (hatch-invalid-ring), примеры ec295d1d:00000000:177B, ec295d1d:00000000:179D; HATCH, слой 'ДВ_ПП_Тип7_Тротуар АБ менее 2м за Газон', блок None: 2 (hatch-invalid-ring), примеры ec295d1d:00000000:1966, ec295d1d:00000000:2DCAD9; MLINE, слой 'ДВ_ГП_П_Водоотводные_лотки', блок None: 49 (geometry-not-readable), примеры ec295d1d:00000000:1F59, ec295d1d:00000000:1F5A; HATCH, слой '_ГП_Граница проектирования (штриховка)', блок None: 1 (hatch-open-boundary), примеры ec295d1d:00000000:2918D5. Расчёт остановлен: загрузите внешние ссылки и предоставьте DXF с сохранённой пространственной геометрией (для неподдерживаемых объектов — полилинии/штриховки). Наличие других сетей не заменяет потерянные данные.",
+      "read_status": "completed",
+      "seconds": 1.7182
+    },
+    {
+      "name": "04_10001899-АПОТ-ГЧ.dwg",
+      "source_sha256": "9ec3f8a6198fe15a37c83709d520a27ecdaec09cb114373e5ab1a61d119f50e4",
+      "bytes": 4464993,
+      "conversion_seconds": 0.601,
+      "dxf_bytes": 21102184,
+      "read_status": "rejected",
+      "error": "04_10001899-АПОТ-ГЧ.dxf: аудит DXF обнаружил потерю/изменение геометрии или неисправленные ошибки: 11: Removed invalid DXF entity ACAD_TABLE(#1A54BC) from BLOCK '*Paper_Space96'.; 16: Removed DXF entity ACAD_TABLE(#1A54BC) with invalid owner handle (#None != #14BD9A) from BLOCK '*Paper_Space96'.; 11: Removed invalid DXF entity ACAD_TABLE(#1A54BD) from BLOCK '*Paper_Space96'.; 16: Removed DXF entity ACAD_TABLE(#1A54BD) with invalid owner handle (#None != #14BD9A) from BLOCK '*Paper_Space96'.; 11: Removed invalid DXF entity ACAD_TABLE(#1A5689) from BLOCK '*Paper_Space841'.; 16: Removed DXF entity ACAD_TABLE(#1A5689) with invalid owner handle (#None != #1766ED) from BLOCK '*Paper_Space841'.; 11: Removed invalid DXF entity ACAD_TABLE(#1A568A) from BLOCK '*Paper_Space841'.; 16: Removed DXF entity ACAD_TABLE(#1A568A) with invalid owner handle (#None != #1766ED) from BLOCK '*Paper_Space841'.. Нужен исправленный исходник.",
+      "seconds": 2.8273
+    },
+    {
+      "name": "01_25_ДВ_ВАО_10001620_АПОТ.dwg",
+      "source_sha256": "30041ce09292f3b0c86b58e8bc283ef6186dbd9fb7e05297c78befb4521ac9bd",
+      "bytes": 6030782,
+      "conversion_seconds": 1.0035,
+      "dxf_bytes": 34582452,
+      "read_status": "rejected",
+      "error": "01_25_ДВ_ВАО_10001620_АПОТ.dxf: аудит DXF обнаружил потерю/изменение геометрии или неисправленные ошибки: 11: Removed invalid DXF entity ACAD_TABLE(#7085D6) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#7085D6) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#7085D7) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#7085D7) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#7085DE) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#7085DE) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#7085E0) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#7085E0) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.; 11: Removed invalid DXF entity ACAD_TABLE(#7085E1) from BLOCK '*Model_Space'.; 16: Removed DXF entity ACAD_TABLE(#7085E1) with invalid owner handle (#None != #1F) from BLOCK '*Model_Space'.. Нужен исправленный исходник.",
+      "seconds": 3.9125
+    }
+  ]
+}

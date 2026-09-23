@@ -28,6 +28,25 @@ def local_name(value: str) -> str:
     return re.split(r"\||\$\d+\$", unicodedata.normalize("NFC", value))[-1]
 
 
+# Detect reasons to ask for a per-input assignment, never to grant soil. This is
+# deliberately not a universal construction-language parser: unseen wording
+# remains an explicit limitation of automatic name rules.
+_MATERIAL_CONTEXT = re.compile(
+    r"\b(?:за|вместо|на месте|не|нет|без)\b|"
+    r"\b(?:демонт|уничтож|снос|проектир|восстан|устройств|замен|новый|нового|новая|новое)|"
+    r"\b(?:proposed|demolition|remove|removed|replace|replacement|new|not)\b|"
+    r"\bгазон\s+[ру]\b|\bдв гп п газон\b",
+    re.IGNORECASE,
+)
+
+
+def material_context_requires_review(*names: str | None) -> bool:
+    """Work/negation wording cannot establish the material of a planting area."""
+    return any(
+        _MATERIAL_CONTEXT.search(re.sub(r"[_\-]+", " ", local_name(name))) for name in names if name
+    )
+
+
 class MatchTarget(StrEnum):
     LAYER = "layer"
     BLOCK = "block"
@@ -95,7 +114,12 @@ class LayerMap:
         kinds = {self.rules[i].object_class for i in chosen}
         if len(kinds) != 1:
             return ObjectClass.UNKNOWN, ClassificationEvidence("conflict", matches, chosen)
-        return next(iter(kinds)), ClassificationEvidence("name_rule", matches, chosen)
+        kind = next(iter(kinds))
+        if kind is ObjectClass.LAWN and material_context_requires_review(
+            feature.layer, feature.block
+        ):
+            return ObjectClass.UNKNOWN, ClassificationEvidence("material_context", matches, chosen)
+        return kind, ClassificationEvidence("name_rule", matches, chosen)
 
 
 @dataclass(frozen=True, slots=True)
