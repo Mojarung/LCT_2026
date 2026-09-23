@@ -128,6 +128,9 @@ class Feature:
     # input quality must reject it before a plan can be certified.
     geometry_error_m: float | None = 0.0
     circle_center_m: tuple[float, float] | None = None
+    # Distinguish closed linework from explicit fills after semantic mapping.
+    # None carries no evidence that a polygon is just a boundary.
+    source_entity_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

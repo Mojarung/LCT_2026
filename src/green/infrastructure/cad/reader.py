@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, Polyline, Text
+from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Text
+from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
+from ezdxf.tools.text import fast_plain_mtext, plain_text
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
 
@@ -135,9 +137,11 @@ class _Walker:
         index: int,
         parent_block: str | None = None,
     ) -> None:
-        layer = entity.dxf.get("layer", "0")
+        layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
             layer = parent_layer
+        if parent_block is not None:
+            parent_block = decode_dxf_unicode(parent_block)
         handle = entity.dxf.get("handle") or f"{parent_handle}~{index}"
         ref = SourceRef(self.file_sha8, _chain_hash(chain), handle)
         kind = entity.dxftype()
@@ -183,6 +187,7 @@ class _Walker:
                         block=parent_block,
                         circle_radius_m=radius,
                         geometry_error_m=error * self.unit_m if error is not None else None,
+                        source_entity_type=kind,
                         circle_center_m=(center.x * self.unit_m, center.y * self.unit_m)
                         if center is not None
                         else None,
@@ -265,8 +270,13 @@ class _Walker:
         block: str | None,
         chain: tuple[str, ...],
     ) -> None:
-        is_mtext = entity.dxftype() == "MTEXT"
-        text = entity.plain_text() if is_mtext else entity.dxf.text  # ty: ignore[unresolved-attribute]
+        # CIF escapes are not decoded by ezdxf on load, including R2007+.
+        # Decode before stripping MTEXT control sequences, only in our scene;
+        # keep the source Drawing unchanged for export and integrity checks.
+        if isinstance(entity, MText):
+            text = str(fast_plain_mtext(decode_dxf_unicode(entity.text)))
+        else:
+            text = plain_text(decode_dxf_unicode(entity.dxf.text))
         if not text or not text.strip():
             return
         original = entity.origin_of_copy or entity
@@ -301,7 +311,7 @@ class _Walker:
                 y=point.y,
                 text=text.strip(),
                 block=block,
-                block_chain=chain,
+                block_chain=tuple(decode_dxf_unicode(name) for name in chain),
             )
         )
 

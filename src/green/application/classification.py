@@ -157,6 +157,16 @@ def _classify_feature(
             error = 0.0
         else:
             geometry = geometry.centroid
+    elif (
+        kind in {ObjectClass.CURB, ObjectClass.PAVEMENT_EDGE, ObjectClass.FENCE}
+        and geometry.geom_type in {"Polygon", "MultiPolygon"}
+        and feature.source_entity_type in {"LWPOLYLINE", "POLYLINE", "CIRCLE", "ELLIPSE"}
+    ):
+        # These classes denote an edge/enclosure, not a filled obstacle. A
+        # closed CAD polyline arrives as a polygon until semantics are known;
+        # measuring to its filled interior would forbid every enclosed plant.
+        # Area classes and explicit HATCH/MPOLYGON fills keep their interiors.
+        geometry = geometry.boundary
     return replace(
         feature,
         object_class=kind,

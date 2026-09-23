@@ -11,6 +11,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from ezdxf.entities import Insert
+from ezdxf.lldxf.encoding import decode_dxf_unicode
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.results import PlanExportReport
@@ -88,7 +89,7 @@ def _compare(doc: Drawing, insert: Insert, placement: Placement, unit: float) ->
         issues.append(f"{identity}: incorrect species block")
     if insert.dxf.layer != _expected_layer(placement):
         issues.append(f"{identity}: incorrect planting layer")
-    attrs = {a.dxf.tag: a.dxf.text for a in insert.attribs}
+    attrs = {decode_dxf_unicode(a.dxf.tag): decode_dxf_unicode(a.dxf.text) for a in insert.attribs}
     if attrs.get("SPECIES") != placement.species.name_ru or attrs.get("NUM") != str(
         placement.number
     ):
