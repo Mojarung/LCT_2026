@@ -28,12 +28,17 @@ from green.bootstrap.settings import Settings
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from green.application.results import RunReport
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "out/universal-dxf"
 EPSILON_M = 0.002
 MIN_TREES = 10
+# 0.01 percentage point in the project's quality index, for this fixture family.
+# Not a tolerance on regulatory distances or a bound for arbitrary CAD inputs.
+QUALITY_EQUIVALENCE_TOLERANCE = 1e-4
 
 
 @dataclass(frozen=True)
@@ -155,15 +160,80 @@ def oracle(report: RunReport, case: Case) -> list[str]:  # noqa: C901 - independ
     return failures
 
 
-def main() -> None:
+def compare_variants(report: RunReport) -> tuple[dict[str, object], list[str]]:
+    """Check the reported comparison against the selected final plan."""
+    portfolio = report.plan.portfolio
+    if portfolio is None:
+        raise ValueError("portfolio result has no comparison report")
+    variants = [v for v in portfolio.variants if v.valid]
+    scores = {v.name: v.quality_index for v in variants if v.quality_index is not None}
+    if not variants or len(scores) != len(variants):
+        raise ValueError("declared site has an unscored valid variant")
+    failures = []
+    if "baseline" not in scores:
+        failures.append("baseline failed on a known feasible complete scene")
+    chosen = scores.get(portfolio.chosen, -math.inf)
+    if chosen != max(scores.values()):
+        failures.append("chosen variant is not the best reported valid quality")
+    if report.plan.quality is None or chosen != report.plan.quality.index:
+        failures.append("reported portfolio quality differs from the final plan")
+    return {
+        "chosen": portfolio.chosen,
+        "variants": [asdict(v) for v in portfolio.variants],
+        "baseline_quality": scores.get("baseline"),
+        "gain_over_baseline": chosen - scores.get("baseline", chosen),
+    }, failures
+
+
+def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=0, help="0 runs the full 72-case product")
+    parser.add_argument(
+        "--solver", choices=("mixed", "greedy", "milp", "portfolio"), default="mixed"
+    )
+    parser.add_argument("--work-dir", type=Path, default=OUTPUT)
+    parser.add_argument(
+        "--check-existing",
+        action="store_true",
+        help="Check equivalence in --output without rerunning",
+    )
     parser.add_argument(
         "--output", type=Path, default=ROOT / "docs/research/verified-pipeline/universal_dxf.json"
     )
     args = parser.parse_args()
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=OUTPUT / "runs"))
+    if args.limit < 0:
+        parser.error("--limit must be zero or positive")
+    return args
+
+
+def check_representations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compare units, insertion and naming, holding physical pose and solver fixed."""
+    groups: dict[tuple, list[dict[str, Any]]] = {}
+    for row in rows:
+        if row["ok"]:
+            key = tuple(row[k] for k in ("material", "angle", "shift", "mirror", "solver"))
+            groups.setdefault(key, []).append(row)
+    summary = []
+    for key, group in groups.items():
+        values = [r["quality_index"] for r in group]
+        spread = max(values) - min(values)
+        summary.append(
+            {
+                "material_pose_solver": key,
+                "representations": len(group),
+                "quality_spread": spread,
+                "tolerance": QUALITY_EQUIVALENCE_TOLERANCE,
+                "ok": spread <= QUALITY_EQUIVALENCE_TOLERANCE,
+            }
+        )
+    return summary
+
+
+def run_matrix(args: argparse.Namespace) -> None:
+    args.work_dir.mkdir(parents=True, exist_ok=True)
+    container = build_container(
+        Settings(config_dir=ROOT / "config", runs_dir=args.work_dir / "runs")
+    )
     product = itertools.product(
         ("area", "label"),
         ((6, 1.0), (4, 0.001), (2, 0.3048)),
@@ -179,7 +249,7 @@ def main() -> None:
             material, *units, *pose, nested, single_layer, "R2000" if number % 2 else "R2018"
         )
         name = f"case-{number:03d}"
-        work = OUTPUT / name
+        work = args.work_dir / name
         work.mkdir(exist_ok=True)
         source = work / "source.dxf"
         roles = drawing(source, case)
@@ -206,7 +276,9 @@ def main() -> None:
                     str(f.ref): role for f, role in zip(scene.features, roles, strict=True)
                 },
                 "label_roles": {str(t.ref): "soil" for t in scene.labels if t.text == "M-017"},
-                "placement_solver": "portfolio" if number % 12 == 0 else "greedy",
+                "placement_solver": ("portfolio" if number % 12 == 0 else "greedy")
+                if args.solver == "mixed"
+                else args.solver,
                 "max_rejections": 30,
             }
             (work / "review.json").write_text(json.dumps(overrides, indent=2) + "\n")
@@ -216,6 +288,10 @@ def main() -> None:
             )
             container.artifacts.save(work / "reviewed", report)
             failures = oracle(report, case)
+            if params.placement_solver == "portfolio":
+                comparison, comparison_failures = compare_variants(report)
+                row.update(comparison)
+                failures.extend(comparison_failures)
             row.update(
                 ok=not failures
                 and report.integrity.ok
@@ -232,12 +308,16 @@ def main() -> None:
                 saved_dxf_matches=bool(report.export_validation and report.export_validation.ok),
                 solver=params.placement_solver,
                 quality_index=report.plan.quality.index if report.plan.quality else None,
+                quality_terms=[asdict(t) for t in report.plan.quality.terms]
+                if report.plan.quality
+                else [],
             )
         except Exception as error:  # noqa: BLE001 - finish matrix and retain every failure
             row["error"] = f"{type(error).__name__}: {error}"
         row["seconds"] = round(time.perf_counter() - begin, 4)
         rows.append(row)
         print(row, flush=True)
+    checks = check_representations(rows)
     args.output.write_text(
         json.dumps(
             {
@@ -245,6 +325,8 @@ def main() -> None:
                 "tests transfer of geometry/constraints/export, not automatic recognition or "
                 "globally optimal aesthetics. "
                 "R2000 is paired with single-layer inputs; R2018 with opaque multiple layers.",
+                "solver_mode": args.solver,
+                "representation_comparison": checks,
                 "rows": rows,
             },
             ensure_ascii=False,
@@ -253,8 +335,20 @@ def main() -> None:
         + "\n"
     )
     print({"runs": len(rows), "passed": sum(bool(r["ok"]) for r in rows)}, flush=True)
-    if any(not row["ok"] for row in rows):
+    if any(not row["ok"] for row in rows) or any(not check["ok"] for check in checks):
         raise SystemExit(1)
+
+
+def main() -> None:
+    args = arguments()
+    if args.check_existing:
+        rows = json.loads(args.output.read_text())["rows"]
+        checks = check_representations(rows)
+        print(json.dumps(checks, indent=2))
+        if not checks or any(not c["ok"] for c in checks) or any(not r["ok"] for r in rows):
+            raise SystemExit(1)
+    else:
+        run_matrix(args)
 
 
 if __name__ == "__main__":

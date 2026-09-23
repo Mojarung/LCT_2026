@@ -161,9 +161,9 @@ def test_fork_rewards_the_norm_and_punishes_both_sides() -> None:
     assert fork(600, 150, 180) == 0.0
 
 
-def test_curbs_are_sampled_by_metre_inside_the_work_boundary() -> None:
+def test_curbs_keep_their_physical_length_inside_the_work_boundary() -> None:
     site = _site()
-    assert len(site.curb_points) == 200
+    assert np.linalg.norm(site.curb_segments[:, 1] - site.curb_segments[:, 0], axis=1).sum() == 200
     assert site.street_length_m == pytest.approx(200.0, rel=0.01)
 
 
@@ -244,7 +244,7 @@ def test_shade_is_measured_against_the_zone_where_planting_is_allowed() -> None:
 
 
 def test_without_a_work_boundary_the_index_is_not_given_but_terms_are() -> None:
-    site = Site(boundary=None, curb_points=np.zeros((0, 2)))
+    site = Site(boundary=None, curb_segments=np.zeros((0, 2, 2)))
     quality = evaluate(_plan(), site, PARAMS)
     assert quality.index is None
     assert "Граница работ" in quality.gate

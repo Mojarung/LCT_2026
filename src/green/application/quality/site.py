@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
 
     from green.domain.objects import Feature
 
-CURB_STEP_M = 1.0  # шаг точек по борту: доля бортов под кронами считается в метрах
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 
@@ -35,8 +35,8 @@ class Site:
     """Что индексу нужно от чертежа, кроме самих посадок."""
 
     boundary: BaseGeometry | None
-    # Точки по бортам внутри границы работ с шагом CURB_STEP_M, координаты в метрах.
-    curb_points: NDArray[np.float64]
+    # Unique curb segments clipped to the work boundary; shape (n, 2, 2), metres.
+    curb_segments: NDArray[np.float64]
 
     @property
     def area_m2(self) -> float:
@@ -49,7 +49,7 @@ class Site:
 
 def site_of(features: Sequence[Feature]) -> Site:
     boundary = work_boundary(features)
-    return Site(boundary=boundary, curb_points=curb_points(features, boundary))
+    return Site(boundary=boundary, curb_segments=curb_segments(features, boundary))
 
 
 def street_length(boundary: BaseGeometry) -> float:
@@ -69,7 +69,9 @@ def street_length(boundary: BaseGeometry) -> float:
     return total
 
 
-def curb_points(features: Sequence[Feature], boundary: BaseGeometry | None) -> NDArray[np.float64]:
+def curb_segments(
+    features: Sequence[Feature], boundary: BaseGeometry | None
+) -> NDArray[np.float64]:
     lines: list[BaseGeometry] = []
     for feature in features:
         if feature.object_class is not ObjectClass.CURB:
@@ -80,19 +82,20 @@ def curb_points(features: Sequence[Feature], boundary: BaseGeometry | None) -> N
         if geometry.geom_type in _LINE_TYPES:
             lines.extend(shapely.get_parts(geometry))
     if not lines:
-        return np.zeros((0, 2), dtype=np.float64)
-    parts = np.array(lines, dtype=object)
-    lengths = shapely.length(parts)
-    counts = np.maximum(1, np.floor(lengths / CURB_STEP_M).astype(np.int64))
-    repeated = np.repeat(parts, counts)
-    offsets = np.repeat(np.cumsum(counts) - counts, counts)
-    position = np.arange(int(counts.sum())) - offsets
-    # Точка в середине каждого метра: так n точек честно представляют n метров борта.
-    fraction = (position + 0.5) / np.repeat(counts, counts)
-    xy = shapely.get_coordinates(
-        shapely.line_interpolate_point(repeated, fraction, normalized=True)
-    )
-    if boundary is not None and len(xy):
-        shapely.prepare(boundary)
-        xy = xy[shapely.contains_xy(boundary, xy[:, 0], xy[:, 1])]
-    return xy
+        return np.zeros((0, 2, 2), dtype=np.float64)
+    geometry = shapely.union_all(lines)
+    if boundary is not None:
+        geometry = shapely.intersection(geometry, boundary)
+    segments = []
+    pending = list(shapely.get_parts(geometry))
+    while pending:
+        part = pending.pop()
+        if part.geom_type in {"MultiLineString", "GeometryCollection"}:
+            pending.extend(shapely.get_parts(part))
+            continue
+        if part.geom_type not in {"LineString", "LinearRing"}:
+            continue
+        xy = shapely.get_coordinates(part)
+        segments.extend(pairwise(xy))
+    result = np.asarray(segments, dtype=np.float64).reshape(-1, 2, 2)
+    return result[np.any(result[:, 0] != result[:, 1], axis=1)]

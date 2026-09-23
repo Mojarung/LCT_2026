@@ -22,6 +22,7 @@ from scipy.spatial import KDTree
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.placement import MODE_LABELS
+from green.application.quality.coverage import measure_crowns
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
@@ -625,49 +626,26 @@ def canopy(
 
 def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
     """Доля бортов под кронами, взвешенная газоустойчивостью вида (0-2 -> 0-1)."""
-    points = site.curb_points
-    if not len(points):
+    if not len(site.curb_segments):
         return layout.empty("бортов в границе работ нет: пылезащиту мерить не по чему")
     target = params.dust_target
     weight = np.array([p.species.gas_tolerance / 2 for p in layout.placements], dtype=np.float64)
-    best = np.zeros(len(points))
-    second = np.zeros(len(points))
-    owner = np.full(len(points), -1, dtype=np.int64)
-    reach = np.zeros(layout.size, dtype=np.int64)
-    if layout.size:
-        tree = KDTree(layout.xy)
-        hits = tree.query_ball_point(points, float(layout.radius.max()))
-        for m, candidates in enumerate(hits):
-            if not candidates:
-                continue
-            near = np.array(candidates, dtype=np.int64)
-            distance = np.hypot(*(layout.xy[near] - points[m]).T)
-            near = near[distance <= layout.radius[near]]
-            if not len(near):
-                continue
-            reach[near] += 1
-            values = weight[near]
-            order = np.argsort(-values, kind="stable")
-            best[m] = values[order[0]]
-            owner[m] = near[order[0]]
-            second[m] = values[order[1]] if len(order) > 1 else 0.0
-    total = float(best.sum())
-    count = len(points)
+    coverage = measure_crowns(site.curb_segments, layout.xy, layout.radius, weight)
+    total, count = coverage.weighted_m, coverage.length_m
     share = total / count
     score = min(1.0, share / target)
-    loss = np.zeros(layout.size)
-    np.add.at(loss, owner[owner >= 0], (best - second)[owner >= 0])
-    deltas = score - np.minimum(1.0, (total - loss) / count / target)
-    covered = int((owner >= 0).sum())
+    deltas = score - np.minimum(1.0, (total - coverage.loss_m) / count / target)
+    covered = coverage.covered_m
     details = [
-        f"крона прикрывает {int(reach[i])} м борта, газоустойчивость {p.species.gas_tolerance} из 2"
-        if reach[i]
+        f"крона прикрывает {coverage.reach_m[i]:.1f} м борта, "
+        f"газоустойчивость {p.species.gas_tolerance} из 2"
+        if coverage.reach_m[i]
         else ""
         for i, p in enumerate(layout.placements)
     ]
     note = (
-        f"под кронами {covered} м бортов из {count} ({covered / count:.0%}), с поправкой на "
-        f"газоустойчивость {share:.0%} при цели {target:.0%}"
+        f"под кронами {covered:.1f} м бортов из {count:.1f} ({covered / count:.0%}), "
+        f"с поправкой на газоустойчивость {share:.0%} при цели {target:.0%}"
     )
     measure = {"curb_m": count, "covered_m": covered, "share": round(share, 4)}
     return TermResult(score, note, deltas, details, measure)

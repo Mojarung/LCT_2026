@@ -81,3 +81,12 @@
 [surface-topology.md](surface-topology.md). Сравнение политик:
 `surface_topology_comparison.json`; локальная проверка топологии:
 `surface_face_survey.json`.
+
+Актуальная проверка роли границ E23: `surface_boundary_roles_comparison.json` и
+`surface_boundary_roles_survey.json`. Предыдущие файлы оставлены как история.
+Сквозная матрица E24: `universal_dxf.json` — 72 представления одной заданной улицы,
+включая неизвестные имена, вложенность, отражение, единицы и кодировки.
+Сравнение всех полных вариантов и устойчивости качества E25:
+`universal_portfolio.json`; снимок до исправления покрытия бортов —
+`universal_portfolio_before_coverage.json`. Это проверки заданных конструкций,
+а не точность распознавания незнакомых реальных улиц.
