@@ -144,7 +144,7 @@ class _Walker:
         self.visited[kind] += 1
 
         if kind in _TEXT_ENTITIES:
-            self._label(entity, ref, layer)
+            self._label(entity, ref, layer, parent_block, chain)
         elif kind == "INSERT":
             self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
@@ -257,7 +257,14 @@ class _Walker:
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
         self.skipped[f"VIRTUAL:{entity.dxftype()}:{reason}"] += 1
 
-    def _label(self, entity: DXFGraphic, ref: SourceRef, layer: str) -> None:
+    def _label(
+        self,
+        entity: DXFGraphic,
+        ref: SourceRef,
+        layer: str,
+        block: str | None,
+        chain: tuple[str, ...],
+    ) -> None:
         is_mtext = entity.dxftype() == "MTEXT"
         text = entity.plain_text() if is_mtext else entity.dxf.text  # ty: ignore[unresolved-attribute]
         point = entity.dxf.insert
@@ -265,7 +272,15 @@ class _Walker:
             point = entity.ocs().to_wcs(point)
         if text and text.strip():
             self.labels.append(
-                TextLabel(ref=ref, layer=layer, x=point.x, y=point.y, text=text.strip())
+                TextLabel(
+                    ref=ref,
+                    layer=layer,
+                    x=point.x,
+                    y=point.y,
+                    text=text.strip(),
+                    block=block,
+                    block_chain=chain,
+                )
             )
 
     def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type

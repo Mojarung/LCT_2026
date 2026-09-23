@@ -23,6 +23,20 @@
     </label>
     <button type="button" id="review-assign" disabled>Назначить класс</button>
     <button type="button" id="review-reset" disabled>Отменить своё назначение</button>
+    <label><input id="review-labels-visible" type="checkbox" checked> Подписи с номерами</label>
+    <label>Номер подписи на карте (0 — не выбрана)
+      <input id="review-label-index" type="number" min="0" value="0" step="1" disabled>
+    </label>
+    <pre id="review-label-detail"></pre>
+    <label>Роль выбранной подписи
+      <select id="review-label-role">
+        <option value="ignore">Не использовать для покрытия</option>
+        <option value="soil">Обозначает грунт / газон</option>
+        <option value="paved">Обозначает твёрдое покрытие</option>
+      </select>
+    </label>
+    <button type="button" id="review-label-assign" disabled>Назначить роль подписи</button>
+    <button type="button" id="review-label-reset" disabled>Отменить роль подписи</button>
     <button type="button" id="review-show" disabled>Показать JSON для повторного прогона</button>
     <label id="review-output-label" hidden>JSON уточнений
       <textarea id="review-output" readonly rows="8"></textarea>

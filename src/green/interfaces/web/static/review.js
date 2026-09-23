@@ -3,13 +3,15 @@ const root = document.querySelector('.input-review');
 const id = root.dataset.runId;
 const $ = name => document.getElementById(`review-${name}`);
 const canvas = $('canvas'), ctx = canvas.getContext('2d');
-let data, report, record, groups, paths, groupPaths, assignments = {};
+let data, report, record, groups, paths, groupPaths, assignments = {}, labelAssignments = {};
 let view = { x: 0, y: 0, scale: 1 }, drawing = false, drag;
 const UNKNOWN = new Set(['unknown', 'utility.unknown']);
+const LABEL_ROLES = {auto: 'по тексту и контексту', ignore: 'не использовать для покрытия', soil: 'грунт / газон', paved: 'твёрдое покрытие'};
 const EVIDENCE_NAMES = {
   unmatched: 'имя не распознано', conflict: 'правила противоречат друг другу',
   material_context: 'требуется уточнить материал и стадию работ', name_rule: 'совпало правило имени',
   explicit_feature: 'объект уточнён', explicit_layer: 'слой уточнён', explicit_block: 'блок уточнён',
+  annotation_label: 'подпись оформления', explicit_label: 'роль подписи уточнена',
 };
 const CLASS_NAMES = {
   'utility.water': 'Водопровод', 'utility.sewer': 'Канализация',
@@ -59,6 +61,10 @@ function selected() {
   if (n === 0) return indices;
   return Number.isInteger(n) && n > 0 && n <= indices.length ? [indices[n - 1]] : [];
 }
+function selectedLabel() {
+  const n = Number($('label-index').value);
+  return Number.isInteger(n) && n > 0 ? data.labels?.[n - 1] : null;
+}
 function bounds(indices) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const i of indices) {
@@ -95,12 +101,24 @@ function draw() {
       ctx.strokeStyle = '#c41c2e'; ctx.lineWidth = 3 / view.scale;
       selected().forEach(i => ctx.stroke(paths[i]));
     }
+    if ($('labels-visible').checked) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = '11px sans-serif';
+      const selectedText = selectedLabel();
+      (data.labels || []).forEach((label, i) => {
+        if (!Number.isFinite(label.x) || !Number.isFinite(label.y)) return;
+        const x = rect.width / 2 + (label.x - view.x) * view.scale;
+        const y = rect.height / 2 - (label.y - view.y) * view.scale;
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+        ctx.fillStyle = selectedText === label ? '#173eca' : '#384f43';
+        ctx.fillText(`${i + 1}: ${label.text.slice(0, 80)}`, x + 4, y - 4);
+      });
+    }
   });
 }
 function refresh() {
   const indices = selected(), group = report.groups[Number($('group').value)];
   $('object').max = members().length;
-  $('evidence').textContent = `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}.`;
+  $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}.` : 'Геометрических объектов нет.';
   const current = indices.length === 1 ? data.features[indices[0]] : null;
   $('detail').textContent = current
     ? `${current.id}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\nРезерв геометрии, м: ${current.properties.error_m}`
@@ -111,6 +129,12 @@ function refresh() {
   $('assign').textContent = `Назначить класс (${indices.length} объектов)`;
   $('assign').disabled = !indices.length;
   $('reset').disabled = !indices.length;
+  const label = selectedLabel();
+  $('label-assign').disabled = !label;
+  $('label-reset').disabled = !label;
+  $('label-detail').textContent = label
+    ? `${label.text}\n${label.id}\n${label.layer}\n${(label.block_chain || []).join(' / ')}\nРоль: ${LABEL_ROLES[labelAssignments[label.id] || label.surface_role]}. Основание: ${labelAssignments[label.id] ? 'назначено вами' : (EVIDENCE_NAMES[label.evidence?.method] || label.evidence?.method || 'не уточнено')}.`
+    : `Подписей: ${(data.labels || []).length}. На карте показаны номер и первые 80 символов; здесь — полный текст выбранной подписи.`;
   if (!$('output-label').hidden) $('output').value = reviewJSON();
   draw();
 }
@@ -127,15 +151,40 @@ $('assign').addEventListener('click', () => {
 $('reset').addEventListener('click', () => {
   selected().forEach(i => { delete assignments[data.features[i].id]; }); refresh();
 });
+$('labels-visible').addEventListener('change', draw);
+$('label-index').addEventListener('input', refresh);
+$('label-index').addEventListener('change', () => {
+  const label = selectedLabel();
+  if (label && Number.isFinite(label.x) && Number.isFinite(label.y)) {
+    view.x = label.x; view.y = label.y;
+    view.scale = Math.max(view.scale, canvas.getBoundingClientRect().width / 60); draw();
+  }
+});
+$('label-assign').addEventListener('click', () => {
+  const label = selectedLabel();
+  if (label) labelAssignments[label.id] = $('label-role').value;
+  refresh();
+});
+$('label-reset').addEventListener('click', () => {
+  const label = selectedLabel();
+  if (label) delete labelAssignments[label.id];
+  refresh();
+});
 function reviewJSON() {
   // Preserve non-semantic parameters. Exact refs replace broad layer/block maps.
   const values = {...record.overrides};
   delete values.layer_classes; delete values.block_classes; delete values.feature_classes;
+  delete values.label_roles;
   const explicit = {};
   for (const f of data.features) {
     if (report.groups[f.properties.group].evidence.method.startsWith('explicit_')) explicit[f.id] = f.properties.class;
   }
   values.feature_classes = {...explicit, ...assignments};
+  const explicitLabels = {};
+  for (const label of data.labels || []) {
+    if (label.evidence?.method === 'explicit_label') explicitLabels[label.id] = label.surface_role;
+  }
+  values.label_roles = {...explicitLabels, ...labelAssignments};
   values.semantic_source_sha256 = data.source_sha256;
   values.require_known_objects = true;
   return JSON.stringify(values, null, 2) + '\n';
@@ -186,7 +235,9 @@ try {
     option.textContent = `${g.layer} · ${g.geometry} · ${g.features} · ${CLASS_NAMES[g.object_class]}`;
     $('group').append(option);
   });
-  for (const name of ['group', 'object', 'assign', 'reset', 'show', 'download']) $(name).disabled = !data.features.length;
-  if (data.features.length) { refresh(); fit(selected()); }
-  else $('status').textContent = 'Геометрических объектов нет. Проверьте неприменённые назначения в отчёте.';
+  for (const name of ['group', 'object', 'assign', 'reset']) $(name).disabled = !data.features.length;
+  for (const name of ['show', 'download']) $(name).disabled = !data.features.length && !data.labels?.length;
+  $('label-index').disabled = !data.labels?.length;
+  $('label-index').max = data.labels?.length || 0;
+  refresh(); fit(selected());
 } catch (error) { $('status').textContent = error.message; }

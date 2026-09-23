@@ -347,11 +347,13 @@ def _seeds(
     xy: list[tuple[float, float]] = []
     kind: list[int] = []
     for label in labels:
+        if label.surface_role == "ignore":
+            continue
         text = label.text.strip().upper().rstrip(".")
-        if text in PAVED_LABELS:
+        if label.surface_role == "paved" or (label.surface_role == "auto" and text in PAVED_LABELS):
             xy.append((label.x, label.y))
             kind.append(int(Material.PAVED))
-        elif text in SOIL_LABELS:
+        elif label.surface_role == "soil" or (label.surface_role == "auto" and text in SOIL_LABELS):
             xy.append((label.x, label.y))
             kind.append(int(Material.SOIL))
     trees = [f.geometry for f in features if f.object_class is ObjectClass.EXISTING_TREE]

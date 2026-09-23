@@ -57,6 +57,8 @@ class PlanParams:
     layer_classes: Mapping[str, str] = field(default_factory=dict)
     block_classes: Mapping[str, str] = field(default_factory=dict)
     feature_classes: Mapping[str, str] = field(default_factory=dict)
+    # Exact text source refs; supports custom legends without broad layer guesses.
+    label_roles: Mapping[str, str] = field(default_factory=dict)
     allow_needs_approval: bool = True
     label_search_radius_m: float = 3.0
     max_rejections: int = 2000

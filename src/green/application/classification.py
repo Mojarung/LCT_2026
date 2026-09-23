@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -12,41 +10,16 @@ from typing import TYPE_CHECKING
 from shapely.geometry import Point
 
 from green.application.errors import InputError
+from green.application.semantic_names import local_name, material_context_requires_review, name_key
+from green.application.surface_labels import classify_labels, label_report_groups
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
 if TYPE_CHECKING:
+    import re
     from pathlib import Path
 
     from green.application.params import PlanParams
-
-
-def name_key(value: str) -> str:
-    """CAD names are case-insensitive; Unicode spelling must not change a decision."""
-    return unicodedata.normalize("NFC", value).casefold()
-
-
-def local_name(value: str) -> str:
-    """XREF filenames are namespaces, not semantic labels of their children."""
-    return re.split(r"\||\$\d+\$", unicodedata.normalize("NFC", value))[-1]
-
-
-# Detect reasons to ask for a per-input assignment, never to grant soil. This is
-# deliberately not a universal construction-language parser: unseen wording
-# remains an explicit limitation of automatic name rules.
-_MATERIAL_CONTEXT = re.compile(
-    r"\b(?:за|вместо|на месте|не|нет|без)\b|"
-    r"\b(?:демонт|уничтож|снос|проектир|восстан|устройств|замен|новый|нового|новая|новое)|"
-    r"\b(?:proposed|demolition|remove|removed|replace|replacement|new|not)\b|"
-    r"\bгазон\s+[ру]\b|\bдв гп п газон\b",
-    re.IGNORECASE,
-)
-
-
-def material_context_requires_review(*names: str | None) -> bool:
-    """Work/negation wording cannot establish the material of a planting area."""
-    return any(
-        _MATERIAL_CONTEXT.search(re.sub(r"[_\-]+", " ", local_name(name))) for name in names if name
-    )
+    from green.application.surface_labels import LabelGroup
 
 
 class MatchTarget(StrEnum):
@@ -167,7 +140,8 @@ def classify_scene(
         LayerCoverage(layer=layer, object_class=cls, features=n)
         for (layer, cls), n in sorted(counts.items(), key=lambda item: (item[0][0], item[0][1]))
     )
-    return replace(scene, features=tuple(classified)), coverage
+    labels = classify_labels(scene.labels, layer_map, params.label_roles if params else {})
+    return replace(scene, features=tuple(classified), labels=labels), coverage
 
 
 def _classify_feature(
@@ -265,8 +239,12 @@ class ClassificationReport:
     groups: tuple[ClassificationGroup, ...]
     rules: tuple[RuleDescription, ...]
     unused_overrides: tuple[str, ...]
+    labels: int = 0
+    excluded_surface_labels: int = 0
+    label_groups: tuple[LabelGroup, ...] = ()
     scope: str = (
-        "Semantic assignments of imported geometry only. Name matches and explicit assignments "
+        "Semantic assignments of imported geometry and label roles only. "
+        "Name matches and explicit assignments "
         "are assumptions, not measured accuracy or evidence that the survey is complete. "
         "seen_in_pilot records historical observation, not confirmation for this drawing. "
         "Reference samples contain at most five objects per group."
@@ -310,6 +288,12 @@ def classification_report(
         for key in getattr(params, f"{target}_classes", {})
         if name_key(key) not in names
     )
+    label_refs = {name_key(str(label.ref)) for label in scene.labels}
+    unused += tuple(
+        f"label_roles:{key}"
+        for key in getattr(params, "label_roles", {})
+        if name_key(key) not in label_refs
+    )
     return ClassificationReport(
         source_sha256=scene.source_sha256,
         layer_map_fingerprint=layer_map.fingerprint,
@@ -333,6 +317,9 @@ def classification_report(
             for i, r in enumerate(layer_map.rules)
         ),
         unused_overrides=unused,
+        labels=len(scene.labels),
+        excluded_surface_labels=sum(label.surface_role == "ignore" for label in scene.labels),
+        label_groups=label_report_groups(scene.labels),
     )
 
 

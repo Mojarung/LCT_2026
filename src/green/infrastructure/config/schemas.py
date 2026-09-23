@@ -230,6 +230,7 @@ class ProfileModel(_Strict):
     layer_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     block_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     feature_classes: dict[str, ObjectClass] = Field(default_factory=dict)
+    label_roles: dict[str, Literal["soil", "paved", "ignore"]] = Field(default_factory=dict)
     allow_needs_approval: bool = True
     label_search_radius_m: float = Field(default=3.0, gt=0, le=20)
     max_rejections: int = Field(default=2000, ge=0, le=100_000)

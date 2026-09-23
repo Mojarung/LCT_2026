@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import orjson
@@ -53,6 +54,20 @@ def save_review_geometry(
                 },
             }
             for f in scene.features
+        ],
+        "labels": [
+            {
+                "id": str(label.ref),
+                "layer": label.layer,
+                "block": label.block,
+                "block_chain": label.block_chain,
+                "x": label.x,
+                "y": label.y,
+                "text": label.text,
+                "surface_role": label.surface_role,
+                "evidence": asdict(label.surface_evidence) if label.surface_evidence else None,
+            }
+            for label in scene.labels
         ],
     }
     geometry = directory / "semantic-review.geojson"

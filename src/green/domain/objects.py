@@ -139,6 +139,11 @@ class TextLabel:
     x: float
     y: float
     text: str
+    block: str | None = None
+    # Only surface inference uses this role; utility diameter text is retained.
+    surface_role: str = "auto"
+    surface_evidence: ClassificationEvidence | None = None
+    block_chain: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
