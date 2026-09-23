@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Уточнение объектов — {{ run.source_name }}{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="/static/review.css?v={{ version }}">
+<link rel="stylesheet" href="/static/review.css?v={{ asset_versions['review.css'] }}">
 <div class="input-review" data-run-id="{{ run.run_id }}">
   <section class="review-controls" aria-label="Уточнение объектов">
     <a href="/runs/{{ run.run_id }}">← К прогону</a>
@@ -62,4 +62,4 @@
   </section>
 </div>
 {% endblock %}
-{% block scripts %}<script type="module" src="/static/review.js?v={{ version }}"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/review.js?v={{ asset_versions['review.js'] }}"></script>{% endblock %}

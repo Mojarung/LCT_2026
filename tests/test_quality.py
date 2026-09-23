@@ -14,6 +14,7 @@ from green.application.placement import MODE_LABELS
 from green.application.quality import Site, assess, evaluate, site_of
 from green.application.quality.site import street_length
 from green.application.quality.terms import fork
+from green.application.validation import validate_plan
 from green.domain.norms import PlantingType, RuleBook
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.domain.planting import (
@@ -299,3 +300,109 @@ def test_curb_under_a_gas_tolerant_crown_counts_for_dust() -> None:
     assert dust.score > 0
     # Липа в 2 м от борта с кроной радиусом 3 м прикрывает около 4 м борта.
     assert any("м борта" in r for r in quality.values["p-003"].reasons)
+
+
+def _counterfactual_plans() -> dict[str, Plan]:
+    a = _place(1, 12, 0, LIME, structure="row-1")
+    b = _place(2, 18, 0, MAPLE, structure="row-1")
+    c = _place(3, 40, 0, OAK, structure="single-2", note=LAWN)
+    assert a.assortment is not None
+    unique_options = replace(
+        a,
+        assortment=replace(
+            a.assortment,
+            alternatives=(Alternative("only-here", "only here", 50, "test"),),
+        ),
+    )
+    return {
+        "singleton": Plan((a,), ()),
+        "last_row": Plan((a, b, c), ()),
+        "last_alley": Plan((a, c), ()),
+        "last_fit": Plan((a, replace(c, assortment=None)), ()),
+        "last_margin": Plan((a, replace(c, checks=())), ()),
+        "last_season": Plan((a, replace(c, species=replace(OAK, decor_months=frozenset()))), ()),
+        "last_admissible": Plan((unique_options, replace(c, assortment=None)), ()),
+        "penalty_floor": Plan((replace(a, species=replace(LIME, allergen=1)),), ()),
+        "no_terms": Plan((a, b), ()),
+    }
+
+
+@pytest.mark.parametrize("scenario", list(_counterfactual_plans()))
+@pytest.mark.parametrize("weighted", ["default", "diversity", "rows", "season", "canopy", "none"])
+def test_removal_matches_full_recalculation_at_term_boundaries(
+    scenario: str, weighted: str
+) -> None:
+    plan, site = _counterfactual_plans()[scenario], _site()
+    weights = (
+        {}
+        if weighted == "default"
+        else {key: float(key == weighted) for key in DEFAULT_QUALITY_WEIGHTS}
+    )
+    params = replace(PARAMS, quality_weights=weights)
+    quality = evaluate(plan, site, params)
+    assert quality.index is not None
+    for placement in plan.placements:
+        after = evaluate(_without(plan, placement.placement_id), site, params)
+        assert after.index is not None
+        value = quality.values[placement.placement_id]
+        assert value.delta == pytest.approx(quality.index - after.index, abs=2e-6)
+        assert sum(value.by_term.values()) == pytest.approx(value.delta, abs=6e-6)
+
+
+def test_better_removal_score_is_not_permission_to_break_quotas() -> None:
+    species = [_species(f"s{i}", f"g{i}", f"f{i}", tree=False, crown=1.5) for i in range(5)]
+    placements = tuple(
+        _place(i + 1, 2 + 3 * (i % 9), 2 + 3 * (i // 9), species[i // 9], note=LAWN)
+        for i in range(45)
+    )
+    plan = Plan(placements, ())
+    boundary = box(0, 0, 30, 20)
+    features = [
+        Feature(SourceRef("f", "x", "b"), "b", boundary, object_class=ObjectClass.WORK_BOUNDARY),
+        Feature(SourceRef("f", "x", "s"), "s", boundary, object_class=ObjectClass.LAWN),
+    ]
+    params = replace(
+        PARAMS,
+        require_utility_data=False,
+        quality_weights={key: float(key == "density") for key in DEFAULT_QUALITY_WEIGHTS},
+    )
+    rules = RuleBook(acts={}, distance_rules=(), fingerprint="counterfactual")
+    assert validate_plan(plan, features, [], rules, params, catalog=species).ok
+    quality = evaluate(plan, site_of(features), params)
+    removed = placements[0].placement_id
+    assert quality.values[removed].delta < 0
+    invalid = validate_plan(_without(plan, removed), features, [], rules, params, catalog=species)
+    assert {issue.code for issue in invalid.issues} == {"quota"}
+    assert "заново проверить квоты" in quality.values[removed].scope
+    assert "это не разрешение на удаление" in " ".join(quality.summary)
+    texts = explain(replace(plan, quality=quality), rules).explanations
+    assert all("заново проверить квоты" in e.text for e in texts)
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_removal_recalculation_on_mixed_subsets(seed: int) -> None:
+    rng = np.random.default_rng(seed)
+    source = _plan()
+    chosen = [p for p in source.placements if rng.random() < 0.5] or [source.placements[0]]
+    plan = replace(source, placements=tuple(chosen))
+    params = replace(
+        PARAMS,
+        quality_weights=dict(
+            zip(DEFAULT_QUALITY_WEIGHTS, rng.random(len(DEFAULT_QUALITY_WEIGHTS)), strict=True)
+        ),
+    )
+    quality = evaluate(plan, _site(), params)
+    assert quality.index is not None
+    for placement in chosen:
+        after = evaluate(_without(plan, placement.placement_id), _site(), params)
+        assert after.index is not None
+        assert quality.values[placement.placement_id].delta == pytest.approx(
+            quality.index - after.index, abs=2e-6
+        )
+
+
+def test_no_index_means_no_claim_about_its_change() -> None:
+    site = Site(boundary=None, curb_segments=np.zeros((0, 2, 2)))
+    quality = evaluate(_plan(), site, PARAMS)
+    assert quality.index is None
+    assert not quality.values

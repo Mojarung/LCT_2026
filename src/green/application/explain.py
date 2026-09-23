@@ -148,7 +148,10 @@ def describe_value(value: PlantingValue | None) -> str:
         return f" Ценность: вклад в индекс качества около нуля{why}."
     if value.delta < 0:
         higher = permille(-value.delta)[1:]
-        return f" Ценность: без этой посадки индекс качества выше на {higher}{why}."
+        return (
+            f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. "
+            f"{value.scope}"
+        )
     rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
     return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}."
 

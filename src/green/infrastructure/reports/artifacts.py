@@ -336,6 +336,7 @@ def _value(value: PlantingValue | None) -> dict[str, Any] | None:
         "percentile": value.percentile,
         "by_term": dict(value.by_term),
         "reasons": list(value.reasons),
+        "scope": value.scope,
     }
 
 

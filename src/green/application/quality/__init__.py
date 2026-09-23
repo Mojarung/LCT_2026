@@ -150,7 +150,11 @@ def evaluate(plan: Plan, site: Site, params: PlanParams) -> PlanQuality:
         )
         for key, result in results.items()
     )
-    values = _values(plan, results, share, penalty_deltas, penalty_flags)
+    values = (
+        _values(plan, results, share, penalty_deltas, penalty_flags, unclipped=raw - penalty)
+        if index is not None
+        else {}
+    )
     summary = _summary(index, gate, terms, penalties, values)
     return PlanQuality(
         index=None if index is None else round(index, 6),
@@ -217,18 +221,36 @@ def _penalties(
     return penalties, deltas, reasons
 
 
-def _values(
+def _values(  # noqa: PLR0913 - term and penalty decomposition of the counterfactual
     plan: Plan,
     results: dict[str, TermResult],
     share: dict[str, float],
     penalty_deltas: NDArray[np.float64],
     penalty_flags: list[list[str]],
+    *,
+    unclipped: float,
 ) -> dict[str, PlantingValue]:
     n = len(plan.placements)
     if not n:
         return {}
-    by_term = {key: share[key] * results[key].deltas for key in share}
-    delta = sum(by_term.values(), np.zeros(n)) - penalty_deltas
+    # A disappearing term loses its weight; the remaining terms are normalised
+    # exactly as in evaluate(). No N full geometric evaluations are necessary.
+    remaining = {}
+    for key, weight in share.items():
+        undefined = results[key].undefined_without
+        remaining[key] = (
+            np.where(undefined, 0.0, weight) if undefined is not None else np.full(n, weight)
+        )
+    totals = sum(remaining.values(), np.zeros(n))
+    by_term = {}
+    for key, weights in remaining.items():
+        after_weight = np.divide(weights, totals, out=np.zeros(n), where=totals > 0)
+        score = results[key].score or 0.0
+        by_term[key] = share[key] * score - after_weight * (score - results[key].deltas)
+    raw_delta = sum(by_term.values(), np.zeros(n)) - penalty_deltas
+    delta = np.clip(unclipped, 0.0, 1.0) - np.clip(unclipped - raw_delta, 0.0, 1.0)
+    # Keep the decomposition additive when either index reaches its 0..1 bound.
+    by_term["index_bounds"] = delta - raw_delta
     ranks = np.argsort(np.argsort(delta, kind="stable"), kind="stable")
     values: dict[str, PlantingValue] = {}
     for i, placement in enumerate(plan.placements):
@@ -293,11 +315,11 @@ def _summary(
         )
         gains = sorted(scored, key=lambda t: -t.weight * (1 - (t.score or 0.0)))[:2]
         lines.append(
-            "Больше всего поднимет индекс: "
+            "Резерв при максимальной оценке отдельного показателя: "
             + "; ".join(
                 f"{t.title.lower()} - до +{_num(t.weight * (1 - (t.score or 0.0)))}" for t in gains
             )
-            + "."
+            + ". Совместная достижимость этих прибавок не проверена."
         )
     missing = [t for t in terms if t.score is None]
     if missing:
@@ -313,8 +335,9 @@ def _summary(
     harmful = sum(1 for v in values.values() if v.delta < -_EPS)
     if harmful:
         lines.append(
-            f"Посадок с отрицательным вкладом: {harmful}. Без них индекс выше: это кандидаты "
-            "на перенос, замену вида или удаление."
+            f"Посадок с отрицательным вкладом: {harmful}. Удаление каждой по отдельности "
+            "повышает расчётный индекс; это не разрешение на удаление. Нужно заново "
+            "проверить квоты и остальные ограничения. Эффекты удалений не складываются."
         )
     return tuple(lines)
 

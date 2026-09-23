@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -25,6 +26,13 @@ from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.intake import accept_run, accept_street_run, parse_overrides
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+# Releases may keep the package version while their frontend changes. Bind asset
+# URLs to content so a browser cannot reuse an explanation from an older build.
+ASSET_VERSIONS = {
+    name: hashlib.sha256((Path(__file__).parent / "static" / name).read_bytes()).hexdigest()[:12]
+    for name in ("app.css", "review.css", "plan.js", "review.js")
+}
+TEMPLATES.env.globals["asset_versions"] = ASSET_VERSIONS  # ty: ignore[invalid-assignment]
 RECENT_LIMIT = 12
 
 #: Файлы, ради которых прогон и запускали. Остальные одиннадцать - служебные: в плоском

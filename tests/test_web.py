@@ -7,6 +7,7 @@ Linux-стенд без интернета, и одна ссылка на CDN, �
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
@@ -19,7 +20,7 @@ from green.application.results import RunState
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.interfaces.api.app import create_app
-from green.interfaces.web.pages import plural
+from green.interfaces.web.pages import ASSET_VERSIONS, plural
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -60,6 +61,15 @@ def test_static_files_are_served(client: TestClient) -> None:
     for name in ("app.css", "plan.js"):
         response = client.get(f"/static/{name}")
         assert response.status_code == 200, name
+
+
+def test_frontend_cache_keys_follow_content_instead_of_package_version(client: TestClient) -> None:
+    for name in ("app.css", "review.css", "plan.js", "review.js"):
+        body = client.get(f"/static/{name}").content
+        digest = hashlib.sha256(body).hexdigest()[:12]
+        assert ASSET_VERSIONS[name] == digest
+    html = client.get("/").text
+    assert f'/static/app.css?v={ASSET_VERSIONS["app.css"]}' in html
 
 
 def test_unknown_run_page_is_not_found(client: TestClient) -> None:

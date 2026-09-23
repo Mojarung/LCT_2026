@@ -1155,12 +1155,13 @@ function valueBlock(value) {
     ? ` Больше, чем у ${Math.round(value.percentile * 100)}% посадок плана.`
     : '';
   const worse = permille < 0 && !zero;
-  const head = worse ? 'Без этой посадки план лучше' : 'Чем ценна посадка';
+  const head = worse ? 'Отрицательный вклад в оценку' : 'Чем ценна посадка';
   const line = zero
     ? 'Вклад в индекс качества около нуля.'
     : `Вклад в индекс качества <b>${shown}</b>.${rank}`;
   return `<h3 class="detail-heading">${head}</h3>
     <p class="value-delta${worse ? ' bad' : ''}">${line}</p>
+    <p class="hint">${escape(value.scope || 'Перед удалением нужно заново проверить квоты видов и остальные ограничения; вклады не складываются.')}</p>
     ${reasons ? `<ul class="value-reasons">${reasons}</ul>` : ''}`;
 }
 

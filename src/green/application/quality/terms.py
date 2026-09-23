@@ -5,8 +5,8 @@
 раз, а локально - сдвиг счётчика вида, уникальная площадь кроны, соседи по ряду. Совпадение с
 прямым пересчётом проверяет tests/test_quality.py.
 
-Если после удаления слагаемое перестаёт быть определённым (из ряда в два дерева убрали
-одно), его оценка без посадки считается нулём: вес слагаемых при удалении не перераспределяется.
+Если после удаления слагаемое перестаёт быть определённым, undefined_without помечает
+такую посадку. Сборщик индекса перераспределяет веса так же, как при полном пересчёте.
 """
 
 from __future__ import annotations
@@ -74,6 +74,7 @@ class TermResult:
     deltas: NDArray[np.float64]
     details: list[str]
     measure: dict[str, float] = field(default_factory=dict)
+    undefined_without: NDArray[np.bool_] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +229,10 @@ def tiers(layout: Layout) -> TermResult:
     for s, count in under.items():
         details[s] = f"нижний ярус под кронами деревьев аллеи: {count}"
     note = f"под кронами {covered} из {total} деревьев аллеи есть кустарник"
-    return TermResult(score, note, deltas, details, {"alley_trees": total, "covered": covered})
+    undefined = np.array([total == 1 and i in alley for i in range(layout.size)], dtype=bool)
+    return TermResult(
+        score, note, deltas, details, {"alley_trees": total, "covered": covered}, undefined
+    )
 
 
 # --- Ряды: один вид и ровный шаг --------------------------------------------------------
@@ -273,7 +277,12 @@ def rows(layout: Layout, params: PlanParams) -> TermResult:
         f"{len(groups)} рядов, {total} посадок; шагов в вилке {low:g}-{high:g} м: "
         f"{in_band} из {gaps}"
     )
-    return TermResult(score, note, deltas, details, {"rows": len(groups), "gaps_in_band": in_band})
+    undefined = np.zeros(layout.size, dtype=bool)
+    if len(groups) == 1 and total == 2:  # noqa: PLR2004 - единственный ряд из двух посадок
+        undefined[next(iter(groups.values()))] = True
+    return TermResult(
+        score, note, deltas, details, {"rows": len(groups), "gaps_in_band": in_band}, undefined
+    )
 
 
 def _row_order(layout: Layout, ids: list[int]) -> list[int]:
@@ -332,10 +341,22 @@ def diversity(layout: Layout, params: PlanParams) -> TermResult:
         return layout.empty("посадок нет")
     placements = layout.placements
     counts = Counter(p.species.code for p in placements)
-    admissible = set(counts) | {
-        a.code for p in placements if p.assortment is not None for a in p.assortment.alternatives
-    }
+    options = [
+        {p.species.code} | {a.code for a in p.assortment.alternatives}
+        if p.assortment is not None
+        else {p.species.code}
+        for p in placements
+    ]
+    occurrences = Counter(code for codes in options for code in codes)
+    admissible = set(occurrences)
     target = max(1, min(params.diversity_target, len(admissible)))
+    targets_without = [
+        max(
+            1,
+            min(params.diversity_target, len(admissible) - sum(occurrences[c] == 1 for c in codes)),
+        )
+        for codes in options
+    ]
     populations = _populations(layout, params)
 
     def score_of(removed: int | None) -> tuple[float, float, float]:
@@ -343,17 +364,18 @@ def diversity(layout: Layout, params: PlanParams) -> TermResult:
         if removed is not None:
             tally[placements[removed].species.code] -= 1
         n = sum(tally.values())
-        richness = min(1.0, _effective(tally.values(), n) / target) if n else 0.0
+        local_target = target if removed is None else targets_without[removed]
+        richness = min(1.0, _effective(tally.values(), n) / local_target) if n else 0.0
         fits = [(pop.size_without(removed), pop.fit(removed)) for pop in populations]
         weight = sum(size for size, _ in fits)
         quota = sum(size * fit for size, fit in fits) / weight if weight else 1.0
         return 0.5 * richness + 0.5 * quota, richness, quota
 
     score, richness, quota = score_of(None)
-    cache: dict[tuple[str, bool], float] = {}
+    cache: dict[tuple[str, bool, int], float] = {}
     deltas = np.zeros(layout.size)
     for i, p in enumerate(placements):
-        key = (p.species.code, bool(layout.is_tree[i]))
+        key = (p.species.code, bool(layout.is_tree[i]), targets_without[i])
         if key not in cache:
             cache[key] = score - score_of(i)[0]
         deltas[i] = cache[key]
@@ -372,7 +394,9 @@ def diversity(layout: Layout, params: PlanParams) -> TermResult:
         "richness": round(richness, 4),
         "quota_fit": round(quota, 4),
     }
-    return TermResult(score, note, deltas, details, measure)
+    return TermResult(
+        score, note, deltas, details, measure, np.full(layout.size, layout.size == 1, dtype=bool)
+    )
 
 
 def _effective(values: Iterable[int], n: int) -> float:
@@ -470,18 +494,19 @@ def _diversity_phrase(layout: Layout, i: int, populations: list[_Population]) ->
 
 def _mean_term(
     values: list[float | None], note: Callable[[float], str], measure_key: str
-) -> tuple[float | None, NDArray[np.float64], str, dict[str, float]]:
+) -> tuple[float | None, NDArray[np.float64], str, dict[str, float], NDArray[np.bool_]]:
     defined = [v for v in values if v is not None]
     deltas = np.zeros(len(values))
+    undefined = np.array([v is not None and len(defined) == 1 for v in values], dtype=bool)
     if not defined:
-        return None, deltas, "", {}
+        return None, deltas, "", {}, undefined
     total, count = sum(defined), len(defined)
     score = total / count
     for i, value in enumerate(values):
         if value is None:
             continue
         deltas[i] = score - ((total - value) / (count - 1) if count > 1 else 0.0)
-    return score, deltas, note(score), {measure_key: round(score, 4)}
+    return score, deltas, note(score), {measure_key: round(score, 4)}, undefined
 
 
 def fit(layout: Layout) -> TermResult:
@@ -489,7 +514,7 @@ def fit(layout: Layout) -> TermResult:
     values: list[float | None] = [
         p.assortment.percent / 100 if p.assortment is not None else None for p in layout.placements
     ]
-    score, deltas, note, measure = _mean_term(
+    score, deltas, note, measure, undefined = _mean_term(
         values, lambda s: f"средняя пригодность вида месту {s:.0%}", "mean"
     )
     if score is None:
@@ -498,7 +523,7 @@ def fit(layout: Layout) -> TermResult:
         f"пригодность вида месту {p.assortment.percent}%" if p.assortment is not None else ""
         for p in layout.placements
     ]
-    return TermResult(score, note, deltas, details, measure)
+    return TermResult(score, note, deltas, details, measure, undefined)
 
 
 def category(layout: Layout, params: PlanParams) -> TermResult:
@@ -507,7 +532,7 @@ def category(layout: Layout, params: PlanParams) -> TermResult:
     where = _CATEGORY_WHERE.get(key, key)
     marks = [p.species.categories.get(key, "") for p in layout.placements]
     values: list[float | None] = [_CATEGORY.get(mark, _CATEGORY_UNKNOWN) for mark in marks]
-    score, deltas, _, _ = _mean_term(values, str, "mean")
+    score, deltas, _, _, undefined = _mean_term(values, str, "mean")
     if score is None:
         return layout.empty("посадок нет")
     plus = sum(1 for mark in marks if mark == "plus")
@@ -522,7 +547,7 @@ def category(layout: Layout, params: PlanParams) -> TermResult:
         f"рекомендованы для {where} {plus} из {len(marks)} посадок; вида нет в табл. В.6: {unknown}"
     )
     measure = {"plus": plus, "unknown": unknown}
-    return TermResult(score, note, deltas, details, measure)
+    return TermResult(score, note, deltas, details, measure, undefined)
 
 
 def _m(value: float) -> str:
@@ -552,7 +577,7 @@ def margin(layout: Layout, params: PlanParams) -> TermResult:
     values: list[float | None] = [
         None if item is None else min(1.0, max(0.0, item[0] / target)) for item in found
     ]
-    score, deltas, note, measure = _mean_term(
+    score, deltas, note, measure, undefined = _mean_term(
         values, lambda s: f"средний запас до ближайшей нормы - {s:.0%} от цели {target:.0%}", "mean"
     )
     if score is None:
@@ -561,7 +586,7 @@ def margin(layout: Layout, params: PlanParams) -> TermResult:
         "" if item is None else f"запас до ближайшей нормы {item[0]:.0%}: {item[1]}"
         for item in found
     ]
-    return TermResult(score, note, deltas, details, measure)
+    return TermResult(score, note, deltas, details, measure, undefined)
 
 
 # --- Тень и пылезащита --------------------------------------------------------------------
@@ -690,7 +715,8 @@ def season(layout: Layout) -> TermResult:
             details[i] = f"единственная декоративная посадка в {', '.join(alone)}"
     active = int((base > 0).sum())
     note = f"декоративные посадки есть в {active} месяцах из 12"
-    return TermResult(score, note, deltas, details, {"months": active})
+    undefined = np.array([len(owned) == base.sum() for owned in months], dtype=bool)
+    return TermResult(score, note, deltas, details, {"months": active}, undefined)
 
 
 # --- Штрафы -------------------------------------------------------------------------------
