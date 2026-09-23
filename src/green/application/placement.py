@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Protocol
 import numpy as np
 import shapely
 
+from green.application.approximation import reserved_buffer
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.candidate_selection import SelectionProblem, select_candidates
 from green.application.constraints import ConstraintIndex, EvaluationBatch
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
     from shapely.geometry import LineString
+    from shapely.geometry.base import BaseGeometry
 
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
@@ -140,7 +142,9 @@ class GreedyPlantingStrategy:
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
         if MODE_ALLEY in params.modes:
-            candidates = _curb_candidates(_curb_lines(features), params)
+            reach = max((abs(offset) for offset in params.curb_offsets_m), default=0.0)
+            lines = _curb_lines(features, index.boundary, reach + _ROUNDING_PAIR_RESERVE_M)
+            candidates = _curb_candidates(lines, params)
             stats["alley_candidates"] = len(candidates)
             stats["alley_plantable"] = _offer(index, selector, candidates)
         if MODE_LAWN in params.modes and index.surface is not None:
@@ -254,7 +258,9 @@ def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candid
     return len(positions)
 
 
-def _curb_lines(features: Sequence[Feature]) -> list[LineString]:
+def _curb_lines(
+    features: Sequence[Feature], boundary: BaseGeometry | None = None, reach_m: float = 0.0
+) -> list[LineString]:
     parts = []
     for feature in features:
         if feature.object_class is not ObjectClass.CURB:
@@ -262,14 +268,44 @@ def _curb_lines(features: Sequence[Feature]) -> list[LineString]:
         geometry = feature.geometry
         if geometry.geom_type in {"Polygon", "MultiPolygon"}:
             geometry = geometry.boundary
-        parts.extend(p for p in shapely.get_parts(geometry) if p.geom_type == "LineString")
+        parts.extend(_linear_parts(geometry))
+    if not parts:
+        return []
+    if boundary is not None:
+        # A station farther away than every offered offset cannot plant inside
+        # the site. Clip before noding/merging so remote tails and junctions do
+        # not change phases or allocate arrays proportional to the whole city.
+        influence = reserved_buffer(boundary, reach_m)
+        parts = [
+            part
+            for clipped in shapely.intersection(parts, influence)
+            for part in _linear_parts(clipped)
+        ]
     if not parts:
         return []
     merged = shapely.line_merge(shapely.union_all(parts))
-    lines = [line for line in shapely.get_parts(merged) if line.length > 0]
+    lines = [_canonical_line(line) for line in _linear_parts(merged) if line.length > 0]
+    if not lines:
+        return []
     centroids = shapely.get_coordinates(shapely.centroid(lines))
     order = np.argsort(_z_order(centroids), kind="stable")
     return [lines[i] for i in order]
+
+
+def _linear_parts(geometry: BaseGeometry) -> list[LineString]:
+    if geometry.geom_type in {"LineString", "LinearRing"}:
+        return [] if geometry.is_empty else [geometry]
+    if geometry.geom_type in {"MultiLineString", "GeometryCollection"}:
+        return [line for part in shapely.get_parts(geometry) for line in _linear_parts(part)]
+    return []
+
+
+def _canonical_line(line: LineString) -> LineString:
+    if line.is_ring:
+        # A closed LineString has an arbitrary start vertex; polygon ring
+        # normalization also fixes that origin, without altering its geometry.
+        return shapely.LineString(shapely.normalize(shapely.Polygon(line)).exterior.coords)
+    return shapely.normalize(line)
 
 
 def _z_order(xy: NDArray[np.float64]) -> NDArray[np.uint64]:
@@ -290,6 +326,8 @@ def _z_order(xy: NDArray[np.float64]) -> NDArray[np.uint64]:
 def _curb_candidates(lines: list[LineString], params: PlanParams) -> list[_Candidate]:
     """Станции по борту с шагом посадки, на каждой все отступы профиля с обеих сторон."""
     candidates: list[_Candidate] = []
+    if not params.curb_offsets_m:
+        return candidates
     station = 0
     for line in lines:
         if line.length >= params.spacing_m:

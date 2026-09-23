@@ -1,0 +1,1201 @@
+{
+  "scope": "Three declared synthetic scenes at three angles; best complete plan among retained legacy and added soil-frame variants. Not recognition accuracy, rotation invariance of the full pipeline, or global aesthetic optimality.",
+  "rows": [
+    {
+      "case": "strip-0.0",
+      "source_sha256": "243c784812e43f16d92d2148c59f867e7fa021d3f2a75628b7106c6d1c7f589b",
+      "legacy_best": 0.525792,
+      "chosen": "phase_xy",
+      "index": 0.525792,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.511577,
+          "trees": 62,
+          "shrubs": 18,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.511577,
+          "trees": 62,
+          "shrubs": 18,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.505376,
+          "trees": 62,
+          "shrubs": 18,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.525792,
+          "trees": 62,
+          "shrubs": 18,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.47278,
+          "trees": 48,
+          "shrubs": 0,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.47278,
+          "trees": 48,
+          "shrubs": 0,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 1.5
+    },
+    {
+      "case": "strip-0.37",
+      "source_sha256": "057f3f0a263d4ea101b0c306e7d956578e34e413be4e80461b6727ebdf6839a2",
+      "legacy_best": 0.616182,
+      "chosen": "aligned",
+      "index": 0.616182,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.510508,
+          "trees": 63,
+          "shrubs": 8,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.510508,
+          "trees": 63,
+          "shrubs": 8,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.568708,
+          "trees": 61,
+          "shrubs": 48,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.531158,
+          "trees": 64,
+          "shrubs": 16,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984466,
+          "valid": true,
+          "quality_index": 0.616182,
+          "trees": 62,
+          "shrubs": 146,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984466,
+          "valid": true,
+          "quality_index": 0.616182,
+          "trees": 62,
+          "shrubs": 146,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984466,
+          "valid": true,
+          "quality_index": 0.498784,
+          "trees": 47,
+          "shrubs": 6,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984466,
+          "valid": true,
+          "quality_index": 0.498784,
+          "trees": 47,
+          "shrubs": 6,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.769
+    },
+    {
+      "case": "strip-0.83",
+      "source_sha256": "a5648e4b4e02ee7427ce088c74a1a2b5cc6a7f375537341d4dd317ea05ecf9f0",
+      "legacy_best": 0.554464,
+      "chosen": "phase_x",
+      "index": 0.554464,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.537808,
+          "trees": 64,
+          "shrubs": 16,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.537808,
+          "trees": 64,
+          "shrubs": 16,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.554464,
+          "trees": 64,
+          "shrubs": 24,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.516356,
+          "trees": 63,
+          "shrubs": 16,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.555496995859386,
+          "valid": true,
+          "quality_index": 0.51416,
+          "trees": 63,
+          "shrubs": 24,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.555496995859386,
+          "valid": true,
+          "quality_index": 0.51416,
+          "trees": 63,
+          "shrubs": 24,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.555496995859386,
+          "valid": true,
+          "quality_index": 0.488933,
+          "trees": 47,
+          "shrubs": 6,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.555496995859386,
+          "valid": true,
+          "quality_index": 0.488933,
+          "trees": 47,
+          "shrubs": 6,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.412
+    },
+    {
+      "case": "crossing-0.0",
+      "source_sha256": "6f15485c10b74f1f7193fad3db4ad7003537d21d70a25de48214cbd81e752c56",
+      "legacy_best": 0.578585,
+      "chosen": "aligned_joint",
+      "index": 0.578585,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.564845,
+          "trees": 43,
+          "shrubs": 105,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.544686,
+          "trees": 52,
+          "shrubs": 54,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.563675,
+          "trees": 42,
+          "shrubs": 104,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.565164,
+          "trees": 44,
+          "shrubs": 95,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 11.52612686215898,
+          "valid": true,
+          "quality_index": 0.56331,
+          "trees": 50,
+          "shrubs": 53,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 11.52612686215898,
+          "valid": true,
+          "quality_index": 0.578585,
+          "trees": 52,
+          "shrubs": 63,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 11.52612686215898,
+          "valid": true,
+          "quality_index": 0.56252,
+          "trees": 50,
+          "shrubs": 56,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 11.52612686215898,
+          "valid": true,
+          "quality_index": 0.572654,
+          "trees": 50,
+          "shrubs": 77,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.197
+    },
+    {
+      "case": "crossing-0.37",
+      "source_sha256": "e385f10f0f0c40f26dc09e4b1be362f8e1ed4aaa99a416253404b0a219b8519f",
+      "legacy_best": 0.584631,
+      "chosen": "aligned",
+      "index": 0.584631,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.569237,
+          "trees": 50,
+          "shrubs": 48,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.558656,
+          "trees": 50,
+          "shrubs": 50,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.559917,
+          "trees": 44,
+          "shrubs": 104,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.570985,
+          "trees": 43,
+          "shrubs": 112,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 32.72556528199531,
+          "valid": true,
+          "quality_index": 0.584631,
+          "trees": 42,
+          "shrubs": 80,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 32.72556528199531,
+          "valid": true,
+          "quality_index": 0.559823,
+          "trees": 50,
+          "shrubs": 42,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 32.72556528199531,
+          "valid": true,
+          "quality_index": 0.562676,
+          "trees": 50,
+          "shrubs": 48,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 32.72556528199531,
+          "valid": true,
+          "quality_index": 0.563816,
+          "trees": 50,
+          "shrubs": 61,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.294
+    },
+    {
+      "case": "crossing-0.83",
+      "source_sha256": "4a1a4858a3332cbc6aa22817a92063ba33718f78865ab4f80f24b358d2620a1e",
+      "legacy_best": 0.574544,
+      "chosen": "soil_frame_joint",
+      "index": 0.578259,
+      "gain": 0.003715,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.574544,
+          "trees": 50,
+          "shrubs": 56,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.566525,
+          "trees": 50,
+          "shrubs": 77,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.555399,
+          "trees": 43,
+          "shrubs": 112,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.554805,
+          "trees": 42,
+          "shrubs": 112,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 59.0816238580057,
+          "valid": true,
+          "quality_index": 0.565801,
+          "trees": 51,
+          "shrubs": 48,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 59.0816238580057,
+          "valid": true,
+          "quality_index": 0.566758,
+          "trees": 51,
+          "shrubs": 68,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 59.0816238580057,
+          "valid": true,
+          "quality_index": 0.566055,
+          "trees": 50,
+          "shrubs": 48,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 59.0816238580057,
+          "valid": true,
+          "quality_index": 0.578259,
+          "trees": 50,
+          "shrubs": 60,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.376
+    },
+    {
+      "case": "courtyard-0.0",
+      "source_sha256": "25824747979070fb39ba176cb7c34b8c1f02c827292759eb3f53291f4d8f6382",
+      "legacy_best": 0.557523,
+      "chosen": "soil_frame",
+      "index": 0.595969,
+      "gain": 0.038446,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.545811,
+          "trees": 22,
+          "shrubs": 234,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.495439,
+          "trees": 23,
+          "shrubs": 234,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.543927,
+          "trees": 23,
+          "shrubs": 234,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.557523,
+          "trees": 31,
+          "shrubs": 207,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.595969,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.595969,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 1.602
+    },
+    {
+      "case": "courtyard-0.37",
+      "source_sha256": "f30eea3c36b1da6bb5bbe154e3c9a5765f465f5f28cd74d711305130445c9516",
+      "legacy_best": 0.605768,
+      "chosen": "baseline",
+      "index": 0.605768,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.605768,
+          "trees": 30,
+          "shrubs": 168,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.605768,
+          "trees": 30,
+          "shrubs": 168,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.536636,
+          "trees": 24,
+          "shrubs": 229,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.53943,
+          "trees": 31,
+          "shrubs": 211,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984225,
+          "valid": true,
+          "quality_index": 0.55643,
+          "trees": 31,
+          "shrubs": 228,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984225,
+          "valid": true,
+          "quality_index": 0.53595,
+          "trees": 40,
+          "shrubs": 180,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984225,
+          "valid": true,
+          "quality_index": 0.59628,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 21.19943841984225,
+          "valid": true,
+          "quality_index": 0.59628,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.557
+    },
+    {
+      "case": "courtyard-0.83",
+      "source_sha256": "facafe9f9b086dbd5cda4623ca0ae436ddadc41dc6b460d54edd6c934631567b",
+      "legacy_best": 0.599911,
+      "chosen": "phase_x",
+      "index": 0.599911,
+      "gain": 0.0,
+      "variants": [
+        {
+          "name": "baseline",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.577596,
+          "trees": 30,
+          "shrubs": 184,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.577596,
+          "trees": 30,
+          "shrubs": 184,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_x",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.0
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.599911,
+          "trees": 31,
+          "shrubs": 185,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "phase_xy",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.5,
+            0.5
+          ],
+          "lawn_rotation_deg": 0.0,
+          "valid": true,
+          "quality_index": 0.551262,
+          "trees": 30,
+          "shrubs": 176,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.55549699585668,
+          "valid": true,
+          "quality_index": 0.534815,
+          "trees": 31,
+          "shrubs": 203,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "aligned_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.55549699585668,
+          "valid": true,
+          "quality_index": 0.534815,
+          "trees": 31,
+          "shrubs": 203,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "raster"
+        },
+        {
+          "name": "soil_frame",
+          "solver": "greedy",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.55549699585668,
+          "valid": true,
+          "quality_index": 0.582353,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        },
+        {
+          "name": "soil_frame_joint",
+          "solver": "milp",
+          "lawn_phase": [
+            0.0,
+            0.0
+          ],
+          "lawn_rotation_deg": 47.55549699585668,
+          "valid": true,
+          "quality_index": 0.582353,
+          "trees": 25,
+          "shrubs": 102,
+          "needs_approval": 0,
+          "error": "",
+          "lawn_anchor": "soil"
+        }
+      ],
+      "all_certificates_ok": true,
+      "seconds": 2.211
+    }
+  ]
+}
