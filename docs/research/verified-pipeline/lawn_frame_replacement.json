@@ -1,0 +1,140 @@
+{
+  "scope": "Rejected direct replacement of legacy lawn generators; local-frame candidate equivalence alone does not guarantee improved complete plans. Values compared with recorded E31 baseline; synthetic scenes only.",
+  "rows": [
+    {
+      "case": "strip-0.0",
+      "prior_index": 0.525792,
+      "replacement_index": 0.567503,
+      "delta": 0.041711,
+      "prior_counts": {
+        "trees": 62,
+        "shrubs": 18
+      },
+      "replacement_counts": {
+        "trees": 40,
+        "shrubs": 360
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "strip-0.37",
+      "prior_index": 0.616182,
+      "replacement_index": 0.566415,
+      "delta": -0.049767,
+      "prior_counts": {
+        "trees": 62,
+        "shrubs": 146
+      },
+      "replacement_counts": {
+        "trees": 62,
+        "shrubs": 48
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "strip-0.83",
+      "prior_index": 0.554464,
+      "replacement_index": 0.55133,
+      "delta": -0.003134,
+      "prior_counts": {
+        "trees": 64,
+        "shrubs": 24
+      },
+      "replacement_counts": {
+        "trees": 63,
+        "shrubs": 24
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "crossing-0.0",
+      "prior_index": 0.578272,
+      "replacement_index": 0.624956,
+      "delta": 0.046684,
+      "prior_counts": {
+        "trees": 52,
+        "shrubs": 63
+      },
+      "replacement_counts": {
+        "trees": 30,
+        "shrubs": 336
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "crossing-0.37",
+      "prior_index": 0.584631,
+      "replacement_index": 0.570236,
+      "delta": -0.014395,
+      "prior_counts": {
+        "trees": 42,
+        "shrubs": 80
+      },
+      "replacement_counts": {
+        "trees": 51,
+        "shrubs": 56
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "crossing-0.83",
+      "prior_index": 0.574544,
+      "replacement_index": 0.578571,
+      "delta": 0.004027,
+      "prior_counts": {
+        "trees": 50,
+        "shrubs": 56
+      },
+      "replacement_counts": {
+        "trees": 50,
+        "shrubs": 60
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "courtyard-0.0",
+      "prior_index": 0.557523,
+      "replacement_index": 0.613621,
+      "delta": 0.056098,
+      "prior_counts": {
+        "trees": 31,
+        "shrubs": 207
+      },
+      "replacement_counts": {
+        "trees": 12,
+        "shrubs": 432
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "courtyard-0.37",
+      "prior_index": 0.605768,
+      "replacement_index": 0.588737,
+      "delta": -0.017031,
+      "prior_counts": {
+        "trees": 30,
+        "shrubs": 168
+      },
+      "replacement_counts": {
+        "trees": 25,
+        "shrubs": 136
+      },
+      "certificates_ok": true
+    },
+    {
+      "case": "courtyard-0.83",
+      "prior_index": 0.599911,
+      "replacement_index": 0.602009,
+      "delta": 0.002098,
+      "prior_counts": {
+        "trees": 31,
+        "shrubs": 185
+      },
+      "replacement_counts": {
+        "trees": 30,
+        "shrubs": 185
+      },
+      "certificates_ok": true
+    }
+  ]
+}

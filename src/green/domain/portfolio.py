@@ -15,6 +15,7 @@ class VariantResult:
     shrubs: int
     needs_approval: int
     error: str = ""
+    lawn_anchor: str = "raster"
 
 
 @dataclass(frozen=True, slots=True)

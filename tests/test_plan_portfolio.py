@@ -34,6 +34,8 @@ def test_compare_complete_quality_and_keep_baseline_on_ties(
         build, PlanParams(modes=("alley",), placement_solver="portfolio"), ()
     )
     assert validation.ok
+    assert plan.portfolio is not None
+    assert plan.quality is not None
     assert plan.portfolio.chosen == winner
     assert plan.quality.index == max(baseline, joint)
     assert len(plan.portfolio.variants) == 2
@@ -46,6 +48,7 @@ def test_high_quality_invalid_variant_cannot_win() -> None:
         return _plan(0.3), PlanValidation(0, ())
 
     plan, _ = choose_plan(build, PlanParams(modes=("alley",), placement_solver="portfolio"), ())
+    assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
     assert not plan.portfolio.variants[1].valid
     assert plan.portfolio.variants[1].error == "unsafe"
@@ -56,6 +59,7 @@ def test_nonfinite_quality_is_not_selected() -> None:
         return _plan(math.nan if params.placement_solver == "milp" else 0.3), PlanValidation(0, ())
 
     plan, _ = choose_plan(build, PlanParams(modes=("alley",), placement_solver="portfolio"), ())
+    assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
     assert not plan.portfolio.variants[1].valid
 
@@ -67,6 +71,7 @@ def test_incomplete_variant_does_not_discard_valid_baseline() -> None:
         return _plan(0.3), PlanValidation(0, ())
 
     plan, _ = choose_plan(build, PlanParams(modes=("alley",), placement_solver="portfolio"), ())
+    assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
     assert plan.portfolio.variants[1].error == "No compatible species"
 
@@ -89,5 +94,24 @@ def test_configured_phases_are_preserved_in_baseline() -> None:
     params = PlanParams(placement_solver="portfolio", lawn_phase=(0.7, 0.3), lawn_rotation_deg=30)
     plan, _ = choose_plan(build, params, ())
     assert visited[0] == ((0.7, 0.3), 30)
-    assert visited[-1][0] == pytest.approx((0.2, 0.8))
+    assert visited[3][0] == pytest.approx((0.2, 0.8))
+    assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
+
+
+def test_soil_frame_is_additional_and_cannot_replace_a_better_baseline() -> None:
+    def build(params: PlanParams) -> tuple[Plan, PlanValidation]:
+        return _plan(0.1 if params.lawn_anchor == "soil" else 0.8), PlanValidation(0, ())
+
+    plan, _ = choose_plan(build, PlanParams(placement_solver="portfolio"), ())
+    assert plan.portfolio is not None
+    assert plan.portfolio.chosen == "baseline"
+    assert [v.name for v in plan.portfolio.variants] == [
+        "baseline",
+        "joint",
+        "phase_x",
+        "phase_xy",
+        "soil_frame",
+        "soil_frame_joint",
+    ]
+    assert all(v.lawn_anchor == "soil" for v in plan.portfolio.variants[-2:])

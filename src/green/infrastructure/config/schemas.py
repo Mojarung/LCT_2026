@@ -254,6 +254,7 @@ class ProfileModel(_Strict):
         0.0,
     )
     lawn_rotation_deg: float = Field(default=0.0, ge=-180, le=180)
+    lawn_anchor: Literal["raster", "soil"] = "raster"
     zones: bool = True
     zone_cell_m: float = Field(default=1.0, ge=0.25, le=10.0)
     assortment_mode: Literal["auto", "given", "single"] = "auto"

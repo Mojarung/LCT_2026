@@ -54,6 +54,7 @@ def choose_plan(
                 solver=variant.placement_solver,
                 lawn_phase=variant.lawn_phase,
                 lawn_rotation_deg=variant.lawn_rotation_deg,
+                lawn_anchor=variant.lawn_anchor,
                 valid=True,
                 quality_index=score,
                 trees=sum(p.species.is_tree for p in plan.placements),
@@ -79,6 +80,7 @@ def _failed(name: str, params: PlanParams, error: str) -> VariantResult:
         solver=params.placement_solver,
         lawn_phase=params.lawn_phase,
         lawn_rotation_deg=params.lawn_rotation_deg,
+        lawn_anchor=params.lawn_anchor,
         valid=False,
         quality_index=None,
         trees=0,
@@ -107,6 +109,15 @@ def _variants(params: PlanParams, features: Sequence[Feature]) -> list[tuple[str
                 ("aligned", replace(base, lawn_rotation_deg=angle)),
                 ("aligned_joint", replace(base, lawn_rotation_deg=angle, placement_solver="milp")),
             )
+        )
+    if params.lawn_anchor != "soil":
+        framed = replace(
+            base,
+            lawn_anchor="soil",
+            lawn_rotation_deg=angle if angle is not None else params.lawn_rotation_deg,
+        )
+        variants.extend(
+            (("soil_frame", framed), ("soil_frame_joint", replace(framed, placement_solver="milp")))
         )
     return variants
 

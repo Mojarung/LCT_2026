@@ -301,7 +301,11 @@ def _curb_candidates(lines: list[LineString], params: PlanParams) -> list[_Candi
 
 def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
     """Шахматная сетка с шагом посадки по ячейкам грунта; каждая точка - своя станция."""
-    if params.lawn_phase != (0.0, 0.0) or params.lawn_rotation_deg != 0.0:
+    if (
+        params.lawn_anchor == "soil"
+        or params.lawn_phase != (0.0, 0.0)
+        or params.lawn_rotation_deg != 0.0
+    ):
         return _oriented_lawn_candidates(surface, params)
     stride = max(1, round(params.spacing_m / surface.cell))
     grid = surface.grid
@@ -323,9 +327,19 @@ def _oriented_lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_
     """Continuous staggered lattice in a chosen local frame; the same soil check follows."""
     theta = math.radians(params.lawn_rotation_deg)
     rotation = np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
-    height, width = np.array(surface.grid.shape) * surface.cell
-    corners = np.array([[0, 0], [width, 0], [width, height], [0, height]]) @ rotation
-    low, high = corners.min(axis=0), corners.max(axis=0)
+    if params.lawn_anchor == "soil" and surface.soil_area is not None:
+        # The display raster's world-axis bbox changes under rotation. Anchor
+        # the lattice to actual soil projected into the requested frame instead.
+        # Subtract a nearby origin before projecting to avoid large CAD offsets.
+        outline = shapely.get_coordinates(surface.soil_area)
+        if not len(outline) or surface.soil_area.area <= 0:
+            return []
+        local_outline = (outline - np.asarray(surface.origin)) @ rotation
+    else:
+        # Legacy distance-inference scenes may only have raster evidence.
+        height, width = np.array(surface.grid.shape) * surface.cell
+        local_outline = np.array([[0, 0], [width, 0], [width, height], [0, height]]) @ rotation
+    low, high = local_outline.min(axis=0), local_outline.max(axis=0)
     start = low + np.asarray(params.lawn_phase) * params.spacing_m + surface.cell / 2
     candidates = []
     for row, v in enumerate(np.arange(start[1], high[1], params.spacing_m)):

@@ -88,6 +88,8 @@ class PlanParams:
     placement_max_conflicts: int = 200_000
     lawn_phase: tuple[float, float] = (0.0, 0.0)
     lawn_rotation_deg: float = 0.0
+    # Preserve the historical candidate family while comparing an exact-soil frame.
+    lawn_anchor: str = "raster"
     # Слой зон допустимости: сетка по грунту с вердиктом каждой ячейки по всем правилам.
     zones: bool = True
     zone_cell_m: float = 1.0
