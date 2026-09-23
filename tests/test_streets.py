@@ -161,3 +161,60 @@ def test_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
     assert record["state"] == "succeeded", record.get("error")
     assert record["summary"]["placements"] > 0
     assert record["source_name"] == "Тестовая улица.dxf", "в реестре улица названа улицей"
+
+
+def test_api_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
+    """Улица запускается через JSON API так же, как через форму: интерфейс живёт только на API."""
+    created = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street", "profile": "strict", "overrides": '{"spacing_m": 6}'},
+    )
+
+    assert created.status_code == 202, created.text
+    record = client.get(f"/api/v1/runs/{created.json()['id']}").json()
+    assert record["state"] == "succeeded", record.get("error")
+    assert record["summary"]["placements"] > 0
+    assert record["source_name"] == "Тестовая улица.dxf"
+    assert record["overrides"] == {"spacing_m": 6}
+
+
+def test_api_refuses_unknown_street(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"street": "нет-такой-улицы"})
+
+    assert response.status_code == 422
+    assert "нет в каталоге" in response.json()["detail"]
+
+
+def test_api_run_needs_a_source(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"profile": "strict"})
+
+    assert response.status_code == 422
+    assert "улицу" in response.json()["detail"]
+
+
+def test_api_refuses_street_and_file_together(client: TestClient, work: Path) -> None:
+    """Два источника - два разных прогона: сервис не выбирает за человека, какой из них нужен."""
+    path = work / "own.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"file": ("own.dxf", path.read_bytes(), "image/vnd.dxf")},
+    )
+
+    assert response.status_code == 422
+    assert "одно" in response.json()["detail"]
+
+
+def test_api_street_takes_no_extra_drawings(client: TestClient, work: Path) -> None:
+    """У улицы свой комплект: чужой лист сети рядом с ним склеился бы молча."""
+    path = work / "extra.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"extra": ("extra.dxf", path.read_bytes(), "image/vnd.dxf")},
+    )
+
+    assert response.status_code == 422
+    assert "комплект" in response.json()["detail"]

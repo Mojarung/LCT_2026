@@ -159,7 +159,7 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
         source = container.streets.get(street)
         if source is None:
             raise InputError(f"Улицы {street} нет в каталоге")
-        record = accept_street_run(
+        record = await accept_street_run(
             container=container,
             background=background,
             street=source,
