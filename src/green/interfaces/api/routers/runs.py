@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, Resp
 from fastapi.responses import FileResponse
 
 from green.application.errors import InputError
+from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.errors import PROBLEM_RESPONSES
 from green.interfaces.api.intake import accept_run, accept_street_run
@@ -94,6 +95,22 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
         )
     else:
         raise InputError("Выберите улицу пилотного проекта или свой чертёж")
+    response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
+    return RunOut.from_record(record, _artifact_url(request))
+
+
+@router.post("/demo", status_code=202)
+def create_demo_run(
+    request: Request, response: Response, background: BackgroundTasks, container: ContainerDep
+) -> RunOut:
+    """Прогон встроенного фрагмента улицы Берзарина с профилем по умолчанию.
+
+    Фрагмент лежит в пакете: на стенде жюри датасета нет, а показывать сервис надо с
+    первого клика, не заставляя искать DXF. Статус: GET /runs/{id}.
+    """
+    record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, {})
+    write_sample(container.store.input_path(record.run_id))
+    background.add_task(container.runs.execute, record.run_id, None, ())
     response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
     return RunOut.from_record(record, _artifact_url(request))
 

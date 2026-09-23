@@ -211,3 +211,15 @@ def test_finished_run_has_no_progress_but_keeps_the_basemap(client: TestClient) 
     assert body["state"] == "succeeded"
     assert body["progress"] is None
     assert "basemap.geojson" in {a["name"] for a in body["artifacts"]}
+
+
+def test_demo_run_through_the_api(client: TestClient) -> None:
+    """Встроенный фрагмент запускается из JSON API: интерфейс больше не ходит в /web/demo."""
+    created = client.post("/api/v1/runs/demo")
+
+    assert created.status_code == 202, created.text
+    run_id = created.json()["id"]
+    assert created.headers["location"].endswith(run_id)
+    body = client.get(f"/api/v1/runs/{run_id}").json()
+    assert body["state"] == "succeeded", body.get("error")
+    assert body["summary"]["placements"] > 0

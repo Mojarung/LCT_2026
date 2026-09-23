@@ -974,6 +974,68 @@
         ]
       }
     },
+    "/api/v1/runs/demo": {
+      "post": {
+        "description": "Прогон встроенного фрагмента улицы Берзарина с профилем по умолчанию.\n\nФрагмент лежит в пакете: на стенде жюри датасета нет, а показывать сервис надо с\nпервого клика, не заставляя искать DXF. Статус: GET /runs/{id}.",
+        "operationId": "create_demo_run_api_v1_runs_demo_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Create Demo Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}": {
       "get": {
         "description": "Статус прогона, сводка и ссылки на артефакты.",
