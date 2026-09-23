@@ -197,6 +197,7 @@ class RunService:
                 return self._transition(
                     record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )
+            context.report = report
             return self._transition(
                 record,
                 RunState.SUCCEEDED,

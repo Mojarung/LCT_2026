@@ -103,6 +103,11 @@ class RunContext:
     # Участок для индекса качества: граница работ и борта, от вида не зависит.
     _site: Site | None = field(default=None, repr=False)
 
+    @property
+    def stale(self) -> bool:
+        """Only a successfully saved immutable plan can be current on disk."""
+        return self.report is None or self.plan is not self.report.plan
+
     def site(self) -> Site:
         if self._site is None:
             self._site = site_of(self.features)

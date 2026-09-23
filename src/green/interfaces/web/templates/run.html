@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ run.source_name }} - green{% endblock %}
 
-{% set s = run.summary %}
-{% set done = run.state.value == 'succeeded' %}
+{% set s = summary %}
+{% set done = run.state.value == 'succeeded' or (run.state.value == 'failed' and has_draft) %}
 {% set live = run.state.value in ('queued', 'running') %}
 
 {# Рабочее место занимает весь экран: под планом ничего нет, прокрутки у страницы нет. #}
 {% block body_class %}shell-map{% endblock %}
 
 {% block content %}
-<div class="workspace page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}">
+<div class="workspace page-run" data-run-id="{{ run.run_id }}" data-state="{{ run.state.value }}" data-ready="{{ '1' if done else '0' }}">
 
   <div class="canvas-holder">
     <canvas id="plan-canvas" {% if done %}tabindex="0"{% endif %}
@@ -150,6 +150,9 @@
 
     <div class="hud-scroll">
       {% if done %}
+      {% if run.state.value == 'failed' %}
+      <div class="notice"><p>Пересборка не выполнена: {{ run.error }}. Исправьте черновик и повторите пересборку.</p></div>
+      {% endif %}
       {% if s.get('semantic_assignments_complete') == false or s.get('surface_inference_review_required') %}
       <div class="notice">
         <p><b>Исследовательский эскиз</b></p>
@@ -160,20 +163,20 @@
       {% set total = s.get('placements', 0) %}
       {% set approval = s.get('needs_approval', 0) %}
       {% set rejected = s.get('rejections', 0) %}
-      <p class="metric">
+      <p class="metric" id="plan-metric">
         <b>{{ total }}</b>
-        <span>{{ plural(total, 'посадка', 'посадки', 'посадок') }} в плане{% if approval %},
+        <span>{{ plural(total, 'посадка', 'посадки', 'посадок') }} {% if stale %}в черновике{% else %}в плане{% if approval %},
           {{ approval }} на согласование{% elif s.get('semantic_assignments_complete') == false or s.get('surface_inference_review_required') %},
-          <em>допустимость не подтверждена</em>{% else %}, <em>проверены по заданным правилам</em>{% endif %}</span>
+          <em>допустимость не подтверждена</em>{% else %}, <em>проверены по заданным правилам</em>{% endif %}{% endif %}</span>
       </p>
-      <p class="metric-sub">
+      <p class="metric-sub" id="plan-validation">
         <b>{{ rejected }}</b> {{ plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено') }} ·
-        подоснова <em {% if not s.get('integrity_ok') %}class="bad"{% endif %}>{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}</em>
+        {% if stale %}изменения ещё не сохранены в DXF{% else %}подоснова <em {% if not s.get('integrity_ok') %}class="bad"{% endif %}>{{ 'цела' if s.get('integrity_ok') else 'нарушена' }}</em>{% endif %}
       </p>
       {# Индекс - одной строкой рядом с числом посадок; разбор по слагаемым в панели справа,
          где ему хватает высоты и где у выбранной посадки стоит её вклад. #}
       {% if quality %}
-      <p class="metric-sub quality-line">
+      <p class="metric-sub quality-line" id="quality-line">
         индекс качества {% if quality.index is not none %}<b>{{ ('%.2f' | format(quality.index)) | replace('.', ',') }}</b> из 1{% else %}<em class="bad">не выставлен</em>{% endif %}
         · разбор в панели справа
       </p>
@@ -199,18 +202,18 @@
 
       {# Предупреждения раньше лежали отдельной секцией под планом, куда почти никто не
          доскроливал. Здесь они рядом с самим прогоном и свёрнуты. #}
-      {% if done and s.get('warnings') %}
-      <details class="hud-block fold">
-        <summary>Предупреждения · {{ s.get('warnings') | length }}</summary>
+      {% if done %}
+      <details class="hud-block fold" id="plan-warnings" {% if not s.get('warnings') %}hidden{% endif %}>
+        <summary>Предупреждения · {{ s.get('warnings', []) | length }}</summary>
         <ul class="warn-list">
-          {% for warning in s.get('warnings') %}<li>{{ warning }}</li>{% endfor %}
+          {% for warning in s.get('warnings', []) %}<li>{{ warning }}</li>{% endfor %}
         </ul>
       </details>
       {% endif %}
     </div>
 
     {% if done %}
-    <div class="hud-foot" id="edit-bar" data-stale="0">
+    <div class="hud-foot" id="edit-bar" data-stale="{{ '1' if stale else '0' }}">
       <label class="check">
         <input type="checkbox" id="edit-toggle">
         Переносить и удалять посадки
@@ -243,7 +246,7 @@
       {% endfor %}
       {# Что внутри файлов, говорит сам сервис (HEADLINE_FILES), а не подпись в шаблоне:
          иначе описание и состав выгрузки разъезжаются при первой же правке. #}
-      <p class="dl-note">{% for file in files.headline %}{{ file.what }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+      <p class="dl-note" id="download-note">{% if stale %}Файлы содержат последнюю успешно сохранённую версию. Для текущего черновика пересоберите DXF.{% else %}{% for file in files.headline %}{{ file.what }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}</p>
 
       {% if files.service %}
       <details class="fold">

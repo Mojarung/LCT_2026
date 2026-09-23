@@ -12,11 +12,13 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, BackgroundTasks, Response
 
 from green.application.editing import Edit, EditKind, apply_edits, check_point
+from green.infrastructure.reports.artifacts import plan_payload, quality_payload
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.errors import PROBLEM_RESPONSES, EditContextLostError
 from green.interfaces.api.schemas import (
     CheckIn,
     CheckOut,
+    DraftOut,
     EditsIn,
     PlanSummaryOut,
     RuleCheckOut,
@@ -37,6 +39,18 @@ def _context(container: Container, run_id: str) -> RunContext:
             "переживает перезапуск. Запустите прогон заново, чтобы править план."
         )
     return context
+
+
+@router.get("/{run_id}/draft")
+def draft(run_id: str, response: Response, container: ContainerDep) -> DraftOut:
+    context = _context(container, run_id)
+    plan = context.plan
+    response.headers["Cache-Control"] = "no-store"
+    return DraftOut(
+        plan=plan_payload(plan),
+        quality=quality_payload(plan.quality),
+        stale=context.report is None or plan is not context.report.plan,
+    )
 
 
 @router.post("/{run_id}/check")

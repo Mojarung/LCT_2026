@@ -183,6 +183,14 @@ class EditsIn(BaseModel):
     edits: list[EditIn] = Field(min_length=1, max_length=500)
 
 
+class DraftOut(BaseModel):
+    """Current in-memory draft; artifacts remain the last successful export."""
+
+    plan: dict[str, Any]
+    quality: dict[str, Any]
+    stale: bool
+
+
 class PlanSummaryOut(BaseModel):
     """Состояние плана после правки.
 

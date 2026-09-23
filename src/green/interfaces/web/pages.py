@@ -22,6 +22,7 @@ from green.application.errors import InputError, NotFoundError
 from green.application.progress import estimate
 from green.domain.objects import ObjectClass
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
+from green.infrastructure.reports.artifacts import quality_payload
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.intake import accept_run, accept_street_run, parse_overrides
 
@@ -235,6 +236,15 @@ def run_page(run_id: str, request: Request, container: ContainerDep) -> HTMLResp
     """
     record = container.store.get(run_id)
     progress = estimate(record.progress, datetime.now(UTC)) if record.progress else None
+    context = container.contexts.get(run_id)
+    summary = dict(record.summary)
+    if context is not None:
+        summary.update(
+            placements=len(context.plan.placements),
+            needs_approval=context.plan.approval_count,
+            rejections=len(context.plan.rejections),
+            warnings=list(context.plan.warnings),
+        )
     # Сводка прогона - это JSON с диска, а не типизированная структура: список
     # предупреждений оттуда приходит как `object`.
     raw = record.summary.get("warnings", [])
@@ -245,11 +255,16 @@ def run_page(run_id: str, request: Request, container: ContainerDep) -> HTMLResp
         {
             "version": __version__,
             "run": record,
+            "summary": summary,
+            "has_draft": context is not None and context.report is not None,
+            "stale": context.stale if context is not None else False,
             "progress": progress,
             "species": container.species.all(),
             "files": _files(container, run_id, record.artifacts),
             "notices": [w for w in warnings if w.startswith(KEY_WARNINGS)],
-            "quality": _quality(container, run_id),
+            "quality": quality_payload(context.plan.quality)
+            if context is not None
+            else _quality(container, run_id),
         },
     )
 

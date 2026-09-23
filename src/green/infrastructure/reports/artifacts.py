@@ -111,7 +111,9 @@ class FileArtifactSink:
                 directory / "assortment_shrubs.json",
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
-            "quality.json": _write_json(directory / "quality.json", _quality(report.plan.quality)),
+            "quality.json": _write_json(
+                directory / "quality.json", quality_payload(report.plan.quality)
+            ),
             "selection.json": _write_json(
                 directory / "selection.json",
                 asdict(report.plan.selection) if report.plan.selection is not None else None,
@@ -340,7 +342,7 @@ def _value(value: PlantingValue | None) -> dict[str, Any] | None:
     }
 
 
-def _quality(quality: PlanQuality | None) -> dict[str, Any]:
+def quality_payload(quality: PlanQuality | None) -> dict[str, Any]:
     """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки."""
     if quality is None:
         return {"index": None, "gate": "индекс не считался"}
@@ -395,13 +397,20 @@ def _source(report: RunReport) -> dict[str, Any]:
 
 
 def _plan(report: RunReport) -> dict[str, Any]:
-    plan = report.plan
-    texts = {e.subject_id: e.text for e in plan.explanations}
-    values = plan.quality.values if plan.quality is not None else {}
     return {
+        **plan_payload(report.plan),
         "run_id": report.run_id,
         "source": _source(report),
         "summary": report.summary(),
+        "warnings": list(report.warnings),
+    }
+
+
+def plan_payload(plan: Plan) -> dict[str, Any]:
+    """Current plan content, without attaching saved-file certificates to a draft."""
+    texts = {e.subject_id: e.text for e in plan.explanations}
+    values = plan.quality.values if plan.quality is not None else {}
+    return {
         "placements": [
             {
                 "id": p.placement_id,
@@ -433,7 +442,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
             }
             for r in plan.rejections
         ],
-        "warnings": list(report.warnings),
+        "warnings": list(plan.warnings),
     }
 
 

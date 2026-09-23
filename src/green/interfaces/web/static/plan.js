@@ -125,6 +125,7 @@ const state = {
   // Режим правки выключен по умолчанию: случайно сдвинуть дерево во время осмотра плана
   // не должно быть возможно.
   editing: false,
+  editBusy: false,
   // Файлы результата отстали от плана на экране.
   stale: false,
   dragging: null,
@@ -1240,52 +1241,112 @@ async function probe(item, x, y) {
 }
 
 async function commitMove(item, x, y) {
+  if (state.editBusy) return;
+  state.editBusy = true;
   try {
     const summary = await post('edits', {
       edits: [{ kind: 'move', placement_id: item.id, x, y }],
     });
-    item.x = x;
-    item.y = y;
-    await refreshOne(item);
     setStale(summary.stale);
+    await refreshDraft();
     say(`Посадка №${item.number} перенесена. Нормы пересчитаны.`);
   } catch (error) {
     say(error.message, 'error');
+  } finally {
+    state.editBusy = false;
   }
 }
 
 async function commitDelete(item) {
+  if (state.editBusy) return;
+  state.editBusy = true;
   try {
     const summary = await post('edits', {
       edits: [{ kind: 'delete', placement_id: item.id }],
     });
-    state.placements = state.placements.filter((p) => p !== item);
-    orderItems();
-    state.selected = null;
-    showDetail(null);
     setStale(summary.stale);
+    await refreshDraft();
     say(`Посадка №${item.number} удалена. В плане осталось ${summary.placements}.`);
     schedule();
   } catch (error) {
     say(error.message, 'error');
+  } finally {
+    state.editBusy = false;
   }
 }
 
-/** После переноса вердикт и трасса правил берутся у сервиса, а не досочиняются на клиенте. */
-async function refreshOne(item) {
-  const result = await post('check', {
-    x: item.x,
-    y: item.y,
-    species: item.species_code || null,
-  });
-  item.verdict = result.plantable ? result.verdict : 'rejected';
-  item.checks = result.checks;
-  item.explanation = '';
-  // Ценность считается по плану целиком: после переноса она известна только после пересборки.
-  item.value = null;
-  item.note = result.note;
-  if (state.selected === item) showDetail(item);
+async function loadDraft(optional = false) {
+  const response = await fetch(`/api/v1/runs/${RUN_ID}/draft`, { cache: 'no-store' });
+  // Contexts are intentionally ephemeral; saved runs remain viewable after restart.
+  if (optional && response.status === 409) return null;
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || `Черновик: ${response.status}`);
+  return payload;
+}
+
+/** One server snapshot updates all plants, removals, explanations and quality together. */
+function setPlan(plan, quality) {
+  const selectedId = state.selected?.id;
+  state.quality = quality;
+  state.placements = (plan.placements || []).map((p) => ({
+    kind: 'placement', id: p.id, number: p.number, planting_type: p.planting_type,
+    x: p.x, y: p.y, radius: (p.species?.crown_diameter_m || 3) / 2,
+    verdict: p.verdict, species_code: p.species?.code,
+    species_ru: p.species?.name_ru, species_lat: p.species?.name_lat,
+    explanation: p.explanation, value: p.value, checks: p.checks,
+  }));
+  state.rejections = (plan.rejections || []).map((r) => ({
+    kind: 'rejection', id: r.id, number: r.number, planting_type: r.planting_type,
+    x: r.x, y: r.y, radius: 1.2, verdict: r.verdict,
+    explanation: r.explanation, note: r.note, checks: r.blocking,
+  }));
+  orderItems();
+  state.selected = state.ordered.find((item) => item.id === selectedId) || null;
+}
+
+function draftStatus(draft) {
+  setStale(draft.stale);
+  if (draft.stale) {
+    setText('plan-metric', `${state.placements.length} посадок в черновике`);
+    setText('plan-validation', `${state.rejections.length} отклонённых мест · изменения ещё не сохранены в DXF`);
+    setText('download-note', 'Файлы содержат последнюю успешно сохранённую версию. Для текущего черновика пересоберите DXF.');
+  }
+  setText('quality-line', `Индекс качества ${draft.quality.index == null ? 'не выставлен' : `${decimal(draft.quality.index)} из 1`} · разбор в панели справа`);
+  const warnings = document.getElementById('plan-warnings');
+  if (warnings) {
+    const items = draft.plan.warnings || [];
+    warnings.hidden = !items.length;
+    warnings.querySelector('summary').textContent = `Предупреждения · ${items.length}`;
+    warnings.querySelector('ul').innerHTML = items.map((text) => `<li>${escape(text)}</li>`).join('');
+  }
+}
+
+async function refreshDraft() {
+  const draft = await loadDraft();
+  setPlan(draft.plan, draft.quality);
+  draftStatus(draft);
+  showDetail(state.selected);
   schedule();
+}
+
+async function runStatus() {
+  const response = await fetch(`/api/v1/runs/${RUN_ID}`, { cache: 'no-store' });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || `Статус: ${response.status}`);
+  return payload;
+}
+
+async function waitForRebuild(previousUpdate) {
+  // HTTP 202 only acknowledges scheduling. The old terminal state can briefly
+  // remain visible before the background task starts, so require a new revision.
+  while (true) {
+    const run = await runStatus();
+    if (run.updated_at !== previousUpdate && !['queued', 'running'].includes(run.state)) {
+      if (run.state !== 'succeeded') throw new Error(run.error || 'Пересборка не выполнена');
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
 }
 
 /* ---------- ввод ---------- */
@@ -1570,16 +1631,22 @@ function bindInput() {
   });
 
   document.getElementById('rebuild')?.addEventListener('click', async (event) => {
+    if (state.editBusy) return;
+    state.editBusy = true;
     const button = event.currentTarget;
     button.disabled = true;
     say('Пересобираем DXF и объяснения, это занимает до минуты...');
     try {
+      const previous = await runStatus();
       await post('rebuild', {});
+      await waitForRebuild(previous.updated_at);
       say('Файлы результата пересобраны по исправленному плану. Обновляем страницу.');
       setStale(false);
       setTimeout(() => window.location.reload(), 1200);
     } catch (error) {
       say(error.message, 'error');
+    } finally {
+      state.editBusy = false;
       button.disabled = false;
     }
   });
@@ -1893,47 +1960,19 @@ async function live() {
 async function mount() {
   restorePanels();
   try {
-    const [basemap, plan, rules, quality] = await Promise.all([
+    const [basemap, plan, rules, quality, draft] = await Promise.all([
       loadJson('basemap.geojson'),
       loadJson('plan.json'),
       loadJson('rules.json'),
       // У прогонов до появления индекса файла нет: карта от этого не должна ломаться.
       loadJson('quality.json').catch(() => null),
+      loadDraft(true),
     ]);
-
-    state.quality = quality;
 
     state.rules = rules.rules || {};
     state.chunks = buildChunks(basemap.features || [], basemap.bbox);
-    state.placements = (plan.placements || []).map((p) => ({
-      kind: "placement",
-      id: p.id,
-      number: p.number,
-      planting_type: p.planting_type,
-      x: p.x,
-      y: p.y,
-      radius: (p.species?.crown_diameter_m || 3) / 2,
-      verdict: p.verdict,
-      species_code: p.species?.code,
-      species_ru: p.species?.name_ru,
-      species_lat: p.species?.name_lat,
-      explanation: p.explanation,
-      value: p.value,
-      checks: p.checks,
-    }));
-    state.rejections = (plan.rejections || []).map((r) => ({
-      kind: "rejection",
-      id: r.id,
-      number: r.number,
-      planting_type: r.planting_type,
-      x: r.x,
-      y: r.y,
-      radius: 1.2,
-      verdict: r.verdict,
-      explanation: r.explanation,
-      note: r.note,
-      checks: r.blocking,
-    }));
+    setPlan(draft?.plan || plan, draft?.quality || quality);
+    if (draft) draftStatus(draft);
 
     // Вид подгоняется под план, а не под всю подоснову. На генплане Берзарина подоснова
     // раскинута на 5,5 x 14,5 км из-за нескольких далёких объектов, и участок работ в таком
@@ -1979,7 +2018,7 @@ function boundsOfPoints(items, margin = 10) {
 // Готовый прогон монтирует карту целиком; идущий - следит за ходом и показывает чертёж,
 // как только прогон его отдал. Неудавшийся оставляет подложку с причиной.
 const runState = document.querySelector('.page-run')?.dataset.state;
-if (canvas && RUN_ID && runState === 'succeeded') {
+if (canvas && RUN_ID && document.querySelector('.page-run')?.dataset.ready === '1') {
   mount();
 } else if (canvas && RUN_ID && (runState === 'queued' || runState === 'running')) {
   live();
