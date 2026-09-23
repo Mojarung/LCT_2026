@@ -75,12 +75,15 @@ class _Objects:
     def __init__(self, features: Sequence[Feature]) -> None:
         self.tree = shapely.STRtree([f.geometry for f in features])
         self.radii = np.array([(f.diameter_m or 0.0) / 2 for f in features])
+        self.errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
+        if not np.isfinite(self.errors).all() or (self.errors < 0).any():
+            raise ValueError("Unbounded or invalid input geometry error")
 
     def nearby_clearance(
         self, points: NDArray[np.object_], threshold: float, measure: MeasureTo
     ) -> NDArray[np.float64]:
         """Infinity means proven farther than threshold, not an absent observation."""
-        radii = self.radii if measure is MeasureTo.OUTER_WALL else np.zeros(len(self.radii))
+        radii = self.errors + (self.radii if measure is MeasureTo.OUTER_WALL else 0)
         result = np.full(len(points), np.inf)
         for start in range(0, len(points), 512):
             subset = points[start : start + 512]

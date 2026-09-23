@@ -21,6 +21,7 @@ from scipy import sparse
 from scipy.ndimage import distance_transform_edt
 from scipy.sparse.csgraph import dijkstra
 
+from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ class SurfaceMap:
     inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
     soil_area: BaseGeometry | None = None
     paved_area: BaseGeometry | None = None
+    uncertainty_area: BaseGeometry | None = None
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
@@ -80,6 +82,8 @@ class SurfaceMap:
             result[shapely.contains(self.soil_area, points)] = int(Material.SOIL)
         if self.paved_area is not None:
             result[shapely.intersects(self.paved_area, points)] = int(Material.PAVED)
+        if self.uncertainty_area is not None:
+            result[shapely.intersects(self.uncertainty_area, points)] = int(Material.UNKNOWN)
         return result
 
     def fits_soil(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
@@ -117,6 +121,8 @@ class SurfaceMap:
         fits[inside] |= (grid[rr, cc] == Material.SOIL) & (lower >= radius_m)
         if self.paved_area is not None:
             fits &= shapely.distance(points, self.paved_area) >= radius_m
+        if self.uncertainty_area is not None:
+            fits &= shapely.distance(points, self.uncertainty_area) >= radius_m
         return fits & on_soil
 
     def summary(self) -> dict[str, int | float]:
@@ -137,7 +143,7 @@ class SurfaceMap:
         return rows, cols
 
 
-def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in metres
+def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and named metric limits
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
@@ -176,6 +182,11 @@ def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in 
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
     barrier = _rasterize(barriers, origin, cell, shape)
+    uncertain = _uncertainty_area(features)
+    if uncertain is not None:
+        # Cells touching the possible location of a curved boundary cannot carry
+        # material evidence across it, even if their centres miss the narrow band.
+        barrier |= _inside(reserved_buffer(uncertain, cell / np.sqrt(2)), origin, cell, shape)
     free = ~barrier
     if extent is not None:
         free &= _inside(extent, origin, cell, shape)
@@ -192,16 +203,14 @@ def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in 
     inferred_grid = grid.copy() if polygons else None
     soil_area, paved_area = _exact_areas(polygons, extent)
     # Explicit polygons keep holes. Hard material wins over competing lawn geometry.
-    for material, predicate in (
-        (Material.SOIL, lambda f: f.object_class is ObjectClass.LAWN),
-        (Material.PAVED, lambda f: f.object_class.is_hard_surface),
-    ):
-        areas = [f.geometry for f in polygons if predicate(f)]
-        if areas:
-            mask = _inside(shapely.union_all(areas), origin, cell, shape)
+    for material, area in ((Material.SOIL, soil_area), (Material.PAVED, paved_area)):
+        if area is not None:
+            mask = _inside(area, origin, cell, shape)
             if extent is not None:
                 mask &= _inside(extent, origin, cell, shape)
             grid[mask] = int(material)
+    if uncertain is not None:
+        grid[_inside(uncertain, origin, cell, shape)] = int(Material.UNKNOWN)
     return SurfaceMap(
         grid=grid,
         origin=origin,
@@ -214,18 +223,33 @@ def build_surface_map(  # noqa: PLR0913 - independent named evidence limits, in 
         inferred_grid=inferred_grid,
         soil_area=soil_area,
         paved_area=paved_area,
+        uncertainty_area=uncertain,
     )
 
 
 def _exact_areas(
     polygons: Sequence[Feature], extent: BaseGeometry | None
 ) -> tuple[BaseGeometry | None, BaseGeometry | None]:
-    soil = shapely.union_all([f.geometry for f in polygons if f.object_class is ObjectClass.LAWN])
-    paved = shapely.union_all([f.geometry for f in polygons if f.object_class.is_hard_surface])
+    soil = shapely.union_all(
+        [inner_area(f) for f in polygons if f.object_class is ObjectClass.LAWN]
+    )
+    paved = shapely.union_all([outer_area(f) for f in polygons if f.object_class.is_hard_surface])
     if extent is not None:
         soil, paved = soil.intersection(extent), paved.intersection(extent)
     soil = soil.difference(paved)
     return (None if soil.is_empty else soil, None if paved.is_empty else paved)
+
+
+def _uncertainty_area(features: Sequence[Feature]) -> BaseGeometry | None:
+    bands = []
+    for feature in features:
+        error = error_bound(feature)
+        if not error or not feature.object_class.is_surface_barrier:
+            continue
+        shape = feature.geometry
+        border = shape.boundary if shape.geom_type in _AREA_TYPES else shape
+        bands.append(reserved_buffer(border, error))
+    return shapely.union_all(bands) if bands else None
 
 
 @dataclass(frozen=True, slots=True)

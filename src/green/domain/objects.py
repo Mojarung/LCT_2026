@@ -124,6 +124,10 @@ class Feature:
     # по нему нормоконтроль отличает дерево от кустарника.
     circle_radius_m: float | None = None
     classification: ClassificationEvidence | None = None
+    # XY approximation error in metres. None means no established bound;
+    # input quality must reject it before a plan can be certified.
+    geometry_error_m: float | None = 0.0
+    circle_center_m: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +166,8 @@ class ReadDiagnostics:
     skipped_by_type: Mapping[str, int] = field(default_factory=dict)
     unresolved_xrefs: tuple[str, ...] = ()
     geometry_gaps: tuple[GeometryGap, ...] = ()
+    approximation_features: int = 0
+    max_approximation_error_m: float = 0.0
 
     @property
     def block_failures(self) -> tuple[str, ...]:

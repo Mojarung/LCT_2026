@@ -10,6 +10,7 @@ import numpy as np
 import shapely
 from shapely import STRtree
 
+from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
 from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, RuleCheck, Verdict
@@ -41,6 +42,7 @@ class _ClassIndex:
     tree: STRtree
     features: tuple[Feature, ...]
     half_diameters: NDArray[np.float64]
+    geometry_errors: NDArray[np.float64]
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,12 +110,13 @@ class ConstraintIndex:
         self._barrier_distance_m = barrier_distance_m
         by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
         for feature in features:
+            error_bound(feature)
             by_class[feature.object_class].append(feature)
 
         self._rules = tuple(rules)
         self._forbid = np.array([r.severity is Severity.FORBID for r in self._rules], dtype=bool)
         self._require_utility_data = require_utility_data
-        # Линии, дополненные до «сети неизвестного типа» (fail-closed), не считаются данными
+        # Линии, предположенные «сетями неизвестного типа», не считаются данными
         # о сетях: иначе нераспознанный слой скрывал бы отсутствие выгрузки коммуникаций.
         self.has_utility_data = any(
             cls.is_utility and cls is not ObjectClass.UTILITY_UNKNOWN for cls in by_class
@@ -124,7 +127,7 @@ class ConstraintIndex:
             if by_class.get(cls)
         }
         hard = [
-            f.geometry
+            outer_area(f)
             for f in features
             if f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES
         ]
@@ -227,10 +230,15 @@ def work_boundary(features: Sequence[Feature]) -> BaseGeometry | None:
 
 def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
     """Граница работ из полигонов или из замкнутых линий (как «Граница заказа» Геотреста)."""
-    areas = [f.geometry for f in features if f.geometry.geom_type in _AREA_TYPES]
-    lines = [f.geometry for f in features if f.geometry.geom_type in _LINE_TYPES]
+    areas = [inner_area(f) for f in features if f.geometry.geom_type in _AREA_TYPES]
+    line_features = [f for f in features if f.geometry.geom_type in _LINE_TYPES]
+    lines = [f.geometry for f in line_features]
     if lines:
-        areas.extend(shapely.get_parts(shapely.polygonize([shapely.union_all(lines)])))
+        reserve = max(error_bound(f) for f in line_features)
+        areas.extend(
+            reserved_buffer(area, -reserve)
+            for area in shapely.get_parts(shapely.polygonize([shapely.union_all(lines)]))
+        )
     if not areas:
         return None
     merged = shapely.union_all(areas)
@@ -239,7 +247,10 @@ def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
 
 def _index(features: tuple[Feature, ...]) -> _ClassIndex:
     halves = np.array([(f.diameter_m or 0.0) / 2 for f in features], dtype=np.float64)
-    return _ClassIndex(STRtree([f.geometry for f in features]), features, halves)
+    errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
+    if not np.isfinite(errors).all() or (errors < 0).any():
+        raise ValueError("Unbounded or invalid input geometry error")
+    return _ClassIndex(STRtree([f.geometry for f in features]), features, halves, errors)
 
 
 def _nearest_clearance(
@@ -248,8 +259,8 @@ def _nearest_clearance(
     """Nearest wall is not necessarily the wall of the nearest axis.
 
     The nearest axis supplies an upper bound b on the signed wall distance.
-    A better pipe must have axis distance <= b + maximum pipe radius. Query that
-    bounded neighbourhood, then minimise exact distance-minus-radius. No polygonal
+    A better object must have distance <= b + maximum reserved distance. Query that
+    bounded neighbourhood, then minimise distance minus radius/error. No polygonal
     circle buffers or all-pairs matrix. Batches bound temporary query memory.
     """
     pairs, distances = index.tree.query_nearest(points, return_distance=True, all_matches=False)
@@ -257,28 +268,28 @@ def _nearest_clearance(
     owners = np.empty(len(points), dtype=np.int64)
     values[pairs[0]] = distances
     owners[pairs[0]] = pairs[1]
+    reserve = index.geometry_errors.copy()
     if measure is MeasureTo.OUTER_WALL:
-        values -= index.half_diameters[owners]
-        maximum_radius = float(index.half_diameters.max())
-        if maximum_radius > float(index.half_diameters.min()):
-            batch_size = 4096
-            for start in range(0, len(points), batch_size):
-                end = min(start + batch_size, len(points))
-                subset = points[start:end]
-                radius = np.maximum(values[start:end] + maximum_radius, 0) + 1e-9
-                point_ids, feature_ids = index.tree.query(
-                    subset, predicate="dwithin", distance=radius
-                )
-                clearance = (
-                    shapely.distance(subset[point_ids], index.tree.geometries[feature_ids])
-                    - index.half_diameters[feature_ids]
-                )
-                best = np.full(len(subset), np.inf)
-                np.minimum.at(best, point_ids, clearance)
-                winners = clearance == best[point_ids]
-                winner_ids = np.full(len(subset), len(index.features), dtype=np.int64)
-                np.minimum.at(winner_ids, point_ids[winners], feature_ids[winners])
-                values[start:end] = best
-                owners[start:end] = winner_ids
+        reserve += index.half_diameters
+    values -= reserve[owners]
+    maximum_radius = float(reserve.max())
+    if maximum_radius > float(reserve.min()):
+        batch_size = 4096
+        for start in range(0, len(points), batch_size):
+            end = min(start + batch_size, len(points))
+            subset = points[start:end]
+            radius = np.maximum(values[start:end] + maximum_radius, 0) + 1e-9
+            point_ids, feature_ids = index.tree.query(subset, predicate="dwithin", distance=radius)
+            clearance = (
+                shapely.distance(subset[point_ids], index.tree.geometries[feature_ids])
+                - reserve[feature_ids]
+            )
+            best = np.full(len(subset), np.inf)
+            np.minimum.at(best, point_ids, clearance)
+            winners = clearance == best[point_ids]
+            winner_ids = np.full(len(subset), len(index.features), dtype=np.int64)
+            np.minimum.at(winner_ids, point_ids[winners], feature_ids[winners])
+            values[start:end] = best
+            owners[start:end] = winner_ids
     np.maximum(values, 0.0, out=values)
     return values, owners

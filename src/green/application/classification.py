@@ -9,6 +9,8 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from shapely.geometry import Point
+
 from green.application.errors import InputError
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
@@ -139,9 +141,20 @@ def _classify_feature(
     # Only semantic evidence that this is an existing tree makes the circle a
     # crown symbol with a trunk at its centre. Generic circles keep their area.
     geometry = feature.geometry
+    error = feature.geometry_error_m
     if kind is ObjectClass.EXISTING_TREE and feature.circle_radius_m is not None:
-        geometry = geometry.centroid
-    return replace(feature, object_class=kind, geometry=geometry, classification=evidence)
+        if feature.circle_center_m is not None:
+            geometry = Point(feature.circle_center_m)
+            error = 0.0
+        else:
+            geometry = geometry.centroid
+    return replace(
+        feature,
+        object_class=kind,
+        geometry=geometry,
+        classification=evidence,
+        geometry_error_m=error,
+    )
 
 
 def promote_unknown_lines(scene: Scene) -> Scene:
@@ -194,6 +207,7 @@ class ClassificationGroup:
     evidence: ClassificationEvidence
     features: int
     source_refs: tuple[str, ...]
+    max_geometry_error_m: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,7 +281,14 @@ def classification_report(
         features=len(scene.features),
         unresolved_features=unresolved,
         groups=tuple(
-            ClassificationGroup(*key, len(items), tuple(str(f.ref) for f in items[:5]))
+            ClassificationGroup(
+                *key,
+                len(items),
+                tuple(str(f.ref) for f in items[:5]),
+                None
+                if any(f.geometry_error_m is None for f in items)
+                else max(f.geometry_error_m or 0.0 for f in items),
+            )
             for key, items in groups.items()
         ),
         rules=tuple(
