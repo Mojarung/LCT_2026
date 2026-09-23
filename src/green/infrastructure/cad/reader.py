@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 from ezdxf.addons import geo
+from ezdxf.entities import Circle, LWPolyline
 from ezdxf.path import make_path
 from shapely.geometry import LineString, Point, Polygon, shape
 
@@ -29,14 +30,12 @@ if TYPE_CHECKING:
 
 # Подпись сети Геотреста: текст и стрелка-выноска. Стрелка не должна стать трубой.
 LABEL_BLOCK = re.compile(r"(?:^|\$0\$|\|)DIMTXT", re.IGNORECASE)
-SMALL_CIRCLE_RADIUS_M = 2.0
 MAX_BLOCK_DEPTH = 8
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
-_TEXT_ENTITIES = frozenset({"TEXT", "MTEXT"})
+_TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
 _SKIPPED = frozenset(
     {
         "ATTDEF",
-        "ATTRIB",
         "DIMENSION",
         "LEADER",
         "MULTILEADER",
@@ -165,6 +164,17 @@ class _Walker:
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
             return
+        for position, attribute in enumerate(insert.attribs):
+            # Attached values are instance data, not the ATTDEF default. Copying
+            # removes the handle so MINSERT instances get distinct source refs.
+            self.visit(
+                attribute.copy(),
+                parent_layer=layer,
+                chain=(*chain, name),
+                parent_handle=f"{ref.handle}/attrib",
+                index=position,
+                parent_block=name,
+            )
         try:
             children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
         except ValueError, TypeError, ArithmeticError:
@@ -185,8 +195,11 @@ class _Walker:
         self.skipped[f"VIRTUAL:{entity.dxftype()}:{reason}"] += 1
 
     def _label(self, entity: DXFGraphic, ref: SourceRef, layer: str) -> None:
-        text = entity.dxf.text if entity.dxftype() == "TEXT" else entity.plain_text()  # ty: ignore[unresolved-attribute]
+        is_mtext = entity.dxftype() == "MTEXT"
+        text = entity.plain_text() if is_mtext else entity.dxf.text  # ty: ignore[unresolved-attribute]
         point = entity.dxf.insert
+        if not is_mtext:
+            point = entity.ocs().to_wcs(point)
         if text and text.strip():
             self.labels.append(
                 TextLabel(ref=ref, layer=layer, x=point.x, y=point.y, text=text.strip())
@@ -201,17 +214,13 @@ class _Walker:
             if kind == "POINT":
                 location = entity.dxf.location
                 return Point(location.x, location.y)
-            if kind == "CIRCLE":
-                center, radius = entity.dxf.center, entity.dxf.radius
-                circle_center = Point(center.x, center.y)
-                return (
-                    circle_center
-                    if radius * self.unit_m <= SMALL_CIRCLE_RADIUS_M
-                    else circle_center.buffer(radius)
-                )
-            if kind == "LWPOLYLINE" and not entity.has_arc:  # ty: ignore[unresolved-attribute]
-                points = [(x, y) for x, y in entity.get_points("xy")]  # ty: ignore[unresolved-attribute]
-                return _polyline(points, closed=entity.closed)  # ty: ignore[unresolved-attribute]
+            if isinstance(entity, Circle):
+                tolerance = min(self.flatten, entity.dxf.radius / 64)
+                points = [(v.x, v.y) for v in entity.flattening(tolerance)]
+                return _polyline(points, closed=True)
+            if isinstance(entity, LWPolyline) and not entity.has_arc:
+                points = [(v.x, v.y) for v in entity.vertices_in_wcs()]
+                return _polyline(points, closed=entity.closed)
             if kind in _AREA_ENTITIES:
                 area = shape(geo.proxy(entity, distance=self.flatten))
                 return area if area.is_valid else shapely.make_valid(area)

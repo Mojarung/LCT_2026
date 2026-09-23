@@ -74,6 +74,7 @@ rules:
   - {pattern: "Отдельно стоящее дерево", object_class: existing_tree, confirmed: true,
      note: "штрихи условного знака (дуга, эллипс, линии) вокруг ствола"}
   # «Полоса деревьев»: кружки это стволы, пунктир по 7 см это контур полосы, то есть граница грунта.
+  - {pattern: "Полоса деревьев", geometry: circle, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: point, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: line, object_class: lawn, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Колодцы|Люки|Решетки)$", object_class: utility.access, confirmed: true}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import ezdxf
+import pytest
 
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
@@ -48,7 +49,9 @@ def test_microstation_blocks_keep_geometry_and_labels_stay_text(tmp_path: Path) 
     assert lines[0].layer == CABLE_LAYER
     assert abs(lines[0].geometry.length - AXIS_LENGTH_M) < 1e-6
 
-    points = [f for f in scene.features if f.geometry.geom_type == "Point"]
-    assert [f.block for f in points] == [WELL_BLOCK]
+    circles = [f for f in scene.features if f.circle_radius_m is not None]
+    assert [f.block for f in circles] == [WELL_BLOCK]
+    assert circles[0].geometry.geom_type == "Polygon"
+    assert circles[0].geometry.area == pytest.approx(0.7854, rel=0.03)
 
     assert [(label.layer, label.text) for label in scene.labels] == [(CABLE_LAYER, "d=400ж.б.")]

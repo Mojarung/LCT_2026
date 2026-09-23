@@ -25,6 +25,7 @@ class GeometryKind(StrEnum):
     POINT = "point"
     LINE = "line"
     AREA = "area"
+    CIRCLE = "circle"
 
 
 _KIND_OF_TYPE = {
@@ -51,6 +52,7 @@ class LayerRule:
             return False
         return (
             self.geometry is GeometryKind.ANY
+            or (self.geometry is GeometryKind.CIRCLE and feature.circle_radius_m is not None)
             or _KIND_OF_TYPE.get(feature.geometry.geom_type) is self.geometry
         )
 
@@ -78,13 +80,23 @@ class LayerCoverage:
 
 def classify_scene(scene: Scene, layer_map: LayerMap) -> tuple[Scene, tuple[LayerCoverage, ...]]:
     """Присваивает классы всем объектам и возвращает отчёт покрытия по слоям."""
-    classified = tuple(replace(f, object_class=layer_map.classify(f)) for f in scene.features)
+    classified = tuple(_classify_feature(f, layer_map) for f in scene.features)
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)
         for (layer, cls), n in sorted(counts.items(), key=lambda item: (item[0][0], item[0][1]))
     )
     return replace(scene, features=classified), coverage
+
+
+def _classify_feature(feature: Feature, layer_map: LayerMap) -> Feature:
+    kind = layer_map.classify(feature)
+    # Only semantic evidence that this is an existing tree makes the circle a
+    # crown symbol with a trunk at its centre. Generic circles keep their area.
+    geometry = feature.geometry
+    if kind is ObjectClass.EXISTING_TREE and feature.circle_radius_m is not None:
+        geometry = geometry.centroid
+    return replace(feature, object_class=kind, geometry=geometry)
 
 
 def promote_unknown_lines(scene: Scene) -> Scene:
