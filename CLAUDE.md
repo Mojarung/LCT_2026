@@ -28,7 +28,13 @@ src/green/
                    editing (правка плана: проверка точки, перенос, удаление, кэш контекстов прогонов),
                    progress (этапы прогона, веса из замеров, оценка доли и остатка для интерфейса),
                    quality/ (индекс качества плана: 10 слагаемых с основаниями, проверка перед
-                   оценкой, штрафы, точный вклад каждой посадки; notes/29)
+                   оценкой, штрафы, точный вклад каждой посадки; weights.py - веса по анкетам
+                   экспертов, метод Саати; notes/29), refine (сдвиг слабых мест от сетей, пока
+                   индекс растёт), shrub_rows (ряд кустарника у борта под кронами аллеи и
+                   изгородь вдоль остальных бортов до 720 кустов на 1 км), understory (малая
+                   группа кустарника под кроной дерева без нижнего яруса), shrub_fill (группы
+                   кустарника на газоне до 600 на 1 км по МГСН В.1); размещение: аллея, газон и
+                   добор зоны (modes: fill) - см. notes/30
   infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
                    улицы: запасной прогон, когда каталог улиц не смонтирован), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
@@ -39,7 +45,8 @@ src/green/
                    api/ (FastAPI /api/v1, Swagger, RFC 9457; intake - общий приём файлов,
                    routers/edits - проверка точки, правки, пересборка),
                    web/ (Jinja2-страницы, canvas-карта плана с растровым кэшем и отсечением,
-                   панель обозначений со слоями, фильтр по видам, ползунок масштаба, правка
+                   панель обозначений со слоями, слой покрытий «как понял сервис» и подписи
+                   материала, ссылка на место (#x=..&y=..&m=..), фильтр по видам, ползунок масштаба, правка
                    посадок; пока прогон идёт - чертёж на карте сразу после чтения и полоса
                    хода с процентами по GET /runs/{id}; статика в web/static, внешних запросов
                    нет, node в образе нет)
@@ -48,7 +55,11 @@ config/            acts.yaml, rules.yaml (76 правил: 46 расстояни
                    profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
 docker/cadcheck/   образ проверки DXF в LibreCAD под Linux: Xvfb + xdotool, два снимка на файл (docs/deploy.md)
-tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, prepare_streets.py
+tools/             dwg_scan.py, dwg_summary.py (Кирилл); quality_weights.py (веса по анкетам);
+                   research/quality_robustness.py (Монте-Карло по весам); research/pipeline_lab.py
+                   (стенд экспериментов с пайплайном: кэш улиц, этапы, E00-E59 в lab_experiments.py,
+                   прототипы этапов в lab_stages.py, итоговая таблица lab_report.py, устойчивость к
+                   весам lab_robustness.py, абляция lab_ablation.py); extract_street.py, prepare_streets.py
                    (комплект подосновы каждой улицы из архива в DXF + catalog.json), make_demo_fragment.py
                    (вырезает демонстрационный фрагмент улицы), research/ — наша разведка датасета
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
@@ -60,6 +71,9 @@ docs/
   requirements/planting-requirements.md          требования к посадке по 10 актам заказчика: цитата, статус в сервисе, пробелы;
                                                  quotes.yaml - цитаты, проверка tools/research/check_law_quotes.py
   plans/2026-09-16-assortment.md                 спецификация и план подбора ассортимента
+  quality-weights.md, quality-ahp-example.yaml   веса индекса: процедура OECD/Саати, анкета, проверка
+  plans/2026-09-22-quality-literature.md         источники весов и целей индекса (33, со статусами)
+  plans/2026-09-22-shrub-row-research.md         ряд кустарника у борта: сторона, высота, правила SR-1..18
   plans/2026-09-22-green-index-research.md       ресерч: критерии качества расстановки, откуда числа,
                                                  предложение сводного индекса и вклада каждой посадки
   notes/01..07 (Кирилл: журнал, данные, решения, проблемы, скан DWG, карта покрытий, сверка норм),
@@ -77,6 +91,9 @@ docs/
   notes/28-all-streets.md                        прогон по всем 19 улицам каталога: числа и замечания
   notes/29-quality-index.md                      индекс качества плана и ценность посадки: устройство,
                                                  решения по данным, числа по улицам, ограничения
+  notes/30-pipeline-experiments.md               60 экспериментов с пайплайном посадок: что поднимает
+                                                 индекс, абляция, ошибка квот, итог по 18 улицам;
+                                                 сырые итоги - notes/data/pipeline-lab.jsonl
   design-reviews/                                вердикты жюри по интерфейсу (агент `design-jury`
                                                  в .claude/agents, вызывается после правок вёрстки)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
