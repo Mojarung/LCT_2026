@@ -9,6 +9,7 @@ from ezdxf.lldxf.tagwriter import TagCollector
 
 from green.application.results import IntegrityReport, SourceSnapshot
 from green.infrastructure.cad.documents import RESULT_PREFIX, load_document
+from green.infrastructure.cad.export_validation import check_written_plan
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -16,6 +17,9 @@ if TYPE_CHECKING:
 
     from ezdxf.document import Drawing
     from ezdxf.lldxf.types import DXFTag
+
+    from green.application.results import PlanExportReport
+    from green.domain.planting import Plan
 
 REPORT_LIMIT = 100
 _TEXT_CHUNK = 3
@@ -31,11 +35,13 @@ class EzdxfIntegrityChecker:
 
     def check(self, before: SourceSnapshot, result: Path) -> IntegrityReport:
         """Сверяет отпечатки исходника (сняты писателем до правок) с сохранённым результатом."""
-        after, _ = fingerprints(load_document(result)[0])
+        doc, _ = load_document(result)
+        after, _ = fingerprints(doc)
         digests = before.digests
         changed = sorted(h for h, digest in digests.items() if h in after and after[h] != digest)
         missing = sorted(h for h in digests if h not in after)
-        added = sorted(h for h in after if h not in digests)
+        generated = _result_handles(doc)
+        added = sorted(h for h in after if h not in digests and h not in generated)
         return IntegrityReport(
             source_entities=len(digests),
             unchanged=len(digests) - len(changed) - len(missing),
@@ -48,9 +54,12 @@ class EzdxfIntegrityChecker:
     def verify_files(self, source: Path, result: Path) -> IntegrityReport:
         return self.check(self.snapshot(source), result)
 
+    def check_plan(self, result: Path, plan: Plan, *, unit_m: float) -> PlanExportReport:
+        return check_written_plan(result, plan, unit_m=unit_m)
+
 
 def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
-    """Отпечатки всех сущностей вне слоёв и блоков результата (включая содержимое блоков).
+    """Отпечатки всех исходных сущностей, включая исходные имена GREEN_*.
 
     Теги собираются так же, как их пишет файловый писатель ezdxf: необязательные теги со
     значением по умолчанию опускаются (optional=False), иначе DXF от конвертеров, где такие
@@ -60,12 +69,7 @@ def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
     digests: dict[str, str] = {}
     unexportable = 0
     for block in doc.blocks:
-        if block.name.upper().startswith(RESULT_PREFIX):
-            continue
         for entity in block:
-            block_name = entity.dxf.name if entity.dxftype() == "INSERT" else ""
-            if _is_result(entity.dxf.get("layer", "0"), block_name):
-                continue
             collector = TagCollector(dxfversion=doc.dxfversion, optional=False)
             if not entity.preprocess_export(collector):
                 unexportable += 1
@@ -75,6 +79,22 @@ def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
                 repr(_canonical(entity.dxftype(), collector.tags)).encode(), digest_size=16
             ).hexdigest()
     return digests, unexportable
+
+
+def _result_handles(doc: Drawing) -> set[str]:
+    """New result entities may be added; an original handle is always protected.
+
+    An arbitrary source can already have GREEN_* layers or blocks. Naming alone
+    must never exempt those original entities from changed/missing checks.
+    """
+    handles = set()
+    for block in doc.blocks:
+        own_block = block.name.upper().startswith(RESULT_PREFIX)
+        for entity in block:
+            name = entity.dxf.name if entity.dxftype() == "INSERT" else ""
+            if own_block or _is_result(entity.dxf.get("layer", "0"), name):
+                handles.add(entity.dxf.handle)
+    return handles
 
 
 def _canonical(kind: str, tags: Iterable[DXFTag]) -> list[tuple[int, object]]:

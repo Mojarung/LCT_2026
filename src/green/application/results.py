@@ -55,6 +55,17 @@ class IntegrityReport:
 
 
 @dataclass(frozen=True, slots=True)
+class PlanExportReport:
+    expected_placements: int
+    found_placements: int
+    issues: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.issues
+
+
+@dataclass(frozen=True, slots=True)
 class RunReport:
     run_id: str
     source_name: str
@@ -80,6 +91,7 @@ class RunReport:
     context: RunContext | None = None
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
     validation: PlanValidation | None = None
+    export_validation: PlanExportReport | None = None
 
     def summary(self) -> dict[str, object]:
         return {
@@ -89,6 +101,9 @@ class RunReport:
             "rejections": len(self.plan.rejections),
             "integrity_ok": self.integrity.ok,
             "plan_valid": self.validation.ok if self.validation is not None else None,
+            "export_matches_plan": self.export_validation.ok
+            if self.export_validation is not None
+            else None,
             "total_ms": round(sum(t.ms for t in self.timings), 1),
             "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),

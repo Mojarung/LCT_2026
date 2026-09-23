@@ -16,7 +16,8 @@ from ezdxf.math import Vec2
 from ezdxf.render import mleader
 from test_pipeline_synthetic import ROOT, _street
 
-from green.application.use_case import PlanRequest
+from green.application.errors import InputError
+from green.application.use_case import PENDING_DXF, PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.infrastructure.cad.documents import DocumentCache
@@ -109,6 +110,9 @@ def test_writer_reports_entities_added_by_processing(tmp_path: Path) -> None:
     _street(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
     original_read = container.reader.read
+    params = container.profiles.load("strict", {"max_rejections": 50})
+    request = PlanRequest("careless", source, tmp_path / "out", "strict", params)
+    previous = container.use_case.execute(request).output_dxf.read_bytes()
 
     def careless_read(path: Path, *, unit: str = "auto"):  # noqa: ANN202 - Scene из читателя
         scene = original_read(path, unit=unit)
@@ -117,9 +121,9 @@ def test_writer_reports_entities_added_by_processing(tmp_path: Path) -> None:
         return scene
 
     container.use_case._reader = type("Careless", (), {"read": staticmethod(careless_read)})()  # noqa: SLF001
-    params = container.profiles.load("strict", {"max_rejections": 50})
-    report = container.use_case.execute(
-        PlanRequest("careless", source, tmp_path / "out", "strict", params)
-    )
-    assert not report.integrity.ok
-    assert len(report.integrity.added_outside_result_layers) == 1
+    with pytest.raises(InputError, match="добавлено вне результата 1"):
+        container.use_case.execute(request)
+    assert (tmp_path / "out" / "result.dxf").read_bytes() == previous
+    integrity = container.integrity.verify_files(source, tmp_path / "out" / PENDING_DXF)
+    assert not integrity.ok
+    assert len(integrity.added_outside_result_layers) == 1

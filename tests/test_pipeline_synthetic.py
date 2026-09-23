@@ -137,6 +137,9 @@ def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     assert validation["ok"] is True
     assert validation["checked_placements"] > 0
     assert validation["assumptions"]
+    exported = orjson.loads(artifacts["export_validation.json"].read_bytes())  # type: ignore[index]
+    assert exported["ok"] is True
+    assert exported["expected_placements"] == exported["found_placements"]
     plan_json = orjson.loads(artifacts["plan.json"].read_bytes())  # type: ignore[index]
     first = plan_json["placements"][0]
     assert first["assortment"]["percent"] > 0

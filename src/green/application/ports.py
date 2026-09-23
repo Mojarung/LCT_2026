@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from green.application.params import PlanParams
     from green.application.results import (
         IntegrityReport,
+        PlanExportReport,
         RunRecord,
         RunReport,
         SourceSnapshot,
@@ -152,6 +153,8 @@ class AuditWriter(Protocol):
 
 class IntegrityChecker(Protocol):
     def check(self, before: SourceSnapshot, result: Path) -> IntegrityReport: ...
+
+    def check_plan(self, result: Path, plan: Plan, *, unit_m: float) -> PlanExportReport: ...
 
 
 class ArtifactSink(Protocol):

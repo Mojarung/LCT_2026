@@ -40,9 +40,11 @@ if TYPE_CHECKING:
         SceneReader,
         SpeciesCatalog,
     )
+    from green.application.results import IntegrityReport, PlanExportReport
     from green.domain.planting import Plan
 
 RESULT_DXF = "result.dxf"
+PENDING_DXF = ".result.pending.dxf"
 MERGED_DXF = "merged_source.dxf"
 
 
@@ -116,6 +118,13 @@ class PlanSite:
     ) -> RunReport:
         watch = Stopwatch([], on_stage=progress.stage if progress is not None else None)
         params = request.params
+        targets = {
+            (request.work_dir / name).resolve() for name in (RESULT_DXF, PENDING_DXF, MERGED_DXF)
+        }
+        if any(path.resolve() in targets for path in (request.source, *request.extra_sources)):
+            raise InputError(
+                "Выходной файл совпадает с исходником; выберите другую папку результата"
+            )
         request.work_dir.mkdir(parents=True, exist_ok=True)
 
         with watch.stage("convert"):
@@ -193,10 +202,14 @@ class PlanSite:
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF
+        pending = request.work_dir / PENDING_DXF
         with watch.stage("write_dxf"):
-            snapshot = self._writer.write(source, plan, rulebook, output, unit_m=scene.unit_m)
+            snapshot = self._writer.write(source, plan, rulebook, pending, unit_m=scene.unit_m)
         with watch.stage("verify"):
-            integrity = self._integrity.check(snapshot, output)
+            integrity = self._integrity.check(snapshot, pending)
+            export_validation = self._integrity.check_plan(pending, plan, unit_m=scene.unit_m)
+            require_valid_export(integrity, export_validation)
+            pending.replace(output)
         integrity_notes: tuple[str, ...] = ()
         if integrity.unexportable:
             integrity_notes = (
@@ -226,6 +239,7 @@ class PlanSite:
             basemap=basemap,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,
+            export_validation=export_validation,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и
@@ -255,6 +269,7 @@ class PlanSite:
             raise InputError("Прогон нельзя пересобрать: отчёт исходного прогона не сохранён")
         watch = Stopwatch([])
         output = work_dir / RESULT_DXF
+        pending = work_dir / PENDING_DXF
         with watch.stage("validate_plan"):
             validation = validate_plan(
                 plan,
@@ -270,19 +285,34 @@ class PlanSite:
             require_valid_plan(validation)
         with watch.stage("write_dxf"):
             snapshot = self._writer.write(
-                context.source, plan, context.rulebook, output, unit_m=context.unit_m
+                context.source, plan, context.rulebook, pending, unit_m=context.unit_m
             )
         with watch.stage("verify"):
-            integrity = self._integrity.check(snapshot, output)
+            integrity = self._integrity.check(snapshot, pending)
+            export_validation = self._integrity.check_plan(pending, plan, unit_m=context.unit_m)
+            require_valid_export(integrity, export_validation)
+            pending.replace(output)
         return replace(
             context.report,
             plan=plan,
             integrity=integrity,
             output_dxf=output,
             validation=validation,
+            export_validation=export_validation,
             timings=tuple(watch.timings),
             warnings=(*context.report.warnings, "План изменён вручную и пересобран."),
         )
+
+
+def require_valid_export(integrity: IntegrityReport, exported: PlanExportReport) -> None:
+    if integrity.ok and exported.ok:
+        return
+    detail = "; ".join(exported.issues[:8])
+    raise InputError(
+        "Записанный DXF не прошёл проверку исходника/посадок: "
+        f"изменено {len(integrity.changed)}, пропало {len(integrity.missing)}, "
+        f"добавлено вне результата {len(integrity.added_outside_result_layers)}. {detail}"
+    )
 
 
 def require_valid_plan(result: PlanValidation) -> None:
