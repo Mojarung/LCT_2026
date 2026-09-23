@@ -38,10 +38,17 @@
             "title": "Extra"
           },
           "file": {
-            "contentMediaType": "application/octet-stream",
-            "description": "Чертёж DXF или DWG",
-            "title": "File",
-            "type": "string"
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Чертёж DXF или DWG; или street, но не оба",
+            "title": "File"
           },
           "inventory": {
             "anyOf": [
@@ -79,11 +86,20 @@
             ],
             "description": "Профиль параметров из /meta",
             "title": "Profile"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Улица пилотного проекта из /streets (slug); или file",
+            "title": "Street"
           }
         },
-        "required": [
-          "file"
-        ],
         "title": "Body_create_run_api_v1_runs_post",
         "type": "object"
       },
@@ -889,7 +905,7 @@
         ]
       },
       "post": {
-        "description": "Принять чертёж и поставить прогон в очередь. Статус: GET /runs/{id}.",
+        "description": "Принять чертёж или улицу из каталога и поставить прогон в очередь.\n\nИсточник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного\nпроекта (`street`, её комплект уже лежит в каталоге). Статус: GET /runs/{id}.",
         "operationId": "create_run_api_v1_runs_post",
         "requestBody": {
           "content": {
@@ -898,8 +914,7 @@
                 "$ref": "#/components/schemas/Body_create_run_api_v1_runs_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {

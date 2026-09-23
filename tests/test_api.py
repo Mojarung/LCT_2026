@@ -197,9 +197,13 @@ def test_framework_errors_use_the_same_format(client: TestClient) -> None:
     assert refused.headers["allow"]  # заголовок фреймворка доезжает до клиента
 
 
-def test_request_without_a_file_is_a_validation_problem(client: TestClient) -> None:
+def test_request_without_a_source_is_a_problem(client: TestClient) -> None:
+    """Файл больше не обязателен сам по себе: источником может быть улица из каталога.
+
+    Без обоих - всё та же 422 в формате RFC 9457, но с тем, что сделать, а не со схемой полей.
+    """
     body = _assert_problem(client.post(f"{API_PREFIX}/runs", data={"profile": "strict"}), 422)
-    assert body["errors"]
+    assert "свой чертёж" in body["detail"]
 
 
 def test_extra_file_that_is_not_a_drawing_is_refused(client: TestClient, street: bytes) -> None:
