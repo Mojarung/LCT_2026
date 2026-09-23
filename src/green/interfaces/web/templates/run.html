@@ -136,7 +136,16 @@
     <div class="hud-head">
       <a class="back" href="/">← все прогоны</a>
       <h1>{{ run.source_name }}</h1>
-      <p class="run-sub">{{ run.profile }} · {{ run.run_id[:8] }}{% for key, value in run.overrides.items() %} · {{ key }} {{ value }}{% endfor %}</p>
+      <p class="run-sub">{{ run.profile }} · {{ run.run_id[:8] }}{% if run.overrides.get('spacing_m') %} · шаг {{ run.overrides.spacing_m }} м{% endif %}</p>
+      {% if run.overrides.get('feature_classes') or run.overrides.get('label_roles') or run.overrides.get('layer_classes') or run.overrides.get('block_classes') %}
+      <p class="run-sub">Назначения: объектов {{ run.overrides.get('feature_classes', {}) | length }},
+        подписей {{ run.overrides.get('label_roles', {}) | length }}{% if run.overrides.get('layer_classes') %},
+        слоёв {{ run.overrides.layer_classes | length }}{% endif %}{% if run.overrides.get('block_classes') %},
+        блоков {{ run.overrides.block_classes | length }}{% endif %}.</p>
+      {% endif %}
+      {% if 'run_manifest.json' in run.artifacts %}
+      <p class="run-sub"><a href="/api/v1/runs/{{ run.run_id }}/artifacts/run_manifest.json" download>Параметры расчёта и исходник</a></p>
+      {% endif %}
     </div>
 
     <div class="hud-scroll">

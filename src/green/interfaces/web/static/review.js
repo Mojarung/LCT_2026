@@ -121,7 +121,7 @@ function refresh() {
   $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}.` : 'Геометрических объектов нет.';
   const current = indices.length === 1 ? data.features[indices[0]] : null;
   $('detail').textContent = current
-    ? `${current.id}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\nРезерв геометрии, м: ${current.properties.error_m}`
+    ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\nРезерв геометрии, м: ${current.properties.error_m}`
     : `Выбрано объектов: ${indices.length}. Назначение применяется ко всем выбранным объектам.`;
   let unresolved = 0;
   for (const f of data.features) if (UNKNOWN.has(assignments[f.id] || f.properties.class)) unresolved++;
