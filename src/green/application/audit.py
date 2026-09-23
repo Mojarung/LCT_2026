@@ -244,7 +244,7 @@ class AuditSite:
             base = replace(scene, features=tuple(f for f in scene.features if id(f) not in taken))
             base, _ = classify_scene(base, layer_map, params)
             semantics = classification_report(base, layer_map, params)
-            require_classified(semantics, params)
+            require_classified(semantics, params, scene=base, source=source)
             if not semantics.ready:
                 notes = (
                     *notes,

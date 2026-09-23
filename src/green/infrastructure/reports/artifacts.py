@@ -14,6 +14,7 @@ import shapely
 
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.domain.planting import Placement, Rejection
+from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from green.application.classification import ClassificationReport
     from green.application.results import RunReport
     from green.domain.norms import RuleBook
+    from green.domain.objects import Scene
     from green.domain.planting import (
         AssortmentInfo,
         AssortmentSummary,
@@ -130,9 +132,23 @@ class FileArtifactSink:
         directory.mkdir(parents=True, exist_ok=True)
         return _write_json(directory / "basemap.geojson", _basemap(basemap), indent=False)
 
-    def save_classification(self, directory: Path, report: ClassificationReport) -> Path:
+    def save_classification(
+        self,
+        directory: Path,
+        report: ClassificationReport,
+        *,
+        scene: Scene | None = None,
+        source: Path | None = None,
+    ) -> dict[str, Path]:
         directory.mkdir(parents=True, exist_ok=True)
-        return _write_json(directory / "classification.json", classification_payload(report))
+        saved = {
+            "classification.json": _write_json(
+                directory / "classification.json", classification_payload(report)
+            )
+        }
+        if scene is not None:
+            saved.update(save_review_geometry(directory, report, scene, source))
+        return saved
 
 
 def classification_payload(report: ClassificationReport | None) -> dict[str, Any] | None:

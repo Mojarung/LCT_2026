@@ -1,0 +1,14 @@
+.input-review { display: grid; grid-template-columns: minmax(270px, 360px) 1fr; gap: 20px; padding: 64px 20px 20px; min-height: 90vh; }
+.review-controls { overflow-y: auto; max-height: 85vh; padding-right: 12px; }
+.review-controls h1 { font-size: 1.5rem; }
+.review-controls p { font-size: .9rem; margin-block: 12px; }
+.review-controls label { display: block; margin-block: 12px; }
+.review-controls select, .review-controls input { width: 100%; margin-top: 5px; }
+.review-controls textarea { width: 100%; font-family: monospace; }
+.review-controls [hidden] { display: none; }
+.review-controls button { margin: 4px 0; width: 100%; }
+.review-controls pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.review-map { min-height: 500px; height: 85vh; display: flex; flex-direction: column; min-width: 0; }
+.review-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+#review-canvas { width: 100%; flex: 1; min-height: 0; background: #f4f6f5; touch-action: none; border: 1px solid #a4afaa; }
+@media (max-width: 750px) { .input-review { grid-template-columns: 1fr; } .review-controls { max-height: none; } .review-map { height: 65vh; } }

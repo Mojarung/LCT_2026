@@ -166,7 +166,7 @@ class PlanSite:
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map, params)
             semantics = classification_report(scene, layer_map, params)
-            require_classified(semantics, params)
+            require_classified(semantics, params, scene=scene, source=source)
             if params.require_soil and params.surface_inference_mode == "distance":
                 scene = replace(
                     scene,

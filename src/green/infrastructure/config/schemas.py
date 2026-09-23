@@ -226,6 +226,7 @@ class ProfileModel(_Strict):
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
+    semantic_source_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     layer_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     block_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     feature_classes: dict[str, ObjectClass] = Field(default_factory=dict)

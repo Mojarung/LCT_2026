@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from green import __version__
 from green.application.errors import InputError, NotFoundError
 from green.application.progress import estimate
+from green.domain.objects import ObjectClass
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.intake import accept_run, accept_street_run, parse_overrides
@@ -241,6 +242,30 @@ def run_page(run_id: str, request: Request, container: ContainerDep) -> HTMLResp
             "files": _files(container, run_id, record.artifacts),
             "notices": [w for w in warnings if w.startswith(KEY_WARNINGS)],
             "quality": _quality(container, run_id),
+        },
+    )
+
+
+@router.get("/runs/{run_id}/review", response_class=HTMLResponse, name="web_review")
+def review_page(run_id: str, request: Request, container: ContainerDep) -> HTMLResponse:
+    record = container.store.get(run_id)
+    # The artifact store enforces membership, not merely filesystem existence.
+    container.store.artifact(run_id, "semantic-review.geojson")
+    return TEMPLATES.TemplateResponse(
+        request,
+        "review.html",
+        {
+            "version": __version__,
+            "run": record,
+            "classes": [
+                kind.value
+                for kind in ObjectClass
+                if kind
+                not in {
+                    ObjectClass.UNKNOWN,
+                    ObjectClass.UTILITY_UNKNOWN,
+                }
+            ],
         },
     )
 

@@ -169,7 +169,14 @@ class ArtifactSink(Protocol):
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path: ...
 
-    def save_classification(self, directory: Path, report: ClassificationReport) -> Path: ...
+    def save_classification(
+        self,
+        directory: Path,
+        report: ClassificationReport,
+        *,
+        scene: Scene | None = None,
+        source: Path | None = None,
+    ) -> dict[str, Path]: ...
 
 
 class ProgressSink(Protocol):

@@ -44,7 +44,9 @@ def _save_review(container: Container, directory: Path) -> Iterator[None]:
     try:
         yield
     except ClassificationError as error:
-        container.artifacts.save_classification(directory, error.report)
+        container.artifacts.save_classification(
+            directory, error.report, scene=error.scene, source=error.source
+        )
         raise
 
 

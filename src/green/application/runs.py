@@ -149,12 +149,14 @@ class RunService:
                 if self._contexts is not None and report.context is not None:
                     self._contexts.put(report.context)
             except ClassificationError as error:
-                path = self._artifacts.save_classification(run_dir, error.report)
+                review = self._artifacts.save_classification(
+                    run_dir, error.report, scene=error.scene, source=error.source
+                )
                 return self._transition(
                     reporter.record,
                     RunState.FAILED,
                     error=str(error),
-                    artifacts=(*reporter.record.artifacts, path.name),
+                    artifacts=tuple(sorted(set(reporter.record.artifacts) | set(review))),
                 )
             except GreenError as error:
                 return self._transition(reporter.record, RunState.FAILED, error=str(error))

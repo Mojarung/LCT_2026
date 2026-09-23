@@ -13,6 +13,9 @@
       <p class="error-text">{{ run.error or 'Причина не записана.' }}</p>
       {% if 'classification.json' in run.artifacts %}
       <p><a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Скачать отчёт распознавания объектов</a></p>
+      {% if 'semantic-review.geojson' in run.artifacts %}
+      <p><a href="/runs/{{ run.run_id }}/review">Уточнить объекты на чертеже</a></p>
+      {% endif %}
       {% endif %}
     </div>
   {% else %}

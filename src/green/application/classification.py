@@ -15,6 +15,8 @@ from green.application.errors import InputError
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from green.application.params import PlanParams
 
 
@@ -133,6 +135,15 @@ def classify_scene(
     scene: Scene, layer_map: LayerMap, params: PlanParams | None = None
 ) -> tuple[Scene, tuple[LayerCoverage, ...]]:
     """Присваивает классы всем объектам и возвращает отчёт покрытия по слоям."""
+    if (
+        params
+        and params.semantic_source_sha256
+        and params.semantic_source_sha256 != scene.source_sha256
+    ):
+        raise InputError(
+            "Уточнения относятся к другому DXF: хеш исходника изменился. "
+            "Загрузите review-input.dxf из проверенного прогона или выполните уточнение заново."
+        )
     overrides = _Overrides(params)
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
     classified = []
@@ -326,8 +337,12 @@ def classification_report(
 
 
 class ClassificationError(InputError):
-    def __init__(self, report: ClassificationReport) -> None:
+    def __init__(
+        self, report: ClassificationReport, scene: Scene | None = None, source: Path | None = None
+    ) -> None:
         self.report = report
+        self.scene = scene
+        self.source = source
         examples = ", ".join(
             dict.fromkeys(
                 group.layer
@@ -342,6 +357,12 @@ class ClassificationError(InputError):
         )
 
 
-def require_classified(report: ClassificationReport, params: PlanParams) -> None:
+def require_classified(
+    report: ClassificationReport,
+    params: PlanParams,
+    *,
+    scene: Scene | None = None,
+    source: Path | None = None,
+) -> None:
     if report.unused_overrides or (params.require_known_objects and not report.ready):
-        raise ClassificationError(report)
+        raise ClassificationError(report, scene, source)
