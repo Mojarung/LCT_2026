@@ -51,6 +51,9 @@ MODE_LABELS = {
 _TANGENT_STEP_M = 0.5
 _SPACING_TOLERANCE = 0.95
 _Z_ORDER_BITS = 16
+# Two independently rounded XY points can approach by at most sqrt(2) mm.
+# Reserve 2 mm when constructing a rotated group, rather than weaken clearance.
+_ROUNDING_PAIR_RESERVE_M = 0.002
 
 
 class PlacementStrategy(Protocol):
@@ -198,13 +201,11 @@ class GreedyPlantingStrategy:
                 tree_distance_m=params.tree_seed_distance_m,
                 inference_mode=params.surface_inference_mode,
             )
-        size = params.shrub_group_size
-        offsets = [(i - (size - 1) / 2) * params.spacing_m for i in range(size)]
+        offsets = _shrub_offsets(params)
         candidates = [
             _Candidate(station, MODE_SHRUB_GROUP, round(cx + dx, 3), round(cy + dy, 3))
             for station, (cx, cy) in enumerate(centers)
-            for dx in offsets
-            for dy in offsets
+            for dx, dy in offsets
         ]
         points = shapely.points([(c.x, c.y) for c in candidates])
         positions = np.flatnonzero(index.plantable(points))
@@ -222,6 +223,18 @@ class GreedyPlantingStrategy:
                 occupied.add(candidate.x, candidate.y)
                 selector.placements.append(selector._placement(candidate, batch, row))  # noqa: SLF001 - same placement representation
         return tuple(selector.placements)
+
+
+def _shrub_offsets(params: PlanParams) -> list[tuple[float, float]]:
+    size = params.shrub_group_size
+    spacing = params.spacing_m
+    theta = 0.0
+    if params.lawn_anchor == "soil":
+        theta = math.radians(params.lawn_rotation_deg)
+        spacing = max(spacing, 2 * params.footprint_radius_m + _ROUNDING_PAIR_RESERVE_M)
+    c, s = math.cos(theta), math.sin(theta)
+    offsets = [(i - (size - 1) / 2) * spacing for i in range(size)]
+    return [(dx * c - dy * s, dx * s + dy * c) for dx in offsets for dy in offsets]
 
 
 def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
