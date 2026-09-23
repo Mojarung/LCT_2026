@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
 
+    from green.application.assembly import PackageAssembly
     from green.application.basemap import Basemap
     from green.application.classification import LayerCoverage
     from green.application.editing import RunContext
@@ -94,6 +95,7 @@ class RunReport:
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
     validation: PlanValidation | None = None
     export_validation: PlanExportReport | None = None
+    assembly: PackageAssembly | None = None
 
     def summary(self) -> dict[str, object]:
         return {

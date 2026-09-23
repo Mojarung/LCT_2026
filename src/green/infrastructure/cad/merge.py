@@ -22,6 +22,7 @@ from green.application.ports import MergeResult
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
+from green.infrastructure.cad.xref_package import DrawingPackage, expanded_entity_counts
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -79,19 +80,33 @@ def _user_blocks(doc: Drawing) -> set[str]:
 
 
 class EzdxfDrawingMerger:
-    def merge(self, sources: Sequence[Path], target: Path, *, unit: str = "auto") -> MergeResult:
+    def merge(
+        self,
+        sources: Sequence[Path],
+        target: Path,
+        *,
+        unit: str = "auto",
+        source_names: Sequence[str] = (),
+    ) -> MergeResult:
         if len(sources) < _MIN_SOURCES:
             raise InputError("Склейка: нужно не меньше двух чертежей")
-        base, notes = load_document(sources[0])
-        require_exportable_document(base, sources[0].name)
-        notes = list(notes)
+        if target.resolve() in {source.resolve() for source in sources}:
+            raise InputError("Склейка не может перезаписать один из исходных файлов")
+        package = DrawingPackage.load(sources, source_names)
+        package.resolve()
+        base = package.documents[0]
+        notes = package.notes
+        assembly = package.report()
+        for binding in assembly.references:
+            notes.append(
+                f"XREF {binding.block}: {binding.action}, {binding.source or binding.reference}; "
+                "масштаб и положение заданы исходной вставкой"
+            )
         counts = [len(base.modelspace())]
         base_unit = decide_units(base, unit).unit_m
         base_box = _extents(base)
-        for path in sources[1:]:
-            doc, doc_notes = load_document(path)
-            require_exportable_document(doc, path.name)
-            notes += doc_notes
+        for index in package.roots[1:]:
+            path, doc = sources[index], package.documents[index]
             counts.append(len(doc.modelspace()))
             factor = decide_units(doc, unit).unit_m / base_unit
             if factor != 1.0:
@@ -115,16 +130,12 @@ class EzdxfDrawingMerger:
                         "разные объекты"
                     )
             base_box = _union(base_box, box)
-            clash = sorted(_user_blocks(base) & _user_blocks(doc))
-            policy = xref.ConflictPolicy.NUM_PREFIX if clash else xref.ConflictPolicy.KEEP
-            if clash:
-                notes.append(
-                    f"Склейка: в {path.name} {len(clash)} блоков с именами, которые уже есть "
-                    "в основе; совпавшие ресурсы этого файла получили префикс «$0$»"
-                )
-            xref.load_modelspace(doc, base, conflict_policy=policy)
+            _load_overlay(base, doc, path.name, notes)
         merged = len(base.modelspace())
-        listed = ", ".join(f"{p.name}: {n}" for p, n in zip(sources, counts, strict=True))
+        listed = ", ".join(
+            f"{sources[index].name}: {count}"
+            for index, count in zip(package.roots, counts, strict=True)
+        )
         notes.append(f"Склейка комплекта: {listed}; в объединённом чертеже {merged} сущностей")
         if merged != sum(counts):
             raise InputError(
@@ -132,8 +143,35 @@ class EzdxfDrawingMerger:
                 "не перенесена. Расчёт на неполном комплекте остановлен."
             )
         target.parent.mkdir(parents=True, exist_ok=True)
-        base.saveas(target)
-        return MergeResult(path=target, notes=tuple(notes))
+        _save_package(base, target)
+        return MergeResult(path=target, notes=tuple(notes), assembly=assembly)
+
+
+def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> None:
+    if doc.dxfversion > base.dxfversion:
+        raise InputError(f"Склейка: {name} имеет более новую версию DXF, чем основа")
+    clash = sorted(_user_blocks(base) & _user_blocks(doc))
+    policy = xref.ConflictPolicy.NUM_PREFIX if clash else xref.ConflictPolicy.KEEP
+    if clash:
+        notes.append(
+            f"Склейка: в {name} {len(clash)} блоков с именами, которые уже есть "
+            "в основе; совпавшие ресурсы этого файла получили префикс «$0$»"
+        )
+    expected = expanded_entity_counts(base.modelspace()) + expanded_entity_counts(doc.modelspace())
+    xref.load_modelspace(doc, base, conflict_policy=policy)
+    if expanded_entity_counts(base.modelspace()) != expected:
+        raise InputError(f"Склейка: при импорте {name} потеряны/заменены вложенные сущности")
+
+
+def _save_package(doc: Drawing, target: Path) -> None:
+    require_exportable_document(doc, target.name)
+    expected = expanded_entity_counts(doc.modelspace())
+    pending = target.with_name(f".{target.name}.pending")
+    doc.saveas(pending)
+    written, _ = load_document(pending)
+    if expanded_entity_counts(written.modelspace()) != expected:
+        raise InputError("Склейка: записанный DXF потерял часть структуры объектов")
+    pending.replace(target)
 
 
 def _normalise(doc: Drawing, factor: float, name: str) -> None:

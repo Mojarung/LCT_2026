@@ -88,6 +88,9 @@ class FileArtifactSink:
             "input_read.json": _write_json(
                 directory / "input_read.json", asdict(report.read_diagnostics)
             ),
+            "assembly.json": _write_json(
+                directory / "assembly.json", asdict(report.assembly) if report.assembly else None
+            ),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
             "basemap.geojson": self.save_basemap(directory, report.basemap),
             "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),

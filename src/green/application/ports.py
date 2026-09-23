@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from green.application.assembly import PackageAssembly
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
     from green.application.classification import LayerMap
@@ -44,11 +45,17 @@ class MergeResult:
 
     path: Path
     notes: tuple[str, ...] = ()
+    assembly: PackageAssembly | None = None
 
 
 class DrawingMerger(Protocol):
     def merge(
-        self, sources: Sequence[Path], target: Path, *, unit: str = "auto"
+        self,
+        sources: Sequence[Path],
+        target: Path,
+        *,
+        unit: str = "auto",
+        source_names: Sequence[str] = (),
     ) -> MergeResult: ...
 
 

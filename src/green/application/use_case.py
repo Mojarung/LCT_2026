@@ -70,6 +70,8 @@ class PlanRequest:
     inventory: InventoryCounts | None = None
     # Остальные чертежи комплекта (геоподоснова, сети, дендроплан): склеиваются с source.
     extra_sources: tuple[Path, ...] = ()
+    # Original package paths/names survive upload renaming and DWG conversion.
+    source_names: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -135,14 +137,20 @@ class PlanSite:
                 for path in request.extra_sources
             ]
         merge_notes: tuple[str, ...] = ()
+        assembly = None
         if extras:
             if self._merger is None:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
             with watch.stage("merge"):
                 merged = self._merger.merge(
-                    [source, *extras], request.work_dir / MERGED_DXF, unit=params.drawing_unit
+                    [source, *extras],
+                    request.work_dir / MERGED_DXF,
+                    unit=params.drawing_unit,
+                    source_names=request.source_names
+                    or tuple(str(path) for path in (request.source, *request.extra_sources)),
                 )
                 source, merge_notes = merged.path, merged.notes
+                assembly = merged.assembly
         with watch.stage("load_config"):
             rulebook = self._rules.load()
             layer_map = self._layers.load()
@@ -238,6 +246,7 @@ class PlanSite:
             read_diagnostics=scene.read_diagnostics,
             validation=validation,
             export_validation=export_validation,
+            assembly=assembly,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и

@@ -88,6 +88,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
             raise
 
     extra_paths: list[Path] = []
+    source_names = [file.filename or "drawing.dxf"]
     for position, upload in enumerate(extra or (), 1):
         if not upload.filename:
             continue
@@ -102,8 +103,15 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
             container.runs.reject(record.run_id, str(error))
             raise
         extra_paths.append(target)
+        source_names.append(upload.filename)
 
-    background.add_task(container.runs.execute, record.run_id, inventory_path, tuple(extra_paths))
+    background.add_task(
+        container.runs.execute,
+        record.run_id,
+        inventory_path,
+        tuple(extra_paths),
+        tuple(source_names),
+    )
     return record
 
 
@@ -124,7 +132,9 @@ def _copy_and_execute(container: Container, run_id: str, street: StreetSource) -
     except OSError as error:
         container.runs.reject(run_id, f"комплект улицы не скопирован: {error}")
         return
-    container.runs.execute(run_id, None, tuple(extra_paths))
+    container.runs.execute(
+        run_id, None, tuple(extra_paths), tuple(str(path) for path in (street.main, *street.extra))
+    )
 
 
 def accept_street_run(

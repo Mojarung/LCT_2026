@@ -89,6 +89,7 @@ class AuditRequest:
     # Чем считать посадку без круга кроны и без рода в каталоге (блок-знак, точка).
     default_type: PlantingType = PlantingType.TREE
     extra_sources: tuple[Path, ...] = ()
+    source_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,7 +211,11 @@ class AuditSite:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
             with watch.stage("merge"):
                 merged = self._merger.merge(
-                    [source, *extras], request.work_dir / MERGED_DXF, unit=params.drawing_unit
+                    [source, *extras],
+                    request.work_dir / MERGED_DXF,
+                    unit=params.drawing_unit,
+                    source_names=request.source_names
+                    or tuple(str(path) for path in (request.source, *request.extra_sources)),
                 )
                 source, notes = merged.path, merged.notes
         with watch.stage("load_config"):
