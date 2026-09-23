@@ -232,9 +232,13 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
     faces = None
     if inference_mode == "closed_faces":
         faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
-        soil_area = _merge_material_area(soil_area, faces.soil, extent)
         if soil_area is not None:
-            soil_area = soil_area.difference(faces.unresolved)
+            # A declared material polygon is independent of label propagation:
+            # unfinished separators cannot erase its positive area evidence.
+            # A paved label is a real contradiction, including in an unfinished
+            # face where it cannot itself establish a known paved area.
+            soil_area = soil_area.difference(faces.paved_evidence)
+        soil_area = _merge_material_area(soil_area, faces.soil, extent)
         paved_area = _merge_material_area(paved_area, faces.paved, extent)
         grid = np.full(shape, int(Material.UNKNOWN), dtype=np.int8)
     else:
@@ -247,6 +251,7 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
             ambiguity=ambiguity_m / cell,
             tree_limit=tree_distance_m / cell,
         )
+    soil_area = _soil_polygons(soil_area)
     grid[barrier] = int(Material.BARRIER)
     inferred_grid = grid.copy()
     _paint_materials(grid, (soil_area, paved_area, uncertain), origin, cell)
@@ -270,6 +275,26 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         open_edges=faces.open_edges if faces else 0,
         unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
     )
+
+
+def _soil_polygons(area: BaseGeometry | None) -> BaseGeometry | None:
+    # Overlay against touching areas/extent may leave isolated lines or points.
+    # They are not positive soil evidence. GeometryCollection.boundary is None,
+    # so retaining them would also invalidate clearance inside real polygons.
+    if area is None or area.is_empty:
+        return None
+    if area.geom_type in _AREA_TYPES:
+        return area
+    pending = [area]
+    polygons = []
+    while pending:
+        part = pending.pop()
+        if part.geom_type in _AREA_TYPES:
+            polygons.append(part)
+        elif part.geom_type == "GeometryCollection":
+            pending.extend(shapely.get_parts(part))
+    result = shapely.union_all(polygons)
+    return None if result.is_empty else result
 
 
 def _paint_materials(

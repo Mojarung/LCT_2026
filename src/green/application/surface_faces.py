@@ -19,6 +19,7 @@ class FaceMaterials:
     soil: BaseGeometry
     paved: BaseGeometry
     unresolved: BaseGeometry
+    paved_evidence: BaseGeometry
     count: int
     conflicts: int
     unassigned_labels: int
@@ -69,6 +70,9 @@ def closed_face_materials(
         soil=shapely.union_all(faces[soil & ~unresolved]),
         paved=shapely.union_all(faces[paved & ~unresolved]),
         unresolved=shapely.union_all(faces[unresolved]),
+        # Contrary evidence still challenges a declared lawn when incomplete
+        # linework prevents positively assigning the face's material.
+        paved_evidence=shapely.union_all(faces[paved]),
         count=len(faces),
         conflicts=int((soil & paved).sum()),
         unassigned_labels=missed_soil + missed_paved,

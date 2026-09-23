@@ -93,3 +93,9 @@
 Кольцевой борт и устойчивость на границе участка E26:
 `universal_closed_curb.json`, контрпример до исправления —
 `universal_closed_curb_before_clip.json`.
+
+Разделение явного грунта и вывода по подписям E31:
+`surface_evidence_comparison.json`, `universal_after_surface_fix.json`.
+Девять сцен после исправления потери грунта:
+`refinement_after_surface_fix.json`; неуспешный предыдущий снимок E30 сохранён
+в `refinement_comparison.json`. Ограниченное улучшение пока экспериментальное.
