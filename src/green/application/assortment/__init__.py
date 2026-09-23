@@ -149,7 +149,7 @@ def assign_species(
         rejected_by_kind=dict(rejected_kind),
         rejected_by_rule=dict(rejected_rule),
     )
-    warnings = (*plan.warnings, *_warnings(assignment, no_species), *_conditions(placements))
+    warnings = (*plan.warnings, *_warnings(assignment, no_species), *conditions(placements))
     return replace(
         plan,
         placements=placements,
@@ -201,7 +201,7 @@ def _warnings(assignment: Assignment, no_species: int) -> list[str]:
     return messages
 
 
-def _conditions(placements: Sequence[Placement]) -> list[str]:
+def conditions(placements: Sequence[Placement]) -> list[str]:
     """Условия актов, под которыми допущены назначенные виды: обязательства для проекта."""
     counts: Counter[tuple[str, str, str]] = Counter()
     with_barrier: dict[str, str] = {}

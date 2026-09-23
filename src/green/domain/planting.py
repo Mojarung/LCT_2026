@@ -151,7 +151,7 @@ class Alternative:
 class AssortmentInfo:
     """Почему в этой точке именно этот вид: оценка, структура, основания и альтернативы."""
 
-    status: str  # assigned | given | single | no_species
+    status: str  # assigned | given | single | no_species | manual
     percent: int
     factors: Mapping[str, float]
     structure_id: str | None = None
@@ -217,8 +217,8 @@ class Rejection:
     y: float
     verdict: Verdict
     blocking: tuple[RuleCheck, ...]
-    # Место допустимо по нормам, но не занято: причина не из правил расстояний (квоты
-    # разнообразия, заданные количества). У отказа по нормам поле пустое.
+    # Причина, не выраженная проверками расстояний: квоты, условия вида,
+    # недостаточное посадочное место или ручная правка. Допустимость задаёт verdict.
     note: str = ""
 
 

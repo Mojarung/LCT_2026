@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
@@ -20,6 +21,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 
+from green.application.assortment import conditions
+from green.application.assortment.context import site_context
+from green.application.assortment.filters import species_verdict
+from green.application.assortment.reassessment import NOT_ON_SOIL, reassess_placements
 from green.application.assortment.summary import refresh_summaries
 from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
@@ -28,6 +33,7 @@ from green.application.explain import explain
 from green.application.params import active_distance_rules, species_distance_rules
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
+from green.application.validation import validate_plan
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome, Placement, Rejection, Verdict
 
@@ -44,7 +50,6 @@ if TYPE_CHECKING:
     from green.domain.planting import Plan, RuleCheck, Species
 
 PLACEMENT_PREFIX = "P"
-NOT_ON_SOIL = "Точка вне грунта или вне границы работ: посадочное место здесь не рассматривается."
 
 
 class EditKind(StrEnum):
@@ -103,17 +108,19 @@ class RunContext:
             self._site = site_of(self.features)
         return self._site
 
-    def index_for(self, species: Species | None) -> ConstraintIndex:
+    def index_for(
+        self, species: Species | None, kind: PlantingType | None = None
+    ) -> ConstraintIndex:
         """Индекс ограничений для конкретного вида: состав правил зависит от вида и кроны."""
-        key = species.code if species else ""
-        cached = self._indexes.get(key)
-        if cached is not None:
-            return cached
-        kind = (
+        kind = kind or (
             (PlantingType.TREE if species.is_tree else PlantingType.SHRUB)
             if species
             else self.params.planting_type
         )
+        key = f"{species.code if species else ''}:{kind}"
+        cached = self._indexes.get(key)
+        if cached is not None:
+            return cached
         params = replace(self.params, planting_type=kind)
         rules = (
             species_distance_rules(self.rulebook, params, species)
@@ -175,18 +182,44 @@ class RunContextCache:
         self._items.pop(run_id, None)
 
 
-def check_point(context: RunContext, x: float, y: float, species: Species | None) -> PointVerdict:
-    """Проверить точку по всем действующим правилам, как это делает прогон."""
-    index = context.index_for(species)
+def check_point(
+    context: RunContext,
+    x: float,
+    y: float,
+    species: Species | None,
+    kind: PlantingType | None = None,
+) -> PointVerdict:
+    """Local footprint/distance/species check; whole-plan quotas/spacing remain separate."""
+    if not math.isfinite(x) or not math.isfinite(y):
+        raise InputError("Координаты посадки должны быть конечными числами")
+    kind = kind or (
+        (PlantingType.TREE if species.is_tree else PlantingType.SHRUB)
+        if species
+        else context.params.planting_type
+    )
+    index = context.index_for(species, kind)
     points = np.array([shapely.Point(x, y)], dtype=object)
     plantable = bool(index.plantable(points)[0])
     batch = index.evaluate(points)
+    verdict = batch.verdict(0) if plantable else Verdict.FORBIDDEN
+    note = "" if plantable else NOT_ON_SOIL
+    if species is not None:
+        candidate = Placement("preview", 0, kind, species, x, y, verdict, batch.checks(0))
+        local = species_verdict(
+            species,
+            site_context(candidate),
+            context.rulebook,
+            replace(context.params, planting_type=kind),
+        )
+        if local.blocking is not None:
+            verdict = Verdict.FORBIDDEN
+            note = " ".join(part for part in (note, local.blocking.text) if part)
     return PointVerdict(
-        verdict=batch.verdict(0),
+        verdict=verdict,
         checks=batch.checks(0),
         plantable=plantable,
         needs_barrier=batch.needs_barrier(0),
-        note="" if plantable else NOT_ON_SOIL,
+        note=note,
     )
 
 
@@ -213,11 +246,36 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
         else:
             current[position] = _moved(context, _at(current, position, edit), edit)
 
-    plan = _rebuild_plan(context, [p for p in current if p is not None])
-    return refresh_summaries(plan, context.params, catalog)
+    plan = _rebuild_plan(context, [p for p in current if p is not None], catalog)
+    plan = refresh_summaries(plan, context.params, catalog)
+    return explain(_assess_edited(context, plan, catalog), context.rulebook)
 
 
-def _rebuild_plan(context: RunContext, kept: list[Placement]) -> Plan:
+def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> Plan:
+    validation = validate_plan(
+        plan,
+        context.features,
+        context.labels,
+        context.rulebook,
+        context.params,
+        catalog=catalog,
+        existing=plan.assortment_summary.existing if plan.assortment_summary else None,
+    )
+    # Keep the draft editable when spacing/quotas need further changes, but do
+    # not advertise a quality index or removal advice for an invalid plan.
+    plan = assess(plan, context.site(), context.params)
+    if not validation.ok and plan.quality is not None:
+        gate = "После правки план не прошёл проверку: " + "; ".join(
+            f"{issue.code}: {issue.message}" for issue in validation.issues[:5]
+        )
+        plan = replace(
+            plan,
+            quality=replace(plan.quality, index=None, gate=gate, values={}, summary=(gate,)),
+        )
+    return plan
+
+
+def _rebuild_plan(context: RunContext, kept: list[Placement], catalog: Sequence[Species]) -> Plan:
     """Собрать план заново: нарушающая посадка становится отказом, как у генератора.
 
     Инвариант всего сервиса: на слоях посадок лежит только то, что нормам удовлетворяет.
@@ -225,9 +283,12 @@ def _rebuild_plan(context: RunContext, kept: list[Placement]) -> Plan:
     держать его тоже, иначе дерево с нарушенным отступом уедет в DXF на слой «требует
     согласования», и в просмотрщике эксперт прочитает нарушение как согласуемое решение.
     """
+    refreshed = reassess_placements(
+        kept, context.rulebook, catalog, context.params, context.index_for
+    )
     good: list[Placement] = []
     violating: list[Placement] = []
-    for placement in kept:
+    for placement in refreshed:
         (violating if placement.verdict is Verdict.FORBIDDEN else good).append(placement)
 
     placements = tuple(replace(p, number=i) for i, p in enumerate(good, 1))
@@ -242,20 +303,27 @@ def _rebuild_plan(context: RunContext, kept: list[Placement]) -> Plan:
             verdict=p.verdict,
             blocking=tuple(c for c in p.checks if c.outcome is CheckOutcome.FAIL),
             note=(
-                f"Посадка {p.species.name_ru} перенесена сюда вручную, но норму здесь "
-                f"выдержать нельзя, поэтому место отмечено как отказ."
+                f"Посадка {p.species.name_ru} после ручной правки не проходит ограничения. "
+                + " ".join(p.notes)
             ),
         )
         for i, p in enumerate(violating, 1)
     )
-    plan = replace(
+    return replace(
         context.plan,
         placements=placements,
         rejections=(*context.plan.rejections, *moved_out),
+        selection=None,
+        portfolio=None,
+        warnings=(
+            *(
+                w
+                for w in context.plan.warnings
+                if not w.startswith(("Условие допуска:", "Кустарники: Условие допуска:"))
+            ),
+            *conditions(placements),
+        ),
     )
-    # Правка меняет и ценность соседей: ряд без дерева теряет шаг, вид - долю.
-    plan = assess(plan, context.site(), context.params)
-    return explain(plan, context.rulebook)
 
 
 def _placement_id(edit: Edit) -> str:
@@ -286,8 +354,8 @@ def _coordinates(edit: Edit) -> tuple[float, float]:
 
 def _moved(context: RunContext, placement: Placement, edit: Edit) -> Placement:
     x, y = _coordinates(edit)
-    verdict = check_point(context, x, y, placement.species)
-    notes = tuple(n for n in placement.notes if n != NOT_ON_SOIL)
+    verdict = check_point(context, x, y, placement.species, placement.planting_type)
+    notes = tuple(n for n in placement.notes if n not in {NOT_ON_SOIL, BARRIER_NOTE})
     if verdict.note:
         notes = (*notes, verdict.note)
     return replace(
@@ -316,13 +384,15 @@ def _added(
     species = by_code.get(edit.species_code)
     if species is None:
         raise InputError(f"Вид {edit.species_code} отсутствует в каталоге")
-    verdict = check_point(context, x, y, species)
+    kind = edit.planting_type or (PlantingType.TREE if species.is_tree else PlantingType.SHRUB)
+    if (kind is PlantingType.TREE) != species.is_tree:
+        raise InputError("Вид растения не соответствует типу посадки")
+    verdict = check_point(context, x, y, species, kind)
     used = {p.placement_id for p in existing if p is not None}
     return Placement(
         placement_id=_next_id(used),
         number=0,  # нумерация выставляется после применения всех правок
-        planting_type=edit.planting_type
-        or (PlantingType.TREE if species.is_tree else PlantingType.SHRUB),
+        planting_type=kind,
         species=species,
         x=x,
         y=y,

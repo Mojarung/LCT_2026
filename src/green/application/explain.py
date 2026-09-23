@@ -148,10 +148,7 @@ def describe_value(value: PlantingValue | None) -> str:
         return f" Ценность: вклад в индекс качества около нуля{why}."
     if value.delta < 0:
         higher = permille(-value.delta)[1:]
-        return (
-            f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. "
-            f"{value.scope}"
-        )
+        return f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. {value.scope}"
     rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
     return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}."
 
@@ -193,10 +190,18 @@ def _reason(reason: Reason) -> str:
 
 def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
     if rejection.note:
-        text = (
-            f"Отказ №{rejection.number}: место допустимо по нормам, посадка не выполнена. "
-            f"Причина: {rejection.note}."
+        state = (
+            "место допустимо по нормам, посадка не выполнена"
+            if rejection.verdict is Verdict.ALLOWED
+            else VERDICT_LABELS[rejection.verdict]
         )
+        text = f"Отказ №{rejection.number}: {state}. Причина: {rejection.note}."
+        if rejection.blocking:
+            text += (
+                " Проверки: "
+                + "; ".join(describe_check(check, rulebook) for check in rejection.blocking)
+                + "."
+            )
         return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
     parts = [describe_check(c, rulebook) for c in rejection.blocking]
     text = (
