@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import json
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TypedDict
 
 import shapely
 from shapely.affinity import rotate, translate
@@ -29,6 +31,20 @@ class Case:
     probes: list[tuple[float, float, Material]]
 
 
+class ResultRow(TypedDict):
+    case: str
+    mode: str
+    cell_m: float
+    rotation_deg: int
+    translation_m: int
+    expected: list[int]
+    actual: list[int]
+    false_soil: int
+    missed_soil: int
+    mismatches: int
+    seconds: float
+
+
 def feature(kind: ObjectClass, geometry: shapely.Geometry) -> Feature:
     return Feature(
         SourceRef("synthetic", "0", kind.value), "unfamiliar", geometry, object_class=kind
@@ -43,7 +59,7 @@ def cases() -> list[Case]:
     extent = box(-5, -5, 105, 45)
     border = feature(ObjectClass.CURB, box(0, 0, 100, 40).boundary)
     lawn = label("ГАЗОН", 5, 5)
-    return [
+    result = [
         Case("no-boundary", [], [lawn], extent, [(7, 5, UNKNOWN), (90, 5, UNKNOWN)]),
         Case(
             "project-boundary",
@@ -122,11 +138,67 @@ def cases() -> list[Case]:
             extent,
             [(7, 10, UNKNOWN)],
         ),
+        Case(
+            "fence-preserves-inner-unknown",
+            [border, feature(ObjectClass.FENCE, box(10, 10, 20, 20).boundary)],
+            [lawn, label("ГАЗОН", 12, 12)],
+            extent,
+            [(7, 5, SOIL), (15, 15, UNKNOWN), (90, 35, SOIL)],
+        ),
+        Case(
+            "fence-completes-curb",
+            [
+                feature(ObjectClass.CURB, LineString([(0, 0), (0, 40), (100, 40), (100, 0)])),
+                feature(ObjectClass.FENCE, LineString([(0, 0), (100, 0)])),
+            ],
+            [lawn],
+            extent,
+            [(7, 5, UNKNOWN), (90, 35, UNKNOWN)],
+        ),
+        Case(
+            "fence-overlaps-real-boundary",
+            [border, feature(ObjectClass.FENCE, border.geometry)],
+            [lawn],
+            extent,
+            [(7, 5, SOIL), (90, 35, SOIL)],
+        ),
+        Case(
+            "fence-divides-curb",
+            [border, feature(ObjectClass.FENCE, LineString([(50, 0), (50, 40)]))],
+            [lawn],
+            extent,
+            [(7, 5, UNKNOWN), (90, 35, UNKNOWN)],
+        ),
     ]
+    result.extend(
+        Case(
+            f"nonmaterial-{kind.value}-enclosure",
+            [feature(kind, border.geometry)],
+            [lawn],
+            extent,
+            [(7, 5, UNKNOWN), (90, 35, UNKNOWN)],
+        )
+        for kind in (
+            ObjectClass.FENCE,
+            ObjectClass.ROAD,
+            ObjectClass.SIDEWALK,
+            ObjectClass.TRAM,
+            ObjectClass.RAILWAY,
+            ObjectClass.BUILDING,
+        )
+    )
+    return result
 
 
 def main() -> None:
-    rows = []
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "docs/research/verified-pipeline/surface_topology_comparison.json",
+    )
+    args = parser.parse_args()
+    rows: list[ResultRow] = []
     for mode, cell, angle, offset in itertools.product(
         ("distance", "closed_faces"), (0.25, 0.5, 1.0), (0, 23, 91), (0, 1_000_000)
     ):
@@ -147,8 +219,10 @@ def main() -> None:
                 features, labels, transform(case.extent), cell, inference_mode=mode
             )
             points = shapely.points([transform(Point(x, y)).coords[0] for x, y, _ in case.probes])
-            actual = surface.material(points).tolist() if surface else [UNKNOWN] * len(points)
-            expected = [m for _, _, m in case.probes]
+            actual: list[int] = (
+                surface.material(points).tolist() if surface else [int(UNKNOWN)] * len(points)
+            )
+            expected: list[int] = [m for _, _, m in case.probes]
             rows.append(
                 {
                     "case": case.name,
@@ -189,9 +263,7 @@ def main() -> None:
         "summary": totals,
         "rows": rows,
     }
-    (ROOT / "docs/research/verified-pipeline/surface_topology_comparison.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n"
-    )
+    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(totals, indent=2))
 
 

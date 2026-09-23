@@ -69,7 +69,7 @@ class ObjectClass(StrEnum):
 
     @property
     def is_surface_barrier(self) -> bool:
-        """Линия, по которой меняется покрытие: граница для карты покрытий."""
+        """Возможный разделитель областей; сам по себе не доказывает материал."""
         return self in {
             ObjectClass.CURB,
             ObjectClass.PAVEMENT_EDGE,

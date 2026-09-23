@@ -61,6 +61,7 @@ class SurfaceMap:
     conflicting_faces: int = 0
     unassigned_labels: int = 0
     open_edges: int = 0
+    unsupported_boundary_faces: int = 0
     # Display raster and exact polygon evidence are kept separate: painting a
     # polygon into a cell must not expand it or erase a sub-cell hole.
     inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
@@ -141,6 +142,7 @@ class SurfaceMap:
             "conflicting_faces": self.conflicting_faces,
             "unassigned_labels": self.unassigned_labels,
             "open_edges": self.open_edges,
+            "unsupported_boundary_faces": self.unsupported_boundary_faces,
             **{f"cells_{m.name.lower()}": counted[m] for m in Material},
         }
 
@@ -162,6 +164,12 @@ class SurfaceMap:
             notes.append(
                 f"Подписей без определённого замкнутого контура: {self.unassigned_labels}; "
                 "они не разрешают посадку в соседнем пространстве."
+            )
+        if self.unsupported_boundary_faces:
+            notes.append(
+                f"Контуров, замкнутых без подтверждённых границ покрытия: "
+                f"{self.unsupported_boundary_faces}; забор, ось дороги или рельсы "
+                "не определяют грунт внутри. Уточните роль линий по исходнику."
             )
         return tuple(notes)
 
@@ -260,6 +268,7 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         conflicting_faces=faces.conflicts if faces else 0,
         unassigned_labels=faces.unassigned_labels if faces else 0,
         open_edges=faces.open_edges if faces else 0,
+        unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
     )
 
 
@@ -289,13 +298,22 @@ def _closed_materials(
         if uncertain is not None
         else np.ones(len(seed_xy), dtype=bool)
     )
-    material_lines = _barrier_lines(
+    separating_lines = _barrier_lines(
         [f for f in features if f.object_class is not ObjectClass.WORK_BOUNDARY]
     )
+    material_lines = _barrier_lines(
+        [
+            f
+            for f in features
+            if f.object_class in {ObjectClass.CURB, ObjectClass.PAVEMENT_EDGE, ObjectClass.LAWN}
+            or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
+        ]
+    )
     faces = closed_face_materials(
-        material_lines,
+        separating_lines,
         seed_xy[certain & (seed_kind == Material.SOIL)],
         seed_xy[certain & (seed_kind == Material.PAVED)],
+        material_lines=material_lines,
     )
     return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
 

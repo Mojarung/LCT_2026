@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -19,9 +19,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("inputs", nargs="+", type=Path)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "docs/research/verified-pipeline/surface_face_survey.json",
+    )
+    args = parser.parse_args()
     rows = []
     layers = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
-    for arg in sys.argv[1:]:
+    for arg in args.inputs:
         begin = time.perf_counter()
         scene = EzdxfSceneReader().read(Path(arg))
         require_complete_geometry(scene)
@@ -41,6 +49,7 @@ def main() -> None:
             "conflicting_faces": faces.conflicts,
             "unassigned_labels": faces.unassigned_labels,
             "open_edges": faces.open_edges,
+            "unsupported_boundary_faces": faces.unsupported_boundaries,
             "inferred_soil_m2": faces.soil.area,
             "inferred_paved_m2": faces.paved.area,
             "unresolved_face_m2": faces.unresolved.area,
@@ -56,9 +65,7 @@ def main() -> None:
         ),
         "rows": rows,
     }
-    (ROOT / "docs/research/verified-pipeline/surface_face_survey.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    )
+    args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
 if __name__ == "__main__":
