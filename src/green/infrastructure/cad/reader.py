@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, Polyline
+from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, Polyline, Text
 from ezdxf.path import make_path
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
@@ -267,21 +267,43 @@ class _Walker:
     ) -> None:
         is_mtext = entity.dxftype() == "MTEXT"
         text = entity.plain_text() if is_mtext else entity.dxf.text  # ty: ignore[unresolved-attribute]
+        if not text or not text.strip():
+            return
+        original = entity.origin_of_copy or entity
+        if (
+            isinstance(original, Text)
+            and (original.dxf.halign or original.dxf.valign)
+            and not original.dxf.hasattr("align_point")
+        ):
+            # Text.transform() supplies a fallback before virtual_entities()
+            # returns. Inspect the original too, or blocks hide missing data.
+            self._gap(entity.dxftype(), layer, block, "text-alignment-point-missing", ref)
+            self.skipped[entity.dxftype()] += 1
+            return
         point = entity.dxf.insert
-        if not is_mtext:
+        second = None
+        if isinstance(entity, Text):
+            # For justified TEXT/ATTRIB, DXF group 10 may be stale or ignored;
+            # group 11 is its declared anchor. LEFT/FIT/ALIGNED retain p1.
+            _, point, second = entity.get_placement()
             point = entity.ocs().to_wcs(point)
-        if text and text.strip():
-            self.labels.append(
-                TextLabel(
-                    ref=ref,
-                    layer=layer,
-                    x=point.x,
-                    y=point.y,
-                    text=text.strip(),
-                    block=block,
-                    block_chain=chain,
-                )
+        if not np.isfinite(tuple(point)).all() or (
+            second is not None and not np.isfinite(tuple(second)).all()
+        ):
+            self._gap(entity.dxftype(), layer, block, "non-finite-text-coordinates", ref)
+            self.skipped[entity.dxftype()] += 1
+            return
+        self.labels.append(
+            TextLabel(
+                ref=ref,
+                layer=layer,
+                x=point.x,
+                y=point.y,
+                text=text.strip(),
+                block=block,
+                block_chain=chain,
             )
+        )
 
     def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type
         kind = entity.dxftype()
