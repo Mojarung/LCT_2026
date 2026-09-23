@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING
 
 from green.application.assortment import assign_species
 from green.application.basemap import build_basemap
-from green.application.classification import classify_scene, promote_unknown_lines
+from green.application.classification import (
+    classification_report,
+    classify_scene,
+    promote_unknown_lines,
+    require_classified,
+)
 from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
@@ -159,7 +164,20 @@ class PlanSite:
             scene = self._reader.read(source, unit=params.drawing_unit)
             require_complete_geometry(scene)
         with watch.stage("classify"):
-            scene, coverage = classify_scene(scene, layer_map)
+            scene, coverage = classify_scene(scene, layer_map, params)
+            semantics = classification_report(scene, layer_map, params)
+            require_classified(semantics, params)
+            if not semantics.ready:
+                scene = replace(
+                    scene,
+                    warnings=(
+                        *scene.warnings,
+                        (
+                            "Семантика не уточнена: результат исследовательский; "
+                            "неизвестные объекты могут нарушить допустимость посадок."
+                        ),
+                    ),
+                )
             if params.unknown_lines_as_utility:
                 scene = promote_unknown_lines(scene)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
@@ -247,6 +265,7 @@ class PlanSite:
             validation=validation,
             export_validation=export_validation,
             assembly=assembly,
+            classification=semantics,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -37,8 +36,6 @@ if TYPE_CHECKING:
 
     from green.infrastructure.cad.documents import DocumentCache
 
-# Подпись сети Геотреста: текст и стрелка-выноска. Стрелка не должна стать трубой.
-LABEL_BLOCK = re.compile(r"(?:^|\$0\$|\|)DIMTXT", re.IGNORECASE)
 MAX_BLOCK_DEPTH = 8
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
@@ -125,7 +122,6 @@ class _Walker:
         chain: tuple[str, ...],
         parent_handle: str,
         index: int,
-        labels_only: bool = False,
         parent_block: str | None = None,
     ) -> None:
         layer = entity.dxf.get("layer", "0")
@@ -138,8 +134,6 @@ class _Walker:
 
         if kind in _TEXT_ENTITIES:
             self._label(entity, ref, layer)
-        elif labels_only:
-            self.skipped[f"{kind}:label-leader"] += 1
         elif kind == "INSERT":
             self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
@@ -205,7 +199,6 @@ class _Walker:
         if (block.block.is_xref or block.block.is_xref_overlay) and len(block) == 0:
             self.unresolved_xrefs.add(name)
             return
-        labels_only = LABEL_BLOCK.search(name) is not None
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
             return
@@ -232,7 +225,6 @@ class _Walker:
                 chain=(*chain, name),
                 parent_handle=ref.handle,
                 index=position,
-                labels_only=labels_only,
                 parent_block=name,
             )
 

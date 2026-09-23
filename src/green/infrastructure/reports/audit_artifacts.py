@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import orjson
 
 from green.application.explain import describe_check
+from green.infrastructure.reports.artifacts import classification_payload
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,6 +51,9 @@ class AuditArtifactSink:
         return {
             report.output_dxf.name: report.output_dxf,
             "audit.json": _write_json(directory / "audit.json", _document(report)),
+            "classification.json": _write_json(
+                directory / "classification.json", classification_payload(report.classification)
+            ),
             "audit.csv": _write_csv(directory / "audit.csv", rows),
             "audit.md": _write_text(directory / "audit.md", _markdown(report)),
             "verify.json": _write_json(

@@ -72,7 +72,9 @@ def _audit(work: Path, profile: str = "strict", **options: str) -> AuditReport:
     source = work / "designed.dxf"
     _designed(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
-    params = container.profiles.load(profile, {})
+    # These tests explicitly exercise the legacy partial audit and its warnings.
+    # The default strict path is tested separately and refuses this unknown line.
+    params = container.profiles.load(profile, {"require_known_objects": False})
     request = AuditRequest(
         "audit", source, work / "out", profile, params, planting_layers=PATTERN, **options
     )
@@ -148,6 +150,7 @@ def test_unknown_layers_and_project_parameters_are_not_violations(
     assert near_line.violations == ()
     assert not any(c.rule_id.startswith("R-UTILUNK") for c in near_line.checks)
     assert any("Не вошли в классификатор" in w for w in report.warnings)
+    assert report.summary()["semantic_assignments_complete"] is False
     rules = audit_rules(report.rulebook, report.params, PlantingType.TREE)
     assert rules
     assert all(rule.citation.act_id != "PROJECT" for rule in rules)
@@ -244,7 +247,10 @@ def test_our_own_plan_passes_the_audit(tmp_path: Path) -> None:
             generated.output_dxf,
             tmp_path / "audit",
             "strict",
-            params,
+            container.profiles.load(
+                "strict",
+                {"layer_classes": {"GREEN_ZONE_ALLOWED": "ignore", "GREEN_REJECT": "ignore"}},
+            ),
             planting_layers=r"^GREEN_(TREES|SHRUBS)",
             shrub_layers=r"^GREEN_SHRUBS",
         )

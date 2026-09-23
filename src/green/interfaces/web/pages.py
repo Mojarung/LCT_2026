@@ -166,14 +166,21 @@ async def create_run(  # noqa: PLR0913 - поля формы приходят о
 
 @router.post("/web/demo", name="web_demo")
 def demo(
-    request: Request, background: BackgroundTasks, container: ContainerDep
+    request: Request,
+    background: BackgroundTasks,
+    container: ContainerDep,
+    *,
+    exploratory: Annotated[bool, Form()] = False,
 ) -> RedirectResponse:
     """Запустить прогон на встроенном демонстрационном участке.
 
     Фрагмент настоящей улицы лежит в пакете: на стенде жюри датасета нет, а показывать
     сервис надо с первого клика, не заставляя искать DXF.
     """
-    record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, {})
+    # The real fragment has unresolved spatial layers. Only an explicitly requested
+    # sketch may bypass semantic review; uploads and ordinary demo requests stay strict.
+    overrides = {"require_known_objects": False} if exploratory else {}
+    record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, overrides)
     write_sample(container.store.input_path(record.run_id))
     background.add_task(container.runs.execute, record.run_id, None, ())
     return RedirectResponse(str(request.url_for("web_run", run_id=record.run_id)), status_code=303)

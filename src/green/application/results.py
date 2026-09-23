@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from green.application.assembly import PackageAssembly
     from green.application.basemap import Basemap
-    from green.application.classification import LayerCoverage
+    from green.application.classification import ClassificationReport, LayerCoverage
     from green.application.editing import RunContext
     from green.application.params import PlanParams
     from green.application.validation import PlanValidation
@@ -96,10 +96,14 @@ class RunReport:
     validation: PlanValidation | None = None
     export_validation: PlanExportReport | None = None
     assembly: PackageAssembly | None = None
+    classification: ClassificationReport | None = None
 
     def summary(self) -> dict[str, object]:
         return {
             "placements": len(self.plan.placements),
+            "semantic_assignments_complete": self.classification.ready
+            if self.classification
+            else None,
             "allowed": self.plan.allowed_count,
             "needs_approval": self.plan.approval_count,
             "rejections": len(self.plan.rejections),

@@ -93,7 +93,9 @@ def test_result_holds_no_blocks_the_source_did_not_have(
     source = tmp_path / "leader.dxf"
     _with_leader(source, container_only=container_only)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
-    params = container.profiles.load("strict", {"max_rejections": 50})
+    params = container.profiles.load(
+        "strict", {"max_rejections": 50, "block_classes": {"SIGN_WITH_LEADER": "existing_tree"}}
+    )
     report = container.use_case.execute(
         PlanRequest("leader", source, tmp_path / "out", "strict", params)
     )

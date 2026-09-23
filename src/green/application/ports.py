@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from green.application.assembly import PackageAssembly
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
-    from green.application.classification import LayerMap
+    from green.application.classification import ClassificationReport, LayerMap
     from green.application.params import PlanParams
     from green.application.results import (
         IntegrityReport,
@@ -168,6 +168,8 @@ class ArtifactSink(Protocol):
     def save(self, directory: Path, report: RunReport) -> dict[str, Path]: ...
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path: ...
+
+    def save_classification(self, directory: Path, report: ClassificationReport) -> Path: ...
 
 
 class ProgressSink(Protocol):

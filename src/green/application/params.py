@@ -49,6 +49,12 @@ class PlanParams:
     curb_offsets_m: tuple[float, ...] = (2.0, 2.5, 3.0)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
+    # Name matches are evidence, not proof. Unmatched/conflicting spatial objects
+    # stop the run; exact per-input assignments resolve them without editing code.
+    require_known_objects: bool = True
+    layer_classes: Mapping[str, str] = field(default_factory=dict)
+    block_classes: Mapping[str, str] = field(default_factory=dict)
+    feature_classes: Mapping[str, str] = field(default_factory=dict)
     allow_needs_approval: bool = True
     label_search_radius_m: float = 3.0
     max_rejections: int = 2000

@@ -204,7 +204,7 @@ def test_run_page_and_api_show_progress_of_a_running_run(client: TestClient) -> 
 
 
 def test_finished_run_has_no_progress_but_keeps_the_basemap(client: TestClient) -> None:
-    created = client.post("/web/demo", follow_redirects=False)
+    created = client.post("/web/demo", data={"exploratory": "true"}, follow_redirects=False)
     run_id = created.headers["location"].rsplit("/", 1)[-1]
     body = client.get(f"/api/v1/runs/{run_id}").json()
 

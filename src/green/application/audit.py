@@ -29,7 +29,11 @@ import numpy as np
 import shapely
 
 from green.application.barriers import FAR_M
-from green.application.classification import classify_scene
+from green.application.classification import (
+    classification_report,
+    classify_scene,
+    require_classified,
+)
 from green.application.constraints import ConstraintIndex
 from green.application.diameters import assign_diameters
 from green.application.errors import InputError
@@ -44,6 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+    from green.application.classification import ClassificationReport
     from green.application.params import PlanParams
     from green.application.ports import (
         AuditWriter,
@@ -132,6 +137,7 @@ class AuditReport:
     timings: tuple[StageTiming, ...]
     output_dxf: Path
     warnings: tuple[str, ...] = field(default=())
+    classification: ClassificationReport | None = None
 
     @property
     def violating(self) -> tuple[AuditedPlanting, ...]:
@@ -144,6 +150,9 @@ class AuditReport:
     def summary(self) -> dict[str, object]:
         verdicts = Counter(p.verdict.value for p in self.plantings)
         return {
+            "semantic_assignments_complete": self.classification.ready
+            if self.classification
+            else None,
             "plantings": len(self.plantings),
             "trees": sum(p.planting_type is PlantingType.TREE for p in self.plantings),
             "shrubs": sum(p.planting_type is PlantingType.SHRUB for p in self.plantings),
@@ -233,7 +242,14 @@ class AuditSite:
                 )
             taken = {id(f) for f in on_layers}
             base = replace(scene, features=tuple(f for f in scene.features if id(f) not in taken))
-            base, _ = classify_scene(base, layer_map)
+            base, _ = classify_scene(base, layer_map, params)
+            semantics = classification_report(base, layer_map, params)
+            require_classified(semantics, params)
+            if not semantics.ready:
+                notes = (
+                    *notes,
+                    "Семантика не уточнена: нормоконтроль неполон; см. classification.json.",
+                )
             features = assign_diameters(base.features, base.labels, params.label_search_radius_m)
             found, skipped = _plantings(on_layers)
         with watch.stage("check"):
@@ -257,6 +273,7 @@ class AuditSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             warnings=(*notes, *scene.warnings, *_scope_notes(features, plantings, skipped)),
+            classification=semantics,
         )
 
 

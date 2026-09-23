@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from green.application.classification import ClassificationError
 from green.application.errors import GreenError
 from green.application.progress import plan_stages
 from green.application.results import RunProgress, RunRecord, RunState
@@ -147,6 +148,14 @@ class RunService:
                 saved = self._artifacts.save(run_dir, report)
                 if self._contexts is not None and report.context is not None:
                     self._contexts.put(report.context)
+            except ClassificationError as error:
+                path = self._artifacts.save_classification(run_dir, error.report)
+                return self._transition(
+                    reporter.record,
+                    RunState.FAILED,
+                    error=str(error),
+                    artifacts=(*reporter.record.artifacts, path.name),
+                )
             except GreenError as error:
                 return self._transition(reporter.record, RunState.FAILED, error=str(error))
             except Exception as error:  # noqa: BLE001 - любой сбой прогона фиксируется в статусе

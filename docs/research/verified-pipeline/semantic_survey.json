@@ -1,0 +1,147 @@
+{
+  "scope": "Assignment/completeness counts only, not semantic accuracy. No independent annotated ground truth. Known names can still be wrong. All DXFs read locally.",
+  "layer_map_fingerprint": "6e35d7d0c2883e22014e90804f67f9c373be8d7cd7eda55b6f259ec516d9ea62",
+  "rows": [
+    {
+      "name": "output[1-3]_3_ДЖКХпр-25_03117_1tp.dxf",
+      "source_sha256": "0400b939435c9c92fd4ba7c8722e94084ca8f15efe9cb04d4245089e432e423a",
+      "import_complete": true,
+      "features": 46108,
+      "semantic_ready": false,
+      "unresolved_features": 1783,
+      "unresolved_layers": 7,
+      "unresolved_geometry": {
+        "LineString": 1777,
+        "Polygon": 6
+      },
+      "methods": {
+        "unmatched": 1783,
+        "name_rule": 44325
+      },
+      "classes": {
+        "unknown": 1783,
+        "ignore": 1587,
+        "building": 2107,
+        "existing_tree": 5561,
+        "lawn": 14216,
+        "pole": 1032,
+        "pavement_edge": 16637,
+        "utility.access": 140,
+        "slope": 1162,
+        "fence": 1438,
+        "power_line_overhead": 315,
+        "structure": 130
+      },
+      "classification_seconds": 0.3623,
+      "seconds": 4.0987
+    },
+    {
+      "name": "цвет_output[1-7]_3_ДЖКХ-25_00694up.dxf",
+      "source_sha256": "50a9dcef7eaeabfa89b3bc2286b3a463a91d2ecf202234f1e8fb9fdb23f480fd",
+      "import_complete": true,
+      "features": 97406,
+      "semantic_ready": false,
+      "unresolved_features": 122,
+      "unresolved_layers": 3,
+      "unresolved_geometry": {
+        "LineString": 122
+      },
+      "methods": {
+        "name_rule": 97406
+      },
+      "classes": {
+        "utility.power_cable": 84428,
+        "utility.heat": 1590,
+        "utility.sewer": 1164,
+        "utility.storm": 4358,
+        "utility.water": 3878,
+        "utility.telecom": 1506,
+        "utility.unknown": 122,
+        "utility.drain": 360
+      },
+      "classification_seconds": 0.5104,
+      "seconds": 5.317
+    },
+    {
+      "name": "output[1-11]_3_ДЖКХ-24_02404tp.dxf",
+      "source_sha256": "863f68391934f098adc363d919f937429547e49182717419e5bfe68a7c50228f",
+      "import_complete": true,
+      "features": 58427,
+      "semantic_ready": false,
+      "unresolved_features": 1806,
+      "unresolved_layers": 10,
+      "unresolved_geometry": {
+        "LineString": 1788,
+        "Polygon": 18
+      },
+      "methods": {
+        "name_rule": 56621,
+        "unmatched": 1806
+      },
+      "classes": {
+        "ignore": 2944,
+        "unknown": 1806,
+        "pavement_edge": 10041,
+        "utility.sewer": 10,
+        "power_line_overhead": 690,
+        "pole": 2143,
+        "utility.access": 385,
+        "lawn": 14327,
+        "building": 773,
+        "existing_tree": 6442,
+        "slope": 7739,
+        "fence": 4669,
+        "curb": 6024,
+        "structure": 434
+      },
+      "classification_seconds": 0.3349,
+      "seconds": 6.4726
+    },
+    {
+      "name": "berzarina_fragment.dxf",
+      "source_sha256": "f54238c9cc648fd0b4917580ea477c8f645b1f572598fa3f88c90136ffb77035",
+      "import_complete": true,
+      "features": 11410,
+      "semantic_ready": false,
+      "unresolved_features": 1152,
+      "unresolved_layers": 22,
+      "unresolved_geometry": {
+        "Polygon": 142,
+        "LineString": 1010
+      },
+      "methods": {
+        "unmatched": 1147,
+        "name_rule": 10263
+      },
+      "classes": {
+        "unknown": 1147,
+        "building": 249,
+        "ignore": 1215,
+        "utility.access": 62,
+        "pavement_edge": 1976,
+        "existing_tree": 309,
+        "pole": 77,
+        "fence": 1286,
+        "slope": 42,
+        "lawn": 2109,
+        "curb": 137,
+        "utility.gas": 487,
+        "utility.heat": 75,
+        "utility.storm": 120,
+        "utility.telecom": 372,
+        "utility.power_cable": 972,
+        "utility.sewer": 472,
+        "utility.drain": 12,
+        "utility.water": 166,
+        "utility.unknown": 5,
+        "work_boundary": 7,
+        "power_line_overhead": 32,
+        "structure": 2,
+        "sidewalk": 60,
+        "road": 19
+      },
+      "classification_seconds": 0.089,
+      "seconds": 0.9279
+    }
+  ]
+}

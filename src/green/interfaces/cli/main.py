@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -13,14 +14,21 @@ from cyclopts import App, Parameter
 
 from green import __version__
 from green.application.audit import AuditRequest
-from green.application.classification import classify_scene
+from green.application.classification import (
+    ClassificationError,
+    classification_report,
+    classify_scene,
+)
 from green.application.errors import GreenError, InputError
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
 from green.domain.norms import PlantingType
 from green.infrastructure.inventory import read_inventory
+from green.infrastructure.reports.artifacts import classification_payload
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from green.application.ports import InventoryCounts
     from green.bootstrap.container import Container
 
@@ -29,6 +37,15 @@ app = App(
     help="Автопроектирование озеленения: DXF -> план посадок на слоях GREEN_* -> DXF.",
     version=__version__,
 )
+
+
+@contextmanager
+def _save_review(container: Container, directory: Path) -> Iterator[None]:
+    try:
+        yield
+    except ClassificationError as error:
+        container.artifacts.save_classification(directory, error.report)
+        raise
 
 
 def _print(payload: object) -> None:
@@ -101,9 +118,10 @@ def run(
     run_id = str(uuid.uuid7())
     work_dir = out or Path("out") / run_id
     existing = _inventory(container, inventory)
-    report = container.use_case.execute(
-        PlanRequest(run_id, source, work_dir, profile_name, params, existing, tuple(more))
-    )
+    with _save_review(container, work_dir):
+        report = container.use_case.execute(
+            PlanRequest(run_id, source, work_dir, profile_name, params, existing, tuple(more))
+        )
     files = container.artifacts.save(work_dir, report)
     _print(
         {
@@ -139,21 +157,22 @@ def audit(  # noqa: PLR0913 - CLI options are separate parameters by design
         raise InputError("--no-crown-is: ожидается tree или shrub") from error
     run_id = uuid.uuid4().hex
     work_dir = out or container.settings.runs_dir / f"audit-{run_id}"
-    report = container.audit.execute(
-        AuditRequest(
-            run_id=run_id,
-            source=source,
-            work_dir=work_dir,
-            profile=name,
-            params=params,
-            planting_layers=plantings,
-            tree_layers=trees,
-            shrub_layers=shrubs,
-            min_tree_crown_m=min_tree_crown,
-            default_type=default_type,
-            extra_sources=tuple(more),
+    with _save_review(container, work_dir):
+        report = container.audit.execute(
+            AuditRequest(
+                run_id=run_id,
+                source=source,
+                work_dir=work_dir,
+                profile=name,
+                params=params,
+                planting_layers=plantings,
+                tree_layers=trees,
+                shrub_layers=shrubs,
+                min_tree_crown_m=min_tree_crown,
+                default_type=default_type,
+                extra_sources=tuple(more),
+            )
         )
-    )
     artifacts = container.audit_artifacts.save(work_dir, report)
     _print(
         {
@@ -167,16 +186,31 @@ def audit(  # noqa: PLR0913 - CLI options are separate parameters by design
 
 
 @app.command
-def inspect(source: Path, /) -> None:
+def inspect(
+    source: Path,
+    /,
+    *,
+    profile: str | None = None,
+    set_: Annotated[tuple[str, ...], Parameter(name="--set")] = (),
+) -> None:
     """Показать слои DXF и присвоенные им классы по config/layer_map.yaml."""
     container = build_container()
-    scene, coverage = classify_scene(container.reader.read(source), container.layers.load())
+    params = container.profiles.load(
+        profile or container.settings.default_profile, _overrides(set_)
+    )
+    layer_map = container.layers.load()
+    scene, coverage = classify_scene(
+        container.reader.read(source, unit=params.drawing_unit), layer_map, params
+    )
     _print(
         {
             "source": scene.source_name,
             "dxf_version": scene.dxf_version,
             "features": len(scene.features),
             "labels": len(scene.labels),
+            "classification": classification_payload(
+                classification_report(scene, layer_map, params)
+            ),
             "layers": [
                 {"layer": c.layer, "class": c.object_class.value, "features": c.features}
                 for c in coverage

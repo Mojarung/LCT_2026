@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.basemap import Basemap
+    from green.application.classification import ClassificationReport
     from green.application.results import RunReport
     from green.domain.norms import RuleBook
     from green.domain.planting import (
@@ -85,6 +86,9 @@ class FileArtifactSink:
                 else None,
             ),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
+            "classification.json": _write_json(
+                directory / "classification.json", classification_payload(report.classification)
+            ),
             "input_read.json": _write_json(
                 directory / "input_read.json", asdict(report.read_diagnostics)
             ),
@@ -125,6 +129,14 @@ class FileArtifactSink:
         """
         directory.mkdir(parents=True, exist_ok=True)
         return _write_json(directory / "basemap.geojson", _basemap(basemap), indent=False)
+
+    def save_classification(self, directory: Path, report: ClassificationReport) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        return _write_json(directory / "classification.json", classification_payload(report))
+
+
+def classification_payload(report: ClassificationReport | None) -> dict[str, Any] | None:
+    return {"ready": report.ready, **asdict(report)} if report is not None else None
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:

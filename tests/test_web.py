@@ -138,7 +138,7 @@ def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
     На стенде жюри датасета нет, а показывать сервис надо с первого клика: чертёж строит
     сам сервис, поэтому проверяем весь путь, а не только код ответа.
     """
-    created = client.post("/web/demo", follow_redirects=False)
+    created = client.post("/web/demo", data={"exploratory": "true"}, follow_redirects=False)
 
     assert created.status_code == 303
     page = client.get(created.headers["location"])
@@ -148,6 +148,8 @@ def test_demo_button_runs_the_built_in_site(client: TestClient) -> None:
     run_id = created.headers["location"].rsplit("/", 1)[-1]
     plan = client.get(f"/api/v1/runs/{run_id}/artifacts/plan.json").json()
     assert plan["placements"], "демонстрационный участок не дал ни одной посадки"
+    assert "Исследовательский эскиз" in page.text
+    assert "Допустимость посадок не подтверждена" in page.text
     assert plan["summary"]["integrity_ok"] is True
 
     basemap = client.get(f"/api/v1/runs/{run_id}/artifacts/basemap.geojson").json()
@@ -264,7 +266,7 @@ def test_result_files_come_first_and_service_ones_are_folded(client: TestClient)
     На странице `result.dxf` и `interpretations.csv` названы тем, чем они являются, а
     остальные одиннадцать уходят под раскрытие. Проверяем разделение, а не вёрстку.
     """
-    created = client.post("/web/demo", follow_redirects=False)
+    created = client.post("/web/demo", data={"exploratory": "true"}, follow_redirects=False)
     page = client.get(created.headers["location"]).text
 
     headline = page.index("result.dxf")

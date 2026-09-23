@@ -221,7 +221,12 @@ def test_upload_runs_with_resolved_xref_and_records_assembly(tmp_path: Path) -> 
                 ("file", ("site.dxf", source.read_bytes(), "image/vnd.dxf")),
                 ("extra", ("networks.dxf", asset.read_bytes(), "image/vnd.dxf")),
             ],
-            data={"overrides": '{"placement_solver":"greedy"}'},
+            data={
+                "overrides": (
+                    '{"placement_solver":"greedy", '
+                    '"block_classes":{"unknown name":"utility.water"}}'
+                )
+            },
         )
         assert response.status_code == 202, response.text
         run = client.get(response.headers["Location"]).json()

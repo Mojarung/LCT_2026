@@ -141,13 +141,21 @@
 
     <div class="hud-scroll">
       {% if done %}
+      {% if s.get('semantic_assignments_complete') == false %}
+      <div class="notice">
+        <p><b>Исследовательский эскиз</b></p>
+        <p>Допустимость посадок не подтверждена: есть неуточнённые объекты.</p>
+        <a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Отчёт распознавания объектов</a>
+      </div>
+      {% endif %}
       {% set total = s.get('placements', 0) %}
       {% set approval = s.get('needs_approval', 0) %}
       {% set rejected = s.get('rejections', 0) %}
       <p class="metric">
         <b>{{ total }}</b>
         <span>{{ plural(total, 'посадка', 'посадки', 'посадок') }} в плане{% if approval %},
-          {{ approval }} на согласование{% else %}, <em>все без ограничений</em>{% endif %}</span>
+          {{ approval }} на согласование{% elif s.get('semantic_assignments_complete') == false %},
+          <em>допустимость не подтверждена</em>{% else %}, <em>проверены по заданным правилам</em>{% endif %}</span>
       </p>
       <p class="metric-sub">
         <b>{{ rejected }}</b> {{ plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено') }} ·

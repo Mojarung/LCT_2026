@@ -101,6 +101,16 @@ class SourceRef:
 
 
 @dataclass(frozen=True, slots=True)
+class ClassificationEvidence:
+    """Provenance, not a calibrated probability of semantic correctness."""
+
+    method: str
+    matched_rules: tuple[int, ...] = ()
+    chosen_rules: tuple[int, ...] = ()
+    override_key: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Feature:
     """Геометрический объект подосновы с исходным слоем и присвоенным классом."""
 
@@ -113,6 +123,7 @@ class Feature:
     # Радиус исходной окружности в метрах. Кругом кроны проектировщик обозначает посадку:
     # по нему нормоконтроль отличает дерево от кустарника.
     circle_radius_m: float | None = None
+    classification: ClassificationEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)

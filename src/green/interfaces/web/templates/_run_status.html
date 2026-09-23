@@ -11,11 +11,20 @@
     <div>
       <p class="status-title">Прогон не удался</p>
       <p class="error-text">{{ run.error or 'Причина не записана.' }}</p>
+      {% if 'classification.json' in run.artifacts %}
+      <p><a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Скачать отчёт распознавания объектов</a></p>
+      {% endif %}
     </div>
   {% else %}
     <div>
+      {% if run.summary.get('semantic_assignments_complete') == false %}
+      <p class="status-title">Исследовательский эскиз</p>
+      <p class="error-text">Есть неуточнённые объекты. Допустимость посадок не подтверждена.</p>
+      <p><a href="/api/v1/runs/{{ run.run_id }}/artifacts/classification.json" download>Отчёт распознавания объектов</a></p>
+      {% else %}
       <p class="status-title">План готов</p>
       <p class="hint">Результат только на слоях GREEN_*, исходные сущности не тронуты.</p>
+      {% endif %}
     </div>
   {% endif %}
 </div>

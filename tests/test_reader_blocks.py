@@ -1,16 +1,16 @@
-"""Блоки выгрузок Геотреста: оси сетей взрываются в линии, подписи дают только текст."""
+"""Чтение не исключает геометрию по имени: оформление различает классификатор."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import ezdxf
 import pytest
 
+from green.application.classification import classify_scene
+from green.domain.objects import ObjectClass
 from green.infrastructure.cad.reader import EzdxfSceneReader
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from green.infrastructure.config.repositories import YamlLayerMapSource
 
 CABLE_LAYER = "output[1]_3_ДЖКХ-24_03233up$0$Кабель электрический"
 WELL_LAYER = "output[1]_3_ДЖКХ-24_03233tp$0$Колодцы"
@@ -38,14 +38,14 @@ def _write_drawing(path: Path) -> None:
     doc.saveas(path)
 
 
-def test_microstation_blocks_keep_geometry_and_labels_stay_text(tmp_path: Path) -> None:
+def test_microstation_blocks_keep_geometry_before_semantic_classification(tmp_path: Path) -> None:
     path = tmp_path / "geotrest.dxf"
     _write_drawing(path)
 
     scene = EzdxfSceneReader().read(path)
 
     lines = [f for f in scene.features if f.geometry.geom_type == "LineString"]
-    assert len(lines) == 1
+    assert len(lines) == 2
     assert lines[0].layer == CABLE_LAYER
     assert abs(lines[0].geometry.length - AXIS_LENGTH_M) < 1e-6
 
@@ -55,3 +55,9 @@ def test_microstation_blocks_keep_geometry_and_labels_stay_text(tmp_path: Path) 
     assert circles[0].geometry.area == pytest.approx(0.7854, rel=0.03)
 
     assert [(label.layer, label.text) for label in scene.labels] == [(CABLE_LAYER, "d=400ж.б.")]
+    rules = YamlLayerMapSource(Path(__file__).resolve().parents[1] / "config/layer_map.yaml").load()
+    classified, _ = classify_scene(scene, rules)
+    leader = next(f for f in classified.features if f.block == LABEL_BLOCK)
+    assert leader.object_class is ObjectClass.IGNORE
+    assert leader.classification is not None
+    assert leader.classification.method == "name_rule"
