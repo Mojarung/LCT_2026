@@ -5,14 +5,11 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from green.application.errors import ConversionError
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-STDERR_TAIL = 400
+from green.infrastructure.convert.output import publish_conversion
 
 
 class OdaFileConverter:
@@ -38,7 +35,14 @@ class OdaFileConverter:
         executable = shutil.which(self._binary)
         if executable is None:
             raise ConversionError(f"Не найден {self._binary}")
-        inbox, outbox = workdir / "oda_in", workdir / "oda_out"
+        workdir.mkdir(parents=True, exist_ok=True)
+        target = workdir / "oda_out" / f"{source.stem}.dxf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(prefix="oda_", dir=workdir) as staging:
+            return self._convert(executable, source, Path(staging), target)
+
+    def _convert(self, executable: str, source: Path, staging: Path, target: Path) -> Path:
+        inbox, outbox = staging / "in", staging / "out"
         inbox.mkdir(parents=True, exist_ok=True)
         outbox.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, inbox / source.name)
@@ -57,10 +61,5 @@ class OdaFileConverter:
             )
         except subprocess.TimeoutExpired as error:
             raise ConversionError(f"ODA File Converter не уложился в {self._timeout} с") from error
-        target = outbox / f"{source.stem}.dxf"
-        if not target.exists():
-            raise ConversionError(
-                f"ODA File Converter завершился с кодом {completed.returncode}: "
-                f"{completed.stderr[-STDERR_TAIL:]}"
-            )
-        return target
+        fresh = outbox / f"{source.stem}.dxf"
+        return publish_conversion(completed, fresh, target, name=self.name)

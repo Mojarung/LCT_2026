@@ -14,6 +14,7 @@ import ezdxf
 from ezdxf import recover
 
 from green.application.errors import InputError
+from green.infrastructure.cad.structure import require_complete_container
 
 if TYPE_CHECKING:
     from ezdxf.document import Drawing
@@ -91,6 +92,7 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     (docs/notes/23-load-time.md).
     """
     try:
+        require_complete_container(path)
         return _strict(path, ezdxf.readfile(path), [])
     except ezdxf.DXFStructureError, ValueError:
         pass
