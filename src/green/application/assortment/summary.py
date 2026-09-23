@@ -9,17 +9,70 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from green.application.assortment.assign import Assignment
+from green.application.validation import composition_issues
+from green.domain.norms import PlantingType
 from green.domain.planting import AssortmentSummary
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
-    from green.application.assortment.assign import Assignment
-    from green.domain.planting import Species
+    from green.application.params import PlanParams
+    from green.domain.planting import Placement, Plan, Species
 
 _MONTHS = range(1, 13)
+
+
+def refresh_summaries(plan: Plan, params: PlanParams, catalog: Sequence[Species]) -> Plan:
+    """Update current composition after editing, without reassigning chosen species.
+
+    Solver diagnostics describe the original assignment. Their counts are kept
+    explicitly as history, while shares, decorative months and quotas are fresh.
+    """
+    mixed = params.planting_type is PlantingType.TREE
+    primary = tuple(p for p in plan.placements if p.species.is_tree) if mixed else plan.placements
+    shrubs = tuple(p for p in plan.placements if p.species.is_shrub) if mixed else ()
+    main = _refresh_summary(primary, plan.assortment_summary, params, catalog)
+    secondary = (
+        _refresh_summary(shrubs, plan.shrub_assortment_summary, params, catalog)
+        if mixed and (shrubs or plan.shrub_assortment_summary is not None)
+        else None
+    )
+    return replace(plan, assortment_summary=main, shrub_assortment_summary=secondary)
+
+
+def _refresh_summary(
+    placements: Sequence[Placement],
+    old: AssortmentSummary | None,
+    params: PlanParams,
+    catalog: Sequence[Species],
+) -> AssortmentSummary:
+    existing = old.existing if old else {}
+    index = {s.code: s for s in catalog} | {p.species.code: p.species for p in placements}
+    issues = composition_issues(placements, params, tuple(index.values()), existing)
+    assignment = Assignment(
+        species_by_placement={p.placement_id: p.species.code for p in placements},
+        solver="manual",
+        quota_violations=tuple(issue.message for issue in issues),
+        notes=(
+            (
+                "Состав, доли, сезонность и ограничения пересчитаны после ручной правки. "
+                "Число мест без вида и причины отсева описывают исходный подбор."
+            ),
+        ),
+    )
+    return build_summary(
+        assignment,
+        index,
+        existing,
+        mode=params.assortment_mode,
+        no_species=old.no_species if old else 0,
+        rejected_by_kind=old.rejected_by_kind if old else {},
+        rejected_by_rule=old.rejected_by_rule if old else {},
+    )
 
 
 def build_summary(  # noqa: PLR0913 - сводка собирается из всех итогов прохода сразу

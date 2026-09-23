@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 
+from green.application.assortment.summary import refresh_summaries
 from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
 from green.application.errors import InputError
@@ -212,7 +213,8 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
         else:
             current[position] = _moved(context, _at(current, position, edit), edit)
 
-    return _rebuild_plan(context, [p for p in current if p is not None])
+    plan = _rebuild_plan(context, [p for p in current if p is not None])
+    return refresh_summaries(plan, context.params, catalog)
 
 
 def _rebuild_plan(context: RunContext, kept: list[Placement]) -> Plan:

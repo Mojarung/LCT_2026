@@ -208,7 +208,7 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
         issues.extend(_site_conditions(placements, points, objects, local))
     finite = [p for group in groups.values() for p in group]
     issues.extend(_spacing(finite, params))
-    issues.extend(_composition(plan.placements, params, catalog, existing or {}))
+    issues.extend(composition_issues(plan.placements, params, catalog, existing or {}))
     return PlanValidation(len(plan.placements), tuple(issues))
 
 
@@ -379,12 +379,13 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
     return issues
 
 
-def _composition(
+def composition_issues(
     placements: Sequence[Placement],
     params: PlanParams,
     catalog: Sequence[Species],
     existing: Mapping[str, int],
 ) -> list[ValidationIssue]:
+    """Recompute non-geometric constraints from current plants and inventory."""
     if params.assortment_mode == "single":
         return []
     issues = []

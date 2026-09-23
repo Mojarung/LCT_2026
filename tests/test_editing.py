@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING
 
 import pytest
@@ -169,6 +170,11 @@ def test_rebuild_writes_the_edited_plan_into_the_dxf(client: TestClient, run_id:
     assert after["summary"]["integrity_ok"] is True
     numbers = [p["number"] for p in after["placements"]]
     assert numbers == list(range(1, len(numbers) + 1)), "нумерация после правки разъехалась"
+    summary = client.get(f"{API_PREFIX}/runs/{run_id}/artifacts/assortment.json").json()
+    actual = Counter(
+        p["species"]["code"] for p in after["placements"] if p["planting_type"] == "tree"
+    )
+    assert summary["counts"] == actual, "сводка видов осталась от плана до правки"
 
 
 def test_unknown_run_answers_409_not_a_made_up_verdict(client: TestClient) -> None:
