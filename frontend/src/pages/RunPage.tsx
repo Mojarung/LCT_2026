@@ -1,3 +1,273 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router';
+
+import type { BasemapJson, PlanJson, QualityJson, RulesJson, SurfaceMeta } from '../api/artifacts';
+import { ApiError } from '../api/client';
+import { keys, useArtifact, useRun } from '../api/queries';
+import { DetailPanel } from '../components/detail/DetailPanel';
+import { Downloads } from '../components/run/Downloads';
+import { EditBar } from '../components/run/EditBar';
+import { Legend } from '../components/run/Legend';
+import { MapHud } from '../components/run/MapHud';
+import { PlanMap } from '../components/run/PlanMap';
+import { ProgressHud } from '../components/run/ProgressHud';
+import { PanelToggle, RunHeader, RunMetrics, RunStatus } from '../components/run/RunParts';
+import { useOverflowMark } from '../hooks/useOverflowMark';
+import type { PlanEngine } from '../map/engine';
+import { loadSurface, toMapItems } from '../map/items';
+import type { EngineHooks, MapItem } from '../map/types';
+import { PlanEditor } from '../state/editor';
+import { EngineContext } from '../state/engine';
+import { useWorkspace } from '../state/workspace';
+
+const NO_ITEMS: MapItem[] = [];
+const NO_IDS: ReadonlySet<string> = new Set();
+
+const idle: EngineHooks = {
+  select: () => undefined,
+  probe: () => undefined,
+  move: () => undefined,
+  remove: () => undefined,
+  viewChanged: () => undefined,
+};
+
+/** Рабочее место прогона: план во весь экран, панели поверх. Пока прогон идёт - ход расчёта и
+ *  чертёж на карте сразу после чтения; когда готов - план, объяснения и правка. Переход из
+ *  одного в другое идёт без перезагрузки: вид, который человек настроил, сохраняется. */
 export function RunPage() {
-  return <div className="workspace page-run" />;
+  const { runId = '' } = useParams();
+  const location = useLocation();
+  const client = useQueryClient();
+  const enter = useWorkspace((s) => s.enter);
+  const panels = useWorkspace((s) => s.panels);
+  const layers = useWorkspace((s) => s.layers);
+  const speciesOff = useWorkspace((s) => s.speciesOff);
+  const highlight = useWorkspace((s) => s.highlight);
+  const editing = useWorkspace((s) => s.editing);
+  const selected = useWorkspace((s) => s.selected);
+
+  useEffect(() => {
+    enter(runId);
+  }, [enter, runId]);
+
+  const run = useRun(runId);
+
+  // Рабочее место занимает весь экран: под планом ничего нет, прокрутки у страницы нет.
+  // Ошибка загрузки - обычная страница с шапкой и подвалом.
+  const failed = run.isError;
+  useEffect(() => {
+    if (failed) return;
+    document.body.classList.add('shell-map');
+    return () => {
+      document.body.classList.remove('shell-map');
+    };
+  }, [failed]);
+  const data = run.data;
+  const state = data?.state;
+  const live = state === 'queued' || state === 'running';
+  const done = state === 'succeeded';
+  const names = useMemo(
+    () => new Set((data?.artifacts ?? []).map((a) => a.name)),
+    [data?.artifacts],
+  );
+
+  const basemap = useArtifact<BasemapJson>(runId, 'basemap.geojson', names.has('basemap.geojson'));
+  const plan = useArtifact<PlanJson>(runId, 'plan.json', done && names.has('plan.json'));
+  const rules = useArtifact<RulesJson>(runId, 'rules.json', done && names.has('rules.json'));
+  const quality = useArtifact<QualityJson>(
+    runId,
+    'quality.json',
+    done && names.has('quality.json'),
+  );
+  const surface = useArtifact<SurfaceMeta>(
+    runId,
+    'surface.json',
+    done && names.has('surface.json'),
+  );
+
+  // Отметки карты - изменяемые объекты: перенос двигает их на месте. Удалённые отбрасываются
+  // по id, пока не пришёл пересобранный план.
+  const items = useMemo(() => (plan.data ? toMapItems(plan.data) : null), [plan.data]);
+  const [removed, setRemoved] = useState<{
+    source: PlanJson | undefined;
+    ids: ReadonlySet<string>;
+  }>({
+    source: undefined,
+    ids: NO_IDS,
+  });
+  const removedIds = removed.source === plan.data ? removed.ids : NO_IDS;
+  const placements = useMemo(
+    () => (items ? items.placements.filter((p) => !removedIds.has(p.id)) : NO_ITEMS),
+    [items, removedIds],
+  );
+  const rejections = items?.rejections ?? NO_ITEMS;
+
+  const engine = useRef<PlanEngine | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const hooks = useRef<EngineHooks>(idle);
+  const leftScroll = useOverflowMark<HTMLDivElement>();
+  const planData = useRef(plan.data);
+  const hashApplied = useRef(false);
+
+  const editor = useMemo(() => new PlanEditor(runId), [runId]);
+
+  useLayoutEffect(
+    () =>
+      editor.attach({
+        dragVerdict: (verdict) => engine.current?.setDragVerdict(verdict),
+        itemsChanged: () => engine.current?.touchItems(),
+        removed: (item) => {
+          setRemoved((previous) => {
+            const source = planData.current;
+            const ids = new Set(previous.source === source ? previous.ids : NO_IDS);
+            ids.add(item.id);
+            return { source, ids };
+          });
+        },
+      }),
+    [editor],
+  );
+
+  useLayoutEffect(() => {
+    planData.current = plan.data;
+    hooks.current = {
+      select: (item) => {
+        useWorkspace.getState().select(item);
+      },
+      probe: (item, x, y) => void editor.probe(item, x, y),
+      move: (item, x, y) => void editor.move(item, x, y),
+      remove: (item) => void editor.remove(item),
+      viewChanged: () => {
+        const current = engine.current;
+        if (current) useWorkspace.getState().setZoomShare(current.zoomShare());
+      },
+    };
+  });
+
+  // Данные -> движок.
+  useEffect(() => {
+    if (!basemap.data) return;
+    engine.current?.setBasemap(basemap.data);
+    useWorkspace.getState().setOrientation(engine.current?.orientation() ?? 'street');
+    if (!hashApplied.current && !done && engine.current?.applyHash(location.hash))
+      hashApplied.current = true;
+  }, [basemap.data, done, location.hash]);
+
+  useEffect(() => {
+    if (!items) return;
+    engine.current?.setPlan(placements, rejections);
+    if (!hashApplied.current && engine.current?.applyHash(location.hash))
+      hashApplied.current = true;
+    useWorkspace.getState().setOrientation(engine.current?.orientation() ?? 'street');
+  }, [items, placements, rejections, location.hash]);
+
+  useEffect(() => {
+    const meta = surface.data;
+    if (!meta) return;
+    let cancelled = false;
+    void loadSurface(runId, meta).then((image) => {
+      if (!cancelled) engine.current?.setSurface(image);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, surface.data]);
+
+  useEffect(() => engine.current?.setLayers(layers), [layers]);
+  useEffect(() => engine.current?.setSpeciesOff(speciesOff), [speciesOff]);
+  useEffect(() => engine.current?.setHighlight(highlight), [highlight]);
+  useEffect(() => engine.current?.setEditing(editing), [editing]);
+  useEffect(() => engine.current?.setSelected(selected), [selected]);
+
+  // Панели сменили размер: вид удерживается за центр свободной области.
+  useLayoutEffect(() => {
+    engine.current?.relayout();
+  }, [panels.left, panels.right, panels.legend, live, done]);
+
+  const rebuilt = () => {
+    void client.invalidateQueries({ queryKey: keys.run(runId) });
+    void client.invalidateQueries({ queryKey: keys.artifacts(runId) });
+  };
+
+  if (run.isError) {
+    const missing = run.error instanceof ApiError && run.error.status === 404;
+    return (
+      <div className="launch">
+        <div className="panel" style={{ maxWidth: 560, margin: '0 auto' }}>
+          <h1 className="start-title">{missing ? 'Такого прогона нет' : 'Прогон не загрузился'}</h1>
+          <p className="hint">
+            {missing ? `Прогона ${runId} нет в хранилище сервиса.` : run.error.message}
+          </p>
+          <p className="hint">
+            <Link to="/">К консоли запуска</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const mapReady = done ? Boolean(items && basemap.data) : Boolean(basemap.data);
+  const withMap = done || live;
+
+  return (
+    <EngineContext.Provider value={engine}>
+      <div
+        className={`workspace page-run${withMap && panels.legend ? ' legend-on' : ''}`}
+        data-state={state}
+        ref={root}
+      >
+        <div className="canvas-holder">
+          <PlanMap root={root} hooks={hooks} interactive={done} />
+          {mapReady ? null : (
+            <div className="map-loading">
+              {data ? <RunStatus run={data} /> : <span className="spinner" aria-hidden="true" />}
+            </div>
+          )}
+          {withMap ? <MapHud /> : null}
+          {withMap ? <Legend done={done} /> : null}
+        </div>
+
+        {live && data ? <ProgressHud run={data} fetchedAt={run.dataUpdatedAt} /> : null}
+
+        <aside
+          className={`hud hud-left${panels.left ? ' collapsed' : ''}`}
+          data-map-obstacle="side"
+          aria-label="Прогон"
+        >
+          <PanelToggle panel="left" label="панель прогона" />
+          {data ? <RunHeader run={data} /> : null}
+          <div className="hud-scroll" ref={leftScroll}>
+            {done && data ? (
+              <RunMetrics run={data} quality={quality.data} />
+            ) : (
+              <p className="metric">
+                <b>
+                  <i className="skeleton" />
+                </b>
+                <span>посадок в плане</span>
+              </p>
+            )}
+          </div>
+          {done ? <EditBar editor={editor} onRebuilt={rebuilt} /> : null}
+        </aside>
+
+        {done && data ? (
+          <aside
+            className={`hud hud-right detail${panels.right ? ' collapsed' : ''}`}
+            data-map-obstacle="side"
+            aria-label="Состав плана"
+          >
+            <PanelToggle panel="right" label="панель состава плана" />
+            <DetailPanel
+              placements={placements}
+              rules={rules.data?.rules ?? {}}
+              quality={quality.data}
+            />
+            <Downloads artifacts={data.artifacts ?? []} />
+          </aside>
+        ) : null}
+      </div>
+    </EngineContext.Provider>
+  );
 }

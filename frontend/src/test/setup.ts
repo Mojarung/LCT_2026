@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
+// Заглушки DOM - до любого импорта приложения: модули читают медиазапросы при загрузке.
+import './dom';
 
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
+
+import { resetWorkspace } from '../state/workspace';
 
 // Тесты не ходят в сеть: любой запрос, который тест не подменил сам, получает 404.
 beforeEach(() => {
@@ -20,6 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  resetWorkspace();
   vi.unstubAllGlobals();
   localStorage.clear();
   sessionStorage.clear();
