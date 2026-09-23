@@ -13,6 +13,7 @@ import shapely
 from ezdxf.addons import geo
 from ezdxf.entities import Body, Circle, LWPolyline
 from ezdxf.path import make_path
+from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon, shape
 
 from green.domain.objects import (
@@ -188,6 +189,14 @@ class _Walker:
                 instance_ref = replace(ref, handle=f"{ref.handle}@{position}")
                 self._insert(instance, instance_ref, layer, chain)
             return
+        clip = XClip(insert)
+        if clip.has_clipping_path and clip.is_clipping_enabled:
+            # virtual_entities() ignores XCLIP. Using the full block could invent
+            # positive soil evidence outside the visible crop. Until exact crop
+            # semantics are supported, expose this gap instead of guessing.
+            self.skipped["INSERT:XCLIP"] += 1
+            self._gap("INSERT", layer, insert.dxf.name, "XCLIP-not-applied", ref)
+            return
         name = insert.dxf.name
         block = self.doc.blocks.get(name)
         if block is None or block.block is None:
@@ -251,9 +260,11 @@ class _Walker:
                 location = entity.dxf.location
                 return Point(location.x, location.y)
             if isinstance(entity, Circle):
-                tolerance = min(self.flatten, entity.dxf.radius / 64)
+                # ARC inherits Circle but is open: closing it would invent a
+                # chord and a filled area, including false positive lawn evidence.
+                tolerance = min(self.flatten, abs(entity.dxf.radius) / 64)
                 points = [(v.x, v.y) for v in entity.flattening(tolerance)]
-                return _polyline(points, closed=True)
+                return _polyline(points, closed=kind == "CIRCLE")
             if isinstance(entity, LWPolyline) and not entity.has_arc:
                 points = [(v.x, v.y) for v in entity.vertices_in_wcs()]
                 return _polyline(points, closed=entity.closed)
