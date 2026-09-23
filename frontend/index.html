@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>green - проектирование озеленения улиц</title>
+    <meta
+      name="description"
+      content="Автопроектирование озеленения улиц по чертежу подосновы: план посадок на отдельных слоях с объяснением каждого решения по пунктам нормативных актов."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/mark.svg" type="image/svg+xml" />
+    <script>
+      // Тему выбираем до первой отрисовки, иначе страница мигает светлым.
+      try {
+        const saved = localStorage.getItem('green-theme');
+        if (saved) document.documentElement.dataset.theme = saved;
+      } catch {
+        /* приватный режим: остаёмся на системной теме */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

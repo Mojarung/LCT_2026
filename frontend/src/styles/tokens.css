@@ -1,0 +1,168 @@
+/* Токены «графит и кость»: перенесены из static/app.css без переименований - их же читает
+   движок карты через getComputedStyle. */
+:root {
+  color-scheme: dark;
+  --is-dark: 1;
+
+  --ground: #0e1013;
+  --panel: #171a1e;
+  --panel-2: #1e2227;
+  --hair: #272c32;
+  --hair-2: #3a4048;
+  --bone: #e9e6e0;
+  --bone-2: #a5a39d;
+  --bone-3: #8e8b84;
+  --inverse: #0e1013;
+  /* Отметка выбранного на карте. Ахроматична намеренно: любой цветной контур читался бы
+     как ещё один класс объектов. Подложка под ней - цвет фона карты. */
+  --accent: #f4f1ea;
+  --accent-halo: #0e1013;
+
+  --ok: #6fae86;
+  --warn: #cfa14a;
+  --bad: #d97b6c;
+
+  /* Подоснова. Значения читает plan.js через getComputedStyle. */
+  --c-curb: #9aa0a8;
+  --c-pavement: #6c727a;
+  --c-building: #767c84;
+  --c-building-fill: rgba(118, 124, 132, 0.18);
+  --c-lawn: rgba(120, 150, 118, 0.14);
+  --c-road: #4b5158;
+  --c-fence: #6f757d;
+  --c-slope: #a38c6d;
+  --c-boundary: #e9e6e0;
+  --c-water: #4a9fdd;
+  --c-sewer: #a3815c;
+  --c-storm: #46b3b3;
+  --c-heat: #e0784a;
+  --c-gas: #c4b13a;
+  --c-power: #e2604f;
+  --c-telecom: #a077cc;
+  --c-utility: #99a0a8;
+  --c-overhead: #e2604f;
+  --c-pole: #c3c8cf;
+  --c-existing: #6bb076;
+  /* Сетка чертёжного листа под планом: заметна только как фактура, спорить с линиями
+     подосновы ей нельзя. */
+  --grid: rgba(233, 230, 224, 0.052);
+
+  --sans: 'Plex', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'PlexMono', ui-monospace, Consolas, 'Liberation Mono', monospace;
+
+  /* Шкала кеглей: шесть ступеней, половинных шагов нет, ниже 12px не опускаемся. */
+  --fs-micro: 12px;
+  --fs-small: 13px;
+  --fs-body: 14px;
+  --fs-strong: 16px;
+  --fs-title: 21px;
+  --fs-metric: 30px;
+
+  --gutter: clamp(16px, 3.5vw, 36px);
+  /* Высота плавающей пилюли шапки: под ней начинаются панели. */
+  --bar: 46px;
+  /* Полоса рабочих кнопок внизу карты: панели обязаны остановиться над ней. */
+  --tools: 44px;
+  /* Поле между краем экрана и всем, что лежит поверх плана. */
+  --inset: 12px;
+  /* Высота панели обозначений: значение по умолчанию до первого замера, дальше его
+     проставляет plan.js - панель у разных прогонов разной высоты, а пульт обязан под неё
+     ужаться. */
+  --legend-h: 260px;
+
+  /* Поверхности, которые парят над планом. Радиус крупный и один на всё: панель, пилюля
+     шапки и полоса кнопок - один материал, поднятый над чертежом, а не три разных блока.
+     Тень тонирована под фон, чистой чёрной её тут нет. */
+  --r-panel: 16px;
+  --r-control: 10px;
+  --glass: color-mix(in srgb, var(--panel) 84%, transparent);
+  --lift: 0 1px 1px rgba(5, 7, 10, 0.34), 0 14px 34px -14px rgba(5, 7, 10, 0.62);
+}
+
+/* Светлая тема - для печати, проектора и тех, кто так настроил систему. Тёмная основная:
+   план читается на ней так же, как в CAD. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --is-dark: 0;
+    --ground: #e8e7e3;
+    --panel: #f7f6f3;
+    --panel-2: #eeede9;
+    --hair: #d3d2cd;
+    --hair-2: #aeaca6;
+    --bone: #16181c;
+    --bone-2: #4c4f55;
+    --bone-3: #5d5f65;
+    --inverse: #f7f6f3;
+    --accent: #101216;
+    --accent-halo: #e8e7e3;
+    --ok: #2f6b4a;
+    --warn: #85591b;
+    --bad: #a3392a;
+    --c-curb: #585d64;
+    --c-pavement: #9da2a9;
+    --c-building: #7f848b;
+    --c-building-fill: rgba(127, 132, 139, 0.16);
+    --c-lawn: rgba(110, 140, 108, 0.16);
+    --c-road: #b9bdc2;
+    --c-fence: #92979e;
+    --c-slope: #a98e6b;
+    --c-boundary: #16181c;
+    --c-water: #1f6fb2;
+    --c-sewer: #7a5c3e;
+    --c-storm: #2f8f8f;
+    --c-heat: #c1562a;
+    --c-gas: #93841d;
+    --c-power: #c0392b;
+    --c-telecom: #6f469a;
+    --c-utility: #767c84;
+    --c-overhead: #c0392b;
+    --c-pole: #3a3f45;
+    --c-existing: #43804d;
+    --glass: color-mix(in srgb, var(--panel) 88%, transparent);
+    --lift: 0 1px 1px rgba(40, 38, 33, 0.12), 0 14px 30px -16px rgba(40, 38, 33, 0.38);
+    --grid: rgba(22, 24, 28, 0.07);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --is-dark: 0;
+  --ground: #e8e7e3;
+  --panel: #f7f6f3;
+  --panel-2: #eeede9;
+  --hair: #d3d2cd;
+  --hair-2: #aeaca6;
+  --bone: #16181c;
+  --bone-2: #4c4f55;
+  --bone-3: #5d5f65;
+  --inverse: #f7f6f3;
+  --accent: #101216;
+  --accent-halo: #e8e7e3;
+  --ok: #2f6b4a;
+  --warn: #85591b;
+  --bad: #a3392a;
+  --c-curb: #585d64;
+  --c-pavement: #9da2a9;
+  --c-building: #7f848b;
+  --c-building-fill: rgba(127, 132, 139, 0.16);
+  --c-lawn: rgba(110, 140, 108, 0.16);
+  --c-road: #b9bdc2;
+  --c-fence: #92979e;
+  --c-slope: #a98e6b;
+  --c-boundary: #16181c;
+  --c-water: #1f6fb2;
+  --c-sewer: #7a5c3e;
+  --c-storm: #2f8f8f;
+  --c-heat: #c1562a;
+  --c-gas: #93841d;
+  --c-power: #c0392b;
+  --c-telecom: #6f469a;
+  --c-utility: #767c84;
+  --c-overhead: #c0392b;
+  --c-pole: #3a3f45;
+  --c-existing: #43804d;
+  --glass: color-mix(in srgb, var(--panel) 88%, transparent);
+  --lift: 0 1px 1px rgba(40, 38, 33, 0.12), 0 14px 30px -16px rgba(40, 38, 33, 0.38);
+  --grid: rgba(22, 24, 28, 0.07);
+}
