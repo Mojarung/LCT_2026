@@ -56,6 +56,24 @@ class MetaOut(BaseModel):
     converters: list[ConverterOut]
 
 
+class ProfileOut(BaseModel):
+    """Параметры профиля, которые показывает форма запуска.
+
+    Форма заполняется ими и отправляет в overrides только изменённое человеком: иначе выбор
+    профиля терялся под значениями формы по умолчанию.
+    """
+
+    name: str
+    planting_type: str = Field(description="tree или shrub")
+    spacing_m: float = Field(description="Шаг посадки, м")
+    modes: list[str] = Field(description="Приёмы размещения: alley, lawn, fill")
+    root_barriers: bool
+    shrub_groups: bool
+    shrub_rows: bool
+    curb_hedges: bool
+    understory: bool
+
+
 class ArtifactOut(BaseModel):
     name: str
     url: str

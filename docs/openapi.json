@@ -278,6 +278,19 @@
         "title": "EditsIn",
         "type": "object"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthOut": {
         "properties": {
           "status": {
@@ -443,6 +456,66 @@
           "status"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "ProfileOut": {
+        "description": "Параметры профиля, которые показывает форма запуска.\n\nФорма заполняется ими и отправляет в overrides только изменённое человеком: иначе выбор\nпрофиля терялся под значениями формы по умолчанию.",
+        "properties": {
+          "curb_hedges": {
+            "title": "Curb Hedges",
+            "type": "boolean"
+          },
+          "modes": {
+            "description": "Приёмы размещения: alley, lawn, fill",
+            "items": {
+              "type": "string"
+            },
+            "title": "Modes",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "planting_type": {
+            "description": "tree или shrub",
+            "title": "Planting Type",
+            "type": "string"
+          },
+          "root_barriers": {
+            "title": "Root Barriers",
+            "type": "boolean"
+          },
+          "shrub_groups": {
+            "title": "Shrub Groups",
+            "type": "boolean"
+          },
+          "shrub_rows": {
+            "title": "Shrub Rows",
+            "type": "boolean"
+          },
+          "spacing_m": {
+            "description": "Шаг посадки, м",
+            "title": "Spacing M",
+            "type": "number"
+          },
+          "understory": {
+            "title": "Understory",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "planting_type",
+          "spacing_m",
+          "modes",
+          "root_barriers",
+          "shrub_groups",
+          "shrub_rows",
+          "curb_hedges",
+          "understory"
+        ],
+        "title": "ProfileOut",
         "type": "object"
       },
       "ProgressOut": {
@@ -788,6 +861,46 @@
         ],
         "title": "StreetOut",
         "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
       }
     }
   },
@@ -836,6 +949,49 @@
           }
         },
         "summary": "Meta",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/profiles/{name}": {
+      "get": {
+        "description": "Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов.",
+        "operationId": "profile_api_v1_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile",
         "tags": [
           "system"
         ]

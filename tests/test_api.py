@@ -265,3 +265,25 @@ def test_artifacts_carry_their_size(finished: dict[str, object]) -> None:
 
     assert sizes["result.dxf"] > 0
     assert sizes["plan.json"] > 0
+
+
+def test_profile_parameters_for_the_form(client: TestClient) -> None:
+    """Форма показывает значения выбранного профиля и шлёт только то, что человек изменил."""
+    strict = client.get(f"{API_PREFIX}/profiles/strict").json()
+    shrubs = client.get(f"{API_PREFIX}/profiles/shrubs").json()
+    barriers = client.get(f"{API_PREFIX}/profiles/barriers").json()
+
+    assert strict["name"] == "strict"
+    assert strict["spacing_m"] == 5.0
+    assert "fill" in strict["modes"]
+    assert shrubs["planting_type"] == "shrub"
+    assert "fill" not in shrubs["modes"]
+    assert barriers["root_barriers"] is True
+    assert strict["root_barriers"] is False
+
+
+def test_unknown_profile_is_not_found(client: TestClient) -> None:
+    """404 от самого маршрута, а не от фреймворка: в ответе названы доступные профили."""
+    body = _assert_problem(client.get(f"{API_PREFIX}/profiles/no_such_profile"), 404)
+    assert "no_such_profile" in str(body["detail"])
+    assert "strict" in str(body["detail"])
