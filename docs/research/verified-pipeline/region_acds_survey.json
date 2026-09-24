@@ -1,0 +1,276 @@
+{
+  "scope": "Fixed E14 REGION subset. Flags and payload presence only; no proof of accurate contours or recoverability. Raw CAD and LibreDWG JSON are not saved.",
+  "rows": [
+    {
+      "source_sha256": "42d0e292e7dcdba006e8421fcd84b39b06d0559fd1c80b21cf5da58ff44e1cd5",
+      "source_bytes": 4916249,
+      "source_region_count": 212,
+      "source_acds_marker_present": false,
+      "dwgread_acds_header": {},
+      "region_flag_counts": [
+        {
+          "has_ds_data": false,
+          "acis_empty": false,
+          "wireframe_data_present": true,
+          "count": 212
+        }
+      ],
+      "converted_sha256": "570ce85a4a916534913b39afa4aa87ba718b24f15da4caf13e4c357232e6334a",
+      "converted_region_count": 212,
+      "converted_region_sat_count": 212,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "14. Куликовская улица",
+      "source_name": "output[1-8]_3_ДЖКХ-24_02734tp.dwg"
+    },
+    {
+      "source_sha256": "ba2b6acdc2f98bce4a437b7d9cf31188661b2cd8cefa3c30310a947034f86875",
+      "source_bytes": 4063359,
+      "source_region_count": 51,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 0,
+        "version": 0,
+        "ds_version": 0,
+        "file_size": 0
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 51
+        }
+      ],
+      "converted_sha256": "15d4bda30415698de78478c9dc79501ae8c37ff6f2826f2fbcd77ba3f39d82fc",
+      "converted_region_count": 51,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "15. Академика Понтрягина",
+      "source_name": "3_ДЖКХ-24_03230tp.dwg"
+    },
+    {
+      "source_sha256": "98569f727fb328bbb86a7b725e73fc0d27ac5e7c8d2afbb5500213002f4bd2f4",
+      "source_bytes": 4890894,
+      "source_region_count": 194,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 1685217642,
+        "version": 2,
+        "ds_version": 10,
+        "file_size": 449920
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 194
+        }
+      ],
+      "converted_sha256": "f8fe2144c7b77d754d3f6686a87af6bb2d9691edc94960345d752e3efdbf9d45",
+      "converted_region_count": 194,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "17. Грузинская М ул",
+      "source_name": "tp_Грузинская М.ул.dwg"
+    },
+    {
+      "source_sha256": "56847d3f9f72f0b1af17cebe2d5c88c7536b171126df3a3097c0e1ed25e85590",
+      "source_bytes": 3481989,
+      "source_region_count": 196,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 1685217642,
+        "version": 2,
+        "ds_version": 5,
+        "file_size": 372736
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": false,
+          "count": 196
+        }
+      ],
+      "converted_sha256": "b55df2ebd8afd831967bc41469658f08b208998d9d049b4ebee2fb25a6a59090",
+      "converted_region_count": 196,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "18. Кустанайская улица",
+      "source_name": "00.1_10004141_Топография.dwg"
+    },
+    {
+      "source_sha256": "cff9ed9e0060980e786abcca1b1b628c45a3365187a3477dd536d48f5d3aecfb",
+      "source_bytes": 6001355,
+      "source_region_count": 5628,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 0,
+        "version": 0,
+        "ds_version": 0,
+        "file_size": 0
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 5628
+        }
+      ],
+      "converted_sha256": "8c886dfc5038f9b4a999483e04c5692a64b48d65ba0e0ce38276b8cf9af3f88d",
+      "converted_region_count": 5628,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "19. 2-я прядильная",
+      "source_name": "XREF_ИГДИ_2-я Прядильная.dwg"
+    },
+    {
+      "source_sha256": "704af2f7d4f9c2ab96ce9b1622b9fb5e2d219fcf2e5dec6c41c05441c668bc31",
+      "source_bytes": 7080445,
+      "source_region_count": 752,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 1685217642,
+        "version": 2,
+        "ds_version": 10,
+        "file_size": 1594368
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 752
+        }
+      ],
+      "converted_sha256": "3dfe4e9b8c4a05a9d4a0c081e92a6fee4b13ac3bd1d1105ccde96d41cef14050",
+      "converted_region_count": 752,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "20. Макеева С. ул",
+      "source_name": "tp_Макеева С. ул.dwg"
+    },
+    {
+      "source_sha256": "33b4bec974d323f5b012de724f626e794204099f3d80c5e8f4a2f5c7d93cfefb",
+      "source_bytes": 3577315,
+      "source_region_count": 813,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 1685217642,
+        "version": 2,
+        "ds_version": 5,
+        "file_size": 1669888
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": false,
+          "count": 68
+        },
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 745
+        }
+      ],
+      "converted_sha256": "71cb7e46bc8ce1fcaa94b696c877b4db9444559663d5ea2c6e4b56c0831c677e",
+      "converted_region_count": 813,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "3. 3-я Парковая",
+      "source_name": "XREF_ИГДИ_1-я Прядильная.dwg"
+    },
+    {
+      "source_sha256": "d0ced0c23de49754313ec484d6c4fdce7e2d18596268c46d05388605ed365846",
+      "source_bytes": 3853870,
+      "source_region_count": 458,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 1685217642,
+        "version": 2,
+        "ds_version": 2,
+        "file_size": 936960
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 458
+        }
+      ],
+      "converted_sha256": "d904056352b1ab47d7fcda14dab4c574f853b68e487953c1d35710fb91cd99de",
+      "converted_region_count": 458,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "5. Багрицкого улица",
+      "source_name": "output[1-7]_3_ДЖКХ-25_05352tp.dwg"
+    },
+    {
+      "source_sha256": "dba0488143be5567168e70323dba3c47dce6fc40134a27a5b44922142c4ae674",
+      "source_bytes": 6950026,
+      "source_region_count": 4325,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 0,
+        "version": 0,
+        "ds_version": 0,
+        "file_size": 0
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": false,
+          "count": 4325
+        }
+      ],
+      "converted_sha256": "b36c21053395e1297e1fe4c1c7f4762aae849200dce618caaac6c808304e07f0",
+      "converted_region_count": 4325,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "6. Камчатская улица",
+      "source_name": "XREF_ИГДИ_Камчатская улица.dwg"
+    },
+    {
+      "source_sha256": "d3142a9d6d37510005cac3f3602fe8dac9d7628ebdda9af6455eecb1643779af",
+      "source_bytes": 4348951,
+      "source_region_count": 3127,
+      "source_acds_marker_present": true,
+      "dwgread_acds_header": {
+        "file_signature": 0,
+        "version": 0,
+        "ds_version": 0,
+        "file_size": 0
+      },
+      "region_flag_counts": [
+        {
+          "has_ds_data": true,
+          "acis_empty": true,
+          "wireframe_data_present": true,
+          "count": 3127
+        }
+      ],
+      "converted_sha256": "7b3fa952e8e1e2b7ee8c7ac17ac522edaa49bc506cbab39a882bfcf453013d7c",
+      "converted_region_count": 3127,
+      "converted_region_sat_count": 0,
+      "converted_region_sab_count": 0,
+      "converted_acds_records": false,
+      "street": "7. Нижние Поля ул",
+      "source_name": "кусище.dwg"
+    }
+  ]
+}
