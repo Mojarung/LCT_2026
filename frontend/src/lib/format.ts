@@ -1,11 +1,20 @@
 /* Числа и слова для эксперта: запятая вместо точки, русские падежи, минуты словами. */
 
 /* Числа форматирует Intl по русской норме: запятая в дроби, разряды через неразрывный пробел
- * («2 150,23», «18 780»). Координаты и размеры генплана бывают пятизначными, и без разрядов
- * их приходится пересчитывать по цифрам. */
-const TWO = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const ONE = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const WHOLE = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+ * начиная с пяти знаков («18 780», «13 567,52»), четырёхзначные слитно («1964»): разорванное
+ * «1 964» в крупном моноширинном числе читается как две цифры. Координаты генплана бывают
+ * пятизначными, и без разрядов их приходится пересчитывать по цифрам. */
+const TWO = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: 'min2',
+});
+const ONE = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  useGrouping: 'min2',
+});
+const WHOLE = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0, useGrouping: 'min2' });
 const STAMP = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
   month: '2-digit',

@@ -38,13 +38,15 @@ describe('числа для эксперта', () => {
     expect(decimal(0.871)).toBe('0,87');
   });
 
-  it('большие числа делят разряды неразрывным пробелом', () => {
+  it('разряды делятся неразрывным пробелом с пяти знаков, четырёхзначные - слитно', () => {
     const nbsp = '\u00a0';
-    expect(meters(2150.23)).toBe(`2${nbsp}150,23`);
+    expect(meters(2150.23)).toBe('2150,23');
     expect(meters(-13567.5)).toBe(`-13${nbsp}567,50`);
     expect(integer(18780)).toBe(`18${nbsp}780`);
+    expect(integer(1964)).toBe('1964');
     expect(integer(302)).toBe('302');
-    expect(humanSize(1500 * 1024 * 1024)).toBe(`1${nbsp}500,0 МБ`);
+    expect(humanSize(1500 * 1024 * 1024)).toBe('1500,0 МБ');
+    expect(humanSize(15000 * 1024 * 1024)).toBe(`15${nbsp}000,0 МБ`);
   });
 
   it('время прогона - по часам человека, день и месяц без года', () => {
