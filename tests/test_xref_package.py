@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import ezdxf
 import pytest
 from ezdxf import xref
+from ezdxf.entities import XRecord
 from fastapi.testclient import TestClient
 from test_pipeline_synthetic import ROOT, _street
 
@@ -430,3 +431,34 @@ def test_stale_dictionary_entry_pointing_at_a_block_is_dropped_before_saving(
     written, _ = load_document(target)
     assert len(written.modelspace()) == 2
     assert written.blocks.get("output[1-8]_pp").block.dxf.name == "output[1-8]_pp"
+
+
+@pytest.mark.parametrize("form", ["handle", "foreign"])
+@pytest.mark.parametrize("victim", ["block", "polyline"])
+def test_dictionary_entry_left_from_the_source_file_is_dropped_before_saving(
+    tmp_path: Path, form: str, victim: str
+) -> None:
+    """Харьковская, второй заход: копия словаря из файла ссылки хранит ссылку исходного
+    файла - строку handle или объект чужого документа. В склейке этот handle занят
+    определением блока или полилинией; аудит при чтении отдавал их словарю: блок ронял
+    чтение, у полилинии молча менялся владелец."""
+    doc = ezdxf.new("R2018")
+    block = doc.blocks.new("output[1-8]_pp")
+    block.add_line((0, 0), (1, 0))
+    msp = doc.modelspace()
+    msp.add_blockref("output[1-8]_pp", (0, 0))
+    other = msp.add_lwpolyline([(10, 0), (15, 0)])
+    polyline = msp.add_lwpolyline([(0, 0), (5, 0), (5, 5)])
+    taken = block.block.dxf.handle if victim == "block" else other.dxf.handle
+    stale = taken if form == "handle" else XRecord.new(handle=taken)
+    polyline.new_extension_dict().dictionary._data["ACAD_ASSOCNETWORK"] = stale  # noqa: SLF001
+    target = tmp_path / "merged.dxf"
+
+    dropped = _save_package(doc, target)
+
+    assert dropped == 1
+    written, _ = load_document(target)
+    owner = written.modelspace().block_record_handle
+    assert [e.dxf.owner for e in written.modelspace()] == [owner] * 3
+    written_block = written.blocks.get("output[1-8]_pp")
+    assert written_block.block.dxf.owner == written_block.block_record_handle

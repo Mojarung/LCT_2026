@@ -197,18 +197,32 @@ def _drop_stale_dictionary_entries(doc: Drawing) -> int:
     словаре остаётся старый handle исходного файла, а в собранном он занят чужой сущностью:
     полилинией или определением блока (Харьковская, 25.09.2026). Аудит при чтении «отбирает»
     такой блок словарю и падает. Сама запись - остаток ассоциативных связей, не геометрия.
+    Копия хранит ссылку исходного файла в двух видах: строкой handle или объектом чужого
+    документа, поэтому решает не значение, а то, во что handle превратится при чтении.
     """
     dropped = 0
     for dictionary in doc.objects:
         if not isinstance(dictionary, Dictionary):
             continue
         for key, value in list(dictionary.items()):
-            if isinstance(value, DXFEntity) and (
-                is_graphic_entity(value) or value.dxftype() in _NOT_OBJECTS
-            ):
+            if _stale_entry(doc, value):
                 dictionary.discard(key)
                 dropped += 1
     return dropped
+
+
+def _stale_entry(doc: Drawing, value: object) -> bool:
+    """Запись верна, только если её handle здесь - тот же самый объект секции OBJECTS."""
+    if isinstance(value, DXFEntity):
+        if not value.is_alive:
+            return True
+        handle = value.dxf.handle
+    else:
+        handle = str(value)
+    target = doc.entitydb.get(handle)
+    if target is None or (isinstance(value, DXFEntity) and target is not value):
+        return True
+    return is_graphic_entity(target) or target.dxftype() in _NOT_OBJECTS
 
 
 def _normalise(doc: Drawing, factor: float, name: str) -> None:
