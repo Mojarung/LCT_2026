@@ -328,20 +328,31 @@ def _summary(
         )
     penalty = sum(penalties.values())
     if penalty > _EPS:
+        shares = _thousandths(penalties, penalty)
         named = [
-            f"{PENALTIES[key][1]} -{_num(value, 3)}"
-            for key, value in penalties.items()
-            if round(value, 3) > 0  # «-0,000» ничего не говорит
+            f"{PENALTIES[key][1]} -{_num(share / 1000, 3)}"
+            for key, share in shares.items()
+            if share > 0  # «-0,000» ничего не говорит
         ]
         lines.append(f"Штрафы -{_num(penalty, 3)}: " + "; ".join(named) + ".")
     weak = sum(1 for v in values.values() if v.flagged)
     if weak:
-        lines.append(
-            f"Слабых мест: {weak}. Это посадки, без которых индекс заметно выше: стоят впритык "
-            "к норме, вид хуже среднего по плану или посадка на условии. Их сервис сдвигает сам, "
-            "где может; оставшиеся - кандидаты на перенос или замену вида."
-        )
+        lines.append(f"Слабых мест: {weak}, на карте - треугольник.")
     return tuple(lines)
+
+
+def _thousandths(parts: dict[str, float], total: float) -> dict[str, int]:
+    """Части в тысячных, которые складываются в округлённый итог (метод наибольших остатков).
+
+    Каждая часть, округлённая сама по себе, в сумме расходится с итогом: -0,006 при видимых
+    -0,002, -0,002 и -0,001 читается как ошибка счёта.
+    """
+    scaled = {key: value * 1000 for key, value in parts.items()}
+    shares = {key: int(value) for key, value in scaled.items()}
+    missing = round(total * 1000) - sum(shares.values())
+    for key in sorted(scaled, key=lambda k: shares[k] - scaled[k])[: max(missing, 0)]:
+        shares[key] += 1
+    return shares
 
 
 __all__ = [

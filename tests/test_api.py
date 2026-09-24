@@ -163,7 +163,7 @@ def test_kit_of_two_drawings_is_merged(client: TestClient, work: Path) -> None:
     assert response.status_code == 202, response.text
     run = client.get(response.headers["Location"]).json()
     assert run["state"] == "succeeded", run
-    assert any("Склейка комплекта" in w for w in run["summary"]["warnings"])
+    assert any("Склейка комплекта" in w for w in run["summary"]["load_notes"])
 
 
 @pytest.mark.parametrize(

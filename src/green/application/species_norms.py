@@ -202,11 +202,13 @@ def _mass_allergen(
     allergen = species.sources.get("allergen", "справочник")
     recommended = species.categories.get(site.category) in {PLUS, LIMITED}
     if recommended and site.act_over_allergen:
+        # Две короткие строки вместо одной длинной: факт и чем он разрешён.
+        reasons.append(Reason(REFERENCE, "пыльца - сильный аллерген", source=allergen))
         reasons.append(
             Reason(
                 REFERENCE,
-                f"пыльца аллергенна ({allergen}), но п. 3.6.18 743-ПП видов не называет, а "
-                f"{categories} рекомендует вид для этой категории: решает акт, называющий вид",
+                f"{_PP743_3618} видов не называет, {categories} вид рекомендует: решает акт, "
+                "называющий вид",
                 source=categories,
             )
         )

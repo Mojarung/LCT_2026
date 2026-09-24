@@ -57,7 +57,7 @@ def test_millimetre_drawing_gives_the_same_plan(reports: dict[str, RunReport]) -
         assert math.isclose(ours.x, theirs.x, abs_tol=1e-6)
         assert math.isclose(ours.y, theirs.y, abs_tol=1e-6)
         assert ours.species.code == theirs.species.code
-    assert any("чертёж не в метрах" in w for w in reports["millimetres"].warnings)
+    assert any("чертёж не в метрах" in w for w in reports["millimetres"].load_notes)
 
 
 def test_result_is_written_in_drawing_units(reports: dict[str, RunReport]) -> None:
@@ -81,8 +81,8 @@ def test_result_is_written_in_drawing_units(reports: dict[str, RunReport]) -> No
 def test_header_that_contradicts_geometry_is_ignored(reports: dict[str, RunReport]) -> None:
     lying, metres = reports["lying_header"], reports["metres"]
     assert len(lying.plan.placements) == len(metres.plan.placements)
-    assert any("геометрия метровая" in w and "$INSUNITS=4" in w for w in lying.warnings)
-    assert not any("Единицы" in w for w in metres.warnings)
+    assert any("геометрия метровая" in w and "$INSUNITS=4" in w for w in lying.load_notes)
+    assert not any("Единицы" in w for w in metres.load_notes)
 
 
 def test_imperial_header_is_reported_and_not_applied(tmp_path: Path) -> None:

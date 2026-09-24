@@ -64,9 +64,9 @@ def test_table_distance_to_gas_still_applies_when_the_zone_is_off() -> None:
 
 
 def test_the_warning_names_the_disabled_rule_by_its_clause() -> None:
-    """Эксперт читает пункт акта, а не идентификатор: номер остаётся в скобках для трассы."""
+    """Эксперт читает пункт акта, а не идентификатор: номер правила - в параметрах прогона."""
     note = disabled_rules_note(RULEBOOK, replace(PlanParams(), disabled_rules=(GAS_ZONE,)))
     assert note is not None
     assert "охранная зона газопровода" in note
-    assert note.endswith(f"({GAS_ZONE}).")
+    assert GAS_ZONE not in note
     assert disabled_rules_note(RULEBOOK, PlanParams()) is None

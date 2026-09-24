@@ -128,7 +128,7 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
         return Refinement(plan, len(weak), 0, quality.index, quality.index, base.surface)
     refined = assess(current, site, params)
     note = (
-        f"Слабые места: {moved} из {len(tight)} посадок впритык к сетям сдвинуты на 0,3-1 м от "
+        f"Сдвиг от сетей: {moved} из {len(tight)} посадок впритык к сетям сдвинуты на 0,3-1 м от "
         f"ближайшей нормы, индекс качества вырос {index_change(quality.index, index)}."
     )
     refined = replace(refined, warnings=(*refined.warnings, note))

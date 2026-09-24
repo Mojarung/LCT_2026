@@ -388,6 +388,7 @@ def _plan(report: RunReport) -> dict[str, Any]:
             for r in plan.rejections
         ],
         "warnings": list(report.warnings),
+        "load_notes": list(report.load_notes),
     }
 
 

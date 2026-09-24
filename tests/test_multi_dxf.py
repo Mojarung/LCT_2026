@@ -72,7 +72,10 @@ def test_plan_keeps_distance_to_the_pipe_from_the_second_file(report) -> None:  
 
 
 def test_merge_is_reported_and_the_result_holds_both_files(report) -> None:  # noqa: ANN001
-    assert any("Склейка комплекта" in w and "utilities.dxf" in w for w in report.warnings)
+    # Журнал склейки - в load_notes: в «Как собран план» он растягивал сводку на 40 строк.
+    assert any("Склейка комплекта" in w and "utilities.dxf" in w for w in report.load_notes)
+    assert not any("Склейка комплекта" in w for w in report.warnings)
+    assert report.summary()["load_notes"] == list(report.load_notes)
     assert report.integrity.ok
     assert (report.output_dxf.parent / MERGED_DXF).exists()
     doc = ezdxf.readfile(report.output_dxf)

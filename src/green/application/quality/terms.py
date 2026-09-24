@@ -21,6 +21,7 @@ import shapely
 from scipy.spatial import KDTree
 
 from green.application.barriers import BARRIER_NOTE
+from green.application.explain import OBJECT_LABELS
 from green.application.placement import MODE_LABELS
 from green.application.quality.site import WIDE_STREET_M
 from green.application.wording import decimal
@@ -477,9 +478,8 @@ def _diversity_phrase(layout: Layout, i: int, populations: list[_Population]) ->
             return f"единственный представитель рода {species.genus.capitalize()} в плане"
         if tally_species[code] == 1:
             return "единственная посадка своего вида в плане"
-        share = tally_species[code] / population.size
-        if share > population.quotas[0]:
-            return f"вид сверх квоты: {share:.0%} посадок при квоте {population.quotas[0]:.0%}"
+        # Перебор квоты вида в заслуги не пишется: рядом «квота вида выбрана» у альтернатив
+        # читалось бы ошибкой подбора. Сводка слагаемого называет выполнение квот целиком.
     return ""
 
 
@@ -571,7 +571,9 @@ def tightest(placement: Placement) -> tuple[float, str] | None:
             continue
         slack = check.measured_m - check.threshold_m
         if best is None or slack < best[0]:
-            text = f"{_m(check.measured_m)} м при норме {_m(check.threshold_m)} м ({check.rule_id})"
+            # Сеть называется по имени, правило уже стоит в блоке нормы той же панели.
+            target = OBJECT_LABELS.get(check.object_class, "сети")
+            text = f"до {target} {_m(check.measured_m)} м при норме {_m(check.threshold_m)} м"
             best = (slack, text)
     return best
 
@@ -595,8 +597,10 @@ def margin(layout: Layout, params: PlanParams) -> TermResult:
     )
     if score is None:
         return layout.empty("сетей рядом с посадками нет: запасу не до чего")
+    # Запас больше цели слагаемое уже насытил: «запас 42 м» - не заслуга посадки, а отсутствие
+    # сети рядом, и в причинах ценности он только занимает строку.
     details = [
-        "" if item is None else f"запас сверх нормы до сети {_m(item[0])} м: {item[1]}"
+        "" if item is None or item[0] >= target else f"запас {_m(item[0])} м сверх нормы: {item[1]}"
         for item in found
     ]
     return TermResult(score, note, deltas, details, measure)

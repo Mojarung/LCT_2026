@@ -489,7 +489,8 @@ def _stable_id(prefix: str, params: PlanParams, candidate: _Candidate) -> str:
 
 
 def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
-    """Какие нормы профиль не применяет - пунктом акта; идентификатор в скобках для трассы."""
+    """Какие нормы профиль не применяет - пунктом акта. Идентификаторы - в параметрах прогона
+    (disabled_rules), в строке для человека они шум."""
     if not params.disabled_rules:
         return None
     named = []
@@ -501,7 +502,7 @@ def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
         # Свой пункт без связанных ссылок и пометки о сверке: в строке-сводке она повторяла
         # оговорку, которая уже стоит в тексте пункта.
         act = rulebook.label_of(rule.citation.act_id)
-        named.append(f"{act}, {rule.citation.clause} ({rule_id})")
+        named.append(f"{act}, {rule.citation.clause}")
     return "Профиль не применяет: " + "; ".join(named) + "."
 
 

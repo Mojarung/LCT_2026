@@ -70,6 +70,8 @@ class RunReport:
     output_dxf: Path
     converter: str | None
     warnings: tuple[str, ...] = field(default=())
+    # Журнал чтения чертежа и склейки комплекта: аудит, ремонт строк, единицы, блоки.
+    load_notes: tuple[str, ...] = field(default=())
     # Подоснова для карты в вебе. Может отсутствовать: прогон из CLI её не требует, а на
     # чертеже без классифицированных объектов рисовать нечего.
     basemap: Basemap | None = None
@@ -89,6 +91,7 @@ class RunReport:
             "total_ms": round(sum(t.ms for t in self.timings), 1),
             "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),
+            "load_notes": list(self.load_notes),
         }
 
 

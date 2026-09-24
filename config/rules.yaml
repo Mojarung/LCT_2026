@@ -303,7 +303,7 @@ distance_rules:
     measure_to: axis
     citation:
       act_id: PPRF878
-      clause: "охранная зона газопровода 2 м с каждой стороны (по ресерчу, пункт не сверен)"
+      clause: "охранная зона газопровода 2 м с каждой стороны (пункт не сверен с текстом акта)"
   - rule_id: R-SEWER-TREE-001
     object_class: utility.sewer
     planting_type: tree

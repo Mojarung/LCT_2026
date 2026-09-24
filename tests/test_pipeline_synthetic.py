@@ -194,4 +194,4 @@ def test_moved_weak_places_keep_every_norm(run: dict[str, object]) -> None:
     assert plan.quality is not None
     assert plan.quality.index is not None
     if moved:
-        assert any(w.startswith("Слабые места:") for w in plan.warnings)
+        assert any(w.startswith("Сдвиг от сетей:") for w in plan.warnings)

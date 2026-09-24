@@ -11,7 +11,7 @@ from shapely.geometry import LineString, box
 from green.application.explain import explain
 from green.application.params import DEFAULT_QUALITY_WEIGHTS, PlanParams
 from green.application.placement import MODE_LABELS
-from green.application.quality import Site, assess, evaluate, site_of
+from green.application.quality import Site, _summary, assess, evaluate, site_of
 from green.application.quality.site import street_length
 from green.application.quality.terms import fork
 from green.domain.norms import PlantingType, RuleBook
@@ -375,3 +375,15 @@ def test_dust_counts_only_curbs_with_soil_beside_them() -> None:
     assert fair.score is not None
     assert fair.score > plain.score
     assert fair.measure["curb_total_m"] == len(site.curb_points)
+
+
+def test_penalty_parts_add_up_to_the_total_shown() -> None:
+    """Итог штрафа и его части печатаются с одной точностью и сходятся: -0,006 при видимых
+    -0,003 и -0,002 читалось как ошибка счёта."""
+    lines = _summary(0.9, "", (), {"conditions": 0.0024, "allergen": 0.0024, "lost": 0.0012}, {})
+    line = next(line for line in lines if line.startswith("Штрафы"))
+    total, parts = line.removeprefix("Штрафы -").split(": ")
+    shown = [
+        float(part.rsplit(" -", 1)[1].rstrip(".").replace(",", ".")) for part in parts.split("; ")
+    ]
+    assert round(sum(shown), 3) == float(total.replace(",", "."))

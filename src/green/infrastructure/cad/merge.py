@@ -19,6 +19,7 @@ from ezdxf import xref
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
+from green.application.wording import counted
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.units import measure
 
@@ -83,6 +84,7 @@ class EzdxfDrawingMerger:
             raise InputError("Склейка: нужно не меньше двух чертежей")
         base, notes = load_document(sources[0])
         notes = list(notes)
+        warnings: list[str] = []
         counts = [len(base.modelspace())]
         units = {sources[0].name: base.header.get("$INSUNITS", 0)}
         base_box = _extents(base)
@@ -100,7 +102,7 @@ class EzdxfDrawingMerger:
             if box is not None and base_box is not None and _area(base_box) > 0:
                 shared = _overlap(base_box, box)
                 if shared < _MIN_OVERLAP:
-                    notes.append(
+                    warnings.append(
                         f"Склейка: габариты {path.name} и уже склеенного комплекта "
                         f"перекрываются на {shared:.0%} - возможно, это разные листы или "
                         "разные объекты"
@@ -109,25 +111,26 @@ class EzdxfDrawingMerger:
             clash = sorted(_user_blocks(base) & _user_blocks(doc))
             policy = xref.ConflictPolicy.NUM_PREFIX if clash else xref.ConflictPolicy.KEEP
             if clash:
+                blocks = counted(len(clash), "блок", "блока", "блоков")
                 notes.append(
-                    f"Склейка: в {path.name} {len(clash)} блоков с именами, которые уже есть "
-                    "в основе; совпавшие ресурсы этого файла получили префикс «$0$»"
+                    f"Склейка: в {path.name} {blocks} с именами, которые уже есть в основе; "
+                    "совпавшие ресурсы этого файла получили префикс «$0$»"
                 )
             xref.load_modelspace(doc, base, conflict_policy=policy)
         merged = len(base.modelspace())
         listed = ", ".join(f"{p.name}: {n}" for p, n in zip(sources, counts, strict=True))
         notes.append(f"Склейка комплекта: {listed}; в объединённом чертеже {merged} сущностей")
         if merged != sum(counts):
-            notes.append(
+            warnings.append(
                 f"Склейка: ожидалось {sum(counts)} сущностей, получено {merged} - часть сущностей "
                 "ezdxf не переносит между документами"
             )
         if len(set(units.values())) > 1:
-            notes.append(
+            warnings.append(
                 "Склейка: у файлов разные единицы чертежа ($INSUNITS): "
                 + ", ".join(f"{name}: {value}" for name, value in units.items())
                 + ". Координаты не пересчитывались"
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         base.saveas(target)
-        return MergeResult(path=target, notes=tuple(notes))
+        return MergeResult(path=target, notes=tuple(notes), warnings=tuple(warnings))

@@ -129,12 +129,13 @@ class PlanSite:
                 for path in request.extra_sources
             ]
         merge_notes: tuple[str, ...] = ()
+        merge_warnings: tuple[str, ...] = ()
         if extras:
             if self._merger is None:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
             with watch.stage("merge"):
                 merged = self._merger.merge([source, *extras], request.work_dir / MERGED_DXF)
-                source, merge_notes = merged.path, merged.notes
+                source, merge_notes, merge_warnings = merged.path, merged.notes, merged.warnings
         with watch.stage("load_config"):
             rulebook = self._rules.load()
             layer_map = self._layers.load()
@@ -269,7 +270,10 @@ class PlanSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             converter=converter,
-            warnings=(*merge_notes, *scene.warnings, *plan.warnings, *integrity_notes),
+            # Журнал чтения и склейки отдельно: в сводке прогона он вытеснял то, что меняет
+            # смысл плана (на улице из каталога - около сорока строк аудита планшетов).
+            warnings=(*merge_warnings, *plan.warnings, *integrity_notes),
+            load_notes=(*merge_notes, *scene.warnings),
             basemap=basemap,
             surface=surface,
         )
