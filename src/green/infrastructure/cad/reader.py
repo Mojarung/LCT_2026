@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Text
+from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
@@ -33,6 +33,7 @@ from green.infrastructure.cad.curve_paths import (
 )
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
+from green.infrastructure.cad.region_geometry import RegionGeometryError, simple_region_polygon
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
 
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic, Insert
+    from ezdxf.math import Matrix44
     from shapely.geometry.base import BaseGeometry
 
     from green.infrastructure.cad.documents import DocumentCache
@@ -59,7 +61,6 @@ _SKIPPED = frozenset(
         "IMAGE",
         "WIPEOUT",
         "OLE2FRAME",
-        "REGION",
         "3DSOLID",
         "BODY",
         "SURFACE",
@@ -138,6 +139,7 @@ class _Walker:
         index: int,
         parent_block: str | None = None,
         insert_chain: tuple[InsertInstance, ...] = (),
+        block_matrix: Matrix44 | None = None,
     ) -> None:
         layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
@@ -162,8 +164,8 @@ class _Walker:
                 self._gap(kind, layer, parent_block, reason, ref)
         else:
             try:
-                geometry, error = self._geometry(entity)
-            except HatchGeometryError as exc:
+                geometry, error = self._geometry(entity, block_matrix=block_matrix)
+            except (HatchGeometryError, RegionGeometryError) as exc:
                 self.skipped[kind] += 1
                 self._gap(kind, layer, parent_block, str(exc), ref)
                 return
@@ -267,6 +269,7 @@ class _Walker:
                 insert_chain=instances,
             )
         try:
+            block_matrix = insert.matrix44()
             children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
         except ValueError, TypeError, ArithmeticError:
             self.skipped["INSERT:not-explodable"] += 1
@@ -280,6 +283,7 @@ class _Walker:
                 index=position,
                 parent_block=name,
                 insert_chain=instances,
+                block_matrix=block_matrix,
             )
 
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
@@ -338,9 +342,13 @@ class _Walker:
             )
         )
 
-    def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type
+    def _geometry(  # noqa: C901, PLR0911 - one branch per entity type
+        self, entity: DXFGraphic, *, block_matrix: Matrix44 | None = None
+    ) -> tuple[BaseGeometry | None, float | None]:
         kind = entity.dxftype()
         try:
+            if isinstance(entity, Region):
+                return simple_region_polygon(entity, block_matrix=block_matrix), 0.0
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 return LineString([(start.x, start.y), (end.x, end.y)]), 0.0
@@ -370,7 +378,7 @@ class _Walker:
                 return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
-        except HatchGeometryError:
+        except (HatchGeometryError, RegionGeometryError):
             raise
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None

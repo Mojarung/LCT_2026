@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from ezdxf.entities import Body
 from ezdxf.lldxf.tagwriter import TagCollector
 
 from green.application.errors import InputError
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ezdxf.document import Drawing
+    from ezdxf.entities import DXFGraphic
     from ezdxf.lldxf.types import DXFTag
 
     from green.application.results import PlanExportReport
@@ -86,8 +88,9 @@ def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
 
     Теги собираются так же, как их пишет файловый писатель ezdxf: необязательные теги со
     значением по умолчанию опускаются (optional=False), иначе DXF от конвертеров, где такие
-    теги записаны явно, после пересохранения выглядит изменённым. Сущности, которые ezdxf не
-    экспортирует (REGION без ACIS-данных), считаются отдельно и в отпечатки не входят.
+    теги записаны явно, после пересохранения выглядит изменённым. SAB в ACDSDATA
+    хранится вне тегов REGION/BODY/3DSOLID и хешируется отдельно. Сущности, которые
+    ezdxf не экспортирует (REGION без ACIS-данных), считаются отдельно.
     """
     digests: dict[str, str] = {}
     unexportable = 0
@@ -99,9 +102,18 @@ def fingerprints(doc: Drawing) -> tuple[dict[str, str], int]:
                 continue
             entity.export_dxf(collector)
             digests[entity.dxf.handle] = hashlib.blake2b(
-                repr(_canonical(entity.dxftype(), collector.tags)).encode(), digest_size=16
+                repr(
+                    (_canonical(entity.dxftype(), collector.tags), _sab_digest(entity))
+                ).encode(),
+                digest_size=16,
             ).hexdigest()
     return digests, unexportable
+
+
+def _sab_digest(entity: DXFGraphic) -> str | None:
+    if not isinstance(entity, Body) or not entity.sab:
+        return None
+    return hashlib.blake2b(entity.sab, digest_size=16).hexdigest()
 
 
 def _result_handles(doc: Drawing) -> set[str]:
