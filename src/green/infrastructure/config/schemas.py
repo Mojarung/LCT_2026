@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from green.application.classification import GeometryKind, MatchTarget
 from green.application.params import DEFAULT_QUALITY_WEIGHTS, DEFAULT_WEIGHTS
+from green.application.symbols import SymbolRole
 from green.domain.norms import (
     CitationStatus,
     MeasureTo,
@@ -133,6 +134,21 @@ class LayerRuleModel(_Strict):
 class LayerMapFile(_Strict):
     version: int = 1
     rules: list[LayerRuleModel]
+
+
+class SymbolModel(_Strict):
+    object_class: ObjectClass = Field(alias="class")
+    role: SymbolRole
+    confirmed: bool = False
+    note: str = ""
+    source: str = ""
+
+
+class SymbolsFile(_Strict):
+    """config/symbols.yaml: код условного знака -> класс объекта и роль знака."""
+
+    version: int = 1
+    symbols: dict[str, SymbolModel]
 
 
 class SpeciesModel(_Strict):

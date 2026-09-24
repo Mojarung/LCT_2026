@@ -42,6 +42,11 @@ class ObjectClass(StrEnum):
     WORK_BOUNDARY = "work_boundary"
     EXISTING_TREE = "existing_tree"
     EXISTING_SHRUB = "existing_shrub"
+    # Лесной массив или древесно-кустарниковая группа сплошной областью (знаки LISTVL, SM):
+    # не газон и не место для новой посадки.
+    EXISTING_WOODLAND = "existing_woodland"
+    # Наземное препятствие в точке, не сеть и не опора: афишная тумба, шлагбаум, колонка.
+    OBSTACLE = "obstacle"
     LAWN = "lawn"
     IGNORE = "ignore"
     UNKNOWN = "unknown"

@@ -1,0 +1,100 @@
+# Словарь условных знаков подосновы: код блока Мосгеотреста -> класс объекта и роль знака.
+#
+# Код - базовое имя блока (base_name): локальное имя без префикса внешней ссылки и без номеров
+# экземпляра (DEREVO_935, AFIS_1_2 -> DEREVO, AFIS). Знак решает раньше слоя: слой говорит,
+# в какой группе объектов знак нарисован, знак - что это за объект.
+#
+# role:
+#   point      - объект в точке вставки (дерево, куст, колодец, опора); штрихи знака - рисунок,
+#                сами объектами не являются
+#   marker     - знак материала области (газон, лесной массив): отметка внутри контура,
+#                не объект в точке
+#   geometry   - штрихи знака сами контур объекта
+#   annotation - оформление (стрелка, скобка, пикет, крест сетки): в расчёт не идёт
+#
+# confirmed: true - значение знака подтверждено рисунком из переписи 25.09.2026 и слоем, на
+# котором знак стоит; false - требует подтверждения (вопрос в note).
+# source: УЗ 1:500 - «Условные знаки для топографических планов масштабов 1:5000-1:500».
+version: 1
+symbols:
+  # --- растительность: объекты в точке ---
+  DEREVO:
+    {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "отдельно стоящее лиственное дерево: крона эллипсом, ствол кружком"}
+  SOSNOD:
+    {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "отдельно стоящее хвойное дерево (сосна)"}
+  ELOD:
+    {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "отдельно стоящее хвойное дерево (ель)"}
+  LISTVN:
+    {class: existing_tree, role: point, confirmed: false, source: "рисунок",
+     note: "вертикаль с тремя перекладинами над кружком ствола: отдельно стоящая лиственница?"}
+  KUST1:
+    {class: existing_shrub, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "отдельно стоящий куст (три кружка); раньше ридер считал его деревом"}
+
+  # --- растительность: знаки материала области ---
+  GAZON:
+    {class: lawn, role: marker, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "газон: знак внутри контура, слой «Леса и газоны»"}
+  LISTVL:
+    {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "лиственный лес / древесные насаждения массивом; раньше считался газоном"}
+  SM:
+    {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "смешанный лес (хвойное и лиственное дерево в одном знаке)"}
+  MLISTV:
+    {class: existing_woodland, role: marker, confirmed: false, source: "рисунок",
+     note: "одна крона наполовину залита: мелколиственный лес или молодняк?"}
+
+  # --- сети и колодцы ---
+  KOLOD:
+    {class: utility.access, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "колодец подземных сетей"}
+  RESHT1:
+    {class: utility.access, role: point, confirmed: true, source: "УЗ 1:500, рисунок",
+     note: "дождеприёмная решётка"}
+  ZAGLUS:
+    {class: ignore, role: annotation, confirmed: false, source: "рисунок",
+     note: "П-образный знак на линии сети: заглушка трубы? сама труба - линией слоя"}
+  UKAZ:
+    {class: ignore, role: annotation, confirmed: false, source: "слой «Указатель подз коммуникаций»",
+     note: "указатель подземных коммуникаций: табличка на стене или столбике?"}
+  EUZN:
+    {class: ignore, role: annotation, confirmed: false, source: "слой «Кабель защиты»",
+     note: "прямоугольник с заштрихованными треугольниками на кабеле защиты: электроузел?"}
+
+  # --- опоры и столбы: препятствия в точке ---
+  FNRM1: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "фонарь на мачте, одна лампа"}
+  FNRM2: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "фонарь на мачте, две лампы"}
+  FONAR5: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "фонарь на столбе, одна лампа"}
+  FONAR6: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "фонарь на столбе, две лампы"}
+  PROZCT: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "прожектор на столбе"}
+  RADFON: {class: pole, role: point, confirmed: false, source: "слой «Вышки»", note: "мачта с фонарём и молнией: радиомачта?"}
+  STOLBG: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "столб"}
+  STOLBM: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "столб металлический (штрихованный кружок)"}
+  SVETFR: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "светофор"}
+  DORZN1: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "дорожный знак на стойке"}
+
+  # --- прочие препятствия в точке ---
+  AFIS: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "афишная тумба"}
+  SHLAGB: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "шлагбаум"}
+  ELKRL:
+    {class: obstacle, role: point, confirmed: false, source: "рисунок",
+     note: "окружность без центра: колонка, урна или колодец? нужен слой из переписи"}
+
+  # --- оформление ---
+  PIKET: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "пикет съёмки"}
+  KREST: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "крест координатной сетки"}
+  NIV: {class: ignore, role: annotation, confirmed: true, source: "слой «Геодезические пункты»", note: "нивелирная марка"}
+  GLAZNE: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок в кольце: геодезический пункт?"}
+  TOCSKA: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок: точка съёмки?"}
+  TKAZ: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок, как TOCSKA"}
+  STRELK: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "стрелка направления"}
+  STRFON: {class: ignore, role: annotation, confirmed: true, source: "слой «ЛЭП»", note: "стрелка направления ЛЭП"}
+  SKOBKA: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "скобка группы подписей"}
+  OBR: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "короткая линия: обрыв? нужен слой"}
+  TRPS:
+    {class: ignore, role: annotation, confirmed: true, source: "слой «Здания», УЗ 1:500",
+     note: "знак трансформаторной подстанции внутри контура здания; здание - контуром слоя"}

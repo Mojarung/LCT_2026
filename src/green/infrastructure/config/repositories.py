@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
 from green.application.params import PlanParams
+from green.application.symbols import SymbolCatalog, SymbolEntry
 from green.domain.norms import (
     Act,
     Citation,
@@ -32,6 +33,7 @@ from green.infrastructure.config.schemas import (
     RulesFile,
     SpeciesFile,
     SpeciesModel,
+    SymbolsFile,
 )
 
 if TYPE_CHECKING:
@@ -187,8 +189,11 @@ class YamlRuleBookSource:
 
 
 class YamlLayerMapSource:
-    def __init__(self, path: Path) -> None:
+    """Карта слоёв и словарь условных знаков рядом с ней (symbols.yaml, если он есть)."""
+
+    def __init__(self, path: Path, symbols: Path | None = None) -> None:
         self._path = path
+        self._symbols = symbols if symbols is not None else path.with_name("symbols.yaml")
 
     def load(self) -> LayerMap:
         data, digest = _read(self._path)
@@ -204,7 +209,20 @@ class YamlLayerMapSource:
             )
             for rule in parsed.rules
         )
-        return LayerMap(rules=rules, fingerprint=digest)
+        catalog = SymbolCatalog()
+        if self._symbols.exists():
+            symbol_data, symbol_digest = _read(self._symbols)
+            parsed_symbols = _validate(SymbolsFile, symbol_data, self._symbols)
+            catalog = SymbolCatalog(
+                entries={
+                    code: SymbolEntry(model.object_class, model.role, model.confirmed, model.note)
+                    for code, model in parsed_symbols.symbols.items()
+                },
+                fingerprint=symbol_digest,
+            )
+            # Отпечаток семантики прогона учитывает и слои, и знаки.
+            digest = hashlib.sha256(f"{digest}:{symbol_digest}".encode()).hexdigest()
+        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog)
 
 
 class YamlSpeciesCatalog:

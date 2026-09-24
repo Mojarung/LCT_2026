@@ -39,6 +39,8 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.SLOPE: "откоса",
     ObjectClass.EXISTING_TREE: "существующего дерева",
     ObjectClass.EXISTING_SHRUB: "существующего кустарника",
+    ObjectClass.EXISTING_WOODLAND: "существующего древесного массива",
+    ObjectClass.OBSTACLE: "наземного препятствия",
 }
 
 _FACTOR_LABELS = {

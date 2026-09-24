@@ -3,23 +3,34 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import shapely
 from shapely.geometry import Point
 
 from green.application.errors import InputError
-from green.application.semantic_names import local_name, material_context_requires_review, name_key
+from green.application.semantic_names import (
+    base_name,
+    local_name,
+    material_context_requires_review,
+    name_key,
+)
 from green.application.surface_labels import classify_labels, label_report_groups
+from green.application.symbols import SymbolCatalog, SymbolRole
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
 if TYPE_CHECKING:
     import re
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
+
+    from shapely.geometry.base import BaseGeometry
 
     from green.application.params import PlanParams
     from green.application.surface_labels import LabelGroup
+    from green.domain.objects import SymbolInstance
 
 
 class MatchTarget(StrEnum):
@@ -73,6 +84,8 @@ class LayerMap:
 
     rules: tuple[LayerRule, ...]
     fingerprint: str
+    # Словарь условных знаков (config/symbols.yaml): знак решает раньше слоя.
+    symbols: SymbolCatalog = field(default_factory=SymbolCatalog)
 
     def classify(self, feature: Feature) -> ObjectClass:
         return self.decide(feature)[0]
@@ -118,23 +131,33 @@ def classify_scene(
             "Загрузите review-input.dxf из проверенного прогона или выполните уточнение заново."
         )
     overrides = _Overrides(params)
+    catalog = layer_map.symbols
+    instances = {str(symbol.ref): symbol for symbol in scene.symbols}
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
     classified = []
     for feature in scene.features:
-        key = (
-            feature.layer,
-            feature.block,
-            feature.geometry.geom_type,
-            feature.circle_radius_m is not None,
-        )
-        if key not in cache:
-            cache[key] = layer_map.decide(feature)
-        kind, evidence = cache[key]
+        decided = _stroke_decision(feature, instances, catalog)
+        if decided is None:
+            key = (
+                feature.layer,
+                feature.block,
+                feature.geometry.geom_type,
+                feature.circle_radius_m is not None,
+            )
+            if key not in cache:
+                cache[key] = layer_map.decide(feature)
+            decided = cache[key]
+        kind, evidence = decided
         explicit = overrides.decide(feature)
         if explicit is not None:
             kind, method, override_key = explicit
             evidence = ClassificationEvidence(method, evidence.matched_rules, (), override_key)
         classified.append(_classify_feature(feature, kind, evidence))
+    strokes: dict[str, list[BaseGeometry]] = defaultdict(list)
+    for feature in scene.features:
+        if feature.symbol is not None:
+            strokes[feature.symbol].append(feature.geometry)
+    classified.extend(_symbol_features(scene.symbols, catalog, overrides, strokes))
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)
@@ -142,6 +165,69 @@ def classify_scene(
     )
     labels = classify_labels(scene.labels, layer_map, params.label_roles if params else {})
     return replace(scene, features=tuple(classified), labels=labels), coverage
+
+
+def _stroke_decision(
+    feature: Feature, instances: Mapping[str, SymbolInstance], catalog: SymbolCatalog
+) -> tuple[ObjectClass, ClassificationEvidence] | None:
+    """Штрих условного знака: класс решает словарь знаков, а не слой.
+
+    Штрих знака-точки, маркера или оформления - рисунок, а не объект: объектом становится сам
+    экземпляр знака (_symbol_features). Незнакомый знак оставляет штрихи неизвестными, и
+    строгий прогон остановится: словарь нужно дополнить, а не угадывать по слою.
+    """
+    if not catalog or feature.symbol is None:
+        return None
+    instance = instances.get(feature.symbol)
+    if instance is None:
+        return None
+    code = base_name(instance.block)
+    entry = catalog.get(instance.block)
+    if entry is None:
+        return ObjectClass.UNKNOWN, ClassificationEvidence(f"symbol_unknown:{code}")
+    if entry.role is SymbolRole.GEOMETRY:
+        return entry.object_class, ClassificationEvidence(f"symbol_geometry:{code}")
+    return ObjectClass.IGNORE, ClassificationEvidence(f"symbol_stroke:{code}")
+
+
+def _symbol_features(
+    symbols: Iterable[SymbolInstance],
+    catalog: SymbolCatalog,
+    overrides: _Overrides,
+    strokes: Mapping[str, list[BaseGeometry]],
+) -> list[Feature]:
+    """Экземпляр знака-точки или знака-маркера - один объект подосновы в точке вставки.
+
+    Дерево, куст, опора - точка: нормы меряют от ствола и оси. Колодец - контур нарисованного
+    знака: отступ считается от наружной стенки, точка в центре занизила бы его на радиус.
+    """
+    features = []
+    for symbol in symbols if catalog else ():
+        entry = catalog.get(symbol.block)
+        if entry is None or entry.role not in {SymbolRole.POINT, SymbolRole.MARKER}:
+            continue
+        kind = entry.object_class
+        evidence = ClassificationEvidence(f"symbol_{entry.role}:{base_name(symbol.block)}")
+        drawn = strokes.get(str(symbol.ref))
+        geometry = (
+            shapely.union_all(drawn).convex_hull
+            if kind is ObjectClass.UTILITY_ACCESS and drawn
+            else Point(symbol.x, symbol.y)
+        )
+        feature = Feature(
+            ref=symbol.ref,
+            layer=symbol.layer,
+            geometry=geometry,
+            block=symbol.block,
+            source_entity_type="SYMBOL" if entry.role is SymbolRole.POINT else "SYMBOL_MARKER",
+            symbol=str(symbol.ref),
+        )
+        explicit = overrides.decide(feature)
+        if explicit is not None:
+            kind, method, override_key = explicit
+            evidence = ClassificationEvidence(method, (), (), override_key)
+        features.append(replace(feature, object_class=kind, classification=evidence))
+    return features
 
 
 def _classify_feature(
