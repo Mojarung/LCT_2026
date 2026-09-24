@@ -7,6 +7,10 @@ REGION хранит форму не в группах DXF, а в ядре ACIS: 
 Дуга заменяется ломаной, и граница ошибки честная: наибольший прогиб хорды не больше `flatten`.
 Кривые других типов (сплайны intcurve) и неплоские области не угадываются - это пробел
 с причиной, как у ридера для прочих неподдержанных сущностей.
+
+Матрица тела (transform) тоже читается здесь: ezdxf знает только запись одной строкой
+(SAT, SAB AutoCAD и ODA 27.1) и отбрасывает масштаб, а ODA 27.7 и nanoCAD пишут SAB ACIS 223
+векторами.
 """
 
 from __future__ import annotations
@@ -17,7 +21,8 @@ from typing import TYPE_CHECKING
 import shapely
 from ezdxf.acis import api as acis
 from ezdxf.acis import entities as acis_entities
-from ezdxf.acis.const import AcisException
+from ezdxf.acis import sab as acis_sab
+from ezdxf.acis.const import AcisException, Tags
 from ezdxf.math import Matrix44, Vec3
 from shapely.geometry import Polygon
 
@@ -32,6 +37,10 @@ _FLAT_Z = 1e-6
 # С версии SAT 700 у записи третьим полем идёт номер («-1» - без номера).
 _SAT_WITH_IDS = 700
 _ID_FIELD = 2
+# Матрица transform: 3 строки поворота и перенос, всего 12 чисел.
+_MATRIX_VALUES = 12
+# Допуск «строка матрицы поворота единичной длины».
+_UNIT_ROW = 1e-6
 
 
 class RegionGeometryError(ValueError):
@@ -77,6 +86,46 @@ class EllipseCurve(acis_entities.Curve):
         )
 
 
+@acis_entities.register
+class AcisTransform(acis_entities.Transform):
+    """ACIS transform: строки матрицы поворота, перенос, масштаб и флаги.
+
+    Запись одной строкой: «a11 ... a33 tx ty tz масштаб rotate reflect shear». SAB ACIS 223:
+    четыре вектора, число масштаба и три флага. Масштаб ACIS хранит отдельно от единичной
+    матрицы поворота, поэтому он умножает строки, а не перенос.
+    """
+
+    def restore_data(self, loader: acis_entities.DataLoader) -> None:
+        values, scale = _transform_values(loader)
+        self.matrix = _transform_matrix(values, scale)
+
+
+def _transform_values(loader: acis_entities.DataLoader) -> tuple[list[float], float]:
+    if isinstance(loader, acis_sab.SabDataLoader):
+        if loader.data[loader.index].tag in (Tags.LOCATION_VEC, Tags.DIRECTION_VEC):
+            values = [value for _ in range(4) for value in loader.read_vec3()]
+            return values, loader.read_double()
+        text = loader.read_str().split()
+        scale = float(text[_MATRIX_VALUES]) if len(text) > _MATRIX_VALUES else 1.0
+        return [float(value) for value in text[:_MATRIX_VALUES]], scale
+    values = loader.read_transform()
+    try:
+        scale = loader.read_double()
+    except AcisException, ValueError, IndexError:
+        scale = 1.0  # запись SAT без масштаба
+    return values, scale
+
+
+def _transform_matrix(values: list[float], scale: float) -> Matrix44:
+    rows = [Vec3(values[0:3]), Vec3(values[3:6]), Vec3(values[6:9])]
+    if not math.isclose(scale, 1.0, rel_tol=1e-9):
+        if not all(math.isclose(row.magnitude, 1.0, rel_tol=_UNIT_ROW) for row in rows):
+            # Строки уже не единичные и есть масштаб: чем умножать, неизвестно.
+            raise RegionGeometryError("acis-transform-scale")
+        rows = [row * scale for row in rows]
+    return Matrix44([*rows[0], 0.0, *rows[1], 0.0, *rows[2], 0.0, *values[9:12], 1.0])
+
+
 def region_polygon(
     entity: Body, matrix: Matrix44 | None, flatten: float
 ) -> tuple[BaseGeometry, float]:
@@ -89,6 +138,8 @@ def region_polygon(
         raise RegionGeometryError("missing-acis-data")
     try:
         bodies = acis.load(bytes(sab) if sab else _normalized_sat(sat))
+    except RegionGeometryError:
+        raise
     except (AcisException, ValueError, IndexError, KeyError, TypeError) as error:
         # Разбор ACIS - чужой формат с вариантами версий: ошибка разбора - пробел с
         # причиной, а не падение всего чтения.

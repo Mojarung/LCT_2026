@@ -8,11 +8,16 @@ ACIS эти области терялись целиком: на Старом Г
 from __future__ import annotations
 
 import math
+import struct
 from typing import TYPE_CHECKING
 
 import ezdxf
 import pytest
 from ezdxf.acis import api as acis
+from ezdxf.acis import entities as acis_entities
+from ezdxf.acis import sab
+from ezdxf.acis.const import Tags
+from ezdxf.math import Matrix44
 from ezdxf.render.mesh import MeshBuilder
 
 from green.infrastructure.cad.acis_region import RegionGeometryError, region_polygon
@@ -143,6 +148,82 @@ def test_asm_sat_with_pointer_ids_is_read() -> None:
     polygon, _ = region_polygon(region, None, 0.1)
 
     assert polygon.area == pytest.approx(SIDE * SIDE)
+
+
+def _sab_square(transform: bytes | None = None) -> bytes:
+    """SAB квадрата со стороной 10 и центром (100, 50): сдвиг задан его матрицей transform.
+
+    ezdxf пишет transform одной строкой, как AutoCAD и ODA 27.1; transform - байты записи
+    ACIS 223 из ODA 27.7 и nanoCAD вместо этой строки: векторы строк матрицы, перенос,
+    масштаб, флаги. Указатели SAB - номера записей, замена токена внутри записи их не сдвигает.
+    """
+    half = SIDE / 2  # квадрат с центром в нуле: body_from_mesh не добавит своего сдвига
+    mesh = MeshBuilder()
+    mesh.add_face([(-half, -half, 0), (half, -half, 0), (half, half, 0), (-half, half, 0)])
+    body = acis.body_from_mesh(mesh)
+    matrix = acis_entities.Transform()
+    matrix.matrix = Matrix44.translate(100, 50, 0)
+    body.transform = matrix
+    data = acis.export_sab([body])
+    if transform is None:
+        return data
+    record = next(e for e in sab.parse_sab(data).entities if e.name == "transform")
+    text = record.data[0].value.encode()
+    literal = struct.pack("<Bi", Tags.LITERAL_STR, len(text)) + text
+    assert data.count(literal) == 1
+    return data.replace(literal, transform)
+
+
+def _vector_transform(rows: list[tuple[float, float, float]], scale: float) -> bytes:
+    vectors = b"".join(
+        struct.pack("<Bddd", Tags.DIRECTION_VEC, *row) for row in [*rows, (100.0, 50.0, 0.0)]
+    )
+    return vectors + struct.pack("<Bd", Tags.DOUBLE, scale) + bytes([Tags.BOOL_FALSE] * 3)
+
+
+def _sab_region(data: bytes):  # noqa: ANN202 - Body из ezdxf, тип не экспортируется
+    doc = ezdxf.new("R2018")
+    region = doc.modelspace().add_region()
+    region.sab = data
+    return region
+
+
+def test_sab_transform_written_as_a_string_moves_the_region() -> None:
+    polygon, _ = region_polygon(_sab_region(_sab_square()), None, 0.1)
+
+    assert polygon.bounds == pytest.approx((95, 45, 105, 55))
+
+
+def test_sab_transform_written_as_vectors_moves_the_region() -> None:
+    """Так пишет ODA 27.7: у ezdxf на такой записи ParsingError, области Камчатской терялись."""
+    identity = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    region = _sab_region(_sab_square(_vector_transform(identity, 1.0)))
+
+    polygon, _ = region_polygon(region, None, 0.1)
+
+    assert polygon.bounds == pytest.approx((95, 45, 105, 55))
+
+
+def test_transform_scale_multiplies_the_unit_rotation() -> None:
+    """ACIS хранит масштаб отдельно от матрицы поворота: строки матрицы единичной длины."""
+    quarter_turn = [(0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    region = _sab_region(_sab_square(_vector_transform(quarter_turn, 2.0)))
+
+    polygon, _ = region_polygon(region, None, 0.1)
+
+    assert polygon.area == pytest.approx(4 * SIDE * SIDE)
+    assert polygon.bounds == pytest.approx((90, 40, 110, 60))
+
+
+def test_scale_on_top_of_scaled_rows_is_a_reasoned_error() -> None:
+    """Строки не единичные и масштаб не 1: чем умножать - неизвестно, форму не угадываем."""
+    stretched = [(2.0, 0.0, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 2.0)]
+    region = _sab_region(_sab_square(_vector_transform(stretched, 2.0)))
+
+    with pytest.raises(RegionGeometryError) as caught:
+        region_polygon(region, None, 0.1)
+
+    assert caught.value.reason == "acis-transform-scale"
 
 
 def test_unparseable_acis_is_a_reasoned_error() -> None:
