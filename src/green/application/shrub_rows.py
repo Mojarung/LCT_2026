@@ -55,7 +55,7 @@ from green.application.placement import (
 )
 from green.application.quality.site import WIDE_STREET_M, street_length
 from green.application.surfaces import build_surface_map
-from green.application.wording import counted
+from green.application.wording import counted, decimal
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import (
@@ -553,9 +553,9 @@ def _plant(  # noqa: PLR0913 - участки, виды, план, нормы и
         reason = Reason(
             "reference",
             (
-                f"живая изгородь у борта: ось в {segment.offset_m:.1f} м от борта, шаг "
-                f"{params.shrub_row_spacing_m:.1f} м, стрижка не выше "
-                f"{params.shrub_row_height_m:.1f} м; {kind.purpose}"
+                f"живая изгородь у борта: ось в {decimal(segment.offset_m)} м от борта, шаг "
+                f"{decimal(params.shrub_row_spacing_m)} м, стрижка не выше "
+                f"{decimal(params.shrub_row_height_m)} м; {kind.purpose}"
             ).replace(".", ","),
             source=kind.basis,
         )

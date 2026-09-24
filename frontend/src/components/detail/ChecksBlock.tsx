@@ -75,8 +75,11 @@ export function ChecksBlock({
       ) : null}
       {hidden.length ? (
         <details className="detail-full">
+          {/* Число уже названо строкой выше, когда нарушений нет: второй раз оно не нужно. */}
           <summary>
-            Ещё {hidden.length} {plural(hidden.length, 'проверка', 'проверки', 'проверок')}
+            {!failing
+              ? 'Остальные проверки'
+              : `Ещё ${String(hidden.length)} ${plural(hidden.length, 'проверка', 'проверки', 'проверок')}`}
           </summary>
           <ul className="checks" style={{ marginTop: 12 }}>
             {withFact.map((check) => (

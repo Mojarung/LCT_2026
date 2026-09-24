@@ -21,7 +21,6 @@ import shapely
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
-from green.application.explain import citation_text
 from green.application.params import active_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
@@ -496,7 +495,13 @@ def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
     named = []
     for rule_id in sorted(params.disabled_rules):
         rule = rulebook.rule(rule_id)
-        named.append(f"{citation_text(rule, rulebook)} ({rule_id})" if rule else rule_id)
+        if rule is None:
+            named.append(rule_id)
+            continue
+        # Свой пункт без связанных ссылок и пометки о сверке: в строке-сводке она повторяла
+        # оговорку, которая уже стоит в тексте пункта.
+        act = rulebook.label_of(rule.citation.act_id)
+        named.append(f"{act}, {rule.citation.clause} ({rule_id})")
     return "Профиль не применяет: " + "; ".join(named) + "."
 
 

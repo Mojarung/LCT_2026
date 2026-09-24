@@ -23,11 +23,12 @@ def counted(count: int, one: str, few: str, many: str) -> str:
     return f"{count} {plural(count, one, few, many)}"
 
 
-def _decimal(value: float, digits: int) -> str:
+def decimal(value: float, digits: int = 1) -> str:
+    """Дробное число по-русски, с запятой: «4,1 м», а не «4.1 м»."""
     return f"{value:.{digits}f}".replace(".", ",")
 
 
 def index_change(before: float, after: float) -> str:
     """Изменение индекса качества: сотых хватает, пока они различаются, иначе тысячные."""
-    digits = 2 if _decimal(before, 2) != _decimal(after, 2) else 3
-    return f"с {_decimal(before, digits)} до {_decimal(after, digits)}"
+    digits = 2 if decimal(before, 2) != decimal(after, 2) else 3
+    return f"с {decimal(before, digits)} до {decimal(after, digits)}"

@@ -23,6 +23,7 @@ from scipy.spatial import KDTree
 from green.application.barriers import BARRIER_NOTE
 from green.application.placement import MODE_LABELS
 from green.application.quality.site import WIDE_STREET_M
+from green.application.wording import decimal
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
@@ -376,9 +377,9 @@ def diversity(layout: Layout, params: PlanParams) -> TermResult:
         deltas[i] = cache[key]
     details = [_diversity_phrase(layout, i, populations) for i in range(layout.size)]
     effective = _effective(counts.values(), layout.size)
-    quota_text = "соблюдены" if quota >= 1 else f"превышены, выполнение {quota:.2f}"
+    quota_text = "соблюдены" if quota >= 1 else f"превышены, выполнение {decimal(quota, 2)}"
     note = (
-        f"{len(counts)} видов, эффективное число {effective:.1f} при цели {target} "
+        f"{len(counts)} видов, эффективное число {decimal(effective)} при цели {target} "
         f"(допустимо местам видов: {len(admissible)}); квоты вида, рода и семейства {quota_text}"
     )
     measure = {
