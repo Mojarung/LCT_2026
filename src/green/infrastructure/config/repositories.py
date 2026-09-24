@@ -201,6 +201,7 @@ class YamlLayerMapSource:
                 confirmed=rule.confirmed,
                 geometry=rule.geometry,
                 priority=rule.priority,
+                symbol_instance=rule.symbol_instance,
             )
             for rule in parsed.rules
         )

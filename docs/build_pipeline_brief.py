@@ -131,7 +131,7 @@ def main() -> None:
         canvas.saveState()
         canvas.setFont("Body", 8)
         canvas.setFillColor(colors.HexColor("#555555"))
-        canvas.drawString(44, 24, "green  |  Пайплайн посадок  |  23.09.2026")
+        canvas.drawString(44, 24, "green  |  Пайплайн посадок  |  25.09.2026")
         canvas.drawRightString(A4[0] - 44, 24, str(canvas.getPageNumber()))
         canvas.restoreState()
 

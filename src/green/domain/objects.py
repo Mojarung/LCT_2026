@@ -111,6 +111,17 @@ class ClassificationEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class InsertInstance:
+    """One transformed INSERT occurrence, including a distinct MINSERT cell."""
+
+    ref: SourceRef
+    block: str
+    x: float
+    y: float
+    declared_layer: str
+
+
+@dataclass(frozen=True, slots=True)
 class Feature:
     """Геометрический объект подосновы с исходным слоем и присвоенным классом."""
 
@@ -131,6 +142,11 @@ class Feature:
     # Distinguish closed linework from explicit fills after semantic mapping.
     # None carries no evidence that a polygon is just a boundary.
     source_entity_type: str | None = None
+    # Raw primitives keep the full instance path. A logical symbol retains the
+    # source refs of all collapsed primitives for CAD review and provenance.
+    insert_chain: tuple[InsertInstance, ...] = ()
+    symbol_parts: tuple[SourceRef, ...] = ()
+    symbol_layers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

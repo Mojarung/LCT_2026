@@ -20,6 +20,7 @@ from green.domain.objects import (
     NO_XREF,
     Feature,
     GeometryGap,
+    InsertInstance,
     ReadDiagnostics,
     Scene,
     SourceRef,
@@ -136,6 +137,7 @@ class _Walker:
         parent_handle: str,
         index: int,
         parent_block: str | None = None,
+        insert_chain: tuple[InsertInstance, ...] = (),
     ) -> None:
         layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
@@ -150,7 +152,7 @@ class _Walker:
         if kind in _TEXT_ENTITIES:
             self._label(entity, ref, layer, parent_block, chain)
         elif kind == "INSERT":
-            self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
+            self._insert(entity, ref, layer, chain, insert_chain)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
             self.skipped[kind] += 1
             if kind not in _ANNOTATIONS:
@@ -188,6 +190,7 @@ class _Walker:
                         circle_radius_m=radius,
                         geometry_error_m=error * self.unit_m if error is not None else None,
                         source_entity_type=kind,
+                        insert_chain=insert_chain,
                         circle_center_m=(center.x * self.unit_m, center.y * self.unit_m)
                         if center is not None
                         else None,
@@ -208,11 +211,18 @@ class _Walker:
             for kind, layer, block, reason in [key]
         )
 
-    def _insert(self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...]) -> None:
+    def _insert(
+        self,
+        insert: Insert,
+        ref: SourceRef,
+        layer: str,
+        chain: tuple[str, ...],
+        insert_chain: tuple[InsertInstance, ...],
+    ) -> None:
         if insert.mcount > 1:
             for position, instance in enumerate(insert.multi_insert()):
                 instance_ref = replace(ref, handle=f"{ref.handle}@{position}")
-                self._insert(instance, instance_ref, layer, chain)
+                self._insert(instance, instance_ref, layer, chain, insert_chain)
             return
         clip = XClip(insert)
         if clip.has_clipping_path and clip.is_clipping_enabled:
@@ -233,6 +243,17 @@ class _Walker:
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
             return
+        position = insert.ocs().to_wcs(insert.dxf.insert)
+        instances = (
+            *insert_chain,
+            InsertInstance(
+                ref,
+                decode_dxf_unicode(name),
+                position.x,
+                position.y,
+                decode_dxf_unicode(insert.dxf.get("layer", "0")),
+            ),
+        )
         for position, attribute in enumerate(insert.attribs):
             # Attached values are instance data, not the ATTDEF default. Copying
             # removes the handle so MINSERT instances get distinct source refs.
@@ -243,6 +264,7 @@ class _Walker:
                 parent_handle=f"{ref.handle}/attrib",
                 index=position,
                 parent_block=name,
+                insert_chain=instances,
             )
         try:
             children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
@@ -257,6 +279,7 @@ class _Walker:
                 parent_handle=ref.handle,
                 index=position,
                 parent_block=name,
+                insert_chain=instances,
             )
 
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
@@ -378,7 +401,14 @@ def _to_metres(
     )
     return (
         tuple(
-            replace(feature, geometry=geometry)
+            replace(
+                feature,
+                geometry=geometry,
+                insert_chain=tuple(
+                    replace(instance, x=instance.x * unit_m, y=instance.y * unit_m)
+                    for instance in feature.insert_chain
+                ),
+            )
             for feature, geometry in zip(features, scaled, strict=True)
         ),
         tuple(replace(label, x=label.x * unit_m, y=label.y * unit_m) for label in labels),

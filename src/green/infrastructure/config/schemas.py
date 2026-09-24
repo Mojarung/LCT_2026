@@ -122,6 +122,7 @@ class LayerRuleModel(_Strict):
     confirmed: bool = False
     note: str = ""
     priority: int = 0
+    symbol_instance: bool = False
 
     @field_validator("pattern")
     @classmethod

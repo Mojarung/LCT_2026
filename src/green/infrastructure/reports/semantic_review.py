@@ -51,6 +51,8 @@ def save_review_geometry(
                     "class": f.object_class.value,
                     "error_m": f.geometry_error_m,
                     "source_entity_type": f.source_entity_type,
+                    "symbol_parts": [str(ref) for ref in f.symbol_parts],
+                    "symbol_layers": list(f.symbol_layers),
                     "bounds": f.geometry.bounds,
                 },
             }

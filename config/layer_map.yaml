@@ -21,7 +21,8 @@ rules:
 
   # Дендрологические изыскания проектировщиков (ИП_*.dwg, слои «!!!_1. Дендра_*»): сохранить -
   # блоки существующих деревьев, вырубка - деревья под снос, остальное подписи.
-  - {pattern: "Дендра_сохранить", object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "Дендра_сохранить", object_class: existing_tree, confirmed: true, priority: 10,
+     symbol_instance: true}
   - {pattern: "Дендра_|Дендро\\w* Выноски|Дендроплан \\(существующие", object_class: ignore, confirmed: true}
 
   # Генпланы проектировщиков (АПОТ, слои «ДВ_ГП_*», «_АД_*», «Борт ...»): проектные борта,

@@ -12,7 +12,14 @@ from shapely.geometry import Point
 from green.application.errors import InputError
 from green.application.semantic_names import local_name, material_context_requires_review, name_key
 from green.application.surface_labels import classify_labels, label_report_groups
-from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
+from green.domain.objects import (
+    ClassificationEvidence,
+    Feature,
+    InsertInstance,
+    ObjectClass,
+    Scene,
+    SourceRef,
+)
 
 if TYPE_CHECKING:
     import re
@@ -55,6 +62,7 @@ class LayerRule:
     confirmed: bool
     geometry: GeometryKind = GeometryKind.ANY
     priority: int = 0
+    symbol_instance: bool = False
 
     def matches(self, feature: Feature) -> bool:
         value = feature.block if self.target is MatchTarget.BLOCK else feature.layer
@@ -135,6 +143,7 @@ def classify_scene(
             kind, method, override_key = explicit
             evidence = ClassificationEvidence(method, evidence.matched_rules, (), override_key)
         classified.append(_classify_feature(feature, kind, evidence))
+    classified = _collapse_tree_symbols(classified, layer_map, params)
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)
@@ -142,6 +151,90 @@ def classify_scene(
     )
     labels = classify_labels(scene.labels, layer_map, params.label_roles if params else {})
     return replace(scene, features=tuple(classified), labels=labels), coverage
+
+
+def _collapse_tree_symbols(
+    features: list[Feature], layer_map: LayerMap, params: PlanParams | None
+) -> list[Feature]:
+    """Use the INSERT anchor once; retain refs to every contributing CAD primitive."""
+    explicit_tree_blocks = frozenset(
+        name_key(name)
+        for name, kind in (params.block_classes.items() if params else ())
+        if kind == ObjectClass.EXISTING_TREE
+    )
+    explicit_tree_instances = frozenset(
+        name_key(ref)
+        for ref, kind in (params.feature_classes.items() if params else ())
+        if kind == ObjectClass.EXISTING_TREE
+    )
+    symbol_rules = frozenset(
+        index
+        for index, rule in enumerate(layer_map.rules)
+        if rule.symbol_instance
+        or (rule.target is MatchTarget.BLOCK and rule.object_class is ObjectClass.EXISTING_TREE)
+    )
+    groups: dict[SourceRef, list[Feature]] = defaultdict(list)
+    instances: dict[SourceRef, InsertInstance] = {}
+    output: list[Feature | SourceRef] = []
+    for feature in features:
+        instance = _tree_symbol_instance(
+            feature, explicit_tree_blocks, explicit_tree_instances, symbol_rules
+        )
+        if instance is None:
+            output.append(feature)
+            continue
+        key = instance.ref
+        if key not in groups:
+            output.append(key)
+            instances[key] = instance
+        groups[key].append(feature)
+    collapsed: dict[SourceRef, Feature] = {}
+    for key, parts in groups.items():
+        instance = instances[key]
+        first = parts[0]
+        collapsed[key] = replace(
+            first,
+            ref=instance.ref,
+            block=instance.block,
+            geometry=Point(instance.x, instance.y),
+            circle_radius_m=max((part.circle_radius_m or 0.0 for part in parts), default=0.0)
+            or None,
+            circle_center_m=(instance.x, instance.y),
+            geometry_error_m=0.0,
+            source_entity_type="INSERT",
+            symbol_parts=tuple(dict.fromkeys(part.ref for part in parts)),
+            symbol_layers=tuple(dict.fromkeys(part.layer for part in parts)),
+        )
+    return [collapsed[item] if isinstance(item, SourceRef) else item for item in output]
+
+
+def _tree_symbol_instance(
+    feature: Feature,
+    explicit_tree_blocks: frozenset[str],
+    explicit_tree_instances: frozenset[str],
+    symbol_rules: frozenset[int],
+) -> InsertInstance | None:
+    if feature.object_class is not ObjectClass.EXISTING_TREE or not feature.insert_chain:
+        return None
+    for instance in reversed(feature.insert_chain):
+        if name_key(str(instance.ref)) in explicit_tree_instances:
+            return instance
+    for instance in reversed(feature.insert_chain):
+        if name_key(instance.block) in explicit_tree_blocks:
+            return instance
+    evidence = feature.classification
+    if evidence and evidence.method == "name_rule" and symbol_rules.intersection(
+        evidence.chosen_rules
+    ):
+        # A layer-0 decorative child inherits the outer sign's semantic layer.
+        # The nearest INSERT that actually declares this layer is its anchor.
+        for instance in reversed(feature.insert_chain):
+            if instance.declared_layer != "0" and name_key(instance.declared_layer) == name_key(
+                feature.layer
+            ):
+                return instance
+        return feature.insert_chain[-1]
+    return None
 
 
 def _classify_feature(
@@ -205,15 +298,27 @@ class _Overrides:
             self.maps[target] = mapping
 
     def decide(self, feature: Feature) -> tuple[ObjectClass, str, str] | None:
-        for target, value in (
-            ("feature", str(feature.ref)),
-            ("block", feature.block),
-            ("layer", feature.layer),
-        ):
-            entry = self.maps[target].get(name_key(value)) if value is not None else None
+        entry = self.maps["feature"].get(name_key(str(feature.ref)))
+        if entry is not None:
+            key, kind = entry
+            return kind, "explicit_feature", key
+        for instance in reversed(feature.insert_chain):
+            entry = self.maps["feature"].get(name_key(str(instance.ref)))
             if entry is not None:
                 key, kind = entry
-                return kind, f"explicit_{target}", key
+                return kind, "explicit_feature", key
+        for block in (
+            *(instance.block for instance in reversed(feature.insert_chain)),
+            feature.block,
+        ):
+            entry = self.maps["block"].get(name_key(block)) if block is not None else None
+            if entry is not None:
+                key, kind = entry
+                return kind, "explicit_block", key
+        entry = self.maps["layer"].get(name_key(feature.layer))
+        if entry is not None:
+            key, kind = entry
+            return kind, "explicit_layer", key
         return None
 
 
@@ -238,6 +343,7 @@ class RuleDescription:
     object_class: ObjectClass
     priority: int
     seen_in_pilot: bool
+    symbol_instance: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,9 +394,29 @@ def classification_report(
     # An overridden assignment can legitimately shadow a broader override. Check
     # whether every key names an actual input object, not whether it won precedence.
     available = {
-        "layer": {name_key(f.layer) for f in scene.features},
-        "block": {name_key(f.block) for f in scene.features if f.block is not None},
-        "feature": {name_key(str(f.ref)) for f in scene.features},
+        "layer": {
+            name_key(layer)
+            for feature in scene.features
+            for layer in (feature.layer, *feature.symbol_layers)
+        },
+        "block": {
+            name_key(name)
+            for feature in scene.features
+            for name in (
+                *(instance.block for instance in feature.insert_chain),
+                feature.block,
+            )
+            if name is not None
+        },
+        "feature": {
+            name_key(str(ref))
+            for feature in scene.features
+            for ref in (
+                feature.ref,
+                *(instance.ref for instance in feature.insert_chain),
+                *feature.symbol_parts,
+            )
+        },
     }
     unused = tuple(
         f"{target}_classes:{key}"
@@ -322,7 +448,14 @@ def classification_report(
         ),
         rules=tuple(
             RuleDescription(
-                i, r.pattern.pattern, r.target, r.geometry, r.object_class, r.priority, r.confirmed
+                i,
+                r.pattern.pattern,
+                r.target,
+                r.geometry,
+                r.object_class,
+                r.priority,
+                r.confirmed,
+                r.symbol_instance,
             )
             for i, r in enumerate(layer_map.rules)
         ),
