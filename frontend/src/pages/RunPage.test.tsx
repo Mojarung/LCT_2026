@@ -153,13 +153,17 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
 
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    // Имя чертежа без расширения: «.dxf» у каждого прогона ничего не различает.
     expect(await within(left).findByRole('heading', { level: 1 })).toHaveTextContent(
-      'Тестовая улица.dxf',
+      /^Тестовая улица$/,
     );
     expect(await within(left).findByText('302')).toBeInTheDocument();
     expect(left).toHaveTextContent('посадки в плане, все без ограничений');
     expect(left).toHaveTextContent('161 место отклонено. Подоснова цела');
-    expect(await within(left).findByText('0,81')).toBeInTheDocument();
+    // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    expect(await within(right).findByText('0,81')).toBeInTheDocument();
+    expect(within(left).queryByText('0,81')).toBeNull();
     expect(document.body).toHaveClass('shell-map');
   });
 
@@ -252,7 +256,7 @@ describe('RunPage: finished run', () => {
     // Ключевое предупреждение стоит у числа и остаётся в полном списке под раскрытием.
     const copies = await within(left).findAllByText(warnings[0] ?? '');
     expect(copies.map((node) => Boolean(node.closest('.notice')))).toEqual([true, false]);
-    expect(within(left).getByText('Предупреждения: 2')).toBeInTheDocument();
+    expect(within(left).getByText('Как собран план: 2')).toBeInTheDocument();
   });
 
   it('remembers a collapsed panel', async () => {

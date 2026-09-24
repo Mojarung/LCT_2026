@@ -92,12 +92,12 @@ export function renderBase(
 
   const visible = worldBounds(view, -PAD, -PAD, width, height);
   // Карта покрытий - под линиями: грунт и твёрдое так, как их понял сервис. Растр строкой 0
-  // лежит на минимальном Y, и мировая матрица с разворотом Y кладёт его как надо.
+  // лежит на минимальном Y, и мировая матрица с разворотом Y кладёт его как надо. Клетка
+  // растра на приближении крупнее бордюра: со сглаживанием её край не читается как ступень
+  // чертежа.
   if (layers.surfacemap && scene.surface) {
     const { img, x, y, w, h } = scene.surface;
-    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, x, y, w, h);
-    ctx.imageSmoothingEnabled = true;
   }
   for (const chunk of scene.chunks) {
     if (!layers[chunk.group]) continue;

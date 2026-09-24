@@ -251,7 +251,7 @@ export function RunPage() {
           {data ? <RunHeader run={data} /> : null}
           <div className="hud-scroll" ref={leftScroll}>
             {done && data ? (
-              <RunMetrics run={data} quality={quality.data} />
+              <RunMetrics run={data} />
             ) : (
               <p className="metric">
                 <b>

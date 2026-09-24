@@ -206,11 +206,13 @@ button {
   font-size: var(--fs-small);
   font-weight: 500;
   transition:
-    opacity 0.12s,
+    background-color 0.12s,
+    border-color 0.12s,
     transform 0.1s;
 }
 .primary:hover:not(:disabled) {
-  opacity: 0.85;
+  background: var(--bone-hover);
+  border-color: var(--bone-hover);
 }
 .primary:active:not(:disabled) {
   transform: translateY(1px);
@@ -342,7 +344,7 @@ select {
   white-space: nowrap;
 }
 .filefield:hover .pick {
-  opacity: 0.85;
+  background: var(--bone-hover);
 }
 .filefield .chosen {
   flex: 1;

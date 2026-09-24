@@ -163,9 +163,6 @@ export function Legend({ done }: { done: boolean }) {
           </span>
         </div>
         <LayerCheck layer="labels">Подписи покрытий с чертежа</LayerCheck>
-        <p className="legend-note">
-          «А», «ГАЗОН», «ДЕТ.ПЛ.»: по ним строится карта покрытий, видны при приближении.
-        </p>
         <LayerCheck layer="buildings">
           <i className="key" style={line('--c-building')} /> Здания
         </LayerCheck>

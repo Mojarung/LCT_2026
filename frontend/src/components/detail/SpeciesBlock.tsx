@@ -1,4 +1,5 @@
 import type { Assortment, AssortmentReason } from '../../api/artifacts';
+import { runnersText } from '../../lib/alternatives';
 import { plural } from '../../lib/format';
 
 /** Сколько оснований видно сразу: остальные под раскрытием, как проверки норм. */
@@ -52,17 +53,7 @@ export function SpeciesBlock({ assortment }: { assortment: Assortment | null | u
         </details>
       ) : null}
       {runners.length ? (
-        <p className="detail-slack">
-          Рядом по оценке:{' '}
-          {runners
-            .map((alt) =>
-              alt.why_not && alt.why_not !== 'оценка ниже'
-                ? `${alt.name_ru} ${String(alt.percent)}%: ${alt.why_not}`
-                : `${alt.name_ru} ${String(alt.percent)}%`,
-            )
-            .join('; ')}
-          .
-        </p>
+        <p className="detail-slack">Рядом по оценке: {runnersText(runners)}.</p>
       ) : null}
     </>
   );

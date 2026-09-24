@@ -2,9 +2,8 @@
 
 import { Link } from 'react-router';
 
-import type { QualityJson } from '../../api/artifacts';
 import type { RunOut } from '../../api/types';
-import { decimal, integer, plural } from '../../lib/format';
+import { integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
@@ -33,13 +32,16 @@ export function PanelToggle({ panel, label }: { panel: 'left' | 'right'; label: 
   );
 }
 
+/** Имя чертежа без расширения: «.dxf» в заголовке каждого прогона ничего не различает. */
+const stem = (name: string) => name.replace(/\.(dxf|dwg)$/i, '');
+
 export function RunHeader({ run }: { run: RunOut }) {
   return (
     <div className="hud-head">
       <Link className="back" to="/">
         ← все прогоны
       </Link>
-      <h1>{run.source_name}</h1>
+      <h1 title={run.source_name}>{stem(run.source_name)}</h1>
       <p className="run-sub">
         <span>{run.profile}</span>
         <span>{run.id.slice(0, 8)}</span>
@@ -53,8 +55,10 @@ export function RunHeader({ run }: { run: RunOut }) {
 
 /** Сводка: одно число крупно, остальное строкой под ним. Предупреждения, меняющие смысл плана,
  *  стоят рядом с числом: иначе «18 780 посадок» читается как результат работы, а не как
- *  следствие того, что участок ничем не ограничен. */
-export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson | undefined }) {
+ *  следствие того, что участок ничем не ограничен. Индекс качества здесь не повторяется: он
+ *  стоит крупно в правой панели на том же экране. Остальные записи прогона - под раскрытием
+ *  «Как собран план»: это журнал приёмов и подбора, а не тревоги. */
+export function RunMetrics({ run }: { run: RunOut }) {
   const summary = run.summary ?? {};
   const total = num(summary.placements);
   const approval = num(summary.needs_approval);
@@ -88,19 +92,7 @@ export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson
         <p className="metric-sub quality-line">
           <b>{integer(barrierPlaces)}</b>{' '}
           {plural(barrierPlaces, 'место станет', 'места станут', 'мест станут')} допустимыми с
-          прикорневым барьером, на карте пунктиром
-        </p>
-      ) : null}
-      {quality ? (
-        <p className="metric-sub quality-line">
-          индекс качества{' '}
-          {quality.index == null ? (
-            <em className="bad">не выставлен</em>
-          ) : (
-            <>
-              <b>{decimal(quality.index)}</b> из 1
-            </>
-          )}
+          прикорневым барьером
         </p>
       ) : null}
       {notices.length ? (
@@ -112,7 +104,7 @@ export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson
       ) : null}
       {warnings.length ? (
         <details className="hud-block fold">
-          <summary>Предупреждения: {warnings.length}</summary>
+          <summary>Как собран план: {warnings.length}</summary>
           <ul className="warn-list">
             {warnings.map((text) => (
               <li key={text}>{text}</li>

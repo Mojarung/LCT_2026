@@ -18,7 +18,7 @@ export type LayerKey =
 export type Layers = Record<LayerKey, boolean>;
 
 /** Что видно по умолчанию: отказы выключены - их сотни, и без вопроса «почему здесь нет»
- *  они только засоряют план. */
+ *  они только засоряют план; карта покрытий тоже - это проверка разбора чертежа, а не план. */
 export const DEFAULT_LAYERS: Layers = {
   utilities: true,
   surfaces: true,
@@ -28,7 +28,7 @@ export const DEFAULT_LAYERS: Layers = {
   rejections: false,
   weak: true,
   barrier: true,
-  surfacemap: true,
+  surfacemap: false,
   labels: true,
 };
 

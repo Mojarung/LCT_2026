@@ -4,6 +4,8 @@ import {
   extentOf,
   fitView,
   focusOf,
+  GROUP_MAX_SCALE,
+  groupView,
   niceLength,
   scaleFromShare,
   toScreen,
@@ -113,6 +115,38 @@ describe('вид карты', () => {
     const middle = toWorld(view, 500, 250);
     expect(middle.x).toBeCloseTo(50, 6);
     expect(middle.y).toBeCloseTo(40, 6);
+  });
+
+  it('вид из состава: посадки вне кадра вписываются, все в кадре - вид не двигается', () => {
+    const area = { left: 0, top: 0, width: 1000, height: 500 };
+    const view = { scale: 2, tx: 0, ty: 400, rot: 0 };
+    const inside = [
+      { x: 50, y: 50 },
+      { x: 150, y: 100 },
+    ];
+    expect(groupView(view, inside, area)).toBeNull();
+
+    const far = [
+      { x: 2000, y: 0 },
+      { x: 2100, y: 40 },
+    ];
+    const target = groupView(view, far, area);
+    expect(target).not.toBeNull();
+    const shown = { ...view, ...target };
+    for (const { x, y } of far) {
+      const { sx, sy } = toScreen(shown, x, y);
+      expect(sx).toBeGreaterThan(0);
+      expect(sx).toBeLessThan(1000);
+      expect(sy).toBeGreaterThan(0);
+      expect(sy).toBeLessThan(500);
+    }
+  });
+
+  it('одна посадка вида не раздувается на весь экран', () => {
+    const area = { left: 0, top: 0, width: 1000, height: 500 };
+    const view = { scale: 0.5, tx: 0, ty: 0, rot: 0 };
+    const target = groupView(view, [{ x: 5000, y: 5000 }], area);
+    expect(target?.scale).toBe(GROUP_MAX_SCALE);
   });
 
   it('медиана точек по осям вида', () => {

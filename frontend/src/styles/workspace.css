@@ -682,12 +682,6 @@ body.shell-map .topbar {
 .legend i.cross {
   color: var(--bad);
 }
-.legend-note {
-  margin: 10px 0 0;
-  font-size: var(--fs-micro);
-  line-height: 1.4;
-  color: var(--bone-3);
-}
 /* Пульт уступает место панели обозначений ровно на её высоту: высота зависит от прогона
    (у идущего нет раздела «План»), поэтому её измеряет Legend.tsx и кладёт в переменную. */
 .workspace.legend-on .hud-left {
@@ -905,7 +899,8 @@ body.shell-map .topbar {
   border: 1px solid var(--bone);
 }
 .dl.primary:hover {
-  opacity: 0.85;
+  background: var(--bone-hover);
+  border-color: var(--bone-hover);
 }
 .dl.ghost {
   background: transparent;

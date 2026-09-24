@@ -2,7 +2,7 @@ import type { QualityJson } from '../../api/artifacts';
 import { decimal, plural } from '../../lib/format';
 
 /** Индекс качества плана: оценка, слагаемые с тем, что измерено, и основание каждого.
- *  Веса - выбор команды, и это сказано рядом с каждым слагаемым. */
+ *  Веса - выбор команды: это сказано один раз над слагаемыми, у каждого - только число. */
 export function QualityBlock({ quality }: { quality: QualityJson | undefined }) {
   if (!quality?.terms) return null;
   // Первая строка сводки - оценка или причина, по которой её нет: она уже стоит выше.
@@ -26,6 +26,7 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
           Разбор: {quality.terms.length}{' '}
           {plural(quality.terms.length, 'слагаемое', 'слагаемых', 'слагаемых')}
         </summary>
+        <p className="term-note">Веса слагаемых выбрала команда.</p>
         <ul className="quality-terms">
           {quality.terms.map((term) => (
             <li key={term.key}>
@@ -42,9 +43,7 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
                 <p className="term-note">{term.note}</p>
                 <p className="term-basis">
                   {term.basis}
-                  {term.score == null
-                    ? ''
-                    : `. Вес ${String(Math.round(term.weight * 100))}%, выбор команды.`}
+                  {term.score == null ? '' : `. Вес ${String(Math.round(term.weight * 100))}%.`}
                 </p>
               </details>
             </li>

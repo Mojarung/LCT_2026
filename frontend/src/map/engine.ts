@@ -39,6 +39,7 @@ import {
 import {
   extentOf,
   fitView,
+  groupView,
   focusOf,
   scaleFromShare,
   toScreen,
@@ -53,6 +54,8 @@ const SETTLE_MS = 110;
 /** Длительность довоза вида до выбранной посадки. Единственная анимация на странице, и она
  *  служебная: при выборе с клавиатуры скачок карты неотличим от перезагрузки. */
 const PAN_MS = 220;
+/** Переход к посадкам вида из состава: с масштабом дольше простого сдвига, но короче 300 мс. */
+const GROUP_MS = 280;
 /** Живая проверка точки при переносе - не чаще раза в столько миллисекунд. */
 const PROBE_MS = 120;
 /** Шаг сдвига с клавиатуры (Alt со стрелками) и крупный шаг (Alt+Shift), метров. */
@@ -206,6 +209,16 @@ export class PlanEngine {
   setHighlight(code: string | null): void {
     this.marks.highlight = code;
     this.schedule();
+  }
+
+  /** Вид из состава плана выбран: его посадки вписываются в свободную область, если видны не
+   *  все. Иначе подсветка вида за краем кадра ничего не показывает. */
+  showSpecies(code: string): void {
+    const points = this.scene.placements.filter((p) => p.species_code === code);
+    const target = groupView(this.view, points, this.clearArea());
+    if (!target) return;
+    this.touched = true;
+    this.moveTo(target, GROUP_MS);
   }
 
   setSelected(item: MapItem | null): void {
@@ -574,21 +587,38 @@ export class PlanEngine {
   }
 
   private panTo(tx: number, ty: number): void {
+    this.moveTo({ scale: this.view.scale, tx, ty }, PAN_MS);
+  }
+
+  /** Плавный переход вида. Масштаб меняется по логарифму, а точка чертежа в центре холста
+   *  идёт по прямой: так приближение не описывает дугу мимо цели. */
+  private moveTo(target: { scale: number; tx: number; ty: number }, ms: number): void {
     cancelAnimationFrame(this.pan);
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced || (Math.abs(tx - this.view.tx) < 2 && Math.abs(ty - this.view.ty) < 2)) {
-      this.view.tx = tx;
-      this.view.ty = ty;
+    const still =
+      target.scale === this.view.scale &&
+      Math.abs(target.tx - this.view.tx) < 2 &&
+      Math.abs(target.ty - this.view.ty) < 2;
+    if (reduced || still) {
+      Object.assign(this.view, target);
       this.schedule();
       return;
     }
-    const from = { tx: this.view.tx, ty: this.view.ty };
+    const from = { scale: this.view.scale, tx: this.view.tx, ty: this.view.ty };
+    const cx = this.canvas.clientWidth / 2;
+    const cy = this.canvas.clientHeight / 2;
+    const u0 = (cx - from.tx) / from.scale;
+    const v0 = (cy - from.ty) / from.scale;
+    const u1 = (cx - target.tx) / target.scale;
+    const v1 = (cy - target.ty) / target.scale;
     const started = performance.now();
     const tick = (now: number) => {
-      const k = Math.min((now - started) / PAN_MS, 1);
+      const k = Math.min((now - started) / ms, 1);
       const eased = 1 - (1 - k) ** 3;
-      this.view.tx = from.tx + (tx - from.tx) * eased;
-      this.view.ty = from.ty + (ty - from.ty) * eased;
+      const scale = from.scale * (target.scale / from.scale) ** eased;
+      this.view.scale = scale;
+      this.view.tx = cx - (u0 + (u1 - u0) * eased) * scale;
+      this.view.ty = cy - (v0 + (v1 - v0) * eased) * scale;
       this.draw();
       if (k < 1) this.pan = requestAnimationFrame(tick);
     };

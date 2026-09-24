@@ -115,8 +115,6 @@ export const CLOSE_SHORT_SHARE = 0.55;
  *  километровой улице иначе на экране остаётся один перекрёсток. */
 export const CLOSE_MAX_ZOOM = 3;
 
-/** Вписать план в свободную область. whole - весь план; close - лента по короткой стороне
- *  на CLOSE_SHORT_SHARE высоты, по длине она уходит под полупрозрачные панели. */
 /** Точка в координатах вида (u вдоль экрана, v поперёк). */
 export interface ViewPoint {
   u: number;
@@ -144,6 +142,8 @@ export function focusOf(view: Pick<ViewState, 'rot'>, points: readonly Point[]):
   return { u: median(us), v: median(vs) };
 }
 
+/** Вписать план в свободную область. whole - весь план; close - лента по короткой стороне
+ *  на CLOSE_SHORT_SHARE высоты, по длине она уходит под полупрозрачные панели. */
 export function fitView(
   ext: Extent,
   area: Area,
@@ -172,6 +172,41 @@ export function fitView(
 function centerOn(focus: number | undefined, lo: number, hi: number, span: number): number {
   if (focus === undefined || span >= hi - lo) return (lo + hi) / 2;
   return Math.min(Math.max(focus, lo + span / 2), hi - span / 2);
+}
+
+/** Группу посадок крупнее не вписывать: при 6 px/м крона 5 м - 30 px, и вокруг видно улицу, а
+ *  не одну точку на весь экран. Подписи материала появляются с 5 px/м (render.LABEL_MIN_SCALE). */
+export const GROUP_MAX_SCALE = 6;
+/** Посадка ближе этого к краю свободной области считается невидной: её перекрывает кромка. */
+const GROUP_PAD_PX = 24;
+
+/** Вид на посадки одного вида из состава плана: вписать их в свободную область. null - все
+ *  уже видны, и вид не двигается: лишний скачок сбивает того, кто сам выбрал кадр. */
+export function groupView(
+  view: ViewState,
+  points: readonly Point[],
+  area: Area,
+): Omit<ViewState, 'rot'> | null {
+  if (!points.length) return null;
+  const seen = points.every(({ x, y }) => {
+    const { sx, sy } = toScreen(view, x, y);
+    return (
+      sx >= area.left + GROUP_PAD_PX &&
+      sx <= area.left + area.width - GROUP_PAD_PX &&
+      sy >= area.top + GROUP_PAD_PX &&
+      sy <= area.top + area.height - GROUP_PAD_PX
+    );
+  });
+  if (seen) return null;
+  const ext = extentOf(view, points);
+  const fitted = fitView(ext, area, 'whole');
+  if (fitted.scale <= GROUP_MAX_SCALE) return fitted;
+  const scale = GROUP_MAX_SCALE;
+  return {
+    scale,
+    tx: area.left + area.width / 2 - ((ext.minU + ext.maxU) / 2) * scale,
+    ty: area.top + area.height / 2 - ((ext.minV + ext.maxV) / 2) * scale,
+  };
 }
 
 /** Масштаб вокруг точки экрана: точка под курсором остаётся на месте. */

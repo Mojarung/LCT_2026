@@ -1,5 +1,6 @@
 import { integer } from '../../lib/format';
 import type { MapItem } from '../../map/types';
+import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
 
 interface Row {
@@ -28,6 +29,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
   const toggleSpecies = useWorkspace((s) => s.toggleSpecies);
   const showAll = useWorkspace((s) => s.showAllSpecies);
   const toggleHighlight = useWorkspace((s) => s.toggleHighlight);
+  const engine = useEngine();
 
   const rows = rowsOf(placements);
   if (!rows.length) {
@@ -73,6 +75,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
                 aria-pressed={highlight === row.code}
                 title="Подсветить вид на карте"
                 onClick={() => {
+                  if (highlight !== row.code) engine.current?.showSpecies(row.code);
                   toggleHighlight(row.code);
                 }}
               >

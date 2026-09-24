@@ -3,9 +3,20 @@ import { permille } from '../../lib/format';
 import type { MapItem } from '../../map/types';
 import { meters } from '../../lib/format';
 
+/** Строка слагаемого «пригодность вида» (quality/terms.py, fit): её число первым показывает
+ *  «Почему этот вид», второй раз в той же панели оно только отнимает строку. */
+const FIT_LINE = 'пригодность вида месту';
+
 /** Чем ценна посадка: насколько упадёт индекс качества без неё и за счёт чего. */
-export function ValueBlock({ value }: { value: PlantingValue | null }) {
+export function ValueBlock({
+  value,
+  speciesShown = false,
+}: {
+  value: PlantingValue | null;
+  speciesShown?: boolean;
+}) {
   if (!value) return null;
+  const weak = speciesShown ? value.weak.filter((line) => !line.startsWith(FIT_LINE)) : value.weak;
   const { value: pm, text, zero } = permille(value.delta);
   const rank =
     pm > 0 && !zero && value.percentile
@@ -22,9 +33,9 @@ export function ValueBlock({ value }: { value: PlantingValue | null }) {
         <p className="value-delta bad">
           Вклад в индекс качества <b>{text}</b>: посадка слабее среднего по плану.
         </p>
-        {value.weak.length ? (
+        {weak.length ? (
           <ul className="value-reasons">
-            {value.weak.map((line) => (
+            {weak.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
@@ -65,11 +76,11 @@ export function ValueBlock({ value }: { value: PlantingValue | null }) {
           ))}
         </ul>
       ) : null}
-      {value.weak.length ? (
+      {weak.length ? (
         <>
           <p className="detail-slack">Слабее всего:</p>
           <ul className="value-reasons">
-            {value.weak.map((line) => (
+            {weak.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
