@@ -1,4 +1,4 @@
-"""Create a fixed synthetic street with one planar polygonal ACIS REGION."""
+"""Create a fixed street with equivalent REGION or LWPOLYLINE obstacles."""
 
 # ruff: noqa: INP001, T201 - standalone fixture generator
 
@@ -13,8 +13,8 @@ from ezdxf.acis import api
 from ezdxf.render import MeshBuilder
 
 
-def make(path: Path, *, polyline: bool = False) -> None:
-    doc = ezdxf.new("R2018")
+def make(path: Path, *, polyline: bool = False, curved: bool = False) -> None:
+    doc = ezdxf.new("R2010" if curved else "R2018")
     doc.header["$INSUNITS"] = 6
     for layer in (
         "Граница заказа",
@@ -55,27 +55,41 @@ def make(path: Path, *, polyline: bool = False) -> None:
     )
     corners = [(45, 29), (55, 29), (55, 35), (45, 35)]
     if polyline:
-        space.add_lwpolyline(corners, close=True, dxfattribs={"layer": "Здания"})
+        if curved:
+            space.add_lwpolyline(
+                [(45, 29, 1), (55, 29, 0), (55, 35, 0), (45, 35, 0)],
+                format="xyb",
+                close=True,
+                dxfattribs={"layer": "Здания"},
+            )
+        else:
+            space.add_lwpolyline(corners, close=True, dxfattribs={"layer": "Здания"})
     else:
         mesh = MeshBuilder()
         mesh.add_face([(x, y, 0) for x, y in corners])
         region = space.add_region(dxfattribs={"layer": "Здания"})
         api.export_dxf(region, [api.body_from_mesh(mesh)])
+        if curved:
+            sat = list(region.sat)
+            index = next(index for index, line in enumerate(sat) if "straight-curve" in line)
+            sat[index] = "ellipse-curve $-1 -1 $-1 0 -3 0 0 0 1 5 0 0 1 I I #"
+            region.sat = sat
     path.parent.mkdir(parents=True, exist_ok=True)
     doc.saveas(path)
     loaded = ezdxf.readfile(path)
     if not polyline:
         regions = loaded.modelspace().query("REGION")
-        if len(regions) != 1 or not regions[0].sab:
-            raise RuntimeError("The generated REGION lost its SAB payload")
+        if len(regions) != 1 or not (regions[0].sat if curved else regions[0].sab):
+            raise RuntimeError("The generated REGION lost its ACIS payload")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path)
     parser.add_argument("--polyline", action="store_true")
+    parser.add_argument("--curved", action="store_true")
     args = parser.parse_args()
-    make(args.path, polyline=args.polyline)
+    make(args.path, polyline=args.polyline, curved=args.curved)
     print(hashlib.sha256(args.path.read_bytes()).hexdigest())
 
 

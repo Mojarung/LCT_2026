@@ -1,0 +1,51 @@
+{
+  "source_sha256": "bc29cd6b492cb6b4b59ec205e2fc9232be17eca3f0d74987ab80d10305f475d2",
+  "baseline_revision": "881335a",
+  "baseline_reader_sha256": "36c74df4d1bd14eeb91844ffecefbb57625fe10063847388328318a1ba6dfe14",
+  "baseline_region_sha256": "5b936fe4a78f382186d36db56b9bfb214043b29ad396a4bf511c8379b7ee784f",
+  "repeats_per_version": 1,
+  "summary": {
+    "baseline": {
+      "region_features": 0,
+      "region_gaps": 1,
+      "all_geometry_gaps": 1,
+      "median_read_s": 0.022,
+      "median_peak_rss_mb": 120.38
+    },
+    "current": {
+      "region_features": 1,
+      "region_gaps": 0,
+      "all_geometry_gaps": 0,
+      "median_read_s": 0.017,
+      "median_peak_rss_mb": 119.92
+    }
+  },
+  "runs": {
+    "baseline": [
+      {
+        "source_sha256": "bc29cd6b492cb6b4b59ec205e2fc9232be17eca3f0d74987ab80d10305f475d2",
+        "read_s": 0.022,
+        "region_features": 0,
+        "region_gaps": 1,
+        "region_gap_reasons": {
+          "acis-entity-unsupported": 1
+        },
+        "all_geometry_gaps": 1,
+        "elapsed_s": 0.023,
+        "peak_rss_mb": 120.38
+      }
+    ],
+    "current": [
+      {
+        "source_sha256": "bc29cd6b492cb6b4b59ec205e2fc9232be17eca3f0d74987ab80d10305f475d2",
+        "read_s": 0.017,
+        "region_features": 1,
+        "region_gaps": 0,
+        "region_gap_reasons": {},
+        "all_geometry_gaps": 0,
+        "elapsed_s": 0.018,
+        "peak_rss_mb": 119.92
+      }
+    ]
+  }
+}

@@ -26,13 +26,14 @@ def _peak_rss_mb() -> float:
     return round(peak / (1024 * 1024) if platform.system() == "Darwin" else peak / 1024, 2)
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901 - standalone benchmark has optional baseline loading
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--read-only", action="store_true")
     parser.add_argument("--reader-file", type=Path)
+    parser.add_argument("--region-module-file", type=Path)
     args = parser.parse_args()
     started = time.perf_counter()
     container = build_container(Settings(config_dir=args.config, runs_dir=args.out / "runs"))
@@ -40,6 +41,15 @@ def main() -> None:
     if args.reader_file is not None:
         if not args.read_only:
             parser.error("--reader-file is available only with --read-only")
+        if args.region_module_file is not None:
+            region_spec = importlib.util.spec_from_file_location(
+                "green.infrastructure.cad.region_geometry", args.region_module_file
+            )
+            if region_spec is None or region_spec.loader is None:
+                raise RuntimeError("Cannot load the requested REGION module")
+            region_module = importlib.util.module_from_spec(region_spec)
+            sys.modules[region_spec.name] = region_module
+            region_spec.loader.exec_module(region_module)
         spec = importlib.util.spec_from_file_location("baseline_cad_reader", args.reader_file)
         if spec is None or spec.loader is None:
             raise RuntimeError("Cannot load the requested reader module")

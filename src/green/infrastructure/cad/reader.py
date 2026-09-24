@@ -33,7 +33,7 @@ from green.infrastructure.cad.curve_paths import (
 )
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
-from green.infrastructure.cad.region_geometry import RegionGeometryError, simple_region_polygon
+from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
@@ -348,7 +348,7 @@ class _Walker:
         kind = entity.dxftype()
         try:
             if isinstance(entity, Region):
-                return simple_region_polygon(entity, block_matrix=block_matrix), 0.0
+                return region_polygon(entity, flatten=self.flatten, block_matrix=block_matrix)
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 return LineString([(start.x, start.y), (end.x, end.y)]), 0.0

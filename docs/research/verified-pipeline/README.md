@@ -115,6 +115,9 @@ ReportLab. В DIR нужны DejaVuSans.ttf, DejaVuSans-Bold.ttf и DejaVuSansMo
 Группировка частей знака дерева по вставке, исходные ссылки и ограничения
 диагностического просмотра двух дендрофайлов: [E40](findings.md#e40--один-знак-дерева-на-одну-вставку-24092026).
 
-Ограниченное чтение прямолинейного REGION, сравнение с прежним reader и границы
-реального CAD: [E42](findings.md#e42--прямолинейный-region-с-проверкой-топологии-25092026),
-`region_polygon_real_comparison.json`.
+Ограниченное чтение прямолинейного и криволинейного SAT REGION, сравнение на
+одних входах и границы обобщения: [E42](findings.md#e42--прямолинейный-region-с-проверкой-топологии-25092026),
+[E43](findings.md#e43--дуги-sat-region-и-проверка-обобщения-25092026),
+`region_polygon_real_comparison.json`, `region_ellipse_real_comparison.json`,
+`region_ellipse_synthetic_read_comparison.json`,
+`region_ellipse_portfolio_survey.json`, `region_ellipse_semantics.json`.

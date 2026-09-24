@@ -1,0 +1,13 @@
+{
+  "source_sha256": "570ce85a4a916534913b39afa4aa87ba718b24f15da4caf13e4c357232e6334a",
+  "curved_region_count": 51,
+  "class_counts": {
+    "lawn": 48,
+    "fence": 2,
+    "unknown": 1
+  },
+  "curved_lawn_union_area_m2": 25.741461,
+  "curved_lawn_outside_other_lawn_m2": 1.294333,
+  "largest_curved_lawn_area_m2": 0.560187,
+  "scope": "Name-rule classes are predictions, not ground truth. Small REGIONs in block symbols can be misclassified as plantable soil."
+}

@@ -14,7 +14,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 
-def _run(source: Path, config: Path, out: Path, baseline_file: Path | None) -> dict:
+def _run(
+    source: Path, config: Path, out: Path, baseline_file: Path | None, region_file: Path | None
+) -> dict:
     command = [
         sys.executable,
         "tools/benchmark_region_polygon.py",
@@ -28,6 +30,8 @@ def _run(source: Path, config: Path, out: Path, baseline_file: Path | None) -> d
     ]
     if baseline_file is not None:
         command.extend(("--reader-file", str(baseline_file)))
+        if region_file is not None:
+            command.extend(("--region-module-file", str(region_file)))
     completed = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
     return json.loads(completed.stdout)
 
@@ -51,14 +55,30 @@ def main() -> None:
         capture_output=True,
         check=True,
     ).stdout
+    region_source = subprocess.run(  # noqa: S603 - fixed git argv
+        ["git", "show", f"{revision}:src/green/infrastructure/cad/region_geometry.py"],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
     with TemporaryDirectory(prefix="reader_baseline_") as temporary:
         baseline_file = Path(temporary) / "reader.py"
         baseline_file.write_bytes(baseline_source)
+        region_file = None
+        if region_source.returncode == 0:
+            region_file = Path(temporary) / "region_geometry.py"
+            region_file.write_bytes(region_source.stdout)
         runs: dict[str, list[dict]] = {"baseline": [], "current": []}
         for index in range(args.repeats):
-            for name, reader_file in (("baseline", baseline_file), ("current", None)):
+            for name, reader_file, saved_region in (
+                ("baseline", baseline_file, region_file),
+                ("current", None, None),
+            ):
                 measurement = _run(
-                    args.source, args.config, args.out / f"{name}-{index}", reader_file
+                    args.source,
+                    args.config,
+                    args.out / f"{name}-{index}",
+                    reader_file,
+                    saved_region,
                 )
                 measurement.pop("reader_file", None)
                 runs[name].append(measurement)
@@ -66,6 +86,9 @@ def main() -> None:
         "source_sha256": source_hash,
         "baseline_revision": revision,
         "baseline_reader_sha256": hashlib.sha256(baseline_source).hexdigest(),
+        "baseline_region_sha256": hashlib.sha256(region_source.stdout).hexdigest()
+        if region_file is not None
+        else None,
         "repeats_per_version": args.repeats,
         "summary": {
             name: {
