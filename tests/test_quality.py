@@ -309,6 +309,13 @@ def test_value_goes_into_the_explanation_and_the_stats() -> None:
     assert plan.quality.summary[0].startswith("Индекс качества плана")
 
 
+def test_the_summary_does_not_retell_the_terms_or_print_zero_penalties() -> None:
+    """Полоски слагаемых стоят над сводкой: «Сильное/Слабое» их пересказывали, «-0,000» - шум."""
+    summary = assess(_plan(), _site(), PARAMS).quality.summary  # type: ignore[union-attr]
+    assert not any(line.startswith(("Сильное", "Слабое:")) for line in summary)
+    assert not any("-0,000" in line for line in summary)
+
+
 def test_curb_under_a_gas_tolerant_crown_counts_for_dust() -> None:
     quality = evaluate(_plan(), _site(), PARAMS)
     dust = next(t for t in quality.terms if t.key == "dust")

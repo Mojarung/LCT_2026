@@ -37,6 +37,6 @@ def test_counted_puts_the_number_before_the_word() -> None:
 
 
 def test_index_change_never_reads_as_no_change() -> None:
-    """Сдвиг слабых мест поднимает индекс на тысячные: «0,87 -> 0,87» читается как «ничего»."""
-    assert index_change(0.8712, 0.8738) == "0,871 -> 0,874"
-    assert index_change(0.80, 0.83) == "0,80 -> 0,83"
+    """Сдвиг слабых мест поднимает индекс на тысячные: «с 0,87 до 0,87» читается как «ничего»."""
+    assert index_change(0.8712, 0.8738) == "с 0,871 до 0,874"
+    assert index_change(0.80, 0.83) == "с 0,80 до 0,83"

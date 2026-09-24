@@ -283,3 +283,35 @@ def test_greedy_fallback_stays_close_to_the_solver_and_holds_quotas() -> None:
     )
     assert not greedy.quota_violations
     assert len(greedy.species_by_placement) >= 0.9 * len(solved.species_by_placement)
+
+
+def test_the_plan_names_the_quota_a_species_has_used_up() -> None:
+    """Вид с оценкой выше выбранного уступил квоте: карточка называет какой, а не «или-или»."""
+    structures = _singles(30)
+    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
+    assert _counts(result)["tilia_cordata"] == 3
+    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана"
+
+
+def test_a_species_absent_from_the_plan_can_be_held_back_by_its_genus() -> None:
+    lindens = {
+        code: replace(_species(code), genus="tilia", family="Malvaceae")
+        for code in ("tilia_cordata", "tilia_platyphyllos", "tilia_tomentosa")
+    }
+    quotas = Quotas({**CATALOG, **lindens}, {}, PARAMS)
+    others = [code for code in CODES if code != "tilia_cordata"][:8]
+    chosen = {
+        **{f"a-{i}": "tilia_cordata" for i in range(2)},
+        **{f"b-{i}": "tilia_platyphyllos" for i in range(2)},
+        **{f"c-{i}-{code}": code for i in range(2) for code in others},
+    }
+    used_up = quotas.used_up(chosen)
+    assert used_up["tilia_cordata"] == "квота вида 10% выбрана"
+    assert used_up["tilia_tomentosa"] == "квота рода Tilia 20% выбрана"
+
+
+def test_existing_trees_are_named_when_they_used_up_the_quota() -> None:
+    structures = _singles(20)
+    candidates = _candidates(structures, list(CATALOG))
+    result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
+    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана с существующими деревьями"

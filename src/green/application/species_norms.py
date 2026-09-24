@@ -125,7 +125,7 @@ def _category(
     if mark == MINUS:
         return Reason(
             NORM,
-            f"{species.name_ru} не рекомендован для категории насаждений «{label}» ({basis})",
+            f"вид не рекомендован для категории насаждений «{label}» ({basis})",
             rule_id=rule_id,
             source=source,
         )
@@ -133,7 +133,7 @@ def _category(
     reasons.append(
         Reason(
             NORM,
-            f"{species.name_ru} рекомендован{limited} для категории «{label}» ({basis})",
+            f"вид рекомендован{limited} для категории «{label}» ({basis})",
             rule_id=rule_id,
             source=source,
         )

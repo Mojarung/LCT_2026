@@ -129,7 +129,7 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
     refined = assess(current, site, params)
     note = (
         f"Слабые места: {moved} из {len(tight)} посадок впритык к сетям сдвинуты на 0,3-1 м от "
-        f"ближайшей нормы, индекс качества {index_change(quality.index, index)}."
+        f"ближайшей нормы, индекс качества вырос {index_change(quality.index, index)}."
     )
     refined = replace(refined, warnings=(*refined.warnings, note))
     return Refinement(refined, len(weak), moved, quality.index, index, base.surface)
@@ -247,7 +247,7 @@ class _Mover:
         shift = math.dist((placement.x, placement.y), (x, y))
         moved_note = (
             f"сдвинута сервисом на {_decimal(shift, 1)} м от ближайшей нормы: запас "
-            f"{_decimal(before)} -> {_decimal(after)} м"
+            f"вырос с {_decimal(before)} до {_decimal(after)} м"
         )
         notes = (*notes, moved_note)
         moved = replace(

@@ -11,14 +11,14 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment.assign import Assignment, Candidate, assign
 from green.application.assortment.context import site_context
 from green.application.assortment.filters import COMPOSITION, SpeciesVerdict, species_verdict
 from green.application.assortment.scoring import Score, percent, score_species
-from green.application.assortment.structures import build_structures
+from green.application.assortment.structures import GROUP, ROW, build_structures
 from green.application.assortment.summary import build_summary
 from green.application.barriers import BARRIER_CONDITION
 from green.domain.norms import PlantingType
@@ -135,6 +135,7 @@ def assign_species(
             index=index,
             status=status,
             split=assignment.split_placements,
+            used_up=assignment.used_up,
         )
         for placement in plan.placements
     )
@@ -254,8 +255,10 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     index: Mapping[str, Species],
     status: str,
     split: frozenset[str] = frozenset(),
+    used_up: Mapping[str, str] | None = None,
 ) -> Placement:
     ctx = contexts[placement.placement_id]
+    lost = _Lost(used_up or {}, ctx.structure_kind)
     allowed = verdicts.get(placement.placement_id, [])
     code = chosen.get(placement.placement_id)
     if code is None or code not in index:
@@ -268,7 +271,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 structure_id=ctx.structure_id,
                 structure_kind=ctx.structure_kind,
                 reasons=(_no_species_reason(allowed, given=status == GIVEN),),
-                alternatives=_alternatives(placement.placement_id, allowed, scores, None, None),
+                alternatives=_alternatives(placement.placement_id, allowed, scores, None, lost),
             ),
         )
     score = scores[(placement.placement_id, code)]
@@ -287,7 +290,9 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 if placement.placement_id in split
                 else verdict.reasons
             ),
-            alternatives=_alternatives(placement.placement_id, allowed, scores, code, score.total),
+            alternatives=_alternatives(
+                placement.placement_id, allowed, scores, (code, score.total), lost
+            ),
         ),
     )
 
@@ -304,14 +309,32 @@ def _no_species_reason(allowed: Sequence[SpeciesVerdict], *, given: bool) -> Rea
     return Reason(COMPOSITION, "ни один вид каталога не прошёл ограничения этой точки")
 
 
+@dataclass(frozen=True, slots=True)
+class _Lost:
+    """Чему уступил вид с оценкой выше выбранного: квоте (какой) или однородности структуры."""
+
+    used_up: Mapping[str, str]
+    structure_kind: str | None
+
+    def why(self, code: str) -> str:
+        if code in self.used_up:
+            return self.used_up[code]
+        if self.structure_kind == ROW:
+            return "ряд сажается одним видом"
+        if self.structure_kind == GROUP:
+            return "группа сажается одним видом"
+        return "квоты разнообразия по улице"
+
+
 def _alternatives(
     placement_id: str,
     allowed: Sequence[SpeciesVerdict],
     scores: Mapping[tuple[str, str], Score],
-    chosen_code: str | None,
-    chosen_score: float | None,
+    chosen: tuple[str, float] | None,
+    lost: _Lost,
 ) -> tuple[Alternative, ...]:
     """Три лучших вида, кроме выбранного: данные для ручной правки в будущем редакторе."""
+    chosen_code, chosen_score = chosen or (None, None)
     ranked = sorted(
         (
             (scores[(placement_id, v.species.code)].total, v.species)
@@ -328,7 +351,7 @@ def _alternatives(
             why_not=(
                 "оценка ниже"
                 if chosen_score is None or total <= chosen_score
-                else "уступил однородности структуры или квоте разнообразия"
+                else lost.why(species.code)
             ),
         )
         for total, species in ranked[:_ALTERNATIVES]

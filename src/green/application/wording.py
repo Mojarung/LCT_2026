@@ -30,4 +30,4 @@ def _decimal(value: float, digits: int) -> str:
 def index_change(before: float, after: float) -> str:
     """Изменение индекса качества: сотых хватает, пока они различаются, иначе тысячные."""
     digits = 2 if _decimal(before, 2) != _decimal(after, 2) else 3
-    return f"{_decimal(before, digits)} -> {_decimal(after, digits)}"
+    return f"с {_decimal(before, digits)} до {_decimal(after, digits)}"

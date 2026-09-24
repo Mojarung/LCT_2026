@@ -85,6 +85,8 @@ class Assignment:
     notes: tuple[str, ...] = field(default=())
     # Посадки, получившие вид вторым шагом: их структура одним видом в квоты не влезла.
     split_placements: frozenset[str] = frozenset()
+    # Вид -> какая квота выбрана до конца (Quotas.used_up): почему не он у альтернатив.
+    used_up: Mapping[str, str] = field(default_factory=dict)
 
 
 def assign(
@@ -105,6 +107,17 @@ def assign(
 
 
 # --- квоты ---
+
+
+def _quota_label(key: Key, share: float) -> str:
+    level, name = key
+    if key == CONIFER_KEY:
+        return f"доля хвойных {share:.0%}"
+    if level == SPECIES_LEVEL:
+        return f"квота вида {share:.0%}"
+    if level == GENUS_LEVEL:
+        return f"квота рода {name.capitalize()} {share:.0%}"
+    return f"квота семейства {name} {share:.0%}"
 
 
 def allowance(share: float, planned: int) -> int:
@@ -200,6 +213,37 @@ class Quotas:
                 found.append(f"{label}: {count + self.existing[key]} из {population} на улице")
         return tuple(found)
 
+    def used_up(self, chosen: Mapping[str, str]) -> dict[str, str]:
+        """Какая квота не пускает в план ещё одно растение вида: причина для альтернатив.
+
+        Вид с оценкой выше выбранного уступил либо квоте, либо однородности структуры;
+        эксперту нужна одна из двух причин, а не обе через «или».
+        """
+        planned = len(chosen)
+        counts = self.counts(chosen)
+        found: dict[str, str] = {}
+        for code, species in self.catalog.items():
+            for key in self.keys(species):
+                reason = self._used_up(key, counts[key], planned)
+                if reason:
+                    found[code] = reason
+                    break
+        return found
+
+    def _used_up(self, key: Key, count: int, planned: int) -> str:
+        share = self.share(key)
+        label = _quota_label(key, share)
+        if count >= allowance(share, planned):
+            return f"{label} выбрана"
+        if key == CONIFER_KEY or not self.existing_total:
+            return ""
+        population = planned + self.existing_total
+        if self.exhausted(key) or count + self.existing[key] >= math.floor(
+            share * population + _EPS
+        ):
+            return f"{label} выбрана с существующими деревьями"
+        return ""
+
     def exhausted_notes(self, codes: Sequence[str]) -> list[str]:
         keys = sorted({k for code in codes for k in self.keys(self.catalog[code])})
         return [
@@ -268,6 +312,7 @@ class _QuotaAssignment:
             quota_violations=self.quotas.violations(chosen),
             notes=tuple(notes),
             split_placements=frozenset(split),
+            used_up=self.quotas.used_up(chosen),
         )
 
     def _conifer_notes(self, chosen: Mapping[str, str]) -> list[str]:

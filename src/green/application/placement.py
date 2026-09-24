@@ -21,6 +21,7 @@ import shapely
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
+from green.application.explain import citation_text
 from green.application.params import active_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
@@ -149,7 +150,9 @@ class GreedyPlantingStrategy:
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
-            warnings=_warnings(features, index, selector.rejections, params),
+            warnings=_warnings(
+                features, index, selector.rejections, params, disabled_rules_note(rulebook, params)
+            ),
             stats=stats,
             zones=zones,
         )
@@ -480,18 +483,26 @@ def _stable_id(prefix: str, params: PlanParams, candidate: _Candidate) -> str:
     return f"{prefix}-{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
 
+def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
+    """Какие нормы профиль не применяет - пунктом акта; идентификатор в скобках для трассы."""
+    if not params.disabled_rules:
+        return None
+    named = []
+    for rule_id in sorted(params.disabled_rules):
+        rule = rulebook.rule(rule_id)
+        named.append(f"{citation_text(rule, rulebook)} ({rule_id})" if rule else rule_id)
+    return "Профиль не применяет: " + "; ".join(named) + "."
+
+
 def _warnings(
     features: Sequence[Feature],
     index: ConstraintIndex,
     plan_rejections: Sequence[Rejection],
     params: PlanParams,
+    disabled: str | None,
 ) -> tuple[str, ...]:
     max_rejections = params.max_rejections
-    warnings = []
-    if params.disabled_rules:
-        warnings.append(
-            "Профиль отключает правила: " + ", ".join(sorted(params.disabled_rules)) + "."
-        )
+    warnings = [disabled] if disabled else []
     if params.require_soil and index.surface is None and not index.has_surface_polygons:
         warnings.append(
             "Карта покрытий не построена: в чертеже нет подписей материала покрытий "

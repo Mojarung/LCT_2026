@@ -306,20 +306,13 @@ def _summary(
     penalties: dict[str, float],
     values: dict[str, PlantingValue],
 ) -> tuple[str, ...]:
-    """Сводка плана словами: оценка, сильное, слабое и что поднимет индекс сильнее всего."""
+    """Сводка плана словами: оценка, что поднимет индекс сильнее всего, штрафы, слабые места.
+
+    Сильные и слабые слагаемые не пересказываются: каждое стоит рядом со своей оценкой.
+    """
     lines = [gate] if gate else [f"Индекс качества плана {_num(index or 0.0)} из 1."]
     scored = [t for t in terms if t.score is not None and t.weight > 0]
     if scored:
-        best = sorted(scored, key=lambda t: -(t.score or 0.0))[:2]
-        worst = sorted(scored, key=lambda t: t.score or 0.0)[:2]
-        lines.append(
-            "Сильное: " + "; ".join(f"{t.title.lower()} {_num(t.score or 0.0)}" for t in best) + "."
-        )
-        lines.append(
-            "Слабое: "
-            + "; ".join(f"{t.title.lower()} {_num(t.score or 0.0)} ({t.note})" for t in worst)
-            + "."
-        )
         gains = sorted(scored, key=lambda t: -t.weight * (1 - (t.score or 0.0)))[:2]
         lines.append(
             "Больше всего поднимет индекс: "
@@ -336,7 +329,9 @@ def _summary(
     penalty = sum(penalties.values())
     if penalty > _EPS:
         named = [
-            f"{PENALTIES[key][1]} -{_num(value, 3)}" for key, value in penalties.items() if value
+            f"{PENALTIES[key][1]} -{_num(value, 3)}"
+            for key, value in penalties.items()
+            if round(value, 3) > 0  # «-0,000» ничего не говорит
         ]
         lines.append(f"Штрафы -{_num(penalty, 3)}: " + "; ".join(named) + ".")
     weak = sum(1 for v in values.values() if v.flagged)
