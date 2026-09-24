@@ -119,6 +119,7 @@ export function RunForm() {
             <label htmlFor={`${ids}-street`}>Улица пилотного проекта</label>
             <select
               id={`${ids}-street`}
+              name="street"
               ref={streetField}
               value={street}
               aria-describedby={`${ids}-street-hint`}
@@ -161,6 +162,7 @@ export function RunForm() {
           <label htmlFor={`${ids}-profile`}>Профиль норм</label>
           <select
             id={`${ids}-profile`}
+            name="profile"
             value={profileChosen ?? ''}
             onChange={(event) => {
               setProfileName(event.target.value);
@@ -177,7 +179,10 @@ export function RunForm() {
           <label htmlFor={`${ids}-spacing`}>Шаг посадки, м</label>
           <input
             id={`${ids}-spacing`}
+            name="spacing_m"
             type="number"
+            inputMode="decimal"
+            autoComplete="off"
             min={0.5}
             max={20}
             step={0.5}
@@ -241,6 +246,8 @@ export function RunForm() {
           <label htmlFor={`${ids}-overrides`}>Параметры поверх профиля, JSON</label>
           <textarea
             id={`${ids}-overrides`}
+            name="overrides"
+            autoComplete="off"
             rows={3}
             spellCheck={false}
             value={advanced}

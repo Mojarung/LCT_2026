@@ -124,6 +124,13 @@
 .composition li.off .composition-count {
   opacity: 0.45;
 }
+/* Перенос кликом: кнопка под координатами, подсказка - только пока ждём клик. */
+.detail-move {
+  margin: 4px 0 12px;
+}
+.detail-move .hint {
+  margin: 8px 0 0;
+}
 /* Подсказка и «показать все» над списком: без них фильтр находят случайно. */
 .detail-note {
   margin: 0 0 10px;

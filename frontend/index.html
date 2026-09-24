@@ -9,12 +9,20 @@
       content="Автопроектирование озеленения улиц по чертежу подосновы: план посадок на отдельных слоях с объяснением каждого решения по пунктам нормативных актов."
     />
     <meta name="color-scheme" content="light dark" />
+    <!-- Цвет строки браузера = фон страницы (--ground в tokens.css). -->
+    <meta name="theme-color" content="#e8e7e3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/mark.svg" type="image/svg+xml" />
     <script>
       // Тему выбираем до первой отрисовки, иначе страница мигает светлым.
       try {
         const saved = localStorage.getItem('green-theme');
-        if (saved) document.documentElement.dataset.theme = saved;
+        if (saved) {
+          document.documentElement.dataset.theme = saved;
+          const ground = saved === 'dark' ? '#0e1013' : '#e8e7e3';
+          for (const meta of document.querySelectorAll('meta[name="theme-color"]'))
+            meta.content = ground;
+        }
       } catch {
         /* приватный режим: остаёмся на системной теме */
       }

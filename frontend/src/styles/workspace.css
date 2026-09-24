@@ -39,6 +39,11 @@ body.shell-map .topbar {
 #plan-canvas.editable {
   cursor: crosshair;
 }
+/* Ждём клик с новым местом посадки: прицел поверх любого курсора, даже над другой посадкой. */
+#plan-canvas.placing,
+#plan-canvas.placing.dragging {
+  cursor: crosshair;
+}
 #plan-canvas:focus-visible {
   outline: 2px solid var(--bone);
   outline-offset: -4px;

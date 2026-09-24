@@ -47,15 +47,6 @@
   margin-bottom: 18px;
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 /* Два способа начать стоят рядом как равные строки, а не «призыв к действию» в рамке. */
 .start-row {
   display: flex;

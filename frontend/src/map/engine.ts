@@ -55,6 +55,19 @@ const SETTLE_MS = 110;
 const PAN_MS = 220;
 /** Живая проверка точки при переносе - не чаще раза в столько миллисекунд. */
 const PROBE_MS = 120;
+/** Шаг сдвига с клавиатуры (Alt со стрелками) и крупный шаг (Alt+Shift), метров. */
+const NUDGE_M = 0.5;
+const NUDGE_FAR_M = 2;
+/** Сдвиг с клавиатуры уходит на сервер, когда стрелки отпустили на столько миллисекунд:
+ *  десять нажатий подряд - одна правка, а не десять. */
+const NUDGE_COMMIT_MS = 450;
+/** Направление сдвига на экране по стрелке: x вправо, y вниз. */
+const NUDGE_KEYS: Record<string, readonly [number, number]> = {
+  ArrowRight: [1, 0],
+  ArrowLeft: [-1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
 /** Отступ свободной области от панелей, пикселей. */
 const PANEL_GAP = 14;
 
@@ -89,6 +102,9 @@ export class PlanEngine {
   /** Человек сам трогал вид: после этого вид не пересобирается, а удерживается. */
   private touched = false;
   private editing = false;
+  /** Следующий клик по карте переносит выбранную посадку туда (перенос без перетаскивания). */
+  private placing = false;
+  private nudgeTimer = 0;
   private ordered: MapItem[] = [];
   private cache: BaseCache | null = null;
   private frame = 0;
@@ -128,6 +144,7 @@ export class PlanEngine {
   }
 
   destroy(): void {
+    clearTimeout(this.nudgeTimer);
     cancelAnimationFrame(this.frame);
     cancelAnimationFrame(this.pan);
     clearTimeout(this.settleTimer);
@@ -192,6 +209,7 @@ export class PlanEngine {
   }
 
   setSelected(item: MapItem | null): void {
+    if (item !== this.marks.selected) this.setPlacing(false);
     this.marks.selected = item;
     this.schedule();
   }
@@ -199,6 +217,26 @@ export class PlanEngine {
   setEditing(on: boolean): void {
     this.editing = on;
     this.canvas.classList.toggle('editable', on);
+    if (!on) this.setPlacing(false);
+  }
+
+  /** Перенос без перетаскивания (WCAG 2.2, 2.5.7): следующий клик по карте становится новым
+   *  местом выбранной посадки. Работает только в режиме правки и только для посадки. */
+  armPlacing(): boolean {
+    if (!this.editing || this.marks.selected?.kind !== 'placement') return false;
+    this.setPlacing(true);
+    return true;
+  }
+
+  cancelPlacing(): void {
+    this.setPlacing(false);
+  }
+
+  private setPlacing(on: boolean): void {
+    if (this.placing === on) return;
+    this.placing = on;
+    this.canvas.classList.toggle('placing', on);
+    this.hooks.placingChanged(on);
   }
 
   setDragVerdict(verdict: string | null): void {
@@ -361,6 +399,8 @@ export class PlanEngine {
   }
 
   private select(item: MapItem | null): void {
+    // Место указывают для той посадки, что была выбрана: сменился выбор - режим снят.
+    if (item !== this.marks.selected) this.setPlacing(false);
     this.marks.selected = item;
     this.hooks.select(item);
     this.schedule();
@@ -570,6 +610,31 @@ export class PlanEngine {
     this.panTo(tx, ty);
   }
 
+  /** Alt со стрелками двигает выбранную посадку по экрану на полметра (с Shift - на два),
+   *  с живой проверкой точки; на сервер правка уходит одна, когда стрелки отпустили.
+   *  Перенос мышью без клавиатурной замены - отказ по WCAG 2.1.1. */
+  private nudge(key: string, far: boolean): boolean {
+    const item = this.marks.selected;
+    const direction = NUDGE_KEYS[key];
+    if (!this.editing || item?.kind !== 'placement' || !direction) return false;
+    const step = (far ? NUDGE_FAR_M : NUDGE_M) * this.view.scale;
+    const at = toScreen(this.view, item.x, item.y);
+    const world = toWorld(this.view, at.sx + direction[0] * step, at.sy + direction[1] * step);
+    item.x = world.x;
+    item.y = world.y;
+    this.marks.dragging = item;
+    this.hooks.probe(item, world.x, world.y);
+    clearTimeout(this.nudgeTimer);
+    this.nudgeTimer = window.setTimeout(() => {
+      this.marks.dragging = null;
+      this.marks.dragVerdict = null;
+      this.hooks.move(item, item.x, item.y);
+      this.schedule();
+    }, NUDGE_COMMIT_MS);
+    this.schedule();
+    return true;
+  }
+
   private worldOf(event: PointerEvent | MouseEvent): Point {
     const rect = this.canvas.getBoundingClientRect();
     return toWorld(this.view, event.clientX - rect.left, event.clientY - rect.top);
@@ -608,7 +673,8 @@ export class PlanEngine {
       dragging = true;
       moved = 0;
       last = { x: event.clientX, y: event.clientY };
-      const hit = this.editing ? this.pickAt(event) : null;
+      // Пока ждём клик с новым местом, другую посадку не хватаем: клик ставит выбранную.
+      const hit = this.editing && !this.placing ? this.pickAt(event) : null;
       grabbed = hit?.kind === 'placement' ? hit : null;
       this.canvas.setPointerCapture(event.pointerId);
       this.canvas.classList.add('dragging');
@@ -661,6 +727,16 @@ export class PlanEngine {
         return;
       }
       this.marks.dragVerdict = null;
+      const target = this.marks.selected;
+      if (moved < 4 && this.placing && target?.kind === 'placement') {
+        const world = this.worldOf(event);
+        target.x = world.x;
+        target.y = world.y;
+        this.setPlacing(false);
+        this.hooks.move(target, world.x, world.y);
+        this.schedule();
+        return;
+      }
       if (moved < 4) this.select(this.pickAt(event));
       this.schedule();
     });
@@ -712,6 +788,15 @@ export class PlanEngine {
       if (event.key === 'Delete' && this.editing && this.marks.selected?.kind === 'placement') {
         event.preventDefault();
         this.hooks.remove(this.marks.selected);
+        return;
+      }
+      if (event.key === 'Escape' && this.placing) {
+        event.preventDefault();
+        this.setPlacing(false);
+        return;
+      }
+      if (event.altKey && this.nudge(event.key, event.shiftKey)) {
+        event.preventDefault();
         return;
       }
       const action = keys[event.key];

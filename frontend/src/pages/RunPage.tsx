@@ -14,6 +14,7 @@ import { PlanMap } from '../components/run/PlanMap';
 import { ProgressHud } from '../components/run/ProgressHud';
 import { PanelToggle, RunHeader, RunMetrics, RunStatus } from '../components/run/RunParts';
 import { useOverflowMark } from '../hooks/useOverflowMark';
+import { describeItem } from '../lib/checks';
 import type { PlanEngine } from '../map/engine';
 import { loadSurface, toMapItems } from '../map/items';
 import type { EngineHooks, MapItem } from '../map/types';
@@ -30,6 +31,7 @@ const idle: EngineHooks = {
   move: () => undefined,
   remove: () => undefined,
   viewChanged: () => undefined,
+  placingChanged: () => undefined,
 };
 
 /** Рабочее место прогона: план во весь экран, панели поверх. Пока прогон идёт - ход расчёта и
@@ -46,6 +48,8 @@ export function RunPage() {
   const highlight = useWorkspace((s) => s.highlight);
   const editing = useWorkspace((s) => s.editing);
   const selected = useWorkspace((s) => s.selected);
+  // Отметка изменяемая: после переноса у неё новый вердикт, и объявление обязано его назвать.
+  useWorkspace((s) => s.revision);
 
   useEffect(() => {
     enter(runId);
@@ -142,6 +146,9 @@ export function RunPage() {
         const current = engine.current;
         if (current) useWorkspace.getState().setZoomShare(current.zoomShare());
       },
+      placingChanged: (on) => {
+        useWorkspace.getState().setPlacing(on);
+      },
     };
   });
 
@@ -217,6 +224,11 @@ export function RunPage() {
         data-state={state}
         ref={root}
       >
+        {/* Живая область стоит в разметке с первой отрисовки: читалка экрана объявляет только
+            изменения в уже существующем узле, а выбор идёт стрелками по холсту без видимого текста. */}
+        <p id="selection-announce" className="visually-hidden" role="status">
+          {selected ? describeItem(selected) : ''}
+        </p>
         <div className="canvas-holder">
           <PlanMap root={root} hooks={hooks} interactive={done} />
           {mapReady ? null : (

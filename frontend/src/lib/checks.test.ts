@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Rule, RuleCheck } from '../api/artifacts';
-import { splitChecks, whatFor } from './checks';
+import type { MapItem } from '../map/types';
+import { describeItem, splitChecks, whatFor } from './checks';
 
 const check = (
   rule_id: string,
@@ -52,5 +53,37 @@ describe('до чего мерили', () => {
     expect(whatFor({ ...A, object_class: 'curb' }, {})).toBe('бортового камня');
     expect(whatFor({ ...A, rule_id: 'R' }, rules)).toBe('силового кабеля');
     expect(whatFor(A, {})).toBe('объекта');
+  });
+});
+
+describe('что объявить о выбранном', () => {
+  const base: MapItem = {
+    kind: 'placement',
+    id: 'p1',
+    number: 12,
+    planting_type: 'tree',
+    x: 0,
+    y: 0,
+    radius: 2,
+    verdict: 'needs_approval',
+    species_ru: 'Клён остролистный',
+    explanation: '',
+    value: null,
+    checks: [],
+  };
+
+  it('посадка: номер, вид и вердикт', () => {
+    expect(describeItem(base)).toBe(
+      'Выбрана посадка № 12. Клён остролистный, требует согласования',
+    );
+  });
+
+  it('посадка без вида и отказ', () => {
+    expect(describeItem({ ...base, species_ru: undefined, verdict: 'allowed' })).toBe(
+      'Выбрана посадка № 12. вид не назначен, допускается',
+    );
+    expect(
+      describeItem({ ...base, kind: 'rejection', verdict: 'forbidden', note: 'До кабеля 1,20 м.' }),
+    ).toBe('Выбран отказ № 12, запрещено нормой. До кабеля 1,20 м.');
   });
 });

@@ -161,15 +161,37 @@ describe('RunPage: finished run', () => {
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await within(right).findByRole('heading', { name: 'Состав плана: 3' });
 
+    // Живая область стоит в разметке заранее: читалка объявляет только изменения в ней.
+    const announce = document.getElementById('selection-announce');
+    expect(announce).toHaveTextContent('');
+    expect(announce).toHaveAttribute('role', 'status');
+
     const picked = toMapItems(plan).placements[0] ?? null;
     act(() => {
       useWorkspace.getState().select(picked);
     });
 
+    expect(announce).toHaveTextContent('Выбрана посадка № 1. Липа мелколистная, допускается');
+
     expect(within(right).getByRole('heading', { name: '№ 1. Липа мелколистная' })).toBeVisible();
     expect(within(right).getByText('допускается')).toBeVisible();
     expect(within(right).getByText('Ближе всего к норме')).toBeVisible();
     expect(right).toHaveTextContent('R-UTIL-WATER-001, норма 2,00 м. СП 42.13330.2016, табл. 9.1');
+
+    // Перенос без перетаскивания: кнопка есть только в режиме правки.
+    expect(within(right).queryByRole('button', { name: /новое место/ })).toBeNull();
+    act(() => {
+      useWorkspace.getState().setEditing(true);
+    });
+    const place = within(right).getByRole('button', { name: 'Указать новое место на карте' });
+    expect(place).toHaveAttribute('aria-pressed', 'false');
+    act(() => {
+      useWorkspace.getState().setPlacing(true);
+    });
+    expect(place).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(right).getByText(/Кликните точку на карте: посадка № 1 переедет туда/),
+    ).toBeVisible();
 
     await userEvent.click(within(right).getByRole('button', { name: 'к составу плана' }));
     expect(useWorkspace.getState().selected).toBeNull();

@@ -30,6 +30,8 @@ interface WorkspaceState {
   speciesOff: ReadonlySet<string>;
   highlight: string | null;
   editing: boolean;
+  /** Ждём клик по карте с новым местом выбранной посадки. */
+  placing: boolean;
   stale: boolean;
   message: Message;
   panels: Panels;
@@ -44,6 +46,7 @@ interface WorkspaceState {
   showAllSpecies: () => void;
   toggleHighlight: (code: string) => void;
   setEditing: (on: boolean) => void;
+  setPlacing: (on: boolean) => void;
   setStale: (stale: boolean) => void;
   say: (text: string, kind?: Message['kind']) => void;
   togglePanel: (panel: 'left' | 'right') => void;
@@ -87,6 +90,7 @@ const fresh = () => ({
   speciesOff: new Set<string>(),
   highlight: null,
   editing: false,
+  placing: false,
   stale: false,
   message: { text: '', kind: 'info' as const },
   zoomShare: 0.5,
@@ -126,8 +130,16 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   setEditing(on) {
     set({
       editing: on,
-      message: { text: on ? 'Тяните посадку мышью. Delete удаляет выбранную.' : '', kind: 'info' },
+      message: {
+        text: on
+          ? 'Тяните посадку мышью или двигайте Alt со стрелками. Delete удаляет выбранную.'
+          : '',
+        kind: 'info',
+      },
     });
+  },
+  setPlacing(on) {
+    set({ placing: on });
   },
   setStale(stale) {
     set({ stale });

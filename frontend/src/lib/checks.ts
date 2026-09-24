@@ -1,6 +1,7 @@
 /* Проверки норм у посадки: какие показать, как назвать объект, до которого мерили. */
 
 import type { Rule, RuleCheck } from '../api/artifacts';
+import type { MapItem } from '../map/types';
 
 /** Вердикт по-русски: карту смотрят эксперты ДПиООС, а не разработчики. */
 export const VERDICT_RU: Record<string, string> = {
@@ -11,6 +12,16 @@ export const VERDICT_RU: Record<string, string> = {
 };
 
 export const KIND_RU: Record<string, string> = { tree: 'дерево', shrub: 'кустарник' };
+
+/** Что сказать читалке экрана о выбранной отметке. Выбор идёт стрелками по холсту, и без этой
+ *  фразы незрячий эксперт не узнаёт, на какой посадке он стоит и что с ней. */
+export function describeItem(item: MapItem): string {
+  const verdict = VERDICT_RU[item.verdict] ?? item.verdict;
+  if (item.kind === 'rejection') {
+    return `Выбран отказ № ${String(item.number)}, ${verdict}.${item.note ? ` ${item.note}` : ''}`;
+  }
+  return `Выбрана посадка № ${String(item.number)}. ${item.species_ru ?? 'вид не назначен'}, ${verdict}`;
+}
 
 /** Родительный падеж: подставляется в «до ...». Без этого в панели стоит `utility.power_cable`,
  *  и объяснение читает разработчик, а не эксперт. */

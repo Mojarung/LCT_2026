@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { PlanEditor } from '../../state/editor';
 import { useWorkspace } from '../../state/workspace';
@@ -13,6 +13,19 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
   const message = useWorkspace((s) => s.message);
   const say = useWorkspace((s) => s.say);
   const [busy, setBusy] = useState(false);
+
+  // Правки уже на сервере, но DXF и объяснения в файлах старые: закрыть вкладку в этот момент -
+  // унести с собой план, который расходится с картой. Браузер спросит, уходить ли.
+  useEffect(() => {
+    if (!stale) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+    };
+  }, [stale]);
 
   const rebuild = async () => {
     setBusy(true);

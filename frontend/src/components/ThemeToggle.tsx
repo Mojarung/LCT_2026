@@ -8,6 +8,11 @@ export function ThemeToggle() {
     const dark = getComputedStyle(root).getPropertyValue('--is-dark').trim() === '1';
     const next = dark ? 'light' : 'dark';
     root.dataset.theme = next;
+    // Строка браузера на телефоне красится в фон страницы, а не в системную тему.
+    const ground = getComputedStyle(root).getPropertyValue('--ground').trim();
+    for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+      meta.content = ground;
+    }
     try {
       localStorage.setItem('green-theme', next);
     } catch {

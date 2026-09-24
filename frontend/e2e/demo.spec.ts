@@ -65,6 +65,10 @@ function paintedColors(page: Page): Promise<number> {
 
 test('демо: от консоли до пересобранного DXF', async ({ page, baseURL }) => {
   const foreign = watchForeign(page, baseURL ?? '');
+  let edits = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/edits')) edits += 1;
+  });
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Запустить на встроенном участке' }).click();
@@ -99,6 +103,23 @@ test('демо: от консоли до пересобранного DXF', asyn
   const bar = page.locator('#edit-bar');
   await expect(bar).toContainText('перенесена. Нормы пересчитаны.');
   await expect(bar).toHaveAttribute('data-stale', '1');
+  await expect.poll(() => edits).toBe(1);
+
+  // Перенос без мыши (WCAG 2.2, 2.5.7): Alt со стрелками - одна правка на серию нажатий.
+  await page.locator('#plan-canvas').focus();
+  await page.keyboard.press('Alt+ArrowRight');
+  await page.keyboard.press('Alt+ArrowRight');
+  await page.keyboard.press('Alt+Shift+ArrowDown');
+  await expect.poll(() => edits).toBe(2);
+
+  // И одним указателем: кнопка в панели, затем клик по новому месту.
+  const place = right.getByRole('button', { name: 'Указать новое место на карте' });
+  await place.click();
+  await expect(place).toHaveAttribute('aria-pressed', 'true');
+  const spot = await clearCenter(page);
+  await page.mouse.click(spot.x - 30, spot.y + 20);
+  await expect.poll(() => edits).toBe(3);
+  await expect(place).toHaveAttribute('aria-pressed', 'false');
 
   // Пересборка: «готово» только когда прогон вернулся с новой отметкой времени.
   await page.getByRole('button', { name: /Пересобрать DXF/ }).click();

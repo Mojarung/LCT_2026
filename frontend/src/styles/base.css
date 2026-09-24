@@ -26,6 +26,33 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+/* Текст только для читалки экрана: в разметке есть, на экране нет. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Заголовки без висячего слова в последней строке: имя улицы в шапке прогона бывает длинным. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Двойной тап по кнопке не масштабирует страницу и не задерживает нажатие на планшете. */
+a,
+button,
+label,
+summary,
+input,
+select {
+  touch-action: manipulation;
+}
+
 a {
   color: inherit;
   text-decoration-color: var(--hair-2);
@@ -190,6 +217,16 @@ button {
 }
 .ghost:active {
   transform: translateY(1px);
+}
+.ghost.small {
+  padding: 7px 12px;
+  font-size: var(--fs-micro);
+}
+/* Нажатая кнопка-переключатель читается без слов: заливка вместо контура. */
+.ghost[aria-pressed='true'] {
+  background: var(--bone);
+  color: var(--inverse);
+  border-color: var(--bone);
 }
 
 input[type='text'],

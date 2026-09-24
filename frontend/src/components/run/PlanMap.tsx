@@ -37,6 +37,9 @@ export function PlanMap({
       viewChanged: () => {
         hooks.current.viewChanged();
       },
+      placingChanged: (on) => {
+        hooks.current.placingChanged(on);
+      },
     });
     engineRef.current = created;
     return () => {

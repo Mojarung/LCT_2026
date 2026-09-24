@@ -5,6 +5,7 @@ import { useOverflowMark } from '../../hooks/useOverflowMark';
 import { KIND_RU, VERDICT_RU } from '../../lib/checks';
 import { meters } from '../../lib/format';
 import type { MapItem } from '../../map/types';
+import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
 import { ChecksBlock } from './ChecksBlock';
 import { Composition } from './Composition';
@@ -17,8 +18,38 @@ interface DetailProps {
   quality: QualityJson | undefined;
 }
 
+/** Перенос без перетаскивания (WCAG 2.2, 2.5.7): кнопка включает ожидание, следующий клик по
+ *  карте становится новым местом. Имя кнопки не меняется с состоянием, меняется aria-pressed,
+ *  а что делать дальше - говорит строка под ней. */
+function MoveByClick({ item }: { item: MapItem }) {
+  const placing = useWorkspace((s) => s.placing);
+  const engine = useEngine();
+  return (
+    <div className="detail-move">
+      <button
+        type="button"
+        className="ghost small"
+        aria-pressed={placing}
+        onClick={() => {
+          if (placing) engine.current?.cancelPlacing();
+          else engine.current?.armPlacing();
+        }}
+      >
+        Указать новое место на карте
+      </button>
+      {placing ? (
+        <p className="hint">
+          Кликните точку на карте: посадка № {item.number} переедет туда. Повторное нажатие кнопки
+          или Esc на карте отменяет.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string, Rule> }) {
   const select = useWorkspace((s) => s.select);
+  const editing = useWorkspace((s) => s.editing);
   const kind = KIND_RU[item.planting_type] ?? '';
   const title =
     item.kind === 'placement'
@@ -45,6 +76,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <p className="hint mono">
         {kind ? `${kind}, ` : ''}x {meters(item.x)}, y {meters(item.y)}
       </p>
+      {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
       {item.note ? <p className="detail-explain">{item.note}</p> : null}
       <ValueBlock value={item.value} />
       <BarrierBlock item={item} />

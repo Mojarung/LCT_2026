@@ -87,4 +87,6 @@ export interface EngineHooks {
   remove(item: MapItem): void;
   /** Вид изменился: масштаб, сдвиг или разворот (для ползунка масштаба). */
   viewChanged(): void;
+  /** Включён или снят режим «следующий клик по карте - новое место выбранной посадки». */
+  placingChanged(on: boolean): void;
 }
