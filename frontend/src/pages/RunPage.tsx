@@ -37,6 +37,18 @@ const idle: EngineHooks = {
 /** Рабочее место прогона: план во весь экран, панели поверх. Пока прогон идёт - ход расчёта и
  *  чертёж на карте сразу после чтения; когда готов - план, объяснения и правка. Переход из
  *  одного в другое идёт без перезагрузки: вид, который человек настроил, сохраняется. */
+/** На узком экране панель посадки стоит под картой, за сгибом: касание кроны ничего видимого
+ *  не меняло, пока к панели не прокрутить (жюри дизайна, итерация 6). */
+function revealDetail(): void {
+  if (!window.matchMedia('(max-width: 1080px)').matches) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  requestAnimationFrame(() => {
+    document
+      .querySelector('.hud-right')
+      ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  });
+}
+
 export function RunPage() {
   const { runId = '' } = useParams();
   const location = useLocation();
@@ -138,6 +150,7 @@ export function RunPage() {
     hooks.current = {
       select: (item) => {
         useWorkspace.getState().select(item);
+        if (item) revealDetail();
       },
       probe: (item, x, y) => void editor.probe(item, x, y),
       move: (item, x, y) => void editor.move(item, x, y),
@@ -276,7 +289,12 @@ export function RunPage() {
               rules={rules.data?.rules ?? {}}
               quality={quality.data}
             />
-            <Downloads artifacts={data.artifacts ?? []} />
+            <Downloads
+              artifacts={data.artifacts ?? []}
+              notes={
+                Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []
+              }
+            />
           </aside>
         ) : null}
       </div>

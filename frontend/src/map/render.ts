@@ -243,6 +243,10 @@ export function drawScaleBar(
   ctx.font = `500 12px ${font}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
+  // Плашка цвета панели: на приближении под линейкой лежат кроны, и обводки у штрихов мало.
+  plate(ctx, palette, () => {
+    ctx.roundRect(left - 12, y - 25, width + 24, 35, 6);
+  });
   // Подложка цвета фона: линейка лежит поверх чертежа и обязана читаться над любой линией.
   ctx.strokeStyle = palette.get('--accent-halo');
   ctx.lineWidth = 4;
@@ -469,6 +473,9 @@ export function drawNorth(
   const len = 15;
   ctx.save();
   ctx.translate(x, y);
+  plate(ctx, palette, () => {
+    ctx.arc(0, 0, 31, 0, Math.PI * 2);
+  });
   ctx.strokeStyle = palette.get('--bone-3');
   ctx.fillStyle = palette.get('--bone-3');
   ctx.lineWidth = 1.2;
@@ -486,6 +493,17 @@ export function drawNorth(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('С', nx * (len + 10), ny * (len + 10));
+  ctx.restore();
+}
+
+/** Полупрозрачная плашка цвета панели под служебным знаком карты (масштаб, север). */
+function plate(ctx: CanvasRenderingContext2D, palette: Palette, shape: () => void): void {
+  ctx.save();
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = palette.get('--panel');
+  ctx.beginPath();
+  shape();
+  ctx.fill();
   ctx.restore();
 }
 

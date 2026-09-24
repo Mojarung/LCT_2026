@@ -2,9 +2,11 @@ import type { PlantingValue } from '../../api/artifacts';
 import { meters, permille } from '../../lib/format';
 import type { MapItem } from '../../map/types';
 
-/** Строка слагаемого «пригодность вида» (quality/terms.py, fit): её число первым показывает
- *  «Почему этот вид», второй раз в той же панели оно только отнимает строку. */
-const FIT_LINE = 'пригодность вида месту';
+/** Строки слагаемых «пригодность вида» и «категория по табл. В.6» (quality/terms.py, fit и
+ *  category): то же первым говорит «Почему этот вид», второй раз в той же панели строка только
+ *  отнимает место. */
+const SAID_BY_SPECIES = (line: string) =>
+  line.startsWith('пригодность вида месту') || line.endsWith('(МГСН 1.02-02, табл. В.6)');
 
 /** Чем ценна посадка: какое место её вклад в индекс качества занимает среди посадок плана и
  *  за счёт чего. Сам вклад - десятитысячные доли индекса, в промилле; знака ‰ в шрифте
@@ -17,7 +19,10 @@ export function ValueBlock({
   speciesShown?: boolean;
 }) {
   if (!value) return null;
-  const weak = speciesShown ? value.weak.filter((line) => !line.startsWith(FIT_LINE)) : value.weak;
+  const own = (lines: readonly string[]) =>
+    speciesShown ? lines.filter((line) => !SAID_BY_SPECIES(line)) : lines;
+  const weak = own(value.weak);
+  const reasons = own(value.reasons);
   const { value: pm, zero } = permille(value.delta);
   const rank = value.percentile ? Math.round(value.percentile * 100) : null;
   // Слабое место - по порогу размера плана (flagged); у старых прогонов - любой минус.
@@ -36,11 +41,11 @@ export function ValueBlock({
             ))}
           </ul>
         ) : null}
-        {value.reasons.length ? (
+        {reasons.length ? (
           <>
             <p className="detail-slack">Что даёт:</p>
             <ul className="value-reasons">
-              {value.reasons.map((line) => (
+              {reasons.map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
@@ -65,9 +70,9 @@ export function ValueBlock({
           'Вклад в индекс качества положительный.'
         )}
       </p>
-      {value.reasons.length ? (
+      {reasons.length ? (
         <ul className="value-reasons">
-          {value.reasons.map((line) => (
+          {reasons.map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>

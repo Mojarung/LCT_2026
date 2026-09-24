@@ -32,8 +32,9 @@ export function PanelToggle({ panel, label }: { panel: 'left' | 'right'; label: 
   );
 }
 
-/** Имя чертежа без расширения: «.dxf» в заголовке каждого прогона ничего не различает. */
-const stem = (name: string) => name.replace(/\.(dxf|dwg)$/i, '');
+/** Имя чертежа без расширения: «.dxf» в заголовке каждого прогона ничего не различает.
+ *  Пробел перед дефисом неразрывный: заголовок не повисает строкой, начатой с дефиса. */
+const stem = (name: string) => name.replace(/\.(dxf|dwg)$/i, '').replaceAll(' - ', '\u00a0- ');
 
 export function RunHeader({ run }: { run: RunOut }) {
   return (

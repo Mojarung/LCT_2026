@@ -100,8 +100,7 @@ body.shell-map .topbar {
   width: 30px;
   height: 30px;
   padding: 0;
-  /* Фон панели, а не прозрачность: прокрученный текст уходит под значок, а не сквозь него. */
-  background: var(--panel);
+  background: none;
   border: 0;
   border-radius: var(--r-control);
   color: var(--bone-3);
@@ -278,6 +277,22 @@ body.shell-map .topbar {
 .hud-scroll[data-overflow='1'],
 .detail-scroll[data-overflow='1'] {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
+}
+/* Прокрученная панель растворяет текст и у верхней кромки: иначе строки идут под значок
+   сворачивания, который висит в углу поверх прокрутки. */
+.hud-scroll[data-scrolled='1'],
+.detail-scroll[data-scrolled='1'] {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
+}
+.hud-scroll[data-scrolled='1'][data-overflow='1'],
+.detail-scroll[data-scrolled='1'][data-overflow='1'] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 40px,
+    #000 calc(100% - 22px),
+    transparent 100%
+  );
 }
 
 /* Действие панели прибито к её низу и в прокрутку не попадает: кнопка, которая уезжает
@@ -484,11 +499,9 @@ body.shell-map .topbar {
 
 .hud-label {
   margin: 0 0 9px;
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--bone-3);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--bone-2);
 }
 /* Сводка идёт первой и отбивки не требует; всё, что после неё, отделяется линией.
    Отбивки сжаты так, чтобы панель целиком помещалась на 1366 x 768 - это высота, на

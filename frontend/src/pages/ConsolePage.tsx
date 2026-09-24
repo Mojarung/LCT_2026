@@ -15,7 +15,8 @@ export function ConsolePage() {
         <ServiceFacts />
         <div className="sheet-body">
           <section className="sheet-cell" aria-labelledby="launch-title">
-            <h2 className="section-label" id="launch-title">
+            {/* Название графы для читалки: на листе его заменяет сама форма. */}
+            <h2 className="visually-hidden" id="launch-title">
               Новый прогон
             </h2>
             <RunForm demo={noCatalog} />

@@ -18,7 +18,15 @@ const HEADLINE: { name: string; label: string; what: string }[] = [
 
 /** Выгрузка - конец работы, поэтому она прибита к низу панели результата и не уезжает в
  *  прокрутку вместе со списком видов. Главные файлы - одной строкой, служебные свёрнуты. */
-export function Downloads({ artifacts }: { artifacts: readonly ArtifactOut[] }) {
+export function Downloads({
+  artifacts,
+  notes = [],
+}: {
+  artifacts: readonly ArtifactOut[];
+  /** Журнал чтения чертежа и склейки комплекта (summary.load_notes): рядом с файлами, а не
+   *  в сводке плана - это про исходник, а не про посадки. */
+  notes?: readonly string[];
+}) {
   const byName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
   const headline = HEADLINE.filter((file) => byName.has(file.name));
   const service = artifacts.filter(
@@ -59,6 +67,16 @@ export function Downloads({ artifacts }: { artifacts: readonly ArtifactOut[] }) 
                   <span className="size">{size(artifact)}</span>
                 </a>
               </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {notes.length ? (
+        <details className="fold">
+          <summary>Чтение чертежа: {notes.length}</summary>
+          <ul className="warn-list">
+            {notes.map((text) => (
+              <li key={text}>{text}</li>
             ))}
           </ul>
         </details>

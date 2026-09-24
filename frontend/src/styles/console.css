@@ -47,13 +47,13 @@
   color: var(--bone-2);
 }
 
+/* Подписи разделов строчными, как подписи полей: разрядка капсом - язык любого шаблона,
+   а на листе чертежа графы подписаны обычным шрифтом. */
 .section-label {
   margin: 0 0 16px;
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--bone-3);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--bone-2);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--hair);
 }
@@ -216,8 +216,10 @@
   transform: translateY(-50%);
   background: currentColor;
 }
+/* Готовый прогон - нейтральный квадрат: цвет --ok носят кроны на карте, и в реестре он
+   читался как «посадки», а не как «готово». Цвет остаётся за тем, что требует внимания. */
 .state-succeeded {
-  color: var(--ok);
+  color: var(--bone-3);
 }
 .state-failed {
   color: var(--bad);

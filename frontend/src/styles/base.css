@@ -305,19 +305,19 @@ select {
 /* Родной input[type=file] показывает системную надпись «Файл не выбран», которую нельзя
    ни перевести, ни набрать своим шрифтом. Сам input остаётся в разметке и получает фокус,
    видимой его частью работает подпись. */
+/* Поле файла - строка графы с волосяной линией снизу, а не пунктирная зона «перетащите
+   сюда»: на листе чертежа так заполняют графу. */
 .filefield {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 11px 12px;
-  background: var(--panel-2);
-  border: 1px dashed var(--hair-2);
-  border-radius: var(--r-control);
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--hair-2);
 }
 .filefield:hover {
-  border-color: var(--bone-3);
+  border-bottom-color: var(--bone-3);
 }
 /* Сам input растянут на всё поле и прозрачен: клик в любую точку открывает выбор файла,
    а системная надпись рядом с кнопкой не показывается. */

@@ -35,12 +35,12 @@
   --c-water: #4a9fdd;
   --c-sewer: #a3815c;
   --c-storm: #46b3b3;
-  --c-heat: #e0784a;
+  --c-heat: #d08a3c;
   --c-gas: #c4b13a;
   --c-power: #e2604f;
   --c-telecom: #a077cc;
   --c-utility: #99a0a8;
-  --c-overhead: #e2604f;
+  --c-overhead: #e05a8a;
   --c-pole: #c3c8cf;
   --c-existing: #6bb076;
   /* Сетка чертёжного листа под планом: заметна только как фактура, спорить с линиями
@@ -114,12 +114,12 @@
     --c-water: #1f6fb2;
     --c-sewer: #7a5c3e;
     --c-storm: #2f8f8f;
-    --c-heat: #c1562a;
+    --c-heat: #a8641c;
     --c-gas: #93841d;
     --c-power: #c0392b;
     --c-telecom: #6f469a;
     --c-utility: #767c84;
-    --c-overhead: #c0392b;
+    --c-overhead: #b0306a;
     --c-pole: #3a3f45;
     --c-existing: #43804d;
     --glass: color-mix(in srgb, var(--panel) 88%, transparent);
@@ -157,12 +157,12 @@
   --c-water: #1f6fb2;
   --c-sewer: #7a5c3e;
   --c-storm: #2f8f8f;
-  --c-heat: #c1562a;
+  --c-heat: #a8641c;
   --c-gas: #93841d;
   --c-power: #c0392b;
   --c-telecom: #6f469a;
   --c-utility: #767c84;
-  --c-overhead: #c0392b;
+  --c-overhead: #b0306a;
   --c-pole: #3a3f45;
   --c-existing: #43804d;
   --glass: color-mix(in srgb, var(--panel) 88%, transparent);
