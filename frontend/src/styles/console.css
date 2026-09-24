@@ -1,30 +1,52 @@
-/* --- страница запуска: консоль, а не лендинг --- */
+/* --- страница запуска: лист чертежа, а не лендинг --- */
 
 .launch {
   padding: clamp(16px, 2.2vw, 24px) var(--inset) clamp(24px, 3vw, 40px);
 }
-.launch-inner {
+
+/* Лист: волосяная рамка без скругления и тени, графы разделены той же линией. Карточки
+   с тенью были языком любого SaaS; сервис выдаёт чертёж, и консоль говорит его языком. */
+.sheet {
   max-width: 1400px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
-  gap: clamp(14px, 1.6vw, 20px);
-  align-items: start;
-}
-
-/* Главная сложена из тех же поверхностей, что парят над планом на странице прогона:
-   два самостоятельных модуля - «запустить» и «что уже посчитано», - а не разделы текста. */
-.panel {
   background: var(--panel);
-  border: 1px solid var(--hair);
-  border-radius: var(--r-panel);
-  box-shadow: var(--lift);
+  border: 1px solid var(--hair-2);
+}
+.sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+}
+.sheet-cell {
   padding: clamp(18px, 2.2vw, 26px);
+  min-width: 0;
+}
+.sheet-cell + .sheet-cell {
+  border-left: 1px solid var(--hair-2);
 }
 
-.section-label.section-gap {
-  margin-top: 34px;
+/* Штамп: название сервиса слева, графы свода справа - подпись мелко, значение крупно. */
+.stamp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-bottom: 1px solid var(--hair-2);
 }
+.stamp-title {
+  padding: 16px clamp(18px, 2.2vw, 26px);
+  min-width: 0;
+}
+.stamp-title h1 {
+  margin: 0 0 4px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.stamp-title p {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
+}
+
 .section-label {
   margin: 0 0 16px;
   font-size: var(--fs-micro);
@@ -47,21 +69,11 @@
   margin-bottom: 18px;
 }
 
-/* Два способа начать стоят рядом как равные строки, а не «призыв к действию» в рамке. */
-.start-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px 24px;
-  padding: 0 0 20px;
-  border-bottom: 1px solid var(--hair);
-}
-.start-row > div {
-  flex: 1;
-  min-width: 240px;
-}
-.start-form {
-  padding-top: 22px;
+/* Встроенный участок стоит на месте каталога улиц: тот же вес строки, что у поля выбора. */
+.sample-title {
+  margin: 0 0 4px;
+  font-size: var(--fs-body);
+  font-weight: 500;
 }
 
 /* Два источника прогона в одной форме: улица из каталога или свой чертёж. */
@@ -92,23 +104,22 @@
 
 .facts {
   display: grid;
-  gap: 0;
-  margin: 0 0 14px;
-  border-top: 1px solid var(--hair);
+  grid-template-columns: repeat(3, auto) minmax(0, 190px);
+  height: 100%;
+  margin: 0;
 }
 .facts div {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--hair);
-}
-.facts div {
-  align-items: baseline;
+  gap: 6px;
+  padding: 12px 18px;
+  border-left: 1px solid var(--hair-2);
 }
 .facts dt {
-  font-size: var(--fs-small);
+  font-size: var(--fs-micro);
   color: var(--bone-3);
+  white-space: nowrap;
 }
 .facts dd {
   margin: 0;
@@ -118,7 +129,6 @@
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 /* Перечень актов - не число: моноширинный и крупный делают его тяжелее самих значений. */
 .facts dd.acts {
@@ -126,6 +136,7 @@
   font-size: var(--fs-small);
   font-weight: 400;
   letter-spacing: 0;
+  line-height: 1.35;
   color: var(--bone-2);
 }
 
@@ -185,7 +196,7 @@
   text-decoration: underline;
 }
 .registry tr:hover td {
-  background: var(--panel);
+  background: var(--panel-2);
 }
 
 /* Состояние - отдельная узкая колонка с квадратом: приписанное к имени файла, оно

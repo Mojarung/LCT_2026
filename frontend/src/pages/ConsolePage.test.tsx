@@ -70,6 +70,17 @@ describe('консоль запуска', () => {
     });
   });
 
+  it('параметры свёрнуты: заголовок раскрытия называет профиль и шаг и говорит о правке', async () => {
+    mockApi(consoleRoutes());
+    renderApp('/');
+    const user = userEvent.setup();
+
+    const summary = await screen.findByText(/^Параметры: strict, шаг 5 м$/);
+    expect(summary.closest('details')).not.toHaveAttribute('open');
+    await user.click(screen.getByRole('checkbox', { name: /Добор зоны/ }));
+    expect(summary).toHaveTextContent('Параметры: strict, шаг 5 м, изменены');
+  });
+
   it('снятая галочка добора уходит изменением приёмов профиля', async () => {
     const calls = mockApi({
       ...consoleRoutes(),

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { postForm } from '../../api/client';
 import { useMeta, useProfile, useStreets } from '../../api/queries';
 import type { RunOut } from '../../api/types';
+import { plain } from '../../lib/format';
 import {
   diffOverrides,
   formDefaults,
@@ -11,34 +12,33 @@ import {
   type RunFormValues,
   type Switch,
 } from '../../lib/overrides';
+import { useDemoStart } from './DemoStart';
 import { FileField } from './FileField';
 
-/** Подписи приёмов - те же, что знали эксперты по старой форме: меняется оболочка, не язык. */
+/** Приёмы по порядку работы конвейера: деревья, потом кустарник от борта к газону. Две строки
+ *  про группы кустарника различаются тем, откуда место: пустое после квот деревьев или
+ *  свободный газон. */
 const SWITCH_LABELS: { name: Switch | 'fill'; label: string }[] = [
-  {
-    name: 'shrub_groups',
-    label: 'Группы кустарников на местах, которые квоты деревьев оставили пустыми',
-  },
-  {
-    name: 'fill',
-    label: 'Добор зоны: узкие полосы и карманы газона, которые сетка 5-6 м пропускает',
-  },
+  { name: 'fill', label: 'Добор зоны: узкие полосы и карманы газона' },
   { name: 'shrub_rows', label: 'Ряд кустарника у борта под кронами аллеи' },
-  {
-    name: 'curb_hedges',
-    label: 'Живая изгородь вдоль остальных бортов с газоном, до 720 кустов на 1 км',
-  },
-  { name: 'understory', label: 'Кустарник под кроной дерева аллеи, где ряда нет' },
+  { name: 'curb_hedges', label: 'Живая изгородь вдоль остальных бортов, до 720 кустов на 1 км' },
+  { name: 'understory', label: 'Кустарник под кроной дерева, где ряда нет' },
+  { name: 'shrub_groups', label: 'Кустарник там, где квоты не пустили дерево' },
   { name: 'shrub_fill', label: 'Группы кустарника на свободном газоне' },
   { name: 'root_barriers', label: 'Прикорневые барьеры' },
 ];
 
 const NEED_SOURCE = 'Выберите улицу пилотного проекта или свой чертёж.';
+const NEED_FILE = 'Выберите чертёж или запустите встроенный участок.';
 
-export function RunForm() {
+/** Форма запуска. Параметры свёрнуты: по умолчанию работает профиль целиком, и путь «выбрал
+ *  улицу - запустил» не требует ни одного решения; развернуть их нужно для повторного прогона
+ *  с другими условиями. demo - каталога улиц нет, его место занимает встроенный участок. */
+export function RunForm({ demo = false }: { demo?: boolean }) {
   const navigate = useNavigate();
   const meta = useMeta();
   const streets = useStreets();
+  const sample = useDemoStart();
   const ids = useId();
 
   const [street, setStreet] = useState('');
@@ -67,13 +67,19 @@ export function RunForm() {
   };
 
   const hasStreets = Boolean(streets.data?.length);
+  // Без каталога и без своего чертежа главное действие - встроенный участок.
+  const sampleFirst = demo && !files.length;
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
+    if (sampleFirst) {
+      void sample.start();
+      return;
+    }
     const file = files[0];
     if (!street && !file) {
-      setMessage(NEED_SOURCE);
+      setMessage(demo ? NEED_FILE : NEED_SOURCE);
       (streetField.current ?? document.getElementById(`${ids}-file`))?.focus();
       return;
     }
@@ -109,10 +115,17 @@ export function RunForm() {
     }
   };
 
+  const changed = (() => {
+    if (!profile.data || !values) return false;
+    try {
+      return Object.keys(diffOverrides(profile.data, values, advanced)).length > 0;
+    } catch {
+      return true;
+    }
+  })();
+
   return (
     <form className="start-form" onSubmit={(event) => void submit(event)} noValidate>
-      <p className="start-title">Новый прогон</p>
-
       {hasStreets ? (
         <>
           <div className="field">
@@ -143,6 +156,16 @@ export function RunForm() {
           </div>
           <p className="or">или</p>
         </>
+      ) : demo ? (
+        <>
+          <div className="field sample">
+            <p className="sample-title">Встроенный участок улицы Берзарина</p>
+            <p className="hint">
+              Фрагмент настоящей подосновы с сетями: каталог улиц не подключён.
+            </p>
+          </div>
+          <p className="or">или</p>
+        </>
       ) : null}
 
       <FileField
@@ -157,74 +180,78 @@ export function RunForm() {
         }}
       />
 
-      <div className="field-row">
-        <div className="field">
-          <label htmlFor={`${ids}-profile`}>Профиль норм</label>
-          <select
-            id={`${ids}-profile`}
-            name="profile"
-            value={profileChosen ?? ''}
-            onChange={(event) => {
-              setProfileName(event.target.value);
-            }}
-          >
-            {meta.data?.profiles.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor={`${ids}-spacing`}>Шаг посадки, м</label>
-          <input
-            id={`${ids}-spacing`}
-            name="spacing_m"
-            type="number"
-            inputMode="decimal"
-            autoComplete="off"
-            min={0.5}
-            max={20}
-            step={0.5}
-            value={values?.spacing_m ?? ''}
-            disabled={!values}
-            aria-describedby={`${ids}-spacing-hint`}
-            onChange={(event) => {
-              if (values) update({ ...values, spacing_m: Number(event.target.value) });
-            }}
-          />
-          <p className="hint" id={`${ids}-spacing-hint`}>
-            743-ПП, табл. 3.6.2: однорядная посадка 5-6 м, групповая 5-7 м.
-          </p>
-        </div>
-      </div>
-
-      <fieldset className="field">
-        <legend>Приёмы размещения</legend>
-        {SWITCH_LABELS.map(({ name, label }) => (
-          <label className="check" key={name}>
-            <input
-              type="checkbox"
-              checked={values ? (name === 'fill' ? values.fill : values.switches[name]) : false}
-              disabled={!values}
+      <details className="advanced params">
+        <summary>
+          Параметры: {profileChosen ?? 'профиль'}
+          {values ? `, шаг ${plain(values.spacing_m)} м` : ''}
+          {changed ? ', изменены' : ''}
+        </summary>
+        <div className="field-row">
+          <div className="field">
+            <label htmlFor={`${ids}-profile`}>Профиль норм</label>
+            <select
+              id={`${ids}-profile`}
+              name="profile"
+              value={profileChosen ?? ''}
               onChange={(event) => {
-                if (!values) return;
-                const checked = event.target.checked;
-                update(
-                  name === 'fill'
-                    ? { ...values, fill: checked }
-                    : { ...values, switches: { ...values.switches, [name]: checked } },
-                );
+                setProfileName(event.target.value);
+              }}
+            >
+              {meta.data?.profiles.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${ids}-spacing`}>Шаг посадки, м</label>
+            <input
+              id={`${ids}-spacing`}
+              name="spacing_m"
+              type="number"
+              inputMode="decimal"
+              autoComplete="off"
+              min={0.5}
+              max={20}
+              step={0.5}
+              value={values?.spacing_m ?? ''}
+              disabled={!values}
+              aria-describedby={`${ids}-spacing-hint`}
+              onChange={(event) => {
+                if (values) update({ ...values, spacing_m: Number(event.target.value) });
               }}
             />
-            {label}
-          </label>
-        ))}
-        <p className="hint">Сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.</p>
-      </fieldset>
+            <p className="hint" id={`${ids}-spacing-hint`}>
+              743-ПП, табл. 3.6.2: однорядная посадка 5-6 м, групповая 5-7 м.
+            </p>
+          </div>
+        </div>
 
-      <details className="advanced">
-        <summary>Комплект файлов и параметры</summary>
+        <fieldset className="field">
+          <legend>Приёмы размещения</legend>
+          {SWITCH_LABELS.map(({ name, label }) => (
+            <label className="check" key={name}>
+              <input
+                type="checkbox"
+                checked={values ? (name === 'fill' ? values.fill : values.switches[name]) : false}
+                disabled={!values}
+                onChange={(event) => {
+                  if (!values) return;
+                  const checked = event.target.checked;
+                  update(
+                    name === 'fill'
+                      ? { ...values, fill: checked }
+                      : { ...values, switches: { ...values.switches, [name]: checked } },
+                  );
+                }}
+              />
+              {label}
+            </label>
+          ))}
+          <p className="hint">Сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.</p>
+        </fieldset>
+
         <FileField
           id={`${ids}-extra`}
           label="Остальные чертежи комплекта"
@@ -262,10 +289,18 @@ export function RunForm() {
       {/* Живая область стоит в разметке всегда: читалка объявляет только изменения внутри
           области, которая существовала до сообщения. */}
       <p className="form-error" role="status" aria-live="polite">
-        {message}
+        {message || sample.message}
       </p>
-      <button type="submit" className="primary" disabled={busy}>
-        {busy ? (street ? 'Готовим улицу…' : 'Загружаем чертёж…') : 'Запустить прогон'}
+      <button type="submit" className="primary" disabled={busy || sample.busy}>
+        {sampleFirst
+          ? sample.busy
+            ? 'Запускаем…'
+            : 'Запустить на встроенном участке'
+          : busy
+            ? street
+              ? 'Готовим улицу…'
+              : 'Загружаем чертёж…'
+            : 'Запустить прогон'}
       </button>
     </form>
   );

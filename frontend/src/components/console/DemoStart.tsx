@@ -5,8 +5,9 @@ import { postJson } from '../../api/client';
 import type { RunOut } from '../../api/types';
 
 /** Встроенный фрагмент нужен там, где датасета нет: на стенде без каталога улиц иначе нечего
- *  запустить. Когда улицы есть, он только отнимает у формы первое место. */
-export function DemoStart() {
+ *  запустить. Форма ставит его на место каталога и делает главной кнопкой, пока не выбран
+ *  свой чертёж. */
+export function useDemoStart() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -23,18 +24,5 @@ export function DemoStart() {
     }
   };
 
-  return (
-    <div className="start-row">
-      <div>
-        <p className="start-title">Встроенный участок улицы Берзарина</p>
-        <p className="hint">Фрагмент настоящей подосновы с сетями: каталог улиц не подключён.</p>
-        <p className="form-error" role="status" aria-live="polite">
-          {message}
-        </p>
-      </div>
-      <button type="button" className="ghost" disabled={busy} onClick={() => void start()}>
-        {busy ? 'Запускаем…' : 'Запустить на встроенном участке'}
-      </button>
-    </div>
-  );
+  return { start, busy, message };
 }

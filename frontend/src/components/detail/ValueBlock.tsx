@@ -1,13 +1,14 @@
 import type { PlantingValue } from '../../api/artifacts';
-import { permille } from '../../lib/format';
+import { meters, permille } from '../../lib/format';
 import type { MapItem } from '../../map/types';
-import { meters } from '../../lib/format';
 
 /** Строка слагаемого «пригодность вида» (quality/terms.py, fit): её число первым показывает
  *  «Почему этот вид», второй раз в той же панели оно только отнимает строку. */
 const FIT_LINE = 'пригодность вида месту';
 
-/** Чем ценна посадка: насколько упадёт индекс качества без неё и за счёт чего. */
+/** Чем ценна посадка: какое место её вклад в индекс качества занимает среди посадок плана и
+ *  за счёт чего. Сам вклад - десятитысячные доли индекса, в промилле; знака ‰ в шрифте
+ *  интерфейса нет, а место среди посадок читается без единиц. Число - в объяснении посадки. */
 export function ValueBlock({
   value,
   speciesShown = false,
@@ -17,11 +18,8 @@ export function ValueBlock({
 }) {
   if (!value) return null;
   const weak = speciesShown ? value.weak.filter((line) => !line.startsWith(FIT_LINE)) : value.weak;
-  const { value: pm, text, zero } = permille(value.delta);
-  const rank =
-    pm > 0 && !zero && value.percentile
-      ? ` Больше, чем у ${String(Math.round(value.percentile * 100))}% посадок плана.`
-      : '';
+  const { value: pm, zero } = permille(value.delta);
+  const rank = value.percentile ? Math.round(value.percentile * 100) : null;
   // Слабое место - по порогу размера плана (flagged); у старых прогонов - любой минус.
   const worse = typeof value.flagged === 'boolean' ? value.flagged : pm < 0 && !zero;
   if (worse) {
@@ -30,9 +28,7 @@ export function ValueBlock({
     return (
       <>
         <h3 className="detail-heading">Слабое место</h3>
-        <p className="value-delta bad">
-          Вклад в индекс качества <b>{text}</b>: посадка слабее среднего по плану.
-        </p>
+        <p className="value-delta bad">Вклад в индекс качества ниже среднего по плану.</p>
         {weak.length ? (
           <ul className="value-reasons">
             {weak.map((line) => (
@@ -60,13 +56,13 @@ export function ValueBlock({
         {zero ? (
           'Вклад в индекс качества около нуля.'
         ) : pm < 0 ? (
+          'Вклад в индекс качества чуть ниже среднего по плану.'
+        ) : rank ? (
           <>
-            Вклад в индекс качества <b>{text}</b>: чуть ниже среднего по плану.
+            Вклад в индекс качества больше, чем у <b>{rank}%</b> посадок плана.
           </>
         ) : (
-          <>
-            Вклад в индекс качества <b>{text}</b>.{rank}
-          </>
+          'Вклад в индекс качества положительный.'
         )}
       </p>
       {value.reasons.length ? (

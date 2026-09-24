@@ -75,11 +75,23 @@
 .detail-full {
   margin-top: 16px;
 }
+/* Маркер раскрытия во всём сервисе один: «+» и «-» моноширинным, как у складок пульта. */
 .detail-full > summary {
   cursor: pointer;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   user-select: none;
+  list-style: none;
+}
+.detail-full > summary::-webkit-details-marker {
+  display: none;
+}
+.detail-full > summary::before {
+  content: '+ ';
+  font-family: var(--mono);
+}
+.detail-full[open] > summary::before {
+  content: '- ';
 }
 .detail-full > summary:hover {
   color: var(--bone);

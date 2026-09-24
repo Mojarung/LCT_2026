@@ -100,7 +100,8 @@ body.shell-map .topbar {
   width: 30px;
   height: 30px;
   padding: 0;
-  background: none;
+  /* Фон панели, а не прозрачность: прокрученный текст уходит под значок, а не сквозь него. */
+  background: var(--panel);
   border: 0;
   border-radius: var(--r-control);
   color: var(--bone-3);
