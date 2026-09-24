@@ -18,8 +18,12 @@ import { niceLength, toScreen, worldBounds } from './view';
 /** Запас растрового кэша вокруг окна, пикселей: панорама на это расстояние - просто перенос. */
 export const PAD = 260;
 /** Подписи покрытий видны с этого масштаба (пикселей на метр): на общем виде тысячи «А»
- *  сливаются в кашу и прячут сами линии. */
-export const LABEL_MIN_SCALE = 3;
+ *  сливаются в кашу и прячут сами линии. При 3 они уже висели на первом крупном виде
+ *  (жюри, итерация 4), с 5 появляются, только когда человек сам приблизил карту. */
+export const LABEL_MIN_SCALE = 5;
+/** Клетка экрана для отсева наложенных подписей и зазор между ними, пикселей. */
+const LABEL_CELL = 12;
+const LABEL_GAP = 4;
 /** Крона мельче этого на экране не рисуется: иначе на общем виде план вырождается в россыпь
  *  точек, и о трёхстах деревьях можно узнать только из числа в панели. */
 export const MIN_CROWN_PX = 4;
@@ -135,15 +139,34 @@ function drawLabels(
   ctx.lineJoin = 'round';
   ctx.lineWidth = 3;
   ctx.strokeStyle = palette.get('--accent-halo');
-  const paved = palette.get('--bone-2');
-  const soil = palette.get('--c-existing');
-  for (const [x, y, text, material] of labels) {
+  // Один нейтральный цвет: зелёным подпись «ГАЗОН» читалась как существующее дерево, а
+  // материал и так назван словом.
+  ctx.fillStyle = palette.get('--bone-3');
+  // Подписи с чертежа стоят гуще, чем их можно прочесть: на месте, где уже есть подпись,
+  // вторая не рисуется. Занятость считается по клеткам экрана.
+  const taken = new Set<string>();
+  for (const [x, y, text] of labels) {
     if (x < visible[0] || x > visible[2] || y < visible[1] || y > visible[3]) continue;
     const { sx, sy } = toScreen(view, x, y);
+    const cells = labelCells(sx, sy, ctx.measureText(text).width / 2 + LABEL_GAP);
+    if (cells.some((cell) => taken.has(cell))) continue;
+    for (const cell of cells) taken.add(cell);
     ctx.strokeText(text, sx, sy);
-    ctx.fillStyle = material === 'soil' ? soil : paved;
     ctx.fillText(text, sx, sy);
   }
+}
+
+/** Клетки экрана, которые займёт подпись шириной 2 * half с центром в (sx, sy). */
+function labelCells(sx: number, sy: number, half: number): string[] {
+  const cells: string[] = [];
+  const left = Math.floor((sx - half) / LABEL_CELL);
+  const right = Math.floor((sx + half) / LABEL_CELL);
+  const top = Math.floor((sy - 8) / LABEL_CELL);
+  const bottom = Math.floor((sy + 8) / LABEL_CELL);
+  for (let cx = left; cx <= right; cx++) {
+    for (let cy = top; cy <= bottom; cy++) cells.push(`${String(cx)}:${String(cy)}`);
+  }
+  return cells;
 }
 
 /** Картинка кэша больше не закрывает окно: запас израсходован панорамой или зумом. */

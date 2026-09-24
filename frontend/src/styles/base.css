@@ -44,6 +44,13 @@ h3 {
   text-wrap: pretty;
 }
 
+/* Флажки и ползунок - цветом интерфейса, а не браузерным синим: синий на этой карте значит
+   водопровод. */
+input[type='checkbox'],
+input[type='range'] {
+  accent-color: var(--bone);
+}
+
 /* Двойной тап по кнопке не масштабирует страницу и не задерживает нажатие на планшете. */
 a,
 button,
@@ -130,6 +137,23 @@ a:hover {
   transition:
     background-color 0.12s,
     color 0.12s;
+}
+/* Имя сервиса - единственный элемент пилюли с подписью, отделён тонкой чертой. */
+.topbar-nav > .brand {
+  width: auto;
+  gap: 7px;
+  padding: 0 10px 0 7px;
+  margin-right: 3px;
+  border-right: 1px solid var(--hair);
+  border-radius: var(--r-control) 0 0 var(--r-control);
+  font-family: var(--mono);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone);
+}
+.brand img {
+  display: block;
+  border-radius: 4px;
 }
 .topbar-nav > *:hover {
   background: var(--panel-2);

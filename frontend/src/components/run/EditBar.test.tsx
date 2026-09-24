@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { PlanEditor } from '../../state/editor';
@@ -12,6 +12,16 @@ const leave = (): Event => {
 };
 
 describe('EditBar', () => {
+  it('offers the rebuild only when there are edits to rebuild', () => {
+    render(<EditBar editor={new PlanEditor('r1')} onRebuilt={() => undefined} />);
+    expect(screen.queryByRole('button', { name: /Пересобрать DXF/ })).toBeNull();
+
+    act(() => {
+      useWorkspace.getState().setStale(true);
+    });
+    expect(screen.getByRole('button', { name: /Пересобрать DXF/ })).toBeEnabled();
+  });
+
   it('warns before leaving only while the plan is edited and the DXF is not rebuilt', () => {
     const view = render(<EditBar editor={new PlanEditor('r1')} onRebuilt={() => undefined} />);
     expect(leave().defaultPrevented).toBe(false);

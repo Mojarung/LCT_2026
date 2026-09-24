@@ -45,18 +45,14 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
   return (
     <>
       <h2 className="detail-heading">Состав плана: {integer(total)}</h2>
-      <p className="detail-note">
-        Галочка оставляет вид на карте, клик по строке подсвечивает его.
-        {visible === total ? null : (
-          <>
-            {' '}
-            Показано {integer(visible)} из {integer(total)}.{' '}
-            <button type="button" className="linkish" onClick={showAll}>
-              показать все
-            </button>
-          </>
-        )}
-      </p>
+      {visible === total ? null : (
+        <p className="detail-note">
+          Показано {integer(visible)} из {integer(total)}.{' '}
+          <button type="button" className="linkish" onClick={showAll}>
+            показать все
+          </button>
+        </p>
+      )}
       <ul className="composition">
         {rows.map((row) => {
           const off = speciesOff.has(row.code);
@@ -65,6 +61,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
               <input
                 type="checkbox"
                 className="composition-see"
+                title="Показывать вид на карте"
                 checked={!off}
                 aria-label={`Показывать на карте: ${row.name}`}
                 onChange={(event) => {
@@ -74,6 +71,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
               <button
                 type="button"
                 aria-pressed={highlight === row.code}
+                title="Подсветить вид на карте"
                 onClick={() => {
                   toggleHighlight(row.code);
                 }}
@@ -89,9 +87,6 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
           );
         })}
       </ul>
-      <p className="detail-empty" style={{ marginTop: 14 }}>
-        Клик по посадке на карте покажет норму, по которой она стоит.
-      </p>
     </>
   );
 }

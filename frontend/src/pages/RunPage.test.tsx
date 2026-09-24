@@ -270,18 +270,24 @@ describe('RunPage: finished run', () => {
     expect(localStorage.getItem('green-panel-left')).toBe('1');
   });
 
-  it('hides the legend with one click and brings it back from the map controls', async () => {
+  it('keeps the legend one click away on an ordinary screen and remembers the choice', async () => {
+    // Заглушка matchMedia в тестах - не высокий экран: обозначения закрыты и не отнимают
+    // у пульта треть высоты.
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const legend = await screen.findByRole('complementary', { name: 'Условные обозначения' });
+    const toggle = await screen.findByRole('button', { name: 'обозначения' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
+
+    await userEvent.click(toggle);
+    const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
+    expect(legend).toBeVisible();
+    expect(localStorage.getItem('green-legend')).toBe('1');
+
     await userEvent.click(screen.getByRole('button', { name: 'Скрыть условные обозначения' }));
     expect(legend).not.toBeVisible();
-
-    const toggle = screen.getByRole('button', { name: 'обозначения' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await userEvent.click(toggle);
-    expect(legend).toBeVisible();
   });
 });
 

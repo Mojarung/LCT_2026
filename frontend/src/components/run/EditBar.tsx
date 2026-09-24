@@ -59,15 +59,19 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
       <p className="edit-message" role="status" aria-live="polite" data-kind={message.kind}>
         {message.text}
       </p>
-      <button
-        type="button"
-        className="primary small"
-        id="rebuild"
-        disabled={busy}
-        onClick={() => void rebuild()}
-      >
-        {busy ? 'Пересобираем…' : 'Пересобрать DXF'}
-      </button>
+      {/* Кнопка появляется, когда есть что пересобирать: без правок она обещала действие,
+          которое ничего не меняет, и занимала строку пульта. */}
+      {stale || busy ? (
+        <button
+          type="button"
+          className="primary small"
+          id="rebuild"
+          disabled={busy}
+          onClick={() => void rebuild()}
+        >
+          {busy ? 'Пересобираем…' : 'Пересобрать DXF'}
+        </button>
+      ) : null}
     </div>
   );
 }

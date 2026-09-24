@@ -15,6 +15,7 @@ const ONE = new Intl.NumberFormat('ru-RU', {
   useGrouping: 'min2',
 });
 const WHOLE = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0, useGrouping: 'min2' });
+const PLAIN = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, useGrouping: 'min2' });
 const STAMP = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
   month: '2-digit',
@@ -26,6 +27,9 @@ const STAMP = new Intl.DateTimeFormat('ru-RU', {
 export const meters = (value: number): string => TWO.format(value);
 
 export const decimal = (value: number): string => TWO.format(value);
+
+/** Число без лишних нулей: «6», «5,5», «1,25». */
+export const plain = (value: number): string => PLAIN.format(value);
 
 /** Целое число с разрядами: «18 780 посадок». */
 export const integer = (value: number): string => WHOLE.format(value);

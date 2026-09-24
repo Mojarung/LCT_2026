@@ -5,19 +5,12 @@ import { Link } from 'react-router';
 import type { QualityJson } from '../../api/artifacts';
 import type { RunOut } from '../../api/types';
 import { decimal, integer, plural } from '../../lib/format';
+import { overrideLabel } from '../../lib/overrides';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
-
-function overrideText(value: unknown): string {
-  if (Array.isArray(value)) return value.map(String).join(', ');
-  if (typeof value === 'boolean') return value ? 'да' : 'нет';
-  return typeof value === 'number' || typeof value === 'string'
-    ? String(value)
-    : JSON.stringify(value);
-}
 
 /** Свернуть панель - значок в её верхнем углу. Свёрнутая панель остаётся одной кнопкой, и вся
  *  ширина экрана уходит плану: на ленте улицы это решает, видно чертёж или нет. */
@@ -51,9 +44,7 @@ export function RunHeader({ run }: { run: RunOut }) {
         <span>{run.profile}</span>
         <span>{run.id.slice(0, 8)}</span>
         {Object.entries(run.overrides).map(([key, value]) => (
-          <span key={key}>
-            {key} {overrideText(value)}
-          </span>
+          <span key={key}>{overrideLabel(key, value)}</span>
         ))}
       </p>
     </div>
@@ -110,7 +101,6 @@ export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson
               <b>{decimal(quality.index)}</b> из 1
             </>
           )}
-          , разбор в панели справа
         </p>
       ) : null}
       {notices.length ? (

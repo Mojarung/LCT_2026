@@ -71,15 +71,18 @@ const write = (key: string, value: string): void => {
   }
 };
 
-/** Панели - как их оставили. Обозначения по умолчанию открыты: без них цвет на карте не значит
- *  ничего. На узком экране - закрыты: там панель накрывает половину карты. */
+/** Панели - как их оставили. Обозначения по умолчанию открыты только на высоком экране: на
+ *  1440 x 900 и ниже панель занимала треть высоты, и пульт срезал сводку прогона посередине
+ *  (жюри, итерация 4). Кнопка «обозначения» у кромки карты открывает их одним нажатием. */
 function savedPanels(): Panels {
-  const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 1080px)').matches;
+  const roomy =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(min-width: 1081px) and (min-height: 1000px)').matches;
   const legend = read('green-legend');
   return {
     left: read('green-panel-left') === '1',
     right: read('green-panel-right') === '1',
-    legend: legend === null ? !narrow : legend !== '0',
+    legend: legend === null ? roomy : legend !== '0',
   };
 }
 

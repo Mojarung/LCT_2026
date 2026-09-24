@@ -435,6 +435,9 @@ body.shell-map .topbar {
 .term-basis {
   color: var(--bone-3);
 }
+.quality-fold {
+  margin-top: 6px;
+}
 .quality-summary {
   margin-top: 8px;
 }
@@ -865,12 +868,21 @@ body.shell-map .topbar {
   flex-direction: column;
   gap: 6px;
 }
+/* Две главные кнопки в одну строку, размер под названием: так выгрузка занимает одну
+   строку панели, а не три, и список видов остаётся на экране. */
+.dl-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
 .dl {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 13px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 11px;
   border-radius: var(--r-control);
   font-size: var(--fs-small);
   font-weight: 500;
@@ -910,12 +922,6 @@ body.shell-map .topbar {
   font-weight: 400;
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
-}
-.dl-note {
-  margin: 2px 0 0;
-  font-size: var(--fs-micro);
-  color: var(--bone-3);
-  line-height: 1.4;
 }
 
 /* Складки в панели: служебные файлы и предупреждения открываются по требованию, а в

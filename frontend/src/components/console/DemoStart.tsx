@@ -27,10 +27,7 @@ export function DemoStart() {
     <div className="start-row">
       <div>
         <p className="start-title">Встроенный участок улицы Берзарина</p>
-        <p className="hint">
-          Фрагмент настоящей подосновы с подземными сетями. Каталог улиц не подключён, поэтому
-          прогон можно показать на нём.
-        </p>
+        <p className="hint">Фрагмент настоящей подосновы с сетями: каталог улиц не подключён.</p>
         <p className="form-error" role="status" aria-live="polite">
           {message}
         </p>

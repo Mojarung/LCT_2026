@@ -198,10 +198,11 @@
 .registry td.state::before {
   content: '';
   position: absolute;
-  top: 0.55em;
+  top: 50%;
   left: 0;
   width: 7px;
   height: 7px;
+  transform: translateY(-50%);
   background: currentColor;
 }
 .state-succeeded {

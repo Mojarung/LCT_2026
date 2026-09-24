@@ -103,9 +103,6 @@ export function Legend({ done }: { done: boolean }) {
             <LayerCheck layer="barrier">
               <i className="key ring" /> Места, возможные с прикорневым барьером
             </LayerCheck>
-            <p className="legend-note">
-              Кружок - крона в натуральную величину: у дерева она больше, у кустарника меньше.
-            </p>
           </>
         ) : null}
         <LayerCheck layer="utilities">Подземные сети</LayerCheck>

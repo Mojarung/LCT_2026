@@ -5,6 +5,7 @@
  * выбранного профиля из GET /api/v1/profiles/{name}, а в overrides уходит разница. */
 
 import type { ProfileOut } from '../api/types';
+import { plain } from './format';
 
 export type Switch =
   'root_barriers' | 'shrub_groups' | 'shrub_rows' | 'curb_hedges' | 'understory' | 'shrub_fill';
@@ -74,4 +75,32 @@ export function diffOverrides(
       : profile.modes.filter((mode) => mode !== 'fill');
   }
   return values;
+}
+
+/** Короткие имена параметров для шапки прогона: там стоят только отличия от профиля, и
+ *  сырые ключи JSON («root_barriers: true») эксперту ничего не говорят. */
+const PARAM_RU: Record<string, string> = {
+  modes: 'приёмы',
+  root_barriers: 'барьеры',
+  shrub_groups: 'группы кустарника',
+  shrub_rows: 'ряд у борта',
+  curb_hedges: 'изгородь',
+  understory: 'подлесок',
+  shrub_fill: 'кустарник на газоне',
+  species_code: 'вид',
+  planting_type: 'тип посадки',
+};
+const MODE_RU: Record<string, string> = { alley: 'аллея', lawn: 'газон', fill: 'добор' };
+
+function valueText(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'да' : 'нет';
+  if (typeof value === 'number') return plain(value);
+  if (Array.isArray(value))
+    return value.map((item) => MODE_RU[String(item)] ?? String(item)).join(', ');
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+export function overrideLabel(key: string, value: unknown): string {
+  if (key === 'spacing_m' && typeof value === 'number') return `шаг ${plain(value)} м`;
+  return `${PARAM_RU[key] ?? key}: ${valueText(value)}`;
 }

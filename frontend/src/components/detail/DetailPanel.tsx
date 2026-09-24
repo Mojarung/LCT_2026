@@ -79,9 +79,10 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       </p>
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
       {item.note ? <p className="detail-explain">{item.note}</p> : null}
-      <ValueBlock value={item.value} />
-      <BarrierBlock item={item} />
+      {/* Норма - первым: это ответ на вопрос «можно ли здесь сажать», ценность и вид - после. */}
       <ChecksBlock checks={item.checks} rules={rules} />
+      <BarrierBlock item={item} />
+      <ValueBlock value={item.value} />
       <SpeciesBlock assortment={item.assortment} />
       {item.explanation ? (
         <details className="detail-full">
