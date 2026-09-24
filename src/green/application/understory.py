@@ -34,6 +34,7 @@ from green.application.params import active_distance_rules
 from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_UNDERSTORY
 from green.application.shrub_rows import Blockers, ranked_species
 from green.application.surfaces import build_surface_map
+from green.application.wording import counted
 from green.domain.norms import PlantingType
 from green.domain.planting import SHRUB_FORMS, AssortmentInfo, Placement, Reason, Verdict
 
@@ -104,7 +105,9 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
     start = len(plan.placements)
     added = [replace(p, number=start + i) for i, p in enumerate(planter.added, 1)]
     summary = (
-        f"Кустарник под кронами: {planter.groups} групп, {len(added)} кустов под деревьями без "
+        "Кустарник под кронами: "
+        f"{counted(planter.groups, 'группа', 'группы', 'групп')}, "
+        f"{counted(len(added), 'куст', 'куста', 'кустов')} под деревьями без "
         "нижнего яруса (МГСН 1.02-02, п. 4.2.9.2)."
     )
     return replace(plan, placements=(*plan.placements, *added), warnings=(*plan.warnings, summary))

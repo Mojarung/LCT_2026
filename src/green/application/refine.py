@@ -36,6 +36,7 @@ from green.application.constraints import VERDICT_ORDER, ConstraintIndex
 from green.application.quality import WEAK_PERMILLE, assess, evaluate
 from green.application.quality.terms import tightest
 from green.application.surfaces import build_surface_map
+from green.application.wording import index_change
 from green.domain.norms import DistanceRule, PlantingType
 from green.domain.planting import CheckOutcome, Verdict
 
@@ -128,7 +129,7 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
     refined = assess(current, site, params)
     note = (
         f"Слабые места: {moved} из {len(tight)} посадок впритык к сетям сдвинуты на 0,3-1 м от "
-        f"ближайшей нормы, индекс качества {_decimal(quality.index)} -> {_decimal(index)}."
+        f"ближайшей нормы, индекс качества {index_change(quality.index, index)}."
     )
     refined = replace(refined, warnings=(*refined.warnings, note))
     return Refinement(refined, len(weak), moved, quality.index, index, base.surface)

@@ -34,6 +34,7 @@ from green.application.params import active_distance_rules
 from green.application.placement import MODE_LABELS, MODE_SHRUB_FILL, curb_lines
 from green.application.quality.site import street_length
 from green.application.surfaces import Material, build_surface_map
+from green.application.wording import counted
 from green.application.zones import MAX_ZONE_POINTS
 from green.domain.norms import PlantingType
 from green.domain.planting import SHRUB_FORMS, Plan, Verdict
@@ -111,7 +112,9 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
     if not added:
         return plan
     summary = (
-        f"Группы кустарника на газоне: {len(centers)} групп, {len(added)} кустов - кустарников "
+        "Группы кустарника на газоне: "
+        f"{counted(len(centers), 'группа', 'группы', 'групп')}, "
+        f"{counted(len(added), 'куст', 'куста', 'кустов')} - кустарников "
         f"было {shrubs_now}, нижняя граница МГСН 1.02-02, табл. В.1 - {goal:.0f} на эту улицу "
         f"({params.density_shrubs_per_km[0]:g} на 1 км)."
     )

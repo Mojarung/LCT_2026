@@ -55,6 +55,7 @@ from green.application.placement import (
 )
 from green.application.quality.site import WIDE_STREET_M, street_length
 from green.application.surfaces import build_surface_map
+from green.application.wording import counted
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import (
@@ -143,8 +144,10 @@ def fill_shrub_rows(  # noqa: PLR0913 - сценарий передаёт всё
     if planted:
         length = sum(s.length_m for s in segments)
         summary = (
-            f"Ряды кустарника у борта под кронами аллеи: {len(segments) - skipped} участков, "
-            f"{len(planted)} кустов, {length:.0f} м ряда (СП 82.13330.2016, п. 9.38)."
+            "Ряды кустарника у борта под кронами аллеи: "
+            f"{counted(len(segments) - skipped, 'участок', 'участка', 'участков')}, "
+            f"{counted(len(planted), 'куст', 'куста', 'кустов')}, {length:.0f} м ряда "
+            "(СП 82.13330.2016, п. 9.38)."
         )
         if skipped:
             summary += (
@@ -207,13 +210,15 @@ def _curb_hedges(  # noqa: PLR0913 - этап получает всё, что у
         return plan
     length = sum(s.length_m for s in segments)
     summary = (
-        f"Живая изгородь вдоль бортов: {len(segments) - skipped} участков, {len(planted)} кустов, "
+        "Живая изгородь вдоль бортов: "
+        f"{counted(len(segments) - skipped, 'участок', 'участка', 'участков')}, "
+        f"{counted(len(planted), 'куст', 'куста', 'кустов')}, "
         f"{length:.0f} м (СП 82.13330.2016, п. 9.38; шаг {params.curb_hedge_spacing_m:g} м - "
         "743-ПП, табл. 3.6.2, высокие кустарники)."
     ).replace(".0 м", " м")
     if capped:
         summary += (
-            f" Ещё {capped} участков не посажены: кустарников на улице было бы больше "
+            f" Не посажено участков: {capped} - кустарников на улице было бы больше "
             f"{params.density_shrubs_per_km[1]:g} на 1 км (МГСН 1.02-02, табл. В.1)."
         )
     return replace(
