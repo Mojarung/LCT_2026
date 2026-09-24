@@ -18,7 +18,9 @@
 src/green/
   domain/          Feature, SourceRef, DistanceRule, RuleBook, Placement, Rejection, Plan (frozen dataclass),
                    quality (PlanQuality, QualityTerm, PlantingValue)
-  application/     use_case.PlanSite (сценарий), classification, diameters, constraints.ConstraintIndex
+  application/     use_case.PlanSite (сценарий), classification (знак решает раньше слоя: словарь
+                   symbols.SymbolCatalog, штрихи знака - рисунок, экземпляр - объект), diameters,
+                   constraints.ConstraintIndex
                    (STRtree+numpy), surfaces (карта покрытий, Дейкстра), placement.GreedyPlantingStrategy
                    (аллея вдоль борта + сетка по газону), zones (зоны допустимости),
                    assortment/ (подбор вида: context, structures, filters, scoring, assign (MILP),
@@ -29,7 +31,9 @@ src/green/
                    progress (этапы прогона, веса из замеров, оценка доли и остатка для интерфейса),
                    quality/ (индекс качества плана: 10 слагаемых с основаниями, проверка перед
                    оценкой, штрафы, точный вклад каждой посадки; notes/29)
-  infrastructure/  cad/ (ezdxf reader, writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
+  infrastructure/  cad/ (ezdxf reader: экземпляры знаков SymbolInstance и учёт исхода каждого
+                   примитива; acis_region - REGION из ACIS; xref_package - комплект по внешним
+                   ссылкам; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
                    улицы: запасной прогон, когда каталог улиц не смонтирован), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    streets (каталог улиц пилота из dataset/streets_dxf/catalog.json),
@@ -43,13 +47,16 @@ src/green/
                    посадок; пока прогон идёт - чертёж на карте сразу после чтения и полоса
                    хода с процентами по GET /runs/{id}; статика в web/static, внешних запросов
                    нет, node в образе нет)
-config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц),
+config/            acts.yaml, rules.yaml (76 правил: 46 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 75 основание сверено, 5 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц), symbols.yaml (словарь условных знаков: код блока -> класс и роль),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
 docker/cadcheck/   образ проверки DXF в LibreCAD под Linux: Xvfb + xdotool, два снимка на файл (docs/deploy.md)
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, prepare_streets.py
-                   (комплект подосновы каждой улицы из архива в DXF + catalog.json), make_demo_fragment.py
+                   (комплект улицы из архива по внешним ссылкам основного чертежа + catalog.json с путями в
+                   архиве и ссылками без файла; ODA по умолчанию), converter_diff.py (LibreDWG против ODA по
+                   каждому объекту), xref_census.py, reader_check.py (чтение всех улиц: учёт, пробелы, знаки),
+                   symbol_census.py (перепись знаков и листы рисунков), make_demo_fragment.py
                    (вырезает демонстрационный фрагмент улицы), research/ — наша разведка датасета
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
 docs/
@@ -81,8 +88,9 @@ docs/
                                                  в .claude/agents, вызывается после правок вёрстки)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
 dataset/           датасет и конвертированные DXF, в git не идёт; compose монтирует ./dataset в /dataset
-  streets_dxf/     каталог улиц пилота: 19 улиц, 155 файлов, 2,8 ГБ, собирается tools/prepare_streets.py
-                   (подоснова + сети всех планшетов + границы работ; notes/26)
+  streets_dxf/     каталог улиц пилота (LibreDWG, старый): 19 улиц, 155 файлов, 2,8 ГБ (notes/26)
+  streets_oda/     новый каталог: ODA 27.1 и сборка по внешним ссылкам, 292 файла (GREEN_STREETS_DIR)
+  street_inventory/ опись исходных материалов улиц (PDF, таблицы, фото, DWG), только локально
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
@@ -94,6 +102,14 @@ dataset/           датасет и конвертированные DXF, в gi
 - Ветки от `main`, conventional commits (у Кирилла: `feat(placement): …`, `docs: …`), squash в main. Ветка наших доков — `docs/dataset-research`.
 - Датасет и ТЗ в git не кладём. Результаты прогонов — `runs/`, `out/` (игнорируются).
 - Windows-грабли: `PYTHONIOENCODING=utf-8` для кириллицы в консоли; Git Bash переписывает аргументы с двоеточием (`origin/main:.gitignore`) — `MSYS_NO_PATHCONV=1`.
+
+## DWG → DXF: конвертер и проверка чтения (сверка 25.09.2026)
+
+- **Конвертер для датасета - ODA File Converter 27.1** (бесплатный, Windows и Linux), на Windows ставится в `C:\Program Files\ODA\ODAFileConverter 27.1.0\`. Вызов на папку, не на файл: `ODAFileConverter <вход> <выход> ACAD2018 DXF 0 1 "*.DWG"`, без окна, 2-8 с на лист. Сервису: `GREEN_ODA_BINARY=<путь к exe>`, `GREEN_CONVERTER=oda`.
+- **LibreDWG теряет данные ACIS у каждой REGION** в выдаче AC1032/AC1027: по 19 улицам 140 224 области из 165 648 без формы. ODA сохраняет все, `acis_region` читает их полностью. Пространство модели и используемые блоки у обоих конвертеров совпадают по числу сущностей каждого типа; расходятся только неиспользуемые анонимные блоки `*U…` (LibreDWG выгружает лишние, ODA отбрасывает и перенумеровывает).
+- Вставка без определения блока - дефект исходного DWG, а не конвертера (Песчаный, 2 вставки): LibreDWG пишет INSERT с пустым именем, ODA при аудите подставляет пустой блок `$TD_AUDIT_GENERATED_(N)`. Это пробел чтения с причиной, молча не принимать.
+- ODA 27.7 из пробного SDK пишет SAB ACIS 223, где `transform` - три вектора, а ezdxf ждёт строку и падает с `ParsingError`. Для конвертации брать 27.1; пробный SDK (evaluation) - только локальная проверка (`OdReadEx`, `OdVectorizeEx`, `SimpleExportToRaster`), в Docker и git не класть.
+- Проверка без ручного просмотра в CAD: один DWG двумя независимыми читателями (LibreDWG и ODA), поблочная сверка состава; исходные DWG лежат только в архиве `dataset/Датасет/Пилотный проект 20 улиц.zip`, выбор файлов улицы - `tools/prepare_streets.py`.
 
 ## Условия сдачи (из ТЗ ДПиООС, полный текст — `ТЗ/tz_dpioos_2026.txt`, локально)
 
