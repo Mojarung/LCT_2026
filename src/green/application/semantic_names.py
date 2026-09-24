@@ -35,6 +35,17 @@ def local_name(value: str) -> str:
     return re.split(r"\||\$\d+\$", unicodedata.normalize("NFC", value))[-1]
 
 
+def base_name(block: str) -> str:
+    """Код условного знака: локальное имя без номера экземпляра.
+
+    Мосгеотрест выгружает каждую вставку знака отдельным блоком с номером на конце
+    (`DEREVO_935`, `KUST1_162`), а копии первого экземпляра получают ещё один номер:
+    `AFIS_1`, `AFIS_1_1`, `AFIS_1_2` - один и тот же знак (одинаковые рисунок и слой,
+    перепись 25.09.2026). Поэтому снимаются все хвостовые группы `_цифры`.
+    """
+    return re.sub(r"(_\d+)+$", "", local_name(block))
+
+
 # Detect reasons to ask for a per-input assignment, never to grant soil. This is
 # deliberately not a universal construction-language parser: unseen wording
 # remains an explicit limitation of automatic name rules.
