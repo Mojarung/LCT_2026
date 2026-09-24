@@ -93,7 +93,13 @@ def _species_norms(
     reasons: list[Reason],
 ) -> Reason | None:
     """369-ПП и 743-ПП п. 3.6.18: запрет или условие для вида, одинаковые в любой точке."""
-    verdict = species_norms(species, rulebook, params.territory, params.planting_category)
+    verdict = species_norms(
+        species,
+        rulebook,
+        params.territory,
+        params.planting_category,
+        allergen_act_priority=params.allergen_act_priority,
+    )
     reasons.extend(verdict.reasons)
     return verdict.blocking
 

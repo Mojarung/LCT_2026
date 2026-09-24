@@ -190,15 +190,31 @@ def test_mass_allergen_without_an_act_recommendation_is_rejected_by_743_pp() -> 
     assert "отнесение вида" in verdict.blocking.text
 
 
+def test_profile_may_put_the_allergen_ban_above_the_act_that_names_the_species() -> None:
+    """allergen_act_priority=false: запрет п. 3.6.18 743-ПП выше рекомендации МГСН табл. В.6.
+
+    Рекомендация акта названа в тексте отказа: эксперт видит, что она известна.
+    """
+    birch = CATALOG.get("betula_pendula")
+    params = replace(PARAMS, allergen_act_priority=False)
+    verdict = species_verdict(birch, _ctx_of(), RULEBOOK, params)
+    assert not verdict.allowed
+    assert verdict.blocking is not None
+    assert verdict.blocking.rule_id == "R-PPSEVEN-ALLERGEN-001"
+    assert "МГСН 1.02-02" in verdict.blocking.text
+
+
 def test_birch_recommended_by_the_moscow_act_is_not_banned_as_an_allergen() -> None:
-    """МГСН 1.02-02 табл. В.6 и 515-ПП рекомендуют берёзу: справочная аллергенность не запрет."""
+    """МГСН 1.02-02 табл. В.6 и 515-ПП называют берёзу, п. 3.6.18 видов не называет: вид
+    допускается, и основание говорит, какой акт решил, а не «запрет не применён»."""
     birch = CATALOG.get("betula_pendula")
     for category in ("streets", "yards", "parks"):
         verdict = species_verdict(
             birch, _ctx_of(), RULEBOOK, replace(PARAMS, planting_category=category)
         )
         assert verdict.allowed, category
-        assert any("п. 3.6.18 743-ПП не применён" in r.text for r in verdict.reasons)
+        assert any("решает акт, называющий вид" in r.text for r in verdict.reasons)
+        assert not any("не применён" in r.text for r in verdict.reasons)
 
 
 def test_species_marked_minus_for_the_category_is_rejected() -> None:

@@ -108,7 +108,13 @@ class GreedyPlantingStrategy:
         # паре «посадка - вид» (assortment.filters), а вид профиля лишь задаёт отступы по роду.
         single = params.assortment_mode == "single"
         if single:
-            norms = species_norms(species, rulebook, params.territory, params.planting_category)
+            norms = species_norms(
+                species,
+                rulebook,
+                params.territory,
+                params.planting_category,
+                allergen_act_priority=params.allergen_act_priority,
+            )
             if norms.blocking is not None:
                 raise InputError(
                     f"Вид {species.name_lat} недопустим: {norms.blocking.text} "
