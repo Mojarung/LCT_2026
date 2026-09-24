@@ -10,6 +10,7 @@ import { useWorkspace } from '../../state/workspace';
 import { ChecksBlock } from './ChecksBlock';
 import { Composition } from './Composition';
 import { QualityBlock } from './QualityBlock';
+import { SpeciesBlock } from './SpeciesBlock';
 import { BarrierBlock, ValueBlock } from './ValueBlock';
 
 interface DetailProps {
@@ -81,6 +82,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <ValueBlock value={item.value} />
       <BarrierBlock item={item} />
       <ChecksBlock checks={item.checks} rules={rules} />
+      <SpeciesBlock assortment={item.assortment} />
       {item.explanation ? (
         <details className="detail-full">
           <summary>Объяснение целиком, как в выгрузке</summary>

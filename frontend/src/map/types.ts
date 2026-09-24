@@ -1,7 +1,7 @@
 /* Типы движка карты. Движок не знает про React: страница отдаёт ему данные и получает
  * события через EngineHooks. */
 
-import type { PlantingValue, RuleCheck } from '../api/artifacts';
+import type { Assortment, PlantingValue, RuleCheck } from '../api/artifacts';
 
 export type LayerKey =
   | 'utilities'
@@ -49,6 +49,8 @@ export interface MapItem {
   explanation: string;
   value: PlantingValue | null;
   checks: RuleCheck[];
+  /** Почему выбран вид (только у посадок). */
+  assortment?: Assortment | null;
   note?: string;
   barrier_m?: number | null;
 }

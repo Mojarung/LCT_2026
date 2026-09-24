@@ -44,7 +44,25 @@ const plan: PlanJson = {
     verdict: 'allowed',
     notes: [],
     explanation: `Посадка №${String(number)} допускается.`,
-    assortment: null,
+    assortment:
+      number === 1
+        ? {
+            status: 'assigned',
+            percent: 74,
+            factors: {},
+            structure: { id: null, kind: null },
+            reasons: [
+              {
+                kind: 'norm',
+                text: 'рекомендован для категории «улицы и дороги»',
+                rule_id: 'R-MGSN-CATEGORY-001',
+                source: null,
+                condition: null,
+              },
+            ],
+            alternatives: [],
+          }
+        : null,
     value: null,
     checks: [
       {
@@ -177,6 +195,8 @@ describe('RunPage: finished run', () => {
     expect(within(right).getByText('допускается')).toBeVisible();
     expect(within(right).getByText('Ближе всего к норме')).toBeVisible();
     expect(right).toHaveTextContent('R-UTIL-WATER-001, норма 2,00 м. СП 42.13330.2016, табл. 9.1');
+    expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).toBeVisible();
+    expect(right).toHaveTextContent('Пригодность месту 74%');
 
     // Перенос без перетаскивания: кнопка есть только в режиме правки.
     expect(within(right).queryByRole('button', { name: /новое место/ })).toBeNull();

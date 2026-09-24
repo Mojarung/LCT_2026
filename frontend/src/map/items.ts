@@ -25,6 +25,7 @@ export function toMapItems(plan: PlanJson): { placements: MapItem[]; rejections:
       explanation: p.explanation,
       value: p.value,
       checks: p.checks,
+      assortment: p.assortment,
     })),
     rejections: plan.rejections.map((r) => ({
       kind: 'rejection',
