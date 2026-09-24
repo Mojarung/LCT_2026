@@ -87,12 +87,13 @@ class EzdxfDrawingMerger:
         *,
         unit: str = "auto",
         source_names: Sequence[str] = (),
+        absent_references: Sequence[tuple[str, str]] = (),
     ) -> MergeResult:
         if len(sources) < _MIN_SOURCES:
             raise InputError("Склейка: нужно не меньше двух чертежей")
         if target.resolve() in {source.resolve() for source in sources}:
             raise InputError("Склейка не может перезаписать один из исходных файлов")
-        package = DrawingPackage.load(sources, source_names)
+        package = DrawingPackage.load(sources, source_names, absent_references)
         package.resolve()
         base = package.documents[0]
         notes = package.notes

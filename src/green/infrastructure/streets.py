@@ -68,6 +68,7 @@ class JsonStreetCatalog:
                 if name != main.name and (folder / name).is_file()
             )
             size = main.stat().st_size + sum(path.stat().st_size for path in extra)
+            sources, absent = _package_names(row, folder, (main, *extra))
             streets.append(
                 StreetSource(
                     slug=str(row["slug"]),
@@ -76,9 +77,35 @@ class JsonStreetCatalog:
                     main=main,
                     extra=extra,
                     size_mb=round(size / _MB, 1),
+                    sources=sources,
+                    absent_references=absent,
                 )
             )
         return tuple(sorted(streets, key=lambda street: street.number))
+
+
+def _package_names(
+    row: dict, folder: Path, files: tuple[Path, ...]
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Имена файлов комплекта для сборки и ссылки, файлов которых нет в архиве заказчика.
+
+    Имя - путь в архиве (`sources` каталога), по нему внешняя ссылка находится как в AutoCAD.
+    Каталог без путей (старый) даёт пустые имена: сборка возьмёт пути файлов каталога.
+    """
+    mapping = row.get("sources") or {}
+    names = tuple(str(mapping.get(path.name, "")) for path in files)
+    if not all(names):
+        names = ()
+    present = {path.name for path in files}
+    absent = tuple(
+        (
+            str(mapping[host]) if names else str(folder / host),
+            str(item.get("reference", "")),
+        )
+        for item in row.get("missing_xrefs", [])
+        if isinstance(item, dict) and (host := str(item.get("host", ""))) in present
+    )
+    return names, absent
 
 
 __all__ = ["JsonStreetCatalog"]

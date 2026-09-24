@@ -56,6 +56,7 @@ class DrawingMerger(Protocol):
         *,
         unit: str = "auto",
         source_names: Sequence[str] = (),
+        absent_references: Sequence[tuple[str, str]] = (),
     ) -> MergeResult: ...
 
 
@@ -124,6 +125,11 @@ class StreetSource:
     main: Path
     extra: tuple[Path, ...] = ()
     size_mb: float = 0.0
+    # Пути файлов в архиве заказчика для (main, *extra): по ним сборка находит файл внешней
+    # ссылки так же, как AutoCAD. Пусто - имена файлов каталога.
+    sources: tuple[str, ...] = ()
+    # Ссылки (файл комплекта, путь), файлов которых нет во всём архиве заказчика.
+    absent_references: tuple[tuple[str, str], ...] = ()
 
 
 class StreetCatalog(Protocol):

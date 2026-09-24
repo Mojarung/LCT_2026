@@ -132,9 +132,8 @@ def _copy_and_execute(container: Container, run_id: str, street: StreetSource) -
     except OSError as error:
         container.runs.reject(run_id, f"комплект улицы не скопирован: {error}")
         return
-    container.runs.execute(
-        run_id, None, tuple(extra_paths), tuple(str(path) for path in (street.main, *street.extra))
-    )
+    names = street.sources or tuple(str(path) for path in (street.main, *street.extra))
+    container.runs.execute(run_id, None, tuple(extra_paths), names, street.absent_references)
 
 
 def accept_street_run(

@@ -9,6 +9,10 @@
     uv run python tools/prepare_streets.py --list          посмотреть, что будет выбрано
     uv run python tools/prepare_streets.py                 собрать всё
     uv run python tools/prepare_streets.py --only 16 --only 8
+    uv run python tools/prepare_streets.py --converter oda --out dataset/streets_dxf_oda
+
+Конвертер по умолчанию, как у сервиса, - ODA File Converter, если он установлен: LibreDWG
+теряет данные ACIS у каждой области REGION (сверка 25.09.2026, CLAUDE.md).
 
 Выбор файлов - по именам, потому что ничего другого в архиве нет: у двадцати улиц
 двадцать разных способов назвать геоподоснову. Поэтому решение каждой улицы попадает в
@@ -20,18 +24,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import shutil
 import sys
 import tempfile
+import unicodedata
 import zipfile
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from green.application.semantic_names import slug_key  # noqa: E402
 from green.infrastructure.convert.libredwg import LibreDwgConverter  # noqa: E402
 from green.infrastructure.convert.oda import OdaFileConverter  # noqa: E402
 
@@ -62,20 +69,13 @@ BOUNDARY = re.compile(r"(?<![a-z])brd(?![a-z])|границ\w*\s*работ", re
 #: Потолок на комплект: планшетов на улицу бывает до трёх, видов сетей четыре, плюс границы.
 MAX_FILES = 16
 
-TRANSLIT = {
-    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh",
-    "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",
-    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
-    "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu",
-    "я": "ya",
-}
-
-
 def slugify(name: str) -> str:
-    """Имя папки улицы -> короткий латинский идентификатор для путей и адресов."""
-    text = "".join(TRANSLIT.get(char, char) for char in name.lower())
-    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
-    return re.sub(r"-{2,}", "-", text)[:60]
+    """Имя папки улицы -> короткий латинский идентификатор для путей и адресов.
+
+    Тот же ключ, по которому сборка комплекта находит файл внешней ссылки: второй
+    транслитерации быть не должно.
+    """
+    return slug_key(name)[:60]
 
 
 def entry_name(info: zipfile.ZipInfo) -> str:
@@ -204,7 +204,16 @@ def survey() -> list[Street]:
     return sorted(streets, key=lambda s: s.number)
 
 
-def build_converter():
+def oda_binary() -> str:
+    """ODA File Converter: GREEN_ODA_BINARY, иначе стандартная установка Windows, иначе PATH."""
+    binary = os.environ.get("GREEN_ODA_BINARY", "")
+    if binary:
+        return binary
+    installed = sorted(Path("C:/Program Files/ODA").glob("ODAFileConverter*/ODAFileConverter.exe"))
+    return str(installed[-1]) if installed else "ODAFileConverter"
+
+
+def build_converter(kind: str = "auto"):
     """Тот же конвертер, что у сервиса: второй реализации быть не должно.
 
     На Windows LibreDWG лежит распакованным в `tools/libredwg` и в PATH не попадает,
@@ -215,25 +224,25 @@ def build_converter():
         local = ROOT / "tools" / "libredwg" / ("dwg2dxf.exe" if os.name == "nt" else "dwg2dxf")
         if local.exists():
             binary = str(local)
-    options = [LibreDwgConverter(binary=binary)] if binary else [LibreDwgConverter()]
-    options.append(OdaFileConverter())
+    libredwg = LibreDwgConverter(binary=binary) if binary else LibreDwgConverter()
+    oda = OdaFileConverter(binary=oda_binary())
+    options = {"auto": [oda, libredwg], "libredwg": [libredwg], "oda": [oda]}[kind]
     for converter in options:
         if converter.available():
             return converter
-    message = "не найден ни dwg2dxf (LibreDWG), ни ODAFileConverter"
+    message = f"конвертер {kind} не найден: ни ODAFileConverter, ни dwg2dxf (LibreDWG)"
     raise SystemExit(message)
 
 
-def convert_one(job: tuple[str, str, str]) -> tuple[str, str, str]:
+def convert_one(job: tuple[str, str, str, str, str, str]) -> tuple[str, str, str]:
     """Достать один DWG из архива и положить рядом его DXF. Работает в своём процессе."""
-    member, slug, role = job
-    converter = build_converter()
-    target_dir = OUT / slug
+    member, slug, role, kind, out, name = job
+    converter = build_converter(kind)
+    target_dir = Path(out) / slug
     target_dir.mkdir(parents=True, exist_ok=True)
-    stem = Path(member).stem
-    target = target_dir / f"{slugify(stem) or 'source'}.dxf"
+    target = target_dir / name
     if target.exists():
-        return slug, target.name, "уже был"
+        return member, name, "уже был"
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -245,9 +254,164 @@ def convert_one(job: tuple[str, str, str]) -> tuple[str, str, str]:
         try:
             produced = converter.to_dxf(source, work)
         except Exception as error:  # noqa: BLE001 - причина уходит в отчёт, улица не падает
-            return slug, Path(member).name, f"ошибка: {error}"
+            return member, name, f"ошибка: {error}"
         shutil.move(str(produced), target)
-    return slug, target.name, role
+    return member, name, role
+
+
+# ---------------------------------------------------------------- внешние ссылки
+
+DRAWINGS = (".dwg", ".dxf")
+XREF_FLAG = 4
+OVERLAY_FLAG = 8
+
+
+def xrefs(path: Path) -> list[tuple[str, str, bool]]:
+    """Внешние ссылки DXF: (имя блока, путь, overlay).
+
+    Секция BLOCKS читается построчно, без ezdxf: подоснова весит сотни мегабайт, а нужны
+    только заголовки блоков. DXF 2007+ в UTF-8, более старые - в кодировке чертежа (cp1251).
+    """
+    found: list[tuple[str, str, bool]] = []
+    section = rtype = None
+    record: dict[str, str] = {}
+    with path.open("rb") as handle:
+        lines = iter(handle)
+        for code_line in lines:
+            raw = next(lines, b"").rstrip(b"\r\n")
+            try:
+                value = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                value = raw.decode("cp1251", errors="replace")
+            code = code_line.strip()
+            if code == b"0":
+                flags = int(record.get("70", "0") or 0)
+                # AutoCAD ставит overlay оба флага, ezdxf - только флаг overlay.
+                if rtype == "BLOCK" and flags & (XREF_FLAG | OVERLAY_FLAG):
+                    found.append(
+                        (record.get("2", ""), record.get("1", ""), bool(flags & OVERLAY_FLAG))
+                    )
+                rtype, record = value, {}
+                if value == "ENDSEC" and section == "BLOCKS":
+                    break
+                continue
+            if rtype == "SECTION" and code == b"2":
+                section = value
+            elif section == "BLOCKS" and code in (b"1", b"2", b"70"):
+                record.setdefault(code.decode(), value)
+    return found
+
+
+def _member_key(path: str) -> str:
+    stem, suffix = posixpath.splitext(unicodedata.normalize("NFC", path).casefold())
+    return stem + ".dwg" if suffix in DRAWINGS else stem + suffix
+
+
+def _shared_folders(first: str, second: str) -> int:
+    count = 0
+    for a, b in zip(first.split("/")[:-1], second.split("/")[:-1], strict=False):
+        if a != b:
+            break
+        count += 1
+    return count
+
+
+def resolve_reference(
+    host: str, reference: str, members: dict[str, zipfile.ZipInfo]
+) -> tuple[str | None, str]:
+    """Файл внешней ссылки в архиве улицы: (путь в архиве или None, как найден).
+
+    Как AutoCAD: сначала путь от папки основного чертежа, затем имя файла среди чертежей
+    улицы (ключ имени, как у каталога). Из копий в разных папках берётся ближайшая к
+    основному чертежу; одинаковые по содержимому копии - одна и та же ссылка. Остальное
+    не угадывается: «неоднозначно» или «нет в архиве».
+    """
+    path = reference.replace("\\", "/").strip()
+    keys = {_member_key(member): member for member in members}
+    if path and not re.match(r"^([A-Za-z]:|/)", path):
+        candidate = posixpath.normpath(posixpath.join(posixpath.dirname(host), path))
+        if (found := keys.get(_member_key(candidate))) is not None:
+            return found, "по пути"
+    stem = slug_key(PurePosixPath(path).stem)
+    same = [member for member in members if slug_key(PurePosixPath(member).stem) == stem]
+    if len(same) > 1:
+        nearest = max(_shared_folders(member, host) for member in same)
+        same = [member for member in same if _shared_folders(member, host) == nearest]
+    if len({(members[m].file_size, members[m].CRC) for m in same}) == 1:
+        return same[0], "по имени"
+    return None, "неоднозначно" if same else "нет в архиве"
+
+
+def _sheet_key(name: str) -> tuple[str, str] | None:
+    """Пара «планшет + вид» выгрузки сетей или границ работ, как в pick_files."""
+    base = Path(name).name
+    if BOUNDARY.search(base) and not UTILITY.search(base):
+        return sheet_of(base), "brd"
+    if match := UTILITY.search(base):
+        return sheet_of(base), (match.group(1) or match.group(0)).lower()
+    return None
+
+
+@dataclass
+class Kit:
+    """Комплект улицы: основной чертёж, всё, на что он ссылается, и выгрузки из отбора."""
+
+    street: Street
+    members: dict[str, zipfile.ZipInfo]
+    files: dict[str, str] = field(default_factory=dict)  # путь в архиве -> имя в каталоге
+    roles: dict[str, str] = field(default_factory=dict)
+    missing: list[dict[str, object]] = field(default_factory=list)
+    failed: dict[str, str] = field(default_factory=dict)
+    queued: list[str] = field(default_factory=list)
+
+    def add(self, member: str, role: str) -> None:
+        info = self.members[member]
+        if any(
+            (self.members[known].file_size, self.members[known].CRC) == (info.file_size, info.CRC)
+            for known in self.files
+        ):
+            return  # тот же файл уже в комплекте, пусть и из другой папки
+        name = f"{slugify(Path(member).stem) or 'source'}.dxf"
+        taken = set(self.files.values())
+        suffix = 2
+        while name in taken:
+            name = f"{slugify(Path(member).stem) or 'source'}-{suffix}.dxf"
+            suffix += 1
+        self.files[member] = name
+        self.roles[member] = role
+        self.queued.append(member)
+
+    def add_uncovered_picks(self) -> None:
+        """Выгрузки из отбора, чьей пары «планшет + вид» ещё нет среди ссылок комплекта."""
+        covered = {_sheet_key(member) for member in self.files} - {None}
+        for pick in self.street.picks[1:]:
+            if _sheet_key(pick.path) not in covered and pick.path in self.members:
+                self.add(pick.path, pick.role)
+
+    def follow(self, host: str, dxf: Path) -> None:
+        for block, reference, overlay in xrefs(dxf):
+            member, how = resolve_reference(host, reference, self.members)
+            if member is not None:
+                if member not in self.files:
+                    self.add(member, "ссылка")
+                continue
+            self.missing.append(
+                {"host": self.files[host], "block": block, "reference": reference,
+                 "overlay": overlay, "why": how}
+            )
+
+
+def drawing_members(archive: zipfile.ZipFile) -> dict[str, dict[str, zipfile.ZipInfo]]:
+    """Все DWG/DXF каждой улицы по имени её папки, без служебных заголовков tar."""
+    found: dict[str, dict[str, zipfile.ZipInfo]] = {}
+    for info in archive.infolist():
+        name = entry_name(info)
+        parts = name.split("/")
+        if info.is_dir() or len(parts) < 3 or parts[0] != TOP or "PaxHeader" in parts:
+            continue
+        if name.lower().endswith(DRAWINGS) and info.file_size > 0:
+            found.setdefault(parts[1], {})[name] = info
+    return found
 
 
 def main() -> None:
@@ -255,7 +419,10 @@ def main() -> None:
     parser.add_argument("--list", action="store_true", help="показать выбор и выйти")
     parser.add_argument("--only", action="append", type=int, help="номера улиц")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--converter", choices=("auto", "libredwg", "oda"), default="auto")
+    parser.add_argument("--out", type=Path, default=OUT, help="папка каталога улиц")
     args = parser.parse_args()
+    out = args.out if args.out.is_absolute() else ROOT / args.out
 
     if not ZIP.exists():
         raise SystemExit(f"нет архива: {ZIP}")
@@ -275,39 +442,71 @@ def main() -> None:
     if args.list:
         return
 
-    jobs = [
-        (pick.path, street.slug, pick.role)
-        for street in streets
-        for pick in street.picks
-    ]
-    print(f"\nконвертирую {len(jobs)} файлов в {OUT}")
-    done: dict[str, list[str]] = {}
+    with zipfile.ZipFile(ZIP) as archive:
+        members = drawing_members(archive)
+    kits = [Kit(street, members.get(street.title, {})) for street in streets if street.picks]
+    for kit in kits:
+        kit.add(kit.street.picks[0].path, kit.street.picks[0].role)
+    owner = {member: kit for kit in kits for member in kit.members}
+    print(f"\nконвертирую в {out} ({build_converter(args.converter).name}), по ссылкам волнами")
+    picks_added = False
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        for slug, name, role in pool.map(convert_one, jobs):
-            print(f"  {slug:<32} {name:<44} {role}")
-            if not role.startswith("ошибка"):
-                done.setdefault(slug, []).append(name)
+        while True:
+            jobs = [
+                (member, kit.street.slug, kit.roles[member], args.converter, str(out),
+                 kit.files[member])
+                for kit in kits
+                for member in kit.queued
+            ]
+            for kit in kits:
+                kit.queued = []
+            if not jobs:
+                if picks_added:
+                    break
+                # Сначала основной чертёж и его ссылки, потом выгрузки из отбора, которых
+                # ссылки не покрыли: иначе одна сеть из двух копий архива попадёт дважды.
+                for kit in kits:
+                    kit.add_uncovered_picks()
+                picks_added = True
+                continue
+            for member, name, status in pool.map(convert_one, jobs):
+                kit = owner[member]
+                print(f"  {kit.street.slug:<32} {name:<48} {status}")
+                if status.startswith("ошибка"):
+                    kit.failed[member] = status
+                    continue
+                kit.follow(member, out / kit.street.slug / name)
 
     catalog = []
-    for street in streets:
-        files = done.get(street.slug, [])
-        if not files:
+    for kit in kits:
+        done = [member for member in kit.files if member not in kit.failed]
+        if kit.street.picks[0].path not in done:
             continue
-        main_name = f"{slugify(Path(street.picks[0].path).stem) or 'source'}.dxf"
         catalog.append(
             {
-                "slug": street.slug,
-                "number": street.number,
-                "title": re.sub(r"^\d+\.\s*", "", street.title).strip(),
-                "main": main_name,
-                "files": sorted(files),
+                "slug": kit.street.slug,
+                "number": kit.street.number,
+                "title": re.sub(r"^\d+\.\s*", "", kit.street.title).strip(),
+                "main": kit.files[kit.street.picks[0].path],
+                "files": sorted(kit.files[member] for member in done),
+                # Путь в архиве от папки улицы: по нему сборка комплекта находит файл
+                # внешней ссылки так же, как AutoCAD, а не по угаданному имени.
+                "sources": {kit.files[m]: "/".join(m.split("/")[2:]) for m in done},
+                "roles": {kit.files[m]: kit.roles[m] for m in done},
+                "missing_xrefs": kit.missing,
+                "failed": {kit.files[m]: kit.failed[m] for m in kit.failed},
             }
         )
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "catalog.json").write_text(
+        print(
+            f"{kit.street.number:>2}. {kit.street.slug}: файлов {len(done)}, "
+            f"по ссылкам {sum(1 for m in done if kit.roles[m] == 'ссылка')}, "
+            f"ссылок без файла {len(kit.missing)}, ошибок конвертации {len(kit.failed)}"
+        )
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "catalog.json").write_text(
         json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(f"\nкаталог: {OUT / 'catalog.json'}, улиц {len(catalog)}")
+    print(f"\nкаталог: {out / 'catalog.json'}, улиц {len(catalog)}")
 
 
 if __name__ == "__main__":

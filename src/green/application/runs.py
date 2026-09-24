@@ -105,6 +105,7 @@ class RunService:
         inventory_path: Path | None = None,
         extra_sources: tuple[Path, ...] = (),
         source_names: tuple[str, ...] = (),
+        absent_references: tuple[tuple[str, str], ...] = (),
     ) -> RunRecord:
         """Синхронный прогон: вызывается из пула потоков, CPU-работа не блокирует event loop."""
         record = self._store.get(run_id)
@@ -141,6 +142,7 @@ class RunService:
                         extra_sources=extra_sources,
                         source_names=source_names
                         or (record.source_name, *(str(path) for path in extra_sources)),
+                        absent_references=absent_references,
                     ),
                     reporter,
                 )

@@ -77,6 +77,8 @@ class PlanRequest:
     extra_sources: tuple[Path, ...] = ()
     # Original package paths/names survive upload renaming and DWG conversion.
     source_names: tuple[str, ...] = ()
+    # Внешние ссылки (файл комплекта, путь), файлов которых нет в исходных данных заказчика.
+    absent_references: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(slots=True)
@@ -153,6 +155,7 @@ class PlanSite:
                     unit=params.drawing_unit,
                     source_names=request.source_names
                     or tuple(str(path) for path in (request.source, *request.extra_sources)),
+                    absent_references=request.absent_references,
                 )
                 source, merge_notes = merged.path, merged.notes
                 assembly = merged.assembly

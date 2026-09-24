@@ -376,3 +376,33 @@ def test_base_reference_with_an_offset_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(InputError, match="XREF"):
         EzdxfDrawingMerger().merge([base, bounds], tmp_path / "merged.dxf")
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_reference_absent_from_customer_data_is_a_named_gap_only_when_declared(
+    tmp_path: Path, *, declared: bool
+) -> None:
+    """Файла наружного освещения нет во всём архиве заказчика: каталог это проверил и объявил.
+
+    Объявленная ссылка не останавливает сборку, а попадает в заметки прогона; та же ссылка
+    без объявления по-прежнему ошибка - комплект просто не полон."""
+    base, nets = tmp_path / "base.dxf", tmp_path / "nets.dxf"
+    _line(nets, start=20, end=30)
+    doc = _line(base)
+    xref.attach(doc, block_name="НО", filename=r".\НО наташинский пр.dwg", overlay=True)
+    doc.saveas(base)
+    names = ("Исходные данные/АПОТ.dwg", "Исходные данные/tp.dwg")
+    absent = [("Исходные данные/АПОТ.dwg", r".\НО наташинский пр.dwg")] if declared else []
+
+    merge = EzdxfDrawingMerger().merge
+    if not declared:
+        with pytest.raises(InputError, match="не предоставлен"):
+            merge([base, nets], tmp_path / "m.dxf", source_names=names, absent_references=absent)
+        return
+    result = merge([base, nets], tmp_path / "m.dxf", source_names=names, absent_references=absent)
+
+    scene = EzdxfSceneReader().read(result.path)
+    require_complete_geometry(scene)
+    assert len(scene.features) == 2
+    assert any("нет в исходных данных заказчика" in note for note in result.notes)
+    assert [(b.block, b.action) for b in result.assembly.references] == [("НО", "absent_in_source")]

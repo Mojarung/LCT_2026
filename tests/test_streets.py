@@ -161,3 +161,26 @@ def test_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
     assert record["state"] == "succeeded", record.get("error")
     assert record["summary"]["placements"] > 0
     assert record["source_name"] == "Тестовая улица.dxf", "в реестре улица названа улицей"
+
+
+def test_catalog_gives_archive_paths_and_absent_references(tmp_path: Path) -> None:
+    """Сборка ищет файл ссылки по пути в архиве, как AutoCAD; ссылки без файла у заказчика
+    каталог перечисляет, чтобы прогон показал пробел, а не молча его проглотил."""
+    folder = _catalog_with_street(tmp_path, extra=True)
+    catalog = json.loads((tmp_path / "catalog.json").read_text(encoding="utf-8"))
+    catalog[0]["sources"] = {
+        "main.dxf": "Исходные данные/ГП.dwg",
+        "utilities.dxf": "Исходные данные/сети/tp.dwg",
+    }
+    catalog[0]["missing_xrefs"] = [
+        {"host": "main.dxf", "block": "НО", "reference": r".\НО.dwg", "why": "нет в архиве"},
+        {"host": "gone.dxf", "block": "X", "reference": "X.dwg", "why": "нет в архиве"},
+    ]
+    (tmp_path / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False), "utf-8")
+
+    street = JsonStreetCatalog(tmp_path).get("07-test-street")
+
+    assert street is not None
+    assert street.main == folder / "main.dxf"
+    assert street.sources == ("Исходные данные/ГП.dwg", "Исходные данные/сети/tp.dwg")
+    assert street.absent_references == (("Исходные данные/ГП.dwg", r".\НО.dwg"),)

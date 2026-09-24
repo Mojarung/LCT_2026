@@ -21,7 +21,7 @@ from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
     from pathlib import Path
 
     from ezdxf.document import Drawing
@@ -49,9 +49,20 @@ class DrawingPackage:
     notes: list[str]
     bindings: list[ReferenceBinding] = field(default_factory=list)
     resolved: set[int] = field(default_factory=set)
+    absent: frozenset[tuple[str, str]] = frozenset()
 
     @classmethod
-    def load(cls, sources: Sequence[Path], names: Sequence[str] = ()) -> DrawingPackage:
+    def load(
+        cls,
+        sources: Sequence[Path],
+        names: Sequence[str] = (),
+        absent: Collection[tuple[str, str]] = (),
+    ) -> DrawingPackage:
+        """absent - пары (файл комплекта, путь ссылки), которых нет в исходных данных заказчика.
+
+        Их составляет каталог улиц, проверив весь архив. Такая ссылка не останавливает сборку,
+        а становится названным пробелом входных данных; любая другая ненайденная - ошибка.
+        """
         labels = tuple(names) if names else tuple(str(path) for path in sources)
         if len(labels) != len(sources):
             raise InputError("Комплект: число исходных имён не совпадает с числом файлов")
@@ -88,7 +99,8 @@ class DrawingPackage:
                     pending.append(link.target)
         if len(reached) != len(sources):
             raise InputError("Комплект: замкнутый цикл внешних ссылок среди дополнительных файлов")
-        return cls(sources, labels, tuple(documents), roots, links, notes)
+        declared = frozenset((_nfc(host), _nfc(reference)) for host, reference in absent)
+        return cls(sources, labels, tuple(documents), roots, links, notes, absent=declared)
 
     def resolve(self) -> None:
         for index in self.roots:
@@ -102,6 +114,12 @@ class DrawingPackage:
         for link in self.links[index]:
             if chain and link.overlay:
                 self._exclude_nested_overlay(index, link)
+                continue
+            if (
+                link.target is None
+                and (_nfc(self.names[index]), _nfc(link.reference)) in self.absent
+            ):
+                self._skip_absent(index, link)
                 continue
             target = self._supplied_target(index, link)
             if target == 0:
@@ -124,6 +142,22 @@ class DrawingPackage:
                 self.names[link.target] if link.target is not None else None,
                 "excluded_nested_overlay",
                 0,
+            )
+        )
+
+    def _skip_absent(self, index: int, link: _Link) -> None:
+        """Файла ссылки нет в исходных данных: объектов из него на плане нет, и это видно."""
+        block = link.block
+        if len(block):
+            raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
+        _clear_xref_flags(block)
+        self.notes.append(
+            f"XREF {block.name}: файла {link.reference!r} нет в исходных данных заказчика, "
+            f"его объектов на плане нет ({self.names[index]})"
+        )
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index], block.name, link.reference, None, "absent_in_source", 0
             )
         )
 
@@ -244,6 +278,10 @@ def _match(names: tuple[str, ...], host: int, reference: str) -> int | None:
     stem = _stem_key(reference)
     slugged = [index for index, name in enumerate(names) if _stem_key(name) == stem]
     return _unambiguous(slugged, reference) if stem and slugged else None
+
+
+def _nfc(value: str) -> str:
+    return unicodedata.normalize("NFC", value)
 
 
 def _stem_key(name: str) -> str:
