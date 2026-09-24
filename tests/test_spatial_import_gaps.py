@@ -27,14 +27,15 @@ if TYPE_CHECKING:
 
 def _inject_empty_region(path: Path, *, layer: str = "Газопровод") -> None:
     # ezdxf refuses to export empty ACIS; reproduce the converter's actual tags.
-    data = path.read_text()
+    # DXF 2007+ всегда в UTF-8: кодировка ОС по умолчанию (cp1251 на Windows) портит имя слоя.
+    data = path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
     marker = "  2\nENTITIES\n"
     assert marker in data
     tags = (
         "  0\nREGION\n  5\nAFF123\n100\nAcDbEntity\n"
         f"  8\n{layer}\n100\nAcDbModelerGeometry\n 70\n1\n100\nAcDbRegion\n"
     )
-    path.write_text(data.replace(marker, marker + tags, 1))
+    path.write_bytes(data.replace(marker, marker + tags, 1).encode("utf-8"))
 
 
 @pytest.mark.parametrize("layer", ["Газопровод", "0", "arbitrary", "Грунты"])
