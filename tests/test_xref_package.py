@@ -16,7 +16,8 @@ from green.application.input_quality import require_complete_geometry
 from green.application.semantic_names import local_name
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
-from green.infrastructure.cad.merge import EzdxfDrawingMerger
+from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.merge import EzdxfDrawingMerger, _save_package
 from green.infrastructure.cad.reader import EzdxfSceneReader
 from green.infrastructure.cad.xref_package import expanded_entity_counts
 from green.interfaces.api.app import API_PREFIX, create_app
@@ -406,3 +407,26 @@ def test_reference_absent_from_customer_data_is_a_named_gap_only_when_declared(
     assert len(scene.features) == 2
     assert any("нет в исходных данных заказчика" in note for note in result.notes)
     assert [(b.block, b.action) for b in result.assembly.references] == [("НО", "absent_in_source")]
+
+
+def test_stale_dictionary_entry_pointing_at_a_block_is_dropped_before_saving(
+    tmp_path: Path,
+) -> None:
+    """Харьковская: ezdxf не переносит ассоциативные связи между файлами и оставляет в словаре
+    старый handle, а в склейке он занят определением блока. Аудит при чтении «отбирал» блок
+    словарю и падал. Такая запись удаляется при записи склейки, геометрия цела."""
+    doc = ezdxf.new("R2018")
+    block = doc.blocks.new("output[1-8]_pp")
+    block.add_line((0, 0), (1, 0))
+    doc.modelspace().add_blockref("output[1-8]_pp", (0, 0))
+    polyline = doc.modelspace().add_lwpolyline([(0, 0), (5, 0), (5, 5)])
+    extension = polyline.new_extension_dict().dictionary
+    extension._data["ACAD_ASSOCNETWORK"] = block.block  # noqa: SLF001 - так её оставляет копия
+    target = tmp_path / "merged.dxf"
+
+    dropped = _save_package(doc, target)
+
+    assert dropped == 1
+    written, _ = load_document(target)
+    assert len(written.modelspace()) == 2
+    assert written.blocks.get("output[1-8]_pp").block.dxf.name == "output[1-8]_pp"

@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ezdxf import transform, xref
+from ezdxf.entities import Dictionary, DXFEntity, is_graphic_entity
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
@@ -34,6 +35,11 @@ _MIN_SOURCES = 2
 # Файл комплекта, у которого с основой общая меньше половины меньшего из двух габаритов, скорее
 # всего другой лист или другой объект: склейка пройдёт, а посадок не будет.
 _MIN_OVERLAP = 0.5
+# Не объекты: определения блоков и элементы таблиц. В словаре им быть нельзя.
+_NOT_OBJECTS = frozenset(
+    {"BLOCK", "ENDBLK", "BLOCK_RECORD", "LAYER", "LTYPE", "STYLE", "DIMSTYLE", "UCS", "VIEW",
+     "VPORT", "APPID"}
+)  # fmt: skip
 
 type Box = tuple[float, float, float, float]
 
@@ -144,7 +150,12 @@ class EzdxfDrawingMerger:
                 "не перенесена. Расчёт на неполном комплекте остановлен."
             )
         target.parent.mkdir(parents=True, exist_ok=True)
-        _save_package(base, target)
+        dropped = _save_package(base, target)
+        if dropped:
+            notes.append(
+                f"Склейка: удалено {dropped} устаревших записей словарей (ассоциативные связи "
+                "и поля, которые ezdxf не переносит между файлами); геометрия не затронута"
+            )
         return MergeResult(path=target, notes=tuple(notes), assembly=assembly)
 
 
@@ -164,8 +175,10 @@ def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> N
         raise InputError(f"Склейка: при импорте {name} потеряны/заменены вложенные сущности")
 
 
-def _save_package(doc: Drawing, target: Path) -> None:
+def _save_package(doc: Drawing, target: Path) -> int:
+    """Записать склейку и проверить её обратным чтением; число удалённых записей словарей."""
     require_exportable_document(doc, target.name)
+    dropped = _drop_stale_dictionary_entries(doc)
     expected = expanded_entity_counts(doc.modelspace())
     pending = target.with_name(f".{target.name}.pending")
     doc.saveas(pending)
@@ -173,6 +186,29 @@ def _save_package(doc: Drawing, target: Path) -> None:
     if expanded_entity_counts(written.modelspace()) != expected:
         raise InputError("Склейка: записанный DXF потерял часть структуры объектов")
     pending.replace(target)
+    return dropped
+
+
+def _drop_stale_dictionary_entries(doc: Drawing) -> int:
+    """Убрать из словарей записи, которые указывают не на объекты.
+
+    Словарь хранит только объекты секции OBJECTS. Когда ezdxf при внедрении ссылки не может
+    скопировать объект словаря (ACAD_ASSOCNETWORK, FIELD, прокси: «copy process ignored»), в
+    словаре остаётся старый handle исходного файла, а в собранном он занят чужой сущностью:
+    полилинией или определением блока (Харьковская, 25.09.2026). Аудит при чтении «отбирает»
+    такой блок словарю и падает. Сама запись - остаток ассоциативных связей, не геометрия.
+    """
+    dropped = 0
+    for dictionary in doc.objects:
+        if not isinstance(dictionary, Dictionary):
+            continue
+        for key, value in list(dictionary.items()):
+            if isinstance(value, DXFEntity) and (
+                is_graphic_entity(value) or value.dxftype() in _NOT_OBJECTS
+            ):
+                dictionary.discard(key)
+                dropped += 1
+    return dropped
 
 
 def _normalise(doc: Drawing, factor: float, name: str) -> None:
