@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 
 import { useRuns } from '../../api/queries';
 import type { RunOut } from '../../api/types';
+import { integer, stamp } from '../../lib/format';
 
 export const RECENT_LIMIT = 12;
 
@@ -12,23 +13,16 @@ const STATE_RU: Record<string, string> = {
   failed: 'не удался',
 };
 
-/** Время прогона по часам человека, а не сервера: «23.09 12:15». */
-function when(iso: string): string {
-  const date = new Date(iso);
-  const two = (n: number) => String(n).padStart(2, '0');
-  return `${two(date.getDate())}.${two(date.getMonth() + 1)} ${two(date.getHours())}:${two(date.getMinutes())}`;
-}
-
 function placements(run: RunOut): string {
   const value = run.summary?.placements;
-  return typeof value === 'number' ? String(value) : '-';
+  return typeof value === 'number' ? integer(value) : '-';
 }
 
 export function RunsRegistry() {
   const runs = useRuns(RECENT_LIMIT);
 
   if (runs.isPending) {
-    return <p className="empty">Загружаем прогоны...</p>;
+    return <p className="empty">Загружаем прогоны…</p>;
   }
   if (runs.isError) {
     return <p className="empty">Список прогонов не загрузился: {runs.error.message}</p>;
@@ -72,7 +66,7 @@ export function RunsRegistry() {
             <td className="mono">{run.profile}</td>
             <td className="mono num">{placements(run)}</td>
             <td className="mono num nowrap">
-              <time dateTime={run.created_at}>{when(run.created_at)}</time>
+              <time dateTime={run.created_at}>{stamp(run.created_at)}</time>
             </td>
           </tr>
         ))}

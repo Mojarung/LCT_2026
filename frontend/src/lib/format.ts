@@ -1,9 +1,28 @@
 /* Числа и слова для эксперта: запятая вместо точки, русские падежи, минуты словами. */
 
-/** Метры с двумя знаками и запятой: панель читает эксперт, а не отладчик. */
-export const meters = (value: number): string => value.toFixed(2).replace('.', ',');
+/* Числа форматирует Intl по русской норме: запятая в дроби, разряды через неразрывный пробел
+ * («2 150,23», «18 780»). Координаты и размеры генплана бывают пятизначными, и без разрядов
+ * их приходится пересчитывать по цифрам. */
+const TWO = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const ONE = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const WHOLE = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+const STAMP = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
-export const decimal = (value: number): string => value.toFixed(2).replace('.', ',');
+/** Метры с двумя знаками и запятой: панель читает эксперт, а не отладчик. */
+export const meters = (value: number): string => TWO.format(value);
+
+export const decimal = (value: number): string => TWO.format(value);
+
+/** Целое число с разрядами: «18 780 посадок». */
+export const integer = (value: number): string => WHOLE.format(value);
+
+/** Время прогона по часам человека, а не сервера: «23.09, 12:15». */
+export const stamp = (iso: string): string => STAMP.format(new Date(iso));
 
 /** Русское числительное: «1 место», «2 места», «5 мест». Без него подписи приходится строить
  *  так, чтобы обойти падеж, и они кривеют. */
@@ -34,8 +53,8 @@ const KIB = 1024;
 /** Размер файла словами человека, а не байтами. */
 export function humanSize(bytes: number): string {
   if (bytes < KIB) return `${bytes} Б`;
-  if (bytes < KIB * KIB) return `${(bytes / KIB).toFixed(0)} КБ`;
-  return `${(bytes / KIB / KIB).toFixed(1).replace('.', ',')} МБ`;
+  if (bytes < KIB * KIB) return `${WHOLE.format(bytes / KIB)} КБ`;
+  return `${ONE.format(bytes / KIB / KIB)} МБ`;
 }
 
 /** Вклад посадки в индекс качества в промилле. Вклад одной посадки - десятитысячные доли
@@ -43,6 +62,6 @@ export function humanSize(bytes: number): string {
 export function permille(delta: number): { value: number; text: string; zero: boolean } {
   const value = Math.round((Number.isFinite(delta) ? delta : 0) * 1000 * 1e6) / 1e6;
   const zero = Math.abs(value) < 0.005;
-  const text = `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(2).replace('.', ',')} ‰`;
+  const text = `${value < 0 ? '−' : '+'}${TWO.format(Math.abs(value))} ‰`;
   return { value, text, zero };
 }

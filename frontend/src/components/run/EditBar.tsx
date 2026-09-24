@@ -16,7 +16,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
 
   const rebuild = async () => {
     setBusy(true);
-    say('Пересобираем DXF и объяснения, это занимает до минуты...');
+    say('Пересобираем DXF и объяснения, это занимает до минуты…');
     try {
       await editor.rebuild();
       setStale(false);
@@ -53,7 +53,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
         disabled={busy}
         onClick={() => void rebuild()}
       >
-        {busy ? 'Пересобираем...' : 'Пересобрать DXF'}
+        {busy ? 'Пересобираем…' : 'Пересобрать DXF'}
       </button>
     </div>
   );

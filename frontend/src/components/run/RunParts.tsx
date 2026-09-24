@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 
 import type { QualityJson } from '../../api/artifacts';
 import type { RunOut } from '../../api/types';
-import { decimal, plural } from '../../lib/format';
+import { decimal, integer, plural } from '../../lib/format';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
@@ -76,11 +76,11 @@ export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson
   return (
     <>
       <p className="metric">
-        <b>{total}</b>
+        <b>{integer(total)}</b>
         <span>
           {plural(total, 'посадка', 'посадки', 'посадок')} в плане
           {approval ? (
-            `, ${String(approval)} на согласование`
+            `, ${integer(approval)} на согласование`
           ) : (
             <>
               , <em>все без ограничений</em>
@@ -89,13 +89,13 @@ export function RunMetrics({ run, quality }: { run: RunOut; quality: QualityJson
         </span>
       </p>
       <p className="metric-sub">
-        <b>{rejected}</b> {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}
-        . Подоснова{' '}
+        <b>{integer(rejected)}</b>{' '}
+        {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}. Подоснова{' '}
         <em className={integrity ? undefined : 'bad'}>{integrity ? 'цела' : 'нарушена'}</em>
       </p>
       {barrierPlaces ? (
         <p className="metric-sub quality-line">
-          <b>{barrierPlaces}</b>{' '}
+          <b>{integer(barrierPlaces)}</b>{' '}
           {plural(barrierPlaces, 'место станет', 'места станут', 'мест станут')} допустимыми с
           прикорневым барьером, на карте пунктиром
         </p>

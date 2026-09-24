@@ -258,7 +258,7 @@ export function RunForm() {
         {message}
       </p>
       <button type="submit" className="primary" disabled={busy}>
-        {busy ? (street ? 'Готовим улицу...' : 'Загружаем чертёж...') : 'Запустить прогон'}
+        {busy ? (street ? 'Готовим улицу…' : 'Загружаем чертёж…') : 'Запустить прогон'}
       </button>
     </form>
   );

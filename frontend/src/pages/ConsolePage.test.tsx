@@ -126,7 +126,7 @@ describe('консоль запуска', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Запустить прогон' }));
 
-    const busy = await screen.findByRole('button', { name: 'Готовим улицу...' });
+    const busy = await screen.findByRole('button', { name: 'Готовим улицу…' });
     expect(busy).toBeDisabled();
     answer(Response.json(run({ id: 'r1' })));
   });

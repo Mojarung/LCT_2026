@@ -36,7 +36,7 @@ export function DemoStart() {
         </p>
       </div>
       <button type="button" className="ghost" disabled={busy} onClick={() => void start()}>
-        {busy ? 'Запускаем...' : 'Запустить на встроенном участке'}
+        {busy ? 'Запускаем…' : 'Запустить на встроенном участке'}
       </button>
     </div>
   );

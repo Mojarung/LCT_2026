@@ -1,3 +1,4 @@
+import { integer } from '../../lib/format';
 import type { MapItem } from '../../map/types';
 import { useWorkspace } from '../../state/workspace';
 
@@ -43,13 +44,13 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
   const top = rows[0]?.count ?? 1;
   return (
     <>
-      <h2 className="detail-heading">Состав плана: {total}</h2>
+      <h2 className="detail-heading">Состав плана: {integer(total)}</h2>
       <p className="detail-note">
         Галочка оставляет вид на карте, клик по строке подсвечивает его.
         {visible === total ? null : (
           <>
             {' '}
-            Показано {visible} из {total}.{' '}
+            Показано {integer(visible)} из {integer(total)}.{' '}
             <button type="button" className="linkish" onClick={showAll}>
               показать все
             </button>
@@ -82,7 +83,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
                   style={{ ['--share' as string]: `${((row.count / top) * 100).toFixed(1)}%` }}
                 />
                 <span className="composition-name">{row.name}</span>
-                <span className="composition-count">{row.count}</span>
+                <span className="composition-count">{integer(row.count)}</span>
               </button>
             </li>
           );

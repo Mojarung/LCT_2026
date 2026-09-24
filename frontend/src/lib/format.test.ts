@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { aboutText, clockText, decimal, humanSize, meters, permille, plural } from './format';
+import {
+  aboutText,
+  clockText,
+  decimal,
+  humanSize,
+  integer,
+  meters,
+  permille,
+  plural,
+  stamp,
+} from './format';
 
 describe('plural', () => {
   it.each([
@@ -26,6 +36,20 @@ describe('числа для эксперта', () => {
     expect(meters(2.5)).toBe('2,50');
     expect(meters(0.93)).toBe('0,93');
     expect(decimal(0.871)).toBe('0,87');
+  });
+
+  it('большие числа делят разряды неразрывным пробелом', () => {
+    const nbsp = '\u00a0';
+    expect(meters(2150.23)).toBe(`2${nbsp}150,23`);
+    expect(meters(-13567.5)).toBe(`-13${nbsp}567,50`);
+    expect(integer(18780)).toBe(`18${nbsp}780`);
+    expect(integer(302)).toBe('302');
+    expect(humanSize(1500 * 1024 * 1024)).toBe(`1${nbsp}500,0 МБ`);
+  });
+
+  it('время прогона - по часам человека, день и месяц без года', () => {
+    // Час зависит от пояса машины, минуты и дата - нет.
+    expect(stamp('2026-09-23T09:15:00Z')).toMatch(/^23\.09, \d\d:15$/);
   });
 
   it('часы хода прогона', () => {
