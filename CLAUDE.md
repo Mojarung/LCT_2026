@@ -102,6 +102,8 @@ docs/
   notes/30-pipeline-experiments.md               60 экспериментов с пайплайном посадок: что поднимает
                                                  индекс, абляция, ошибка квот, итог по 18 улицам;
                                                  сырые итоги - notes/data/pipeline-lab.jsonl
+  notes/31-react-frontend.md                     веб-интерфейс на React вместо Jinja2: решения, раздача
+                                                 бандла, перенос без перетаскивания, замеры кадра, проверка
   design-reviews/                                вердикты жюри по интерфейсу (агент `design-jury`
                                                  в .claude/agents, вызывается после правок вёрстки)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
