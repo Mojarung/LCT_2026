@@ -11,6 +11,25 @@ def name_key(value: str) -> str:
     return unicodedata.normalize("NFC", value).casefold()
 
 
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh",
+    "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",
+    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu",
+    "я": "ya",
+}  # fmt: skip
+
+
+def slug_key(value: str) -> str:
+    """Латинский ключ имени, как каталог улиц называет файлы и папки.
+
+    Внешние ссылки комплекта помнят исходные имена («00.1_10004141_Топография»), каталог
+    хранит их транслитом («00-1-10004141-topografiya»): ключ сводит оба к одному.
+    """
+    text = "".join(_TRANSLIT.get(char, char) for char in name_key(value))
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+
 def local_name(value: str) -> str:
     """XREF filenames are namespaces, not semantic labels of their children."""
     return re.split(r"\||\$\d+\$", unicodedata.normalize("NFC", value))[-1]

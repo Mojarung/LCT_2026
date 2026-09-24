@@ -12,9 +12,11 @@ from typing import TYPE_CHECKING
 from ezdxf import xref
 from ezdxf.entities import Insert
 from ezdxf.lldxf import const
+from ezdxf.math import Vec3
 
 from green.application.assembly import PackageAssembly, PackageInput, ReferenceBinding
 from green.application.errors import InputError
+from green.application.semantic_names import slug_key
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 
@@ -73,11 +75,8 @@ class DrawingPackage:
             )
             for index, doc in enumerate(documents)
         )
-        referenced = {link.target for group in links for link in group if link.target is not None}
-        if 0 in referenced:
-            raise InputError(
-                "Комплект: основа сама указана во внешней ссылке; проверьте цикл/выбор основы"
-            )
+        # Ссылка на основу не делает её «ссылаемой»: основа уже во входе (_provide_base).
+        referenced = {link.target for group in links for link in group if link.target}
         roots = (0, *(index for index in range(1, len(sources)) if index not in referenced))
         # A closed component of extra files must not silently disappear from a package.
         reached = set(roots)
@@ -100,56 +99,99 @@ class DrawingPackage:
             raise InputError(f"XREF: цикл или слишком глубокая вложенность: {self.names[index]}")
         if index in self.resolved:
             return
-        doc = self.documents[index]
         for link in self.links[index]:
-            block = link.block
             if chain and link.overlay:
-                if len(block):
-                    raise InputError(f"XREF {block.name}: вложенный overlay содержит кэш геометрии")
-                _clear_xref_flags(block)
-                self.bindings.append(
-                    ReferenceBinding(
-                        self.names[index],
-                        block.name,
-                        link.reference,
-                        self.names[link.target] if link.target is not None else None,
-                        "excluded_nested_overlay",
-                        0,
-                    )
-                )
+                self._exclude_nested_overlay(index, link)
                 continue
-            if link.target is None:
-                raise InputError(
-                    f"XREF {block.name}: файл {link.reference!r} не предоставлен в комплекте "
-                    f"для {self.names[index]}. Автоматический поиск вне комплекта запрещён."
-                )
-            if len(block):
-                raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
-            self._resolve(link.target, chain=(*chain, index))
-            source = self.documents[link.target]
-            if source.dxfversion > doc.dxfversion:
-                raise InputError(
-                    f"XREF {block.name}: версия DXF новее основы; приведите версии к общей"
-                )
-            expected = expanded_entity_counts(source.modelspace())
-            loader = xref.Loader(source, doc, conflict_policy=xref.ConflictPolicy.XREF_PREFIX)
-            loader.load_modelspace(block)
-            loader.execute(xref_prefix=block.name)
-            _clear_xref_flags(block)
-            _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
-            if expanded_entity_counts(block) != expected:
-                raise InputError(f"XREF {block.name}: при внедрении потеряны/заменены сущности")
-            self.bindings.append(
-                ReferenceBinding(
-                    self.names[index],
-                    block.name,
-                    link.reference,
-                    self.names[link.target],
-                    "embedded",
-                    len(source.modelspace()),
-                )
-            )
+            target = self._supplied_target(index, link)
+            if target == 0:
+                self._provide_base(index, link, nested=bool(chain))
+            else:
+                self._resolve(target, chain=(*chain, index))
+                self._embed(index, link, target)
         self.resolved.add(index)
+
+    def _exclude_nested_overlay(self, index: int, link: _Link) -> None:
+        block = link.block
+        if len(block):
+            raise InputError(f"XREF {block.name}: вложенный overlay содержит кэш геометрии")
+        _clear_xref_flags(block)
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index],
+                block.name,
+                link.reference,
+                self.names[link.target] if link.target is not None else None,
+                "excluded_nested_overlay",
+                0,
+            )
+        )
+
+    def _supplied_target(self, index: int, link: _Link) -> int:
+        block = link.block
+        if link.target is None:
+            raise InputError(
+                f"XREF {block.name}: файл {link.reference!r} не предоставлен в комплекте "
+                f"для {self.names[index]}. Автоматический поиск вне комплекта запрещён."
+            )
+        if len(block):
+            raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
+        return link.target
+
+    def _embed(self, index: int, link: _Link, target: int) -> None:
+        block, doc, source = link.block, self.documents[index], self.documents[target]
+        if source.dxfversion > doc.dxfversion:
+            raise InputError(
+                f"XREF {block.name}: версия DXF новее основы; приведите версии к общей"
+            )
+        expected = expanded_entity_counts(source.modelspace())
+        loader = xref.Loader(source, doc, conflict_policy=xref.ConflictPolicy.XREF_PREFIX)
+        loader.load_modelspace(block)
+        loader.execute(xref_prefix=block.name)
+        _clear_xref_flags(block)
+        _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
+        if expanded_entity_counts(block) != expected:
+            raise InputError(f"XREF {block.name}: при внедрении потеряны/заменены сущности")
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index],
+                block.name,
+                link.reference,
+                self.names[target],
+                "embedded",
+                len(source.modelspace()),
+            )
+        )
+
+    def _provide_base(self, index: int, link: _Link, *, nested: bool) -> None:
+        """Ссылка на основу комплекта: основа уже во входе, второй раз её не внедряем.
+
+        Так устроены комплекты каталога: файл границ работ ссылается на топографию, которая
+        сама загружена основой. Это верно, только если ссылка ставит основу туда, где она
+        и лежит: вставка в пространстве модели в (0, 0, 0), масштаб 1, без поворота, точка
+        вставки основы (0, 0, 0). Иначе ссылка означает второе положение основы - ошибка.
+        """
+        block = link.block
+        if nested:
+            raise InputError(
+                f"XREF {block.name}: цикл ссылок через основу {self.names[0]}: "
+                f"{self.names[index]} вложен в комплект и снова ссылается на основу"
+            )
+        inserts = _inserts_of(self.documents[index], block.name)
+        placed_as_is = Vec3(self.documents[0].header.get("$INSBASE", (0, 0, 0))).is_null and all(
+            owner == "*model_space" and _identity(insert) for owner, insert in inserts
+        )
+        if not placed_as_is:
+            raise InputError(
+                f"XREF {block.name}: ссылка на основу {self.names[0]} ставит её не на своё "
+                f"место (сдвиг, поворот, масштаб или вставка внутри блока) в {self.names[index]}"
+            )
+        _clear_xref_flags(block)
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index], block.name, link.reference, self.names[0], "provided_as_input", 0
+            )
+        )
 
     def report(self) -> PackageAssembly:
         inputs = []
@@ -195,7 +237,45 @@ def _match(names: tuple[str, ...], host: int, reference: str) -> int | None:
             return _unambiguous(exact, reference)
     base = posixpath.basename(_path_key(reference))
     matches = [index for index, key in enumerate(keys) if posixpath.basename(key) == base]
-    return _unambiguous(matches, reference) if matches else None
+    if matches:
+        return _unambiguous(matches, reference)
+    # Каталог улиц хранит файлы транслитом («00-1-10004141-topografiya.dxf»), а ссылка помнит
+    # исходное имя («00.1_10004141_Топография.dwg»): последняя попытка - ключ имени.
+    stem = _stem_key(reference)
+    slugged = [index for index, name in enumerate(names) if _stem_key(name) == stem]
+    return _unambiguous(slugged, reference) if stem and slugged else None
+
+
+def _stem_key(name: str) -> str:
+    return slug_key(posixpath.splitext(posixpath.basename(name.replace("\\", "/")))[0])
+
+
+def _inserts_of(doc: Drawing, name: str) -> list[tuple[str, Insert]]:
+    """Все вставки блока в документе с именем владельца (пространство модели или блок)."""
+    key = name.casefold()
+    found = []
+    for layout in doc.blocks:
+        owner = layout.name.casefold()
+        if owner.startswith("*paper_space"):
+            continue
+        found.extend(
+            (owner, entity)
+            for entity in layout.query("INSERT")
+            if isinstance(entity, Insert) and entity.dxf.name.casefold() == key
+        )
+    return found
+
+
+def _identity(insert: Insert) -> bool:
+    dxf = insert.dxf
+    scales = (dxf.get("xscale", 1), dxf.get("yscale", 1), dxf.get("zscale", 1))
+    return (
+        Vec3(dxf.insert).is_null
+        and all(abs(scale - 1) < 1e-9 for scale in scales)  # noqa: PLR2004 - точность double
+        and abs(dxf.get("rotation", 0) % 360) < 1e-9  # noqa: PLR2004
+        and Vec3(dxf.get("extrusion", (0, 0, 1))).isclose((0, 0, 1))
+        and insert.mcount == 1
+    )
 
 
 def _unambiguous(matches: list[int], reference: str) -> int:

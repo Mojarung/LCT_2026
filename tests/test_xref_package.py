@@ -13,6 +13,7 @@ from test_pipeline_synthetic import ROOT, _street
 
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
+from green.application.semantic_names import local_name
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
@@ -315,3 +316,63 @@ def test_closed_extra_cycle_is_not_silently_ignored(tmp_path: Path) -> None:
     _host(two, "one.dxf")
     with pytest.raises(InputError, match="цикл"):
         EzdxfDrawingMerger().merge([host, one, two], tmp_path / "combined.dxf")
+
+
+def _kit_boundary(path: Path, references: list[tuple[str, str]], *, insert: tuple = (0, 0)) -> None:
+    """Файл границ работ комплекта: ссылается на подоснову и сети их исходными CAD-именами."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    doc.layers.add("Граница работ")
+    doc.modelspace().add_lwpolyline(
+        [(0, -5), (40, -5), (40, 5), (0, 5)], close=True, dxfattribs={"layer": "Граница работ"}
+    )
+    for block_name, filename in references:
+        xref.attach(doc, block_name=block_name, filename=filename, insert=insert)
+    doc.saveas(path)
+
+
+def test_catalogue_names_resolve_boundary_references_and_keep_the_base_once(
+    tmp_path: Path,
+) -> None:
+    """Кустанайская: границы ссылаются на «00.1_10004141_Топография», файл каталога назван
+    «00-1-10004141-topografiya.dxf». Основа загружена как основа, сети внедрены один раз."""
+    base = tmp_path / "00-1-10004141-topografiya.dxf"
+    nets = tmp_path / "00-2-10004141-seti.dxf"
+    bounds = tmp_path / "01-10004141-granitsy-rabot.dxf"
+    _line(base, start=0, end=10)
+    _line(nets, start=20, end=30)
+    _kit_boundary(
+        bounds,
+        [
+            ("00.1_10004141_Топография", r"..\..\00.1_10004141_Топография.dwg"),
+            ("00.2_10004141_Сети", "00.2_10004141_Сети.dwg"),
+        ],
+    )
+
+    result = EzdxfDrawingMerger().merge([base, nets, bounds], tmp_path / "merged.dxf")
+
+    scene = EzdxfSceneReader().read(result.path)
+    require_complete_geometry(scene)
+    # Слои внедрённой ссылки названы как в AutoCAD: «00.2_10004141_Сети$0$arbitrary pipe».
+    pipes = sorted(
+        round(f.geometry.bounds[0])
+        for f in scene.features
+        if local_name(f.layer) == "arbitrary pipe"
+    )
+    assert pipes == [0, 20]
+    actions = {binding.block: binding.action for binding in result.assembly.references}
+    assert actions == {
+        "00.1_10004141_Топография": "provided_as_input",
+        "00.2_10004141_Сети": "embedded",
+    }
+
+
+def test_base_reference_with_an_offset_is_rejected(tmp_path: Path) -> None:
+    """Основа уже лежит в своих координатах: ссылка со сдвигом означала бы второе положение."""
+    base = tmp_path / "00-1-x-topografiya.dxf"
+    bounds = tmp_path / "01-x-granitsy-rabot.dxf"
+    _line(base)
+    _kit_boundary(bounds, [("00.1_X_Топография", "00.1_X_Топография.dwg")], insert=(10, 0))
+
+    with pytest.raises(InputError, match="XREF"):
+        EzdxfDrawingMerger().merge([base, bounds], tmp_path / "merged.dxf")
