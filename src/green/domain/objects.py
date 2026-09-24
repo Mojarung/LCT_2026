@@ -131,6 +131,8 @@ class Feature:
     # Distinguish closed linework from explicit fills after semantic mapping.
     # None carries no evidence that a polygon is just a boundary.
     source_entity_type: str | None = None
+    # Штрих условного знака: строка ref экземпляра SymbolInstance, которому принадлежит.
+    symbol: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +149,28 @@ class TextLabel:
     surface_role: str = "auto"
     surface_evidence: ClassificationEvidence | None = None
     block_chain: tuple[str, ...] = ()
+    # Подпись внутри условного знака: строка ref его экземпляра.
+    symbol: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolInstance:
+    """Вставка условного знака: один объект подосновы в точке вставки (дерево, куст, люк).
+
+    Примитивы знака остаются в сцене штрихами (Feature.symbol, TextLabel.symbol) со ссылкой
+    на экземпляр. Контейнеры (обёртки MicroStation, DIMTXT, анонимные и крупные блоки) не
+    знаки: знаком становится то, что внутри них.
+    """
+
+    ref: SourceRef
+    block: str
+    layer: str
+    x: float
+    y: float
+    rotation_deg: float = 0.0
+    scale: float = 1.0
+    # Сколько примитивов знака прочитано в штрихи и подписи.
+    strokes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +200,9 @@ class ReadDiagnostics:
     geometry_gaps: tuple[GeometryGap, ...] = ()
     approximation_features: int = 0
     max_approximation_error_m: float = 0.0
+    # Учёт чтения: у каждого посещённого примитива ровно один исход («feature», «label»,
+    # «insert:symbol», «skipped:<ТИП>:<причина>» ...), сумма равна сумме visited_by_type.
+    outcomes: Mapping[str, int] = field(default_factory=dict)
 
     @property
     def block_failures(self) -> tuple[str, ...]:
@@ -200,3 +227,4 @@ class Scene:
     warnings: tuple[str, ...] = field(default=())
     unit_m: float = 1.0
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
+    symbols: tuple[SymbolInstance, ...] = field(default=())
