@@ -25,6 +25,7 @@ from green.domain.objects import (
     SourceRef,
     TextLabel,
 )
+from green.infrastructure.cad.acis_region import RegionGeometryError, region_polygon
 from green.infrastructure.cad.curve_paths import (
     circle_vertices,
     ellipse_vertices,
@@ -58,7 +59,6 @@ _SKIPPED = frozenset(
         "IMAGE",
         "WIPEOUT",
         "OLE2FRAME",
-        "REGION",
         "3DSOLID",
         "BODY",
         "SURFACE",
@@ -151,6 +151,8 @@ class _Walker:
             self._label(entity, ref, layer, parent_block, chain)
         elif kind == "INSERT":
             self._insert(entity, ref, layer, chain)  # ty: ignore[invalid-argument-type]
+        elif kind == "REGION":
+            self._region(entity, ref, layer, parent_block)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
             self.skipped[kind] += 1
             if kind not in _ANNOTATIONS:
@@ -179,7 +181,7 @@ class _Walker:
                     self._gap(kind, layer, parent_block, "approximation-error-not-bounded", ref)
                 radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" else None
                 center = entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" else None
-                self.features.append(
+                self._feature(
                     Feature(
                         ref=ref,
                         layer=layer,
@@ -193,6 +195,29 @@ class _Walker:
                         else None,
                     )
                 )
+
+    def _feature(self, feature: Feature) -> None:
+        self.features.append(feature)
+
+    def _region(self, entity: Body, ref: SourceRef, layer: str, block: str | None) -> None:
+        """REGION: форма в ACIS. Внутри вставки ezdxf оставляет матрицу вставки при копии."""
+        matrix = entity.temporary_transformation().get_matrix()
+        try:
+            geometry, error = region_polygon(entity, matrix, self.flatten)
+        except RegionGeometryError as exc:
+            self.skipped["REGION"] += 1
+            self._gap("REGION", layer, block, exc.reason, ref)
+            return
+        self._feature(
+            Feature(
+                ref=ref,
+                layer=layer,
+                geometry=geometry,
+                block=block,
+                geometry_error_m=error * self.unit_m,
+                source_entity_type="REGION",
+            )
+        )
 
     def _gap(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> None:
         key = (kind, layer, block, reason)
