@@ -36,6 +36,7 @@ from green.infrastructure.cad.curve_paths import (
     spline_vertices,
 )
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
 from green.infrastructure.cad.units import AUTO, decide_units
 
@@ -48,6 +49,8 @@ if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
 
     from green.infrastructure.cad.documents import DocumentCache
+
+install_ezdxf_fixes()
 
 MAX_BLOCK_DEPTH = 8
 # Контейнер, а не знак: обёртки MicroStation, выноски DIMTXT и анонимные блоки AutoCAD

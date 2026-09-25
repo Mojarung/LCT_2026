@@ -41,6 +41,8 @@ from ezdxf.addons.drawing.recorder import (
 from ezdxf.entities import Insert, LWPolyline, Polyline
 from shapely import STRtree
 
+from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -53,6 +55,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from green.domain.objects import Scene
+
+install_ezdxf_fixes()
 
 ANNOTATION_TYPES = frozenset(
     {
