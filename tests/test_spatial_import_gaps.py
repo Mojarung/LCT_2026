@@ -16,6 +16,7 @@ from green.application.results import SourceSnapshot
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
+from green.domain.objects import GeometryGap, ReadDiagnostics, Scene
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import EzdxfIntegrityChecker, fingerprints
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
@@ -55,6 +56,27 @@ def test_empty_region_is_an_actionable_gap_regardless_of_layer(tmp_path: Path, l
     assert (gaps[0].entity_type, gaps[0].layer, gaps[0].count) == ("REGION", layer, 1)
     assert gaps[0].reason == "missing-acis-data"
     assert gaps[0].source_refs[0].endswith(":AFF123")
+
+
+def test_error_headline_names_what_is_missing_in_plain_words() -> None:
+    """Первую фразу страница неудавшегося прогона ставит заголовком (жюри, итерация 7): в ней
+    число ссылок и объектов словами, без кодов причин, ссылок на объекты и длинного тире."""
+    gap = GeometryGap("REGION", "Газопровод", None, "missing-acis-data", 3, ("h:A1", "h:A2"))
+    diagnostics = ReadDiagnostics(unresolved_xrefs=("XREF_Сети",), geometry_gaps=(gap,))
+    scene = Scene("s.dxf", "sha", "AC1032", (), read_diagnostics=diagnostics)
+    with pytest.raises(InputError) as caught:
+        require_complete_geometry(scene)
+    message = str(caught.value)
+    headline, _, details = message.partition(" Подробности: ")
+    assert headline.startswith(
+        "Чертёж прочитан не полностью: не найдена 1 внешняя ссылка, у 3 объектов нет геометрии. "
+        "Расчёт остановлен: сохраните DXF вместе с внешними ссылками"
+    )
+    assert "missing-acis-data" not in headline
+    assert "h:A1" not in headline
+    assert "XREF XREF_Сети" in details
+    assert "missing-acis-data" in details
+    assert "\N{EM DASH}" not in message
 
 
 @pytest.mark.parametrize("kind", ["region", "3dsolid", "body"])
