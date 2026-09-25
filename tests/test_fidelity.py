@@ -111,3 +111,28 @@ def test_small_batches_give_the_same_report(tmp_path: Path, monkeypatch) -> None
     assert batched.ink_m == pytest.approx(whole.ink_m)
     assert batched.missed_m == pytest.approx(whole.missed_m)
     assert [(w.x0, w.y0) for w in batched.windows] == [(w.x0, w.y0) for w in whole.windows]
+
+
+def test_annotation_inside_a_block_is_annotation_and_misses_name_the_primitive(
+    tmp_path: Path,
+) -> None:
+    """Выноска сетей внутри блока внешней ссылки - оформление, а не потерянная линия
+    вставки; пропуск называет сам примитив, а не вставку (Камчатская, 25.09.2026)."""
+    doc = ezdxf.new("R2018", setup=True)
+    note = doc.blocks.new("NETWORK")
+    note.add_line((0, 0), (30, 0))
+    note.add_leader([(10, 0), (14, 4), (20, 4)])
+    handle = doc.modelspace().add_blockref("NETWORK", (100, 100)).dxf.handle
+    path = tmp_path / "network.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    without_line = replace(
+        scene, features=tuple(f for f in scene.features if f.source_entity_type != "LINE")
+    )
+
+    report = fidelity(ezdxf.readfile(path), scene)
+    lost = fidelity(ezdxf.readfile(path), without_line)
+
+    assert report.misses == ()
+    assert report.annotation_ink_m > 0
+    assert [(m.handle, m.entity_type) for m in lost.misses] == [(handle, "LINE")]

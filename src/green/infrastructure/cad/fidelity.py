@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from ezdxf.addons.drawing.properties import BackendProperties
     from ezdxf.addons.drawing.recorder import DataRecord
     from ezdxf.document import Drawing
+    from ezdxf.entities import DXFGraphic
     from ezdxf.layouts import BaseLayout
     from ezdxf.npshapes import NumpyPath2d
     from numpy.typing import NDArray
@@ -63,6 +64,7 @@ ANNOTATION_TYPES = frozenset(
         "MLEADER",
         "ATTDEF",
         "TOLERANCE",
+        "ACAD_TABLE",
     }
 )
 # Толщина залитой фигуры, которую ещё можно объяснить шириной полилинии вокруг оси.
@@ -74,7 +76,7 @@ type _Key = tuple[str, str, str]
 
 @dataclass(frozen=True, slots=True)
 class InkMiss:
-    """Непокрытые чернила одной сущности верхнего уровня на одном слое."""
+    """Непокрытые чернила: сущность верхнего уровня, примитив, который их нарисовал, слой."""
 
     handle: str
     entity_type: str
@@ -132,14 +134,25 @@ def fidelity(
 
 
 class _Stream(Recorder):
-    """Recorder без записи: каждая запись сразу уходит в проверку."""
+    """Recorder без записи: каждая запись сразу уходит в проверку.
+
+    Движок сообщает о входе в каждую сущность, в том числе во вложенные в блок: по стеку
+    видно, что линию рисует выноска внутри вставки (оформление), и какой примитив её дал.
+    """
 
     def __init__(self, check: _Check) -> None:
         super().__init__()
         self._check = check
+        self._stack: list[str] = []
+
+    def enter_entity(self, entity: DXFGraphic, properties: object) -> None:  # noqa: ARG002
+        self._stack.append(entity.dxftype())
+
+    def exit_entity(self, entity: DXFGraphic) -> None:  # noqa: ARG002
+        self._stack.pop()
 
     def store(self, record: DataRecord, properties: BackendProperties) -> None:
-        self._check.add(record, properties)
+        self._check.add(record, properties, self._stack)
 
 
 class _Check:
@@ -151,8 +164,8 @@ class _Check:
         self.flattening = 0.01 * tolerance_m / scene.unit_m
         geometries = [f.geometry for f in scene.features if not f.geometry.is_empty]
         self.tree = STRtree(geometries) if geometries else None
-        self.types: dict[str, str] = {}
         self.keys: list[_Key] = []
+        self.annotations: list[bool] = []
         self.xy: list[NDArray[np.float64]] = []
         self.weight: list[NDArray[np.float64]] = []
         self.extra: list[NDArray[np.float64]] = []
@@ -163,13 +176,11 @@ class _Check:
         self.lost: dict[_Key, float] = defaultdict(float)
         self.where: dict[_Key, tuple[float, float]] = {}
 
-    def add(self, record: DataRecord, properties: BackendProperties) -> None:
-        handle = properties.handle
-        if handle not in self.types:
-            entity = self.doc.entitydb.get(handle) if handle else None
-            self.types[handle] = entity.dxftype() if entity is not None else "?"
+    def add(self, record: DataRecord, properties: BackendProperties, stack: list[str]) -> None:
         index = len(self.keys)
-        self.keys.append((handle, self.types[handle], properties.layer))
+        primitive = stack[-1] if stack else "?"
+        self.keys.append((properties.handle, primitive, properties.layer))
+        self.annotations.append(any(kind in ANNOTATION_TYPES for kind in stack))
         for line, filled in _polylines(record, flattening=self.flattening):
             coords = line * self.unit
             xy, weight = _cut(coords, self.tolerance)
@@ -188,7 +199,7 @@ class _Check:
         weight = np.concatenate(self.weight)
         owner = np.concatenate(self.owner)
         missed = ~self._covered(xy, self.tolerance + np.concatenate(self.extra))
-        annotation = np.array([k[1] in ANNOTATION_TYPES for k in self.keys], dtype=bool)[owner]
+        annotation = np.array(self.annotations, dtype=bool)[owner]
         drawing = ~annotation
         self.ink += float(weight[drawing].sum())
         self.missed += float(weight[drawing & missed].sum())
@@ -199,7 +210,8 @@ class _Check:
             key = self.keys[owner[position]]
             self.lost[key] += float(weight[position])
             self.where.setdefault(key, (float(xy[position, 0]), float(xy[position, 1])))
-        self.keys, self.xy, self.weight, self.extra, self.owner = [], [], [], [], []
+        self.keys, self.annotations = [], []
+        self.xy, self.weight, self.extra, self.owner = [], [], [], []
         self.pending = 0
 
     def report(self, wide_polylines: int) -> FidelityReport:
