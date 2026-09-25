@@ -184,6 +184,31 @@ def test_local_straight_hatch_repairs_only_transform_roundoff() -> None:
     assert linear_hatch_from_local_source(changed, matrix, 0.1, max_closure=0.002) is None
 
 
+@pytest.mark.parametrize(("seam", "accepted"), [(1e-16, True), (1e-5, False)])
+def test_local_hatch_source_seam_must_be_within_machine_roundoff(
+    seam: float, *, accepted: bool
+) -> None:
+    doc = ezdxf.new()
+    source = doc.modelspace().add_hatch()
+    source.paths.add_polyline_path([(0, 0), (1, 0), (1, 1), (0, 1), (0, seam)], is_closed=False)
+    rectangle(source, (1, 0, 2, 1))
+    matrix = Matrix44.translate(18_000, 15_000, 0)
+    virtual = source.copy()
+    virtual.transform(matrix)
+    path = virtual.paths.paths[1]
+    assert isinstance(path, PolylinePath)
+    path.vertices = [
+        (x - 1e-10 if abs(x - 18_001) < 1e-6 else x, y, bulge) for x, y, bulge in path.vertices
+    ]
+    with pytest.raises(HatchGeometryError, match="hatch-intersecting-boundaries"):
+        hatch_geometry(virtual, 0.1, max_closure=0.002)
+    restored = linear_hatch_from_local_source(virtual, matrix, 0.1, max_closure=0.002)
+    assert (restored is not None) == accepted
+    if restored is not None:
+        assert restored[0].area == pytest.approx(2)
+        assert restored[1] < 1e-9
+
+
 def test_zero_area_transform_artifact_does_not_change_filled_area() -> None:
     with_dangling_line = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0), (1, 1), (0, 0)])
     repaired = _valid_transformed_area(with_dangling_line, 1e-9)

@@ -93,7 +93,7 @@ def associated_polyline_error(  # noqa: PLR0913 - source and matched boundary ne
     return matches[0] if len(matches) == 1 else None
 
 
-def linear_hatch_from_local_source(  # noqa: PLR0911 - each failed geometric check rejects fallback
+def linear_hatch_from_local_source(  # noqa: C901, PLR0911 - each failed check rejects fallback
     entity: DXFPolygon,
     matrix: Matrix44,
     distance: float,
@@ -110,11 +110,15 @@ def linear_hatch_from_local_source(  # noqa: PLR0911 - each failed geometric che
         return None
     try:
         local, local_error = hatch_geometry(source, distance, max_closure=max_closure)
-        if local_error != 0:
+        local_extent = max(abs(value) for value in local.bounds)
+        local_roundoff = _LOCAL_TRANSFORM_ROUNDOFF_ULPS * math.ulp(local_extent)
+        if local_error > local_roundoff:
             return None
         local_paths = list(source.paths.rendering_paths(source.dxf.hatch_style))
         virtual_paths = list(entity.paths.rendering_paths(entity.dxf.hatch_style))
         if len(local_paths) != len(virtual_paths) or not local_paths:
+            return None
+        if any(not _straight_path(path) for path in local_paths):
             return None
         x_axis = matrix.transform_direction(Vec3(1, 0, 0))
         y_axis = matrix.transform_direction(Vec3(0, 1, 0))
@@ -133,7 +137,7 @@ def linear_hatch_from_local_source(  # noqa: PLR0911 - each failed geometric che
             virtual_ring, virtual_bound, _ = _path_polygon(
                 entity, virtual_path, distance, max_closure
             )
-            if local_bound != 0 or virtual_bound != 0:
+            if local_bound > local_roundoff or virtual_bound != 0:
                 return None
             expected = affine_transform(_checked_ring(local_ring), coefficients)
             observed = _checked_ring(virtual_ring)
@@ -143,9 +147,16 @@ def linear_hatch_from_local_source(  # noqa: PLR0911 - each failed geometric che
                 and observed.buffer(roundoff).covers(expected)
             ):
                 return None
-        return transformed, roundoff  # noqa: TRY300 - return the fully validated geometry
+        scale = max(x_axis.magnitude, y_axis.magnitude)
+        return transformed, roundoff + local_error * scale
     except HatchGeometryError, GEOSException, ValueError:
         return None
+
+
+def _straight_path(path: AbstractBoundaryPath) -> bool:
+    if isinstance(path, PolylinePath):
+        return all(bulge == 0 for _, _, bulge in path.vertices)
+    return isinstance(path, EdgePath) and all(isinstance(edge, LineEdge) for edge in path.edges)
 
 
 def _valid_transformed_area(
