@@ -72,24 +72,45 @@ def test_unread_acis_is_blocking_even_if_payload_is_present(tmp_path: Path, kind
 def test_spatial_gap_inside_rotated_block_is_not_annotation(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
     block = doc.blocks.new("unknown geometry")
+    mesh = block.add_mesh()
+    with mesh.edit_data() as data:
+        data.vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        data.faces = [(0, 1, 2, 3)]
+    doc.modelspace().add_blockref(block.name, (200, 100), dxfattribs={"rotation": 30})
+    path = tmp_path / "mesh.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    with pytest.raises(InputError, match="MESH"):
+        require_complete_geometry(scene)
+    assert scene.read_diagnostics.geometry_gaps[0].block == block.name
+
+
+def test_mask_inside_rotated_block_is_an_accounted_underlay(tmp_path: Path) -> None:
+    """Маска WIPEOUT - картинка поверх чертежа, не объект: учёт её называет, прогон идёт."""
+    doc = ezdxf.new("R2018")
+    block = doc.blocks.new("unknown geometry")
     block.add_wipeout([(0, 0), (10, 0), (10, 10), (0, 10)])
     doc.modelspace().add_blockref(block.name, (200, 100), dxfattribs={"rotation": 30})
     path = tmp_path / "mask.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
-    with pytest.raises(InputError, match="WIPEOUT"):
-        require_complete_geometry(scene)
-    assert scene.read_diagnostics.geometry_gaps[0].block == block.name
+    require_complete_geometry(scene)
+    assert scene.read_diagnostics.outcomes["skipped:WIPEOUT:underlay"] == 1
 
 
 def test_image_cannot_silently_become_available_land(tmp_path: Path) -> None:
+    """Растр - подложка (решение 25.09.2026): прогон не останавливает, но и земли не даёт:
+    объектов из картинки нет, а учёт и предупреждение называют её."""
     doc = ezdxf.new("R2018")
     image = doc.add_image_def(filename="missing-survey.png", size_in_pixel=(100, 100))
     doc.modelspace().add_image(image, insert=(0, 0), size_in_units=(20, 20))
     path = tmp_path / "raster.dxf"
     doc.saveas(path)
-    with pytest.raises(InputError, match="IMAGE"):
-        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
+    scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    assert scene.features == ()
+    assert scene.read_diagnostics.outcomes["skipped:IMAGE:underlay"] == 1
+    assert any("IMAGE" in warning for warning in scene.warnings)
 
 
 def test_failure_to_interpret_a_spatial_curve_is_reported(tmp_path: Path) -> None:

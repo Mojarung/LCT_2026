@@ -206,17 +206,32 @@ def test_exact_tree_center_has_no_outline_approximation_error(tmp_path: Path) ->
     assert scene.features[0].geometry_error_m == 0
 
 
-def test_unbounded_spline_and_repaired_ring_are_rejected(tmp_path: Path) -> None:
+def test_unbounded_spline_is_rejected(tmp_path: Path) -> None:
     doc = ezdxf.new()
     doc.modelspace().add_spline([(0, 0), (5, 8), (10, 0)])
-    doc.modelspace().add_lwpolyline([(0, 0), (5, 5), (0, 5), (5, 0)], close=True)
     source = tmp_path / "unbounded.dxf"
     doc.saveas(source)
     scene = EzdxfSceneReader().read(source, unit="m")
-    assert len(scene.features) == 2
-    assert all(f.geometry_error_m is None for f in scene.features)
+    assert len(scene.features) == 1
+    assert scene.features[0].geometry_error_m is None
     with pytest.raises(InputError, match="approximation-error-not-bounded"):
         require_complete_geometry(scene)
+
+
+def test_self_crossing_ring_is_filled_even_odd_as_a_hatch(tmp_path: Path) -> None:
+    """«Восьмёрка» из замкнутой полилинии - заливка чёт-нечет, как у штриховки (решение
+    пользователя 25.09.2026): те же линии контура, погрешность прежняя, исход помечен."""
+    doc = ezdxf.new()
+    doc.modelspace().add_lwpolyline([(0, 0), (5, 5), (0, 5), (5, 0)], close=True)
+    source = tmp_path / "bowtie.dxf"
+    doc.saveas(source)
+    scene = EzdxfSceneReader().read(source, unit="m")
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.is_valid
+    assert feature.geometry.area == pytest.approx(12.5)
+    assert feature.geometry_error_m == 0.0
+    assert scene.read_diagnostics.outcomes["feature:even-odd"] == 1
 
 
 @pytest.mark.parametrize(
@@ -228,7 +243,7 @@ def test_exact_repair_of_degenerate_drawing_keeps_its_bound(
 ) -> None:
     """Отрезок нулевой длины - точка, сложенный контур нулевой площади - линия: починка не
     меняет нарисованного, и погрешность остаётся ограниченной (Куликовская: 455 таких
-    отрезков останавливали строгий прогон). «Бабочка» с площадью по-прежнему пробел."""
+    отрезков останавливали строгий прогон)."""
     doc = ezdxf.new()
     if kind == "zero_line":
         doc.modelspace().add_line((5, 5), (5, 5))

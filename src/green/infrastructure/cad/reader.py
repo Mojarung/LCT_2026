@@ -99,6 +99,8 @@ UNDERLAYS = frozenset(
     }
 )
 _GAP_EXAMPLES = 5
+# Починка самопересекающегося контура с площадью по правилу чёт-нечет (вопрос 1 пользователя).
+_EVEN_ODD = "even-odd"
 # Тип -> (пробел, если рисунок не разобрать; пробел, если рисунок пуст; исход при успехе).
 _DRAWN = {
     "ACAD_PROXY_ENTITY": (
@@ -249,11 +251,7 @@ class _Walker:
             return self._skip(kind, layer, block, "geometry-not-readable", ref)
         if not np.isfinite(shapely.get_coordinates(geometry)).all():
             return self._skip(kind, layer, block, "non-finite-coordinates", ref)
-        if not geometry.is_valid:
-            repaired = shapely.make_valid(geometry)
-            if not _same_ink(geometry, repaired):
-                error = None
-            geometry = repaired
+        geometry, error, repairs = _repaired(geometry, error, repairs)
         clipped = False
         if self.clips:
             visible = self._clip(geometry)
@@ -714,19 +712,43 @@ def _same_dimension(original: BaseGeometry, clipped: BaseGeometry) -> BaseGeomet
 
 
 def _same_ink(drawn: BaseGeometry, repaired: BaseGeometry) -> bool:
-    """Починка ничего не переосмыслила: площадей в ней нет, а точки и линии - те же чернила.
+    """Починка ничего не переосмыслила: линии починенного - те же чернила, что нарисованы.
 
-    Отрезок нулевой длины становится точкой, сложенный контур нулевой площади - линией, и
-    погрешность остаётся прежней. Самопересекающийся контур с площадью («бабочка») - другое:
-    смысл площади при починке меняется, это пробел (решение тиммейта, test_curve_clearance).
+    Отрезок нулевой длины становится точкой, сложенный контур нулевой площади - линией.
+    Самопересекающийся контур с площадью («восьмёрка») - заливка по правилу чёт-нечет, как у
+    штриховки (решение пользователя 25.09.2026, вопрос 1): границы частей заливки - те же
+    линии контура, узлы только в точках самопересечения. Погрешность остаётся прежней.
     """
-    parts = list(shapely.get_parts(repaired))
-    while any(part.geom_type == "GeometryCollection" for part in parts):
+    lines = shapely.boundary(drawn) if drawn.geom_type in {"Polygon", "MultiPolygon"} else drawn
+    return shapely.hausdorff_distance(lines, _ink(repaired)) <= _EXACT_REPAIR
+
+
+def _ink(geometry: BaseGeometry) -> BaseGeometry:
+    """Чернила геометрии: у площадей - их границы, линии и точки - как есть."""
+    parts = list(shapely.get_parts(geometry))
+    while any(part.geom_type in {"GeometryCollection", "MultiPolygon"} for part in parts):
         parts = [p for part in parts for p in shapely.get_parts(part)]
-    if any(part.geom_type in {"Polygon", "MultiPolygon"} for part in parts):
-        return False
-    lines = shapely.boundary(drawn) if drawn.geom_type == "Polygon" else drawn
-    return shapely.hausdorff_distance(lines, repaired) <= _EXACT_REPAIR
+    return shapely.union_all(
+        [part.boundary if part.geom_type == "Polygon" else part for part in parts]
+    )
+
+
+def _repaired(
+    geometry: BaseGeometry, error: float | None, repairs: tuple[str, ...]
+) -> tuple[BaseGeometry, float | None, tuple[str, ...]]:
+    """Недопустимая геометрия чинится без смены чернил, иначе погрешность не ограничена."""
+    if geometry.is_valid:
+        return geometry, error, repairs
+    repaired = shapely.make_valid(geometry)
+    if not _same_ink(geometry, repaired):
+        return repaired, None, repairs
+    if _has_area(repaired):
+        return repaired, error, (*repairs, _EVEN_ODD)
+    return repaired, error, repairs
+
+
+def _has_area(geometry: BaseGeometry) -> bool:
+    return geometry.area > 0
 
 
 def _to_metres(
