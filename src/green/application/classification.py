@@ -8,7 +8,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from shapely.geometry import Point
+from shapely.prepared import prep
 
+from green.application.constraints import work_boundary
 from green.application.errors import InputError
 from green.application.semantic_names import local_name, material_context_requires_review, name_key
 from green.application.surface_labels import classify_labels, label_report_groups
@@ -370,6 +372,7 @@ class ClassificationGroup:
     features: int
     source_refs: tuple[str, ...]
     max_geometry_error_m: float | None
+    work_intersections: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,6 +396,8 @@ class ClassificationReport:
     groups: tuple[ClassificationGroup, ...]
     rules: tuple[RuleDescription, ...]
     unused_overrides: tuple[str, ...]
+    work_boundary_present: bool = False
+    unresolved_work_intersections: int | None = None
     labels: int = 0
     excluded_surface_labels: int = 0
     label_groups: tuple[LabelGroup, ...] = ()
@@ -402,6 +407,8 @@ class ClassificationReport:
         "are assumptions, not measured accuracy or evidence that the survey is complete. "
         "seen_in_pilot records historical observation, not confirmation for this drawing. "
         "Reference samples contain at most five objects per group."
+        " Work intersections count features touching the currently classified "
+        "work boundary; they do not make objects outside it safe to ignore."
     )
 
     @property
@@ -468,6 +475,18 @@ def classification_report(
         for key in getattr(params, "label_roles", {})
         if name_key(key) not in label_refs
     )
+    boundary = work_boundary(scene.features)
+    intersections: Counter[tuple[str, str | None, str, ObjectClass, ClassificationEvidence]] = (
+        Counter()
+    )
+    unresolved_work: int | None = None
+    if boundary is not None:
+        prepared = prep(boundary)
+        unresolved_work = 0
+        for key, items in groups.items():
+            intersections[key] = sum(prepared.intersects(item.geometry) for item in items)
+            if key[3] in {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}:
+                unresolved_work += intersections[key]
     return ClassificationReport(
         source_sha256=scene.source_sha256,
         layer_map_fingerprint=layer_map.fingerprint,
@@ -481,6 +500,7 @@ def classification_report(
                 None
                 if any(f.geometry_error_m is None for f in items)
                 else max(f.geometry_error_m or 0.0 for f in items),
+                intersections[key] if boundary is not None else None,
             )
             for key, items in groups.items()
         ),
@@ -498,6 +518,8 @@ def classification_report(
             for i, r in enumerate(layer_map.rules)
         ),
         unused_overrides=unused,
+        work_boundary_present=boundary is not None,
+        unresolved_work_intersections=unresolved_work,
         labels=len(scene.labels),
         excluded_surface_labels=sum(label.surface_role == "ignore" for label in scene.labels),
         label_groups=label_report_groups(scene.labels),

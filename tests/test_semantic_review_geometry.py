@@ -118,6 +118,36 @@ def test_review_keeps_all_objects_holes_small_shapes_and_ignored_layers(tmp_path
     assert not (tmp_path / "changed/.review-input.dxf.tmp").exists()
 
 
+def test_review_prioritizes_unknown_geometry_touching_work_boundary(tmp_path: Path) -> None:
+    source = tmp_path / "source.dxf"
+    doc = ezdxf.new("R2018")
+    doc.units = 6
+    model = doc.modelspace()
+    model.add_lwpolyline(
+        [(0, 0), (10, 0), (10, 10), (0, 10)],
+        close=True,
+        dxfattribs={"layer": "WORK"},
+    )
+    for start, end in [((1, 1), (2, 2)), ((10, 10), (11, 11)), ((20, 20), (21, 21))]:
+        model.add_line(start, end, dxfattribs={"layer": "UNMAPPED"})
+    doc.saveas(source)
+    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
+    raw = EzdxfSceneReader().read(source)
+    scene, _ = classify_scene(raw, rules, PlanParams(layer_classes={"WORK": "work_boundary"}))
+    report = classification_report(scene, rules)
+    unknown = next(group for group in report.groups if group.layer == "UNMAPPED")
+    assert report.work_boundary_present
+    assert report.unresolved_features == 3
+    assert report.unresolved_work_intersections == 2
+    assert (unknown.features, unknown.work_intersections) == (3, 2)
+
+    without_boundary, _ = classify_scene(raw, rules)
+    no_boundary_report = classification_report(without_boundary, rules)
+    assert not no_boundary_report.work_boundary_present
+    assert no_boundary_report.unresolved_work_intersections is None
+    assert all(group.work_intersections is None for group in no_boundary_report.groups)
+
+
 def test_review_marks_unreadable_hatch_and_display_mask_read_only(tmp_path: Path) -> None:
     source = tmp_path / "source.dxf"
     drawing(source)

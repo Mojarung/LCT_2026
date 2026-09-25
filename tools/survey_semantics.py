@@ -53,6 +53,8 @@ def main() -> None:
                 features=report.features,
                 semantic_ready=report.ready,
                 unresolved_features=report.unresolved_features,
+                work_boundary_present=report.work_boundary_present,
+                unresolved_work_intersections=report.unresolved_work_intersections,
                 unresolved_layers=len(
                     {g.layer for g in report.groups if g.object_class in unresolved}
                 ),

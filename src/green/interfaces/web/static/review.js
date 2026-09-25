@@ -123,14 +123,14 @@ function draw() {
 function refresh() {
   const indices = selected(), group = report.groups[Number($('group').value)];
   $('object').max = members().length;
-  $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}.` : 'Геометрических объектов нет.';
+  $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}. ${typeof group.work_intersections !== 'number' ? 'Пересечение с границей работ не измерено.' : `Пересекают границу работ: ${group.work_intersections} из ${group.features}.`}` : 'Геометрических объектов нет.';
   const current = indices.length === 1 ? data.features[indices[0]] : null;
   $('detail').textContent = current
     ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\n${current.properties.source_entity_type === 'IMAGE' ? 'Содержимое внешнего растра не прочитано. Исключайте только после проверки изображения и полноты векторных данных.' : (current.properties.uncertain_footprint ? 'Внутри ограничивающей области материал не подтверждён; назначение класса недоступно.' : `Резерв геометрии, м: ${current.properties.error_m}`)}`
     : `Выбрано объектов: ${indices.length}. Назначение применяется ко всем выбранным объектам.`;
   let unresolved = 0;
   for (const f of data.features) if (UNKNOWN.has(assignments[f.id] || f.properties.class)) unresolved++;
-  $('status').textContent = `Объектов: ${data.features.length}. Не уточнено: ${unresolved}. Ваших назначений: ${Object.keys(assignments).length}.`;
+  $('status').textContent = `Объектов: ${data.features.length}. Не уточнено: ${unresolved}.${typeof report.unresolved_work_intersections !== 'number' ? '' : ` Изначально не уточнено в границе работ: ${report.unresolved_work_intersections}.`} Ваших назначений: ${Object.keys(assignments).length}.`;
   $('assign').textContent = `Назначить класс (${indices.length} объектов)`;
   const readOnly = indices.some(i => data.features[i].properties.read_only);
   const includesRaster = indices.some(i => data.features[i].properties.source_entity_type === 'IMAGE');
@@ -240,9 +240,13 @@ try {
   groups = report.groups.map(() => []);
   paths = data.features.map((f, i) => { groups[f.properties.group].push(i); return pathOf(f.geometry); });
   groupPaths = groups.map(indices => { const path = new Path2D(); indices.forEach(i => path.addPath(paths[i])); return path; });
-  report.groups.map((g, i) => ({g, i})).sort((a, b) => Number(UNKNOWN.has(b.g.object_class)) - Number(UNKNOWN.has(a.g.object_class))).forEach(({g, i}) => {
+  report.groups.map((g, i) => ({g, i})).sort((a, b) =>
+    Number(UNKNOWN.has(b.g.object_class)) - Number(UNKNOWN.has(a.g.object_class)) ||
+    (b.g.work_intersections ?? b.g.features) - (a.g.work_intersections ?? a.g.features) ||
+    b.g.features - a.g.features
+  ).forEach(({g, i}) => {
     const option = document.createElement('option'); option.value = i;
-    option.textContent = `${g.layer} · ${g.geometry} · ${g.features} · ${CLASS_NAMES[g.object_class]}`;
+    option.textContent = `${g.layer} · ${g.geometry} · ${g.features}${typeof g.work_intersections !== 'number' ? '' : ` · в работах ${g.work_intersections}`} · ${CLASS_NAMES[g.object_class]}`;
     $('group').append(option);
   });
   for (const name of ['group', 'object', 'assign', 'reset']) $(name).disabled = !data.features.length;
