@@ -26,6 +26,13 @@ class PlantingType(StrEnum):
     LAWN = "lawn"
 
 
+class LawnKind(StrEnum):
+    """Газон плана по отношению к чертежу."""
+
+    KEPT = "kept"  # газон есть по чертежу: сохраняется или восстанавливается после посадки
+    NEW = "new"  # грунт без газона по чертежу: газон устраивается
+
+
 class Severity(StrEnum):
     """Последствие нарушения правила для кандидата в посадку."""
 
@@ -202,7 +209,23 @@ class SpeciesRestriction:
     citation: Citation
 
 
-type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction
+@dataclass(frozen=True, slots=True)
+class LawnRule:
+    """Основание газона плана (п. 3 ТЗ: травянистые покрытия).
+
+    kind ограничивает правило сохраняемым или устраиваемым газоном; None - основание любого
+    участка газона, например его обозначение на плане.
+    """
+
+    rule_id: str
+    citation: Citation
+    kind: LawnKind | None = None
+
+    def applies_to(self, kind: LawnKind) -> bool:
+        return self.kind is None or self.kind is kind
+
+
+type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction | LawnRule
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +238,7 @@ class RuleBook:
     invasive_species: tuple[InvasiveSpecies, ...] = ()
     invasive_groups: tuple[InvasiveGroupRule, ...] = ()
     species_restrictions: tuple[SpeciesRestriction, ...] = ()
+    lawn_rules: tuple[LawnRule, ...] = ()
 
     @property
     def all_rules(self) -> tuple[AnyRule, ...]:
@@ -223,6 +247,7 @@ class RuleBook:
             *self.invasive_species,
             *self.invasive_groups,
             *self.species_restrictions,
+            *self.lawn_rules,
         )
 
     def distance_rules_for(
@@ -259,6 +284,9 @@ class RuleBook:
 
     def restriction(self, kind: RestrictionKind) -> SpeciesRestriction | None:
         return next((r for r in self.species_restrictions if r.kind is kind), None)
+
+    def lawn_rules_for(self, kind: LawnKind) -> tuple[LawnRule, ...]:
+        return tuple(r for r in self.lawn_rules if r.applies_to(kind))
 
 
 def genus_of(species_lat: str) -> str:

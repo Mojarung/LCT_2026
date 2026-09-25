@@ -13,6 +13,7 @@ from green.application.params import DEFAULT_QUALITY_WEIGHTS, DEFAULT_WEIGHTS
 from green.application.symbols import SymbolRole
 from green.domain.norms import (
     CitationStatus,
+    LawnKind,
     MeasureTo,
     PlantingType,
     RestrictionKind,
@@ -99,12 +100,19 @@ class SpeciesRestrictionModel(_Strict):
     citation: CitationModel
 
 
+class LawnRuleModel(_Strict):
+    rule_id: str = Field(pattern=_RULE_ID)
+    kind: LawnKind | None = None
+    citation: CitationModel
+
+
 class RulesFile(_Strict):
     version: int = 1
     distance_rules: list[DistanceRuleModel]
     invasive_species: list[InvasiveSpeciesModel] = Field(default_factory=list)
     invasive_groups: list[InvasiveGroupModel] = Field(default_factory=list)
     species_restrictions: list[SpeciesRestrictionModel] = Field(default_factory=list)
+    lawn_rules: list[LawnRuleModel] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _every_listed_group_has_a_rule(self) -> RulesFile:
@@ -354,6 +362,8 @@ class ProfileModel(_Strict):
     shrub_fill_tree_gap_m: float = Field(default=3.0, ge=0, le=20)
     shrub_fill_shrub_gap_m: float = Field(default=2.0, ge=0, le=20)
     shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
+    lawns: bool = True
+    lawn_min_area_m2: float = Field(default=5.0, ge=0, le=10_000)
     shrub_quota_species: float = Field(default=0.20, gt=0, le=1)
     shrub_quota_genus: float = Field(default=0.35, gt=0, le=1)
     shrub_quota_family: float = Field(default=0.50, gt=0, le=1)

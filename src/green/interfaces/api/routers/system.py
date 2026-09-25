@@ -44,6 +44,7 @@ def profile(name: str, container: ContainerDep) -> ProfileOut:
         curb_hedges=params.curb_hedges,
         understory=params.understory,
         shrub_fill=params.shrub_fill,
+        lawns=params.lawns,
     )
 
 

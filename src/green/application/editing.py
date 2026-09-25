@@ -30,6 +30,7 @@ from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
 from green.application.errors import InputError
 from green.application.explain import explain
+from green.application.lawns import plan_lawns
 from green.application.params import active_distance_rules, species_distance_rules
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
@@ -254,6 +255,15 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
 
     plan = _rebuild_plan(context, [p for p in current if p is not None], catalog)
     plan = refresh_summaries(plan, context.params, catalog)
+    # Посадочные места сдвинулись: газон считается заново по той же карте покрытий прогона.
+    plan = plan_lawns(
+        plan,
+        features=context.features,
+        labels=context.labels,
+        surface=context.index_for(None).surface,
+        rulebook=context.rulebook,
+        params=context.params,
+    )
     return explain(_assess_edited(context, plan, catalog), context.rulebook)
 
 

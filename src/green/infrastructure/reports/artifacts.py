@@ -14,6 +14,7 @@ import numpy as np
 import orjson
 import shapely
 
+from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
@@ -22,6 +23,8 @@ from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from shapely.geometry.base import BaseGeometry
 
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport
@@ -33,6 +36,7 @@ if TYPE_CHECKING:
         AssortmentInfo,
         AssortmentSummary,
         Explanation,
+        Lawn,
         Plan,
         RuleCheck,
         Species,
@@ -65,8 +69,12 @@ CSV_COLUMNS = (
     "url",
     "explanation",
     "value",
+    "area_m2",
 )
 _PACKAGES = ("green", "ezdxf", "shapely", "fastapi", "pydantic")
+# Геометрия газона в plan.json: сантиметры - точность чертежа 1:500, больше знаков только
+# раздувают файл, который браузер разбирает при открытии прогона.
+_LAWN_DIGITS = 2
 
 
 class FileArtifactSink:
@@ -176,6 +184,52 @@ def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
         rows += own
     for rejection in plan.rejections:
         rows += _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
+    for lawn in plan.lawns:
+        rows += _lawn_rows(lawn, texts.get(lawn.lawn_id), rulebook)
+    return rows
+
+
+def _lawn_rows(
+    lawn: Lawn, explanation: Explanation | None, rulebook: RuleBook
+) -> list[dict[str, Any]]:
+    """Газон: строка на каждое основание участка, площадь - в своей графе."""
+    point = lawn.geometry.representative_point()
+    base = {
+        "kind": "lawn",
+        "number": lawn.number,
+        "subject_id": lawn.lawn_id,
+        "planting_type": lawn.planting_type.value,
+        "species_ru": "",
+        "species_lat": "",
+        "x": round(point.x, 3),
+        "y": round(point.y, 3),
+        "verdict": "",
+        "outcome": lawn.kind.value,
+        "reason": f"{LAWN_LABELS[lawn.kind]} газон",
+        "explanation": explanation.text if explanation else "",
+        "area_m2": round(lawn.area_m2, 2),
+    }
+    rows = []
+    for rule_id in lawn.rule_ids:
+        rule = rulebook.rule(rule_id)
+        citation = rule.citation if rule else None
+        act = rulebook.act_of(citation) if citation else None
+        rows.append(
+            {
+                **base,
+                "rule_id": rule_id,
+                "act_id": citation.act_id if citation else "",
+                "act_title": act.title if act else "",
+                "clause": citation.clause if citation else "",
+                "related": "; ".join(
+                    f"{rulebook.label_of(ref.act_id)}, {ref.clause}"
+                    for ref in (citation.related if citation else ())
+                ),
+                "citation_status": citation.status.value if citation else "",
+                "quote": citation.quote if citation else "",
+                "url": act.url if act else "",
+            }
+        )
     return rows
 
 
@@ -453,8 +507,30 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
             }
             for r in plan.rejections
         ],
+        "lawns": [
+            {
+                "id": lawn.lawn_id,
+                "number": lawn.number,
+                "planting_type": lawn.planting_type.value,
+                "kind": lawn.kind.value,
+                "area_m2": round(lawn.area_m2, 2),
+                "rule_ids": list(lawn.rule_ids),
+                "notes": list(lawn.notes),
+                "explanation": texts.get(lawn.lawn_id, ""),
+                "geometry": _geojson(lawn.geometry),
+            }
+            for lawn in plan.lawns
+        ],
         "warnings": list(plan.warnings),
     }
+
+
+def _geojson(geometry: BaseGeometry) -> dict[str, Any]:
+    """GeoJSON в координатах чертежа: внешний контур против часовой стрелки, отверстия по ней
+    (RFC 7946), так правило ненулевого обхода заливки в браузере оставляет ямы пустыми."""
+    oriented = shapely.orient_polygons(geometry)
+    rounded = shapely.transform(oriented, lambda xy: np.round(xy, _LAWN_DIGITS))
+    return orjson.loads(shapely.to_geojson(rounded))
 
 
 def _rules(rulebook: RuleBook) -> dict[str, Any]:
