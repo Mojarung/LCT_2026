@@ -259,3 +259,19 @@ def test_three_crossing_loops_count_every_crossing(tmp_path: Path) -> None:
     assert not area.covers(Point(7, 2))
     assert not area.covers(Point(3.5, 7))
     assert area.covers(Point(1, 1))
+
+
+def test_zero_area_hatch_is_read_as_the_outline_cad_draws(tmp_path: Path) -> None:
+    """Две совпадающие петли гасят заливку по чёт-нечет (шаблонная штриховка Измайловской,
+    127 м чернил): CAD рисует только контур - контур и читается, пробела нет."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    rectangle(hatch, (0, 0, 10, 10))
+    rectangle(hatch, (0, 0, 10, 10))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.geom_type in {"LineString", "MultiLineString"}
+    assert feature.geometry.length == pytest.approx(40.0)
+    assert scene.read_diagnostics.outcomes["feature:hatch-even-odd+hatch-outline"] == 1

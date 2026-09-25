@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 # Починки контура, которые попадают в учёт исходов ридера.
 EVEN_ODD = "hatch-even-odd"
 GAP_CLOSED = "hatch-gap-closed"
+OUTLINE = "hatch-outline"
 
 
 class HatchGeometryError(ValueError):
@@ -45,7 +46,7 @@ class HatchGeometryError(ValueError):
 
 def hatch_geometry(
     entity: DXFPolygon, distance: float
-) -> tuple[Polygon | MultiPolygon, float, tuple[str, ...]]:
+) -> tuple[BaseGeometry, float, tuple[str, ...]]:
     """Область штриховки, наибольшая погрешность и починки контура (пусто - контур точен)."""
     _require_supported(entity)
     rings, errors, repairs = _rings(entity, distance)
@@ -55,7 +56,14 @@ def hatch_geometry(
         except HatchGeometryError:
             pass  # контуры пересекаются: та же заливка чёт-нечет, но через узлы пересечений
     repairs.add(EVEN_ODD)
-    return _even_odd_area(rings), max(errors), tuple(sorted(repairs))
+    try:
+        return _even_odd_area(rings), max(errors), tuple(sorted(repairs))
+    except HatchGeometryError:
+        # Петли гасят заливку целиком (совпадающие контуры шаблонной штриховки): CAD рисует
+        # только контур - он и читается, линиями, без выдуманной площади.
+        repairs.add(OUTLINE)
+        outline = shapely.union_all([ring.exterior for ring in rings])
+        return outline, max(errors), tuple(sorted(repairs))
 
 
 def _require_supported(entity: DXFPolygon) -> None:
