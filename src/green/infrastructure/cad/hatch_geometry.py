@@ -147,7 +147,8 @@ def linear_hatch_from_local_source(  # noqa: C901, PLR0911 - each failed check r
                 and observed.buffer(roundoff).covers(expected)
             ):
                 return None
-        scale = max(x_axis.magnitude, y_axis.magnitude)
+        # The Frobenius norm also bounds sheared transforms from nested INSERTs.
+        scale = math.hypot(x_axis.magnitude, y_axis.magnitude)
         return transformed, roundoff + local_error * scale
     except HatchGeometryError, GEOSException, ValueError:
         return None
