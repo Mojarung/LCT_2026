@@ -7,12 +7,21 @@
  * 2. Цвета берутся из CSS-переменных: тема переключается в одном месте, карта следует за ней.
  * 3. Вид разворачивается вдоль улицы: участок работ - лента. */
 
-import type { BasemapJson, RuleCheck } from '../api/artifacts';
+import type { BasemapJson, Position, RuleCheck } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { buildChunks } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
 import type { ExistingPlant } from './existing';
-import { type Box, boundsOfPoints, contentPoints, type Point, principalAxis } from './geometry';
+import {
+  addGeometry,
+  type Box,
+  boundaryRings,
+  boundsOfPoints,
+  contentPoints,
+  coversPlan,
+  type Point,
+  principalAxis,
+} from './geometry';
 import { Palette } from './palette';
 import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
 import {
@@ -45,7 +54,6 @@ import {
   extentOf,
   fitView,
   groupView,
-  focusOf,
   scaleFromShare,
   toScreen,
   toWorld,
@@ -91,6 +99,7 @@ export class PlanEngine {
     existing: [],
     placements: [],
     rejections: [],
+    focus: null,
   };
   private readonly marks: Marks = {
     layers: DEFAULT_LAYERS,
@@ -103,6 +112,10 @@ export class PlanEngine {
   };
   private readonly palette = new Palette();
   private readonly base = document.createElement('canvas');
+  /** Маска участка работ для кэша подосновы (render.fadeOutside). */
+  private readonly mask = document.createElement('canvas');
+  /** Контуры границы работ: по ним бледнеет подоснова за участком, если они очерчивают план. */
+  private boundary: Position[][] = [];
   private readonly cleanup: (() => void)[] = [];
   private outline: Point[] = [];
   private mapBox: Box | null = null;
@@ -184,6 +197,8 @@ export class PlanEngine {
     this.dims = { key: '', checks: null, list: [] };
     this.scene.labels = basemap.labels ?? [];
     this.outline = contentPoints(basemap.features);
+    this.boundary = boundaryRings(basemap.features);
+    this.updateFocus();
     this.mapBox = validBox(basemap.bbox);
     if (!this.hasPlan()) {
       // Пока посадок нет, опора вписывания и разворота - центры объектов подосновы.
@@ -207,7 +222,22 @@ export class PlanEngine {
     if (!this.touched) this.view.rot = this.axis;
     this.ordered = orderItems(all, this.view.rot);
     if (this.marks.selected && !all.includes(this.marks.selected)) this.select(null);
+    this.updateFocus();
     this.layout();
+  }
+
+  /** Участок, вне которого подоснова бледнеет: контуры границы работ, если внутри них план.
+   *  Пока плана нет, подоснова рисуется целиком - проверить границу не по чему. */
+  private updateFocus(): void {
+    const own = coversPlan(this.boundary, this.scene.placements);
+    if (own) {
+      const path = new Path2D();
+      addGeometry(path, { type: 'Polygon', coordinates: this.boundary });
+      this.scene.focus = path;
+    } else {
+      this.scene.focus = null;
+    }
+    this.invalidate();
   }
 
   setSurface(surface: SurfaceImage | null): void {
@@ -299,16 +329,14 @@ export class PlanEngine {
 
   /* ---------- вид ---------- */
 
-  /** Вписать план. whole - весь, close - лента крупно (вид при открытии, см. view.fitView). */
-  fit(mode: 'whole' | 'close' = 'whole'): void {
+  /** Вписать весь план в свободную область между панелями (и вид при открытии, view.fitView). */
+  fit(): void {
     if (!this.bbox) return;
-    const points = this.extentPoints();
-    const ext = extentOf(this.view, points);
+    const ext = extentOf(this.view, this.extentPoints());
     const area = this.clearArea();
-    this.fitScale = fitView(ext, area, 'whole').scale;
-    // Внимание - на посадках: отказы теснятся у сетей и тянули бы вид в узел коммуникаций.
-    const focus = focusOf(this.view, this.scene.placements.length ? this.scene.placements : points);
-    Object.assign(this.view, fitView(ext, area, mode, focus));
+    const fitted = fitView(ext, area);
+    this.fitScale = fitted.scale;
+    Object.assign(this.view, fitted);
     this.touched = false;
     this.lastCenter = center(area);
     this.schedule();
@@ -342,7 +370,7 @@ export class PlanEngine {
     this.touched = false;
     this.sizeHolder();
     this.resize();
-    this.fit('whole');
+    this.fit();
   }
 
   /** Вид из ссылки: #x=..&y=..&m=.. - центр в точке чертежа и метров на пиксель, север сверху. */
@@ -368,7 +396,7 @@ export class PlanEngine {
     if (!this.bbox) return;
     const previous = this.lastCenter;
     if (!this.touched || !previous) {
-      this.fit(this.hasPlan() || this.outline.length ? 'close' : 'whole');
+      this.fit();
       return;
     }
     const area = this.clearArea();
@@ -388,7 +416,7 @@ export class PlanEngine {
       left < area.left + area.width - 40 &&
       bottom > area.top + 40 &&
       top < area.top + area.height - 40;
-    if (!visible) this.fit('close');
+    if (!visible) this.fit();
     this.schedule();
   }
 
@@ -461,7 +489,7 @@ export class PlanEngine {
     if (!this.bbox) return;
     this.sizeHolder();
     this.resize();
-    if (!this.touched) this.fit('close');
+    if (!this.touched) this.fit();
     this.invalidate();
     this.schedule();
   }
@@ -570,6 +598,7 @@ export class PlanEngine {
     if (stale || !this.cache) {
       this.cache = renderBase(
         this.base,
+        this.mask,
         rect,
         dpr,
         this.view,

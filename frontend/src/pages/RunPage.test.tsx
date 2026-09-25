@@ -293,6 +293,21 @@ describe('RunPage: finished run', () => {
     expect(legend).not.toBeVisible();
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('keeps weak places off the overview until they are asked for', async () => {
+    // Чёрные треугольники были самым контрастным знаком обзора (жюри, итерация 7): по
+    // умолчанию их нет, галочка в обозначениях включает.
+    mockApi(succeededRoutes());
+    renderApp('/runs/r1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'обозначения' }));
+    const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
+    const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
+    expect(weak).not.toBeChecked();
+    expect(within(legend).getByRole('checkbox', { name: 'Посадки плана' })).toBeChecked();
+    await userEvent.click(weak);
+    expect(useWorkspace.getState().layers.weak).toBe(true);
+  });
 });
 
 describe('RunPage: run in progress', () => {

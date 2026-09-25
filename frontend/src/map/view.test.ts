@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   extentOf,
   fitView,
-  focusOf,
   GROUP_MAX_SCALE,
   groupView,
   niceLength,
@@ -37,8 +36,7 @@ describe('вид карты', () => {
     expect(niceLength(9.9)).toBe(5);
   });
 
-  it('весь план вписывается целиком, крупный вид - лента на 55% высоты', () => {
-    // Лента 600 x 100 в области 1000 x 500: целиком масштаб 1,667, лента на трети высоты.
+  it('весь план вписывается целиком: лента 600 x 100 в области 1000 x 500 - по длине', () => {
     const ext = extentOf(
       { rot: 0 },
       [
@@ -48,22 +46,27 @@ describe('вид карты', () => {
       0,
     );
     const area = { left: 0, top: 0, width: 1000, height: 500 };
-    expect(fitView(ext, area, 'whole').scale).toBeCloseTo(1000 / 600, 9);
-    expect(fitView(ext, area, 'close').scale).toBeCloseTo((0.55 * 500) / 100, 9);
+    expect(fitView(ext, area).scale).toBeCloseTo(1000 / 600, 9);
   });
 
-  it('крупный вид не приближает сильнее трёх видов «весь план»', () => {
-    const ext = extentOf(
-      { rot: 0 },
-      [
-        { x: 0, y: 0 },
-        { x: 6000, y: 10 },
-      ],
-      0,
-    );
-    const area = { left: 0, top: 0, width: 1000, height: 500 };
-    const whole = fitView(ext, area, 'whole').scale;
-    expect(fitView(ext, area, 'close').scale).toBeCloseTo(whole * 3, 9);
+  it('вид при открытии: концы ленты не уходят под панели', () => {
+    // Панели слева (до 320 px) и справа (с 1070 px) на экране 1440: свободна середина.
+    // Длинная лента с посадками у одного конца - крупный вид прятал бы второй конец.
+    const ends = [
+      { x: 0, y: 0 },
+      { x: 1000, y: 100 },
+    ];
+    const points = [...ends, ...Array.from({ length: 40 }, (_, i) => ({ x: 800 + i * 5, y: 50 }))];
+    const ext = extentOf({ rot: 0 }, points);
+    const area = { left: 320, top: 70, width: 750, height: 760 };
+    const view = { ...fitView(ext, area), rot: 0 };
+    for (const end of ends) {
+      const { sx, sy } = toScreen(view, end.x, end.y);
+      expect(sx).toBeGreaterThanOrEqual(area.left);
+      expect(sx).toBeLessThanOrEqual(area.left + area.width);
+      expect(sy).toBeGreaterThanOrEqual(area.top);
+      expect(sy).toBeLessThanOrEqual(area.top + area.height);
+    }
   });
 
   it('вписанный план стоит по центру свободной области', () => {
@@ -76,45 +79,11 @@ describe('вид карты', () => {
       0,
     );
     const area = { left: 300, top: 50, width: 400, height: 300 };
-    const fitted = fitView(ext, area, 'whole');
+    const fitted = fitView(ext, area);
     const view = { ...fitted, rot: 0 };
     const middle = toScreen(view, 60, 35);
     expect(middle.sx).toBeCloseTo(500, 9);
     expect(middle.sy).toBeCloseTo(200, 9);
-  });
-
-  it('крупный вид встаёт туда, где посадки, и не выходит за конец ленты', () => {
-    // Лента 1000 м, почти все посадки у восточного конца: центр габаритов пришёлся бы на пустое
-    // место посередине.
-    const points = [
-      { x: 0, y: 0 },
-      ...Array.from({ length: 40 }, (_, i) => ({ x: 800 + i * 5, y: 50 })),
-      { x: 1000, y: 100 },
-    ];
-    const ext = extentOf({ rot: 0 }, points, 0);
-    const area = { left: 0, top: 0, width: 1000, height: 500 };
-    const view = { ...fitView(ext, area, 'close', focusOf({ rot: 0 }, points)), rot: 0 };
-    expect(view.scale).toBeCloseTo(2.75, 9);
-    // Окно 1000 / 2,75 = 364 м прижато к восточному концу ленты: пустого поля за концом нет.
-    expect(toWorld(view, 1000, 250).x).toBeCloseTo(1000, 6);
-    expect(toWorld(view, 0, 250).x).toBeCloseTo(1000 - 1000 / 2.75, 6);
-    // Поперёк лента помещается целиком и стоит по центру.
-    expect(toWorld(view, 500, 250).y).toBeCloseTo(50, 6);
-  });
-
-  it('если лента помещается в кадр целиком, крупный вид стоит по её центру', () => {
-    const points = [
-      { x: 0, y: 0 },
-      { x: 90, y: 0 },
-      { x: 95, y: 0 },
-      { x: 100, y: 80 },
-    ];
-    const ext = extentOf({ rot: 0 }, points, 0);
-    const area = { left: 0, top: 0, width: 1000, height: 500 };
-    const view = { ...fitView(ext, area, 'close', focusOf({ rot: 0 }, points)), rot: 0 };
-    const middle = toWorld(view, 500, 250);
-    expect(middle.x).toBeCloseTo(50, 6);
-    expect(middle.y).toBeCloseTo(40, 6);
   });
 
   it('вид из состава: посадки вне кадра вписываются, все в кадре - вид не двигается', () => {
@@ -147,16 +116,6 @@ describe('вид карты', () => {
     const view = { scale: 0.5, tx: 0, ty: 0, rot: 0 };
     const target = groupView(view, [{ x: 5000, y: 5000 }], area);
     expect(target?.scale).toBe(GROUP_MAX_SCALE);
-  });
-
-  it('медиана точек по осям вида', () => {
-    const points = [
-      { x: 0, y: 0 },
-      { x: 10, y: 4 },
-      { x: 30, y: 8 },
-    ];
-    expect(focusOf({ rot: 0 }, points)).toEqual({ u: 10, v: -4 });
-    expect(focusOf({ rot: 0 }, [])).toBeNull();
   });
 
   it('масштаб вокруг точки: точка под курсором остаётся на месте', () => {

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BasemapFeature } from '../api/artifacts';
-import { boundsOfPoints, contentPoints, principalAxis, trimmed } from './geometry';
+import {
+  boundaryRings,
+  boundsOfPoints,
+  contentPoints,
+  coversPlan,
+  insideRing,
+  principalAxis,
+  trimmed,
+} from './geometry';
 
 describe('геометрия подосновы', () => {
   it('главная ось точек вдоль прямой под 30 градусов - 30 градусов', () => {
@@ -56,6 +64,74 @@ describe('геометрия подосновы', () => {
       },
     ];
     expect(contentPoints(features)).toEqual([{ x: 5, y: 0 }]);
+  });
+
+  it('участок - замкнутые контуры границы работ одного обхода; обрывки контуром не считаются', () => {
+    const boundary = (geometry: BasemapFeature['geometry']): BasemapFeature => ({
+      type: 'Feature',
+      properties: { class: 'work_boundary' },
+      geometry,
+    });
+    // По часовой стрелке: разворачивается, чтобы контуры складывались, а не вычитались.
+    const clockwise: [number, number][] = [
+      [0, 0],
+      [0, 10],
+      [10, 10],
+      [10, 0],
+      [0, 0],
+    ];
+    const rings = boundaryRings([
+      boundary({ type: 'LineString', coordinates: clockwise }),
+      boundary({
+        type: 'LineString',
+        coordinates: [
+          [50, 0],
+          [90, 0],
+        ],
+      }),
+      boundary({
+        type: 'Polygon',
+        coordinates: [
+          [
+            [20, 0],
+            [30, 0],
+            [30, 10],
+            [20, 10],
+            [20, 0],
+          ],
+          // Дыра полигона участком остаётся: берётся только внешний контур.
+          [
+            [22, 2],
+            [22, 8],
+            [28, 8],
+            [22, 2],
+          ],
+        ],
+      }),
+    ]);
+    expect(rings).toHaveLength(2);
+    expect(rings[0]).toEqual([...clockwise].reverse());
+    expect(insideRing(5, 5, rings[0] ?? [])).toBe(true);
+    expect(insideRing(25, 5, rings[1] ?? [])).toBe(true);
+    expect(insideRing(15, 5, rings[0] ?? [])).toBe(false);
+  });
+
+  it('граница бледнит подоснову, только если очерчивает план', () => {
+    const square: [number, number][] = [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+      [0, 10],
+      [0, 0],
+    ];
+    const plan = Array.from({ length: 20 }, (_, i) => ({ x: 1 + (i % 8), y: 1 + (i % 5) }));
+    expect(coversPlan([square], plan)).toBe(true);
+    // Рамка листа в углу чертежа: внутри неё посадок нет - это не участок.
+    expect(coversPlan([square], [...plan, ...plan.map((p) => ({ x: p.x + 100, y: p.y }))])).toBe(
+      false,
+    );
+    expect(coversPlan([], plan)).toBe(false);
+    expect(coversPlan([square], [])).toBe(false);
   });
 
   it('габарит точек с запасом', () => {

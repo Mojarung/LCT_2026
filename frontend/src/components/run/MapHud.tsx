@@ -16,7 +16,7 @@ export function MapHud() {
         type="button"
         title="Показать весь план"
         onClick={() => {
-          engine.current?.fit('whole');
+          engine.current?.fit();
         }}
       >
         весь план
