@@ -471,11 +471,25 @@ def _rasterize(
 def _inside(
     extent: BaseGeometry, origin: tuple[float, float], cell: float, shape: tuple[int, int]
 ) -> NDArray[np.bool_]:
-    rows, cols = np.mgrid[0 : shape[0], 0 : shape[1]]
-    xs = origin[0] + (cols.ravel() + 0.5) * cell
-    ys = origin[1] + (rows.ravel() + 0.5) * cell
-    shapely.prepare(extent)
-    return shapely.contains_xy(extent, xs, ys).reshape(shape)
+    # Many real plans have tiny, distant material polygons in a large work
+    # boundary. Test only cell centres near each component, then combine their
+    # masks; the exact polygon stays in SurfaceMap for continuous clearances.
+    inside = np.zeros(shape, dtype=np.bool_)
+    for part in shapely.get_parts(extent):
+        if part.is_empty:
+            continue
+        x0, y0, x1, y1 = part.bounds
+        c0 = max(0, int(np.floor((x0 - origin[0]) / cell)) - 1)
+        c1 = min(shape[1], int(np.ceil((x1 - origin[0]) / cell)) + 1)
+        r0 = max(0, int(np.floor((y0 - origin[1]) / cell)) - 1)
+        r1 = min(shape[0], int(np.ceil((y1 - origin[1]) / cell)) + 1)
+        if c0 >= c1 or r0 >= r1:
+            continue
+        xs = origin[0] + (np.arange(c0, c1) + 0.5) * cell
+        ys = origin[1] + (np.arange(r0, r1) + 0.5) * cell
+        shapely.prepare(part)
+        inside[r0:r1, c0:c1] |= shapely.contains_xy(part, xs[None, :], ys[:, None])
+    return inside
 
 
 def _assign(
