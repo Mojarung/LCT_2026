@@ -39,14 +39,16 @@ from ezdxf.addons.drawing.recorder import (
     SolidLinesRecord,
 )
 from ezdxf.entities import Insert, LWPolyline, Polyline
+from ezdxf.path import from_vertices
 from shapely import STRtree
 
+from green.infrastructure.cad.curve_paths import fitted_vertices
 from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from ezdxf.addons.drawing.properties import BackendProperties
+    from ezdxf.addons.drawing.properties import BackendProperties, Properties
     from ezdxf.addons.drawing.recorder import DataRecord
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic
@@ -133,8 +135,21 @@ def fidelity(
         pdmode=0,
         max_flattening_distance=check.flattening,
     )
-    Frontend(RenderContext(doc), _Stream(check), config=config).draw_layout(doc.modelspace())
+    _CadFrontend(RenderContext(doc), _Stream(check), config=config).draw_layout(doc.modelspace())
     return check.report(_wide_polylines(doc))
+
+
+class _CadFrontend(Frontend):
+    """Движок ezdxf, где он рисует не так, как CAD: у 2D-полилинии, сглаженной сплайном, CAD
+    показывает вершины сглаживания, а ezdxf строит путь по всем вершинам вместе с рамкой."""
+
+    def draw_polyline_entity(self, entity: DXFGraphic, properties: Properties) -> None:
+        fitted = fitted_vertices(entity) if isinstance(entity, Polyline) else None
+        if not fitted or entity.has_width:  # ty: ignore[unresolved-attribute]
+            super().draw_polyline_entity(entity, properties)
+            return
+        closed = entity.is_closed  # ty: ignore[unresolved-attribute]
+        self.pipeline.draw_path(from_vertices(fitted, close=closed), properties)
 
 
 class _Stream(Recorder):

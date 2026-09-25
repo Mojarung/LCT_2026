@@ -33,6 +33,7 @@ from green.infrastructure.cad.acis_region import RegionGeometryError, region_pol
 from green.infrastructure.cad.curve_paths import (
     circle_vertices,
     ellipse_vertices,
+    fitted_vertices,
     polyline_vertices,
     spline_vertices,
 )
@@ -534,6 +535,9 @@ class _Walker:
             if isinstance(entity, LWPolyline) or (
                 isinstance(entity, Polyline) and entity.is_2d_polyline
             ):
+                if isinstance(entity, Polyline) and (fitted := fitted_vertices(entity)):
+                    # Сглажена сплайном: на экране CAD ломаная по вершинам сглаживания.
+                    return _polyline(fitted, closed=entity.is_closed), 0.0
                 points, error = polyline_vertices(entity, self.flatten)
                 if isinstance(entity, Polyline) and entity.dxf.flags & 6:
                     error = None  # fit/spline-generated vertices need separate semantics

@@ -177,3 +177,27 @@ def _split_half(control: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDAr
         left.append(level[0])
         right.append(level[-1])
     return np.array(left), np.array(right[::-1])
+
+
+# Флаги 2D-полилинии и её вершин (DXF): сглажена сплайном; вершина сглаживания; вершина рамки.
+_SPLINE_FIT = 4
+_FIT_VERTEX = 8
+_FRAME_VERTEX = 16
+
+
+def fitted_vertices(entity: Polyline) -> list[tuple[float, float]] | None:
+    """Вершины, которые CAD рисует у 2D-полилинии, сглаженной сплайном: вершины сглаживания,
+    без рамки. ezdxf строит путь по всем вершинам подряд - зигзаг между кривой и рамкой.
+    None - полилиния не сглажена сплайном или у вершин сглаживания есть дуги.
+    """
+    if not (entity.is_2d_polyline and entity.dxf.flags & _SPLINE_FIT):
+        return None
+    shown = [v for v in entity.vertices if not v.dxf.flags & _FRAME_VERTEX]
+    if not shown or any(v.dxf.get("bulge", 0.0) for v in shown):
+        return None
+    ocs = entity.ocs()
+    elevation = entity.dxf.elevation.z
+    return [
+        (point.x, point.y)
+        for point in (ocs.to_wcs((v.dxf.location.x, v.dxf.location.y, elevation)) for v in shown)
+    ]
