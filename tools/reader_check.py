@@ -31,6 +31,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from semantic_census import semantics  # noqa: E402
+
 from green.application.classification import classify_scene  # noqa: E402
 from green.application.params import PlanParams  # noqa: E402
 from green.application.semantic_names import base_name, local_name  # noqa: E402
@@ -207,7 +209,21 @@ def check(job: tuple[str, str, bool]) -> dict:
     drawn = _guarded("symbol_drawings", failures, lambda: _draw_symbols(doc, scene, slug))
     ink = _guarded("fidelity", failures, lambda: fidelity(doc, scene)) if with_fidelity else None
     fidelity_s = time.perf_counter() - started
-    vegetation = _guarded("vegetation", failures, lambda: _vegetation(doc, scene)) or {}
+    layer_map = YamlLayerMapSource(ROOT / "config" / "layer_map.yaml").load()
+    classified = _guarded(
+        "classify", failures, lambda: classify_scene(scene, layer_map, PlanParams())[0]
+    )
+    vegetation = (
+        _guarded("vegetation", failures, lambda: _vegetation(doc, classified, layer_map, scene))
+        if classified is not None
+        else None
+    ) or {}
+    dump = OUT / "semantics" / f"{slug}.jsonl"
+    meaning = (
+        _guarded("semantics", failures, lambda: semantics(classified, layer_map, dump))
+        if classified is not None
+        else None
+    ) or {}
     diagnostics = scene.read_diagnostics
     symbols = Counter(local_name(symbol.block) for symbol in scene.symbols)
     return {
@@ -248,6 +264,7 @@ def check(job: tuple[str, str, bool]) -> dict:
         "fidelity": _ink(ink) if ink is not None else None,
         "check_failures": failures,
         "vegetation": vegetation,
+        "semantics": meaning,
         "source": str(source),
         "ezdxf_messages": dict(tally.kinds.most_common()),
         "warnings": list(scene.warnings),
@@ -295,10 +312,8 @@ def _ink(report) -> dict:  # noqa: ANN001 - FidelityReport
     }
 
 
-def _vegetation(doc, scene) -> dict:  # noqa: ANN001 - Drawing, Scene
+def _vegetation(doc, classified, layer_map, scene) -> dict:  # noqa: ANN001 - Drawing, Scene, LayerMap
     """Знаки растительности: независимая перепись вставок против якорей сцены."""
-    layer_map = YamlLayerMapSource(ROOT / "config" / "layer_map.yaml").load()
-    classified, _ = classify_scene(scene, layer_map, PlanParams())
     records = [
         CensusRecord(r.base, r.layer, r.x, r.y) for r in insert_census(doc, unit_m=scene.unit_m)
     ]
