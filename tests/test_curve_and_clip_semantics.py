@@ -9,7 +9,6 @@ import ezdxf
 import pytest
 from ezdxf.xclip import XClip
 
-from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
@@ -46,9 +45,12 @@ def test_arc_remains_open_and_has_no_invented_area(
 
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("nested", [False, True])
-def test_enabled_xclip_is_an_explicit_unsupported_operation(
+def test_enabled_xclip_crops_the_block_as_cad_shows_it(
     tmp_path: Path, *, enabled: bool, nested: bool
 ) -> None:
+    """Обрезка XCLIP применяется: за рамкой нет ни грунта, ни объектов (раньше вставка с
+    обрезкой была пробелом, пока точная обрезка не поддержана; 25.09.2026 поддержана).
+    Вложенная вставка с обрезкой внутри повёрнутого блока режется своей рамкой тоже."""
     doc = ezdxf.new("R2018")
     block = doc.blocks.new("lawn")
     block.add_lwpolyline([(0, 0), (100, 0), (100, 100), (0, 100)], close=True)
@@ -63,10 +65,12 @@ def test_enabled_xclip_is_an_explicit_unsupported_operation(
     path = tmp_path / "clipped.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    assert len(scene.features) == 1
+    assert scene.features[0].geometry.area == pytest.approx(100 if enabled else 10000)
     if enabled:
-        with pytest.raises(InputError, match="XCLIP"):
-            require_complete_geometry(scene)
-    else:
-        require_complete_geometry(scene)
-        assert len(scene.features) == 1
-        assert scene.features[0].geometry.area == pytest.approx(10000)
+        # Центр рамки (5, 5) блока: вставка в (10, 20), у вложенной ещё поворот на 45 градусов.
+        centre = scene.features[0].geometry.centroid
+        half = math.sqrt(0.5)
+        expected = ((15 - 25) * half, (15 + 25) * half) if nested else (15, 25)
+        assert (centre.x, centre.y) == pytest.approx(expected)

@@ -199,7 +199,10 @@ class _Check:
         index = len(self.keys)
         primitive = stack[-1] if stack else "?"
         self.keys.append((properties.handle, primitive, properties.layer))
-        self.annotations.append(any(kind in ANNOTATION_TYPES for kind in stack))
+        # Линии, которые рисует сама вставка, а не её примитив, - рамка обрезки XCLIP: её
+        # видимость в CAD задаёт системная переменная XCLIPFRAME, это не объект чертежа.
+        frame = bool(stack) and stack[-1] in {"INSERT", "MINSERT"}
+        self.annotations.append(frame or any(kind in ANNOTATION_TYPES for kind in stack))
         for line, filled in _polylines(record, flattening=self.flattening):
             coords = line * self.unit
             xy, weight = _cut(coords, self.tolerance)

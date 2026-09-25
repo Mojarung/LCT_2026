@@ -11,11 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import shapely
 from ezdxf import bbox
 from ezdxf.entities import Insert
 from ezdxf.lldxf.encoding import decode_dxf_unicode
-from ezdxf.math import Matrix44
+from ezdxf.math import BoundingBox2d, Matrix44
 from ezdxf.xclip import XClip
+from shapely.geometry import Point, Polygon
 
 from green.application.semantic_names import base_name, local_name
 from green.infrastructure.cad.reader import (
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFGraphic
     from ezdxf.layouts import BlockLayout
+    from shapely.geometry.base import BaseGeometry
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,9 +49,25 @@ class InsertRecord:
     depth: int
 
 
+def _clip_region(clip: XClip, matrix: Matrix44) -> BaseGeometry | None:
+    """Видимая область обычной обрезки в мировых координатах: путь блока через полную
+    матрицу (у вложенной вставки собственная matrix44 - координаты родительского блока)."""
+    path = clip.get_block_clipping_path()
+    if clip.is_inverted_clip or path.is_inverted_clip:
+        return None
+    vertices = list(path.vertices)
+    if len(vertices) == 2:  # noqa: PLR2004 - прямоугольник по двум углам
+        vertices = list(BoundingBox2d(vertices).rect_vertices())
+    if len(vertices) < 3:  # noqa: PLR2004 - многоугольник
+        return None
+    world = [(v.x, v.y) for v in matrix.transform_vertices(vertices)]
+    area = shapely.make_valid(Polygon(world))
+    return area if area.area > 0 else None
+
+
 def insert_census(doc: Drawing, *, unit_m: float) -> list[InsertRecord]:
     census = _Census(doc, unit_m)
-    census.walk(doc.modelspace(), Matrix44(), None, ())
+    census.walk(doc.modelspace(), Matrix44(), None, (), ())
     return census.records
 
 
@@ -65,6 +84,7 @@ class _Census:
         matrix: Matrix44,
         parent_layer: str | None,
         chain: tuple[str, ...],
+        clips: tuple[BaseGeometry, ...],
     ) -> None:
         for entity in entities:
             if isinstance(entity, Insert):
@@ -73,12 +93,22 @@ class _Census:
                     layer = parent_layer
                 instances = entity.multi_insert() if entity.mcount > 1 else [entity]
                 for instance in instances:
-                    self._insert(instance, matrix, layer, chain)
+                    self._insert(instance, matrix, layer, chain, clips)
 
-    def _insert(self, insert: Insert, matrix: Matrix44, layer: str, chain: tuple[str, ...]) -> None:
+    def _insert(
+        self,
+        insert: Insert,
+        matrix: Matrix44,
+        layer: str,
+        chain: tuple[str, ...],
+        clips: tuple[BaseGeometry, ...],
+    ) -> None:
         clip = XClip(insert)
         if clip.has_clipping_path and clip.is_clipping_enabled:
-            return
+            region = _clip_region(clip, insert.matrix44() @ matrix)
+            if region is None:
+                return  # инвертированная обрезка: ридер тоже пропускает вставку
+            clips = (*clips, region)
         name = insert.dxf.name
         block = self.doc.blocks.get(name)
         if block is None or block.block is None or len(chain) >= MAX_BLOCK_DEPTH:
@@ -87,9 +117,11 @@ class _Census:
             return
         total = insert.matrix44() @ matrix
         if self._container(block, total):
-            self.walk(block, total, layer, (*chain, name))
+            self.walk(block, total, layer, (*chain, name), clips)
             return
         point = total.transform(block.block.dxf.get("base_point", (0, 0, 0)))
+        if not all(region.covers(Point(point.x, point.y)) for region in clips):
+            return  # знак за рамкой обрезки: на плане его нет
         decoded = decode_dxf_unicode(name)
         self.records.append(
             InsertRecord(

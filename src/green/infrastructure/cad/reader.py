@@ -55,6 +55,8 @@ if TYPE_CHECKING:
 install_ezdxf_fixes()
 
 MAX_BLOCK_DEPTH = 8
+# Исход примитива за рамкой обрезки XCLIP: CAD его не показывает, это не потеря.
+CLIPPED = "clipped:outside"
 # Починка геометрии без переосмысления: расхождение с нарисованным не больше этого (единицы
 # чертежа) - та же линия, а не новая.
 _EXACT_REPAIR = 1e-6
@@ -153,6 +155,8 @@ class _Walker:
     symbols: list[SymbolInstance] = field(default_factory=list)
     strokes: Counter[str] = field(default_factory=Counter)
     sizes: dict[str, bbox.BoundingBox | None] = field(default_factory=dict)
+    # Рамки обрезки XCLIP вставок, внутри которых идёт обход (единицы чертежа, WCS).
+    clips: list[BaseGeometry] = field(default_factory=list)
 
     def visit(  # noqa: PLR0913 - обход с явным учётом исходов
         self,
@@ -213,10 +217,20 @@ class _Walker:
             if not _same_ink(geometry, repaired):
                 error = None
             geometry = repaired
+        clipped = False
+        if self.clips:
+            visible = self._clip(geometry)
+            if visible.is_empty:
+                return CLIPPED
+            clipped = visible is not geometry
+            geometry = visible
         if error is None:
             self._gap(kind, layer, block, "approximation-error-not-bounded", ref)
-        radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" else None
-        center = entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" else None
+        # Срезанный рамкой круг - уже не крона и не ствол целиком.
+        radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" and not clipped else None
+        center = (
+            entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" and not clipped else None
+        )
         self._feature(
             Feature(
                 ref=ref,
@@ -233,6 +247,19 @@ class _Walker:
             )
         )
         return "feature"
+
+    def _visible(self, point: Point) -> bool:
+        return all(region.covers(point) for region in self.clips)
+
+    def _clip(self, geometry: BaseGeometry) -> BaseGeometry:
+        """Видимая часть внутри всех рамок; тот же объект, если он целиком внутри."""
+        for region in self.clips:
+            if region.covers(geometry):
+                continue
+            geometry = _same_dimension(geometry, geometry.intersection(region))
+            if geometry.is_empty:
+                break
+        return geometry
 
     def _proxy(  # noqa: PLR0913 - как у вставки: слой, цепочка, блок и владелец-знак
         self,
@@ -283,6 +310,10 @@ class _Walker:
             geometry, error = region_polygon(entity, matrix, self.flatten)
         except RegionGeometryError as exc:
             return self._skip("REGION", layer, block, exc.reason, ref)
+        if self.clips:
+            geometry = self._clip(geometry)
+            if geometry.is_empty:
+                return CLIPPED
         self._feature(
             Feature(
                 ref=ref,
@@ -310,7 +341,7 @@ class _Walker:
             for kind, layer, block, reason in [key]
         )
 
-    def _insert(  # noqa: PLR0911 - один исход на каждый случай вставки
+    def _insert(
         self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...], owner: str | None
     ) -> str:
         if insert.mcount > 1:
@@ -319,13 +350,15 @@ class _Walker:
                 self._insert(instance, instance_ref, layer, chain, owner)
             return "insert:multi"
         clip = XClip(insert)
+        region = None
         if clip.has_clipping_path and clip.is_clipping_enabled:
-            # virtual_entities() ignores XCLIP. Using the full block could invent
-            # positive soil evidence outside the visible crop. Until exact crop
-            # semantics are supported, expose this gap instead of guessing.
-            self.skipped["INSERT:XCLIP"] += 1
-            self._gap("INSERT", layer, insert.dxf.name, "XCLIP-not-applied", ref)
-            return "insert:xclip"
+            # virtual_entities() не знает обрезки, а блок целиком придумал бы грунт за
+            # рамкой: разобранное режется той же рамкой, что показывает CAD.
+            region = clip_region(clip)
+            if region is None:
+                self.skipped["INSERT:XCLIP"] += 1
+                self._gap("INSERT", layer, insert.dxf.name, "XCLIP-inverted-not-applied", ref)
+                return "insert:xclip"
         name = insert.dxf.name
         block = self.doc.blocks.get(name)
         if block is None or block.block is None:
@@ -337,11 +370,35 @@ class _Walker:
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
             return "insert:too-deep"
-        outcome, child_owner = self._role(insert, block, ref, layer, owner)
-        if not self._explode(insert, ref, layer, (*chain, name), child_owner):
-            self.skipped["INSERT:not-explodable"] += 1
-            return "insert:not-explodable"
-        return outcome
+        return self._placed(
+            insert, block, ref, layer, chain=(*chain, name), owner=owner, region=region
+        )
+
+    def _placed(  # noqa: PLR0913 - вставка, её блок и место в обходе
+        self,
+        insert: Insert,
+        block: BlockLayout,
+        ref: SourceRef,
+        layer: str,
+        *,
+        chain: tuple[str, ...],
+        owner: str | None,
+        region: BaseGeometry | None,
+    ) -> str:
+        """Роль и разбор вставки внутри её рамки обрезки, если рамка есть."""
+        if region is not None:
+            self.clips.append(region)
+        try:
+            outcome, child_owner = self._role(insert, block, ref, layer, owner)
+            if outcome == CLIPPED:
+                return outcome
+            if not self._explode(insert, ref, layer, chain, child_owner):
+                self.skipped["INSERT:not-explodable"] += 1
+                return "insert:not-explodable"
+            return outcome
+        finally:
+            if region is not None:
+                self.clips.pop()
 
     def _role(
         self, insert: Insert, block: BlockLayout, ref: SourceRef, layer: str, owner: str | None
@@ -356,6 +413,8 @@ class _Walker:
         if self._is_container(insert, block):
             return "insert:container", None
         point = insert.ocs().to_wcs(insert.dxf.insert)
+        if self.clips and not self._visible(Point(point.x, point.y)):
+            return CLIPPED, None
         self.symbols.append(
             SymbolInstance(
                 ref=ref,
@@ -495,6 +554,8 @@ class _Walker:
             second is not None and not np.isfinite(tuple(second)).all()
         ):
             return self._skip(entity.dxftype(), layer, block, "non-finite-text-coordinates", ref)
+        if self.clips and not self._visible(Point(point.x, point.y)):
+            return CLIPPED
         self.labels.append(
             TextLabel(
                 ref=ref,
@@ -575,6 +636,25 @@ class _Walker:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
         return messages
+
+
+def clip_region(clip: XClip) -> BaseGeometry | None:
+    """Видимая область обычной обрезки в WCS; None - инвертированная или вырожденная."""
+    path = clip.get_wcs_clipping_path()
+    if clip.is_inverted_clip or path.is_inverted_clip or len(path.vertices) < 3:  # noqa: PLR2004 - многоугольник
+        return None
+    area = shapely.make_valid(Polygon([(v.x, v.y) for v in path.vertices]))
+    return area if area.area > 0 else None
+
+
+def _same_dimension(original: BaseGeometry, clipped: BaseGeometry) -> BaseGeometry:
+    """Пересечение с рамкой без осколков меньшей размерности (касание - не рисунок)."""
+    dimension = shapely.get_dimensions(original)
+    parts = [p for p in shapely.get_parts(clipped) if shapely.get_dimensions(p) == dimension]
+    while any(p.geom_type == "GeometryCollection" for p in parts):
+        parts = [q for p in parts for q in shapely.get_parts(p)]
+    kept = [p for p in parts if shapely.get_dimensions(p) == dimension]
+    return shapely.union_all(kept) if kept else shapely.Point()
 
 
 def _same_ink(drawn: BaseGeometry, repaired: BaseGeometry) -> bool:
