@@ -11,6 +11,7 @@ import pytest
 import shapely
 from shapely.geometry import Point, box
 
+from green.application.approximation import inner_area
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.infrastructure.cad.reader import EzdxfSceneReader
@@ -184,6 +185,35 @@ def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
         rectangle(hatch, (5, 5, 15, 15))
     scene = read(doc, tmp_path)
     with pytest.raises(InputError):
+        require_complete_geometry(scene)
+
+
+def test_tiny_selfcross_lobe_is_retained_with_clearance_error(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_polyline_path(
+        [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (0.01, 0.01), (-0.01, 0.01)]
+    )
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    feature = scene.features[0]
+    assert feature.geometry.geom_type == "MultiPolygon"
+    assert feature.geometry_error_m is not None
+    assert feature.geometry_error_m == pytest.approx(math.sqrt(2) * 0.01)
+    assert not inner_area(feature).intersects(box(-0.01, 0, 0, 0.01))
+
+
+@pytest.mark.parametrize("lobe", [0.03, 0.5])
+def test_larger_selfcross_lobe_still_blocks_reading(tmp_path: Path, lobe: float) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_polyline_path(
+        [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (lobe, lobe), (-lobe, lobe)]
+    )
+    scene = read(doc, tmp_path)
+    with pytest.raises(InputError, match="hatch-invalid-ring"):
         require_complete_geometry(scene)
 
 

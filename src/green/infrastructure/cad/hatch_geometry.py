@@ -40,6 +40,9 @@ _MAX_MATCH_AREA_FRACTION = 0.02
 _MAX_MATCH_WIDTH_FRACTION = 0.02
 _MAX_ROUNDOFF_OVERLAP_FRACTION = 1e-12
 _MAX_ASSOCIATED_PATH_SIZE_FRACTION = 0.05
+_MAX_TINY_LOBE_AREA_FRACTION = 0.001
+_MAX_TINY_LOBE_DIAMETERS_PER_CLOSURE = 10
+_MAX_TINY_LOBE_BOUNDARY_SHIFT = 1e-9
 
 
 def associated_polyline_error(  # noqa: PLR0913 - source and matched boundary need their bounds
@@ -98,18 +101,66 @@ def hatch_geometry(
     style = entity.dxf.hatch_style
     if style not in {0, 1, 2}:
         raise HatchGeometryError("hatch-style-not-supported")
+    paths = list(entity.paths.rendering_paths(style))
     rings, errors = [], []
     vertices_used = 0
-    for path in entity.paths.rendering_paths(style):
+    for path in paths:
         polygon, error, count = _path_polygon(entity, path, distance, max_closure)
         vertices_used += count
         if vertices_used > MAX_VERTICES:
             raise HatchGeometryError("hatch-vertex-budget-exceeded")
-        rings.append(_checked_ring(polygon))
+        try:
+            ring = _checked_ring(polygon)
+        except HatchGeometryError:
+            repaired = (
+                _tiny_lobe_repair(polygon, max_closure * _MAX_TINY_LOBE_DIAMETERS_PER_CLOSURE)
+                if len(paths) == 1
+                else None
+            )
+            if repaired is None:
+                raise
+            area, ambiguity = repaired
+            return area, error + ambiguity
+        rings.append(ring)
         errors.append(error)
     if not rings:
         raise HatchGeometryError("hatch-no-rendered-boundary")
     return _compose_rings(rings, errors)
+
+
+def _tiny_lobe_repair(  # noqa: PLR0911 - each failed geometric bound rejects the repair
+    polygon: Polygon, max_diameter: float
+) -> tuple[MultiPolygon, float] | None:
+    """Keep every lobe only when all uncertain islands fit in a tiny error envelope."""
+    if polygon.is_empty or not math.isfinite(polygon.area) or polygon.area <= 0:
+        return None
+    try:
+        repaired = shapely.make_valid(polygon)
+        if not isinstance(repaired, MultiPolygon) or not repaired.is_valid:
+            return None
+        parts = sorted(repaired.geoms, key=lambda part: part.area, reverse=True)
+        main, satellites = parts[0], parts[1:]
+        if not satellites or main.area <= 0:
+            return None
+        satellites_area = sum(part.area for part in satellites)
+        if satellites_area > _MAX_TINY_LOBE_AREA_FRACTION * main.area:
+            return None
+        diameters = [
+            math.hypot(part.bounds[2] - part.bounds[0], part.bounds[3] - part.bounds[1])
+            for part in satellites
+        ]
+        ambiguity = max(diameters)
+        if (
+            not math.isfinite(ambiguity)
+            or ambiguity > max_diameter
+            or abs(polygon.area - main.area) > 4 * satellites_area + 1e-12
+            or polygon.boundary.hausdorff_distance(repaired.boundary)
+            > _MAX_TINY_LOBE_BOUNDARY_SHIFT
+        ):
+            return None
+        return repaired, ambiguity  # noqa: TRY300 - validated result depends on the try block
+    except GEOSException, ValueError:
+        return None
 
 
 def _checked_ring(polygon: Polygon) -> Polygon:
