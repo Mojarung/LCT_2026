@@ -57,6 +57,7 @@ def test_hatch_curves_have_native_distance_bound(
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     feature = scene.features[0]
+    assert feature.geometry_error_m is not None
     assert 0 < feature.geometry_error_m <= 0.100001
     native = [
         hatch.ocs().to_wcs((radius * math.cos(a), radius * ratio * math.sin(a), 7))
@@ -98,6 +99,44 @@ def test_multiple_external_areas_are_kept_for_each_hatch_style(tmp_path: Path, s
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     assert scene.features[0].geometry.equals(box(0, 0, 10, 10).union(box(20, 0, 30, 10)))
+
+
+@pytest.mark.parametrize("offset", [(10, 0), (10, 10)])
+def test_adjacent_hatch_rings_share_only_a_boundary(tmp_path: Path, offset: tuple) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.dxf.hatch_style = 1
+    rectangle(hatch, (0, 0, 10, 10))
+    rectangle(hatch, (offset[0], offset[1], offset[0] + 10, offset[1] + 10))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    expected = box(0, 0, 10, 10).union(box(offset[0], offset[1], offset[0] + 10, offset[1] + 10))
+    assert scene.features[0].geometry.equals(expected)
+    assert scene.features[0].geometry.area == pytest.approx(200)
+
+
+def test_nested_ring_touching_outer_boundary_is_rejected(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    rectangle(hatch, (0, 0, 10, 10))
+    rectangle(hatch, (0, 4, 4, 6), flags=16)
+    scene = read(doc, tmp_path)
+    with pytest.raises(InputError, match="hatch-intersecting-boundaries"):
+        require_complete_geometry(scene)
+
+
+def test_adjacent_rings_with_floating_point_overlap_are_unioned(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    rectangle(hatch, (0, 0, 10, 10))
+    rectangle(hatch, (math.nextafter(10, 0), 0, 20, 10))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    assert scene.features[0].geometry.hausdorff_distance(box(0, 0, 20, 10)) < 1e-12
+    assert scene.features[0].geometry.area == pytest.approx(200)
 
 
 @pytest.mark.parametrize(
@@ -162,9 +201,7 @@ def test_millimetre_seam_is_closed_with_reported_error(tmp_path: Path) -> None:
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path(
-        [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.001)], is_closed=False
-    )
+    hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.001)], is_closed=False)
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     feature = scene.features[0]
@@ -177,9 +214,7 @@ def test_large_curve_tolerance_does_not_close_centimetre_seam(tmp_path: Path) ->
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path(
-        [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.01)], is_closed=False
-    )
+    hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.01)], is_closed=False)
     source = tmp_path / "open.dxf"
     doc.saveas(source)
     scene = EzdxfSceneReader(flatten_distance_m=10).read(source)

@@ -35,6 +35,7 @@ class HatchGeometryError(ValueError):
 _MAX_CLOSURE_FRACTION = 0.02
 _MAX_MATCH_AREA_FRACTION = 0.02
 _MAX_MATCH_WIDTH_FRACTION = 0.02
+_MAX_ROUNDOFF_OVERLAP_FRACTION = 1e-12
 
 
 def hatch_geometry(
@@ -202,12 +203,16 @@ def _edge_vertices(edge: AbstractEdge, distance: float) -> tuple[list[Vec2], flo
 
 
 def _nested_area(rings: list[Polygon]) -> Polygon | MultiPolygon:
-    # Crossing/touching rings need a different topology policy; reject instead
-    # of silently repairing a material region. Use geometry, not bounding boxes.
+    # Adjacent filled rings may share an edge or vertex. Their interiors must
+    # remain disjoint; overlapping or boundary-touching nested rings are ambiguous.
     boundaries = [ring.boundary for ring in rings]
     pairs = STRtree(boundaries).query(boundaries, predicate="intersects")
-    if (pairs[0] != pairs[1]).any():
-        raise HatchGeometryError("hatch-intersecting-boundaries")
+    for first, second in zip(*pairs, strict=True):
+        if first >= second or rings[first].touches(rings[second]):
+            continue
+        overlap = rings[first].intersection(rings[second]).area
+        if overlap > _MAX_ROUNDOFF_OVERLAP_FRACTION * min(rings[first].area, rings[second].area):
+            raise HatchGeometryError("hatch-intersecting-boundaries")
     within = STRtree(rings).query(rings, predicate="within")
     containers = defaultdict(list)
     for child, parent in zip(*within, strict=True):
@@ -223,7 +228,10 @@ def _nested_area(rings: list[Polygon]) -> Polygon | MultiPolygon:
         for i, ring in enumerate(rings)
         if len(containers[i]) % 2 == 0
     ]
-    area = MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
+    area = shapely.union_all(polygons) if len(polygons) > 1 else polygons[0]
     if not area.is_valid:
         raise HatchGeometryError("hatch-invalid-nesting")
+    expected = sum(polygon.area for polygon in polygons)
+    if not math.isclose(area.area, expected, rel_tol=1e-10, abs_tol=1e-10):
+        raise HatchGeometryError("hatch-intersecting-boundaries")
     return area
