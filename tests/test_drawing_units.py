@@ -117,3 +117,26 @@ def test_stray_entity_does_not_decide_for_the_drawing(tmp_path: Path) -> None:
     decision = decide_units(doc)
     assert decision.unit_m == 1.0
     assert decision.notes == ()
+
+
+def test_header_that_geometry_contradicts_stops_with_the_numbers(tmp_path: Path) -> None:
+    """Песчаный: заголовок генплана - миллиметры от шаблона, а геометрия метровая (топооснова
+    1:500 вставлена в масштабе 1). По заголовку улица вышла бы в тысячу раз мельче; вместо
+    тихого плана на улице длиной в метр прогон останавливается и называет числа."""
+    source = tmp_path / "lying_header.dxf"
+    _street(source, insunits=INSUNITS_MM)
+    doc = ezdxf.readfile(source)
+
+    with pytest.raises(InputError, match=r"\$INSUNITS=4.*drawing_unit=m") as stop:
+        decide_units(doc)
+
+    assert "высота текста 2.5" in str(stop.value)
+    assert decide_units(doc, "m").unit_m == 1.0
+    assert decide_units(doc, "mm").unit_m == pytest.approx(0.001)
+
+
+def test_true_millimetre_street_is_not_mistaken_for_a_conflict(tmp_path: Path) -> None:
+    source = tmp_path / "millimetres.dxf"
+    _street(source, scale=MM, insunits=INSUNITS_MM)
+
+    assert decide_units(ezdxf.readfile(source)).unit_m == pytest.approx(0.001)

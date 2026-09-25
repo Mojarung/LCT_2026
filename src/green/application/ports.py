@@ -130,6 +130,9 @@ class StreetSource:
     sources: tuple[str, ...] = ()
     # Ссылки (файл комплекта, путь), файлов которых нет во всём архиве заказчика.
     absent_references: tuple[tuple[str, str], ...] = ()
+    # Единицы улицы, когда заголовок основы с геометрией спорит (Песчаный: «миллиметры»
+    # от шаблона при метровой топооснове). None - единицы решает заголовок.
+    drawing_unit: str | None = None
 
 
 class StreetCatalog(Protocol):

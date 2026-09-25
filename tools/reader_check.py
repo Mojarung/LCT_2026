@@ -136,12 +136,14 @@ def _draw_symbols(doc, scene, slug: str) -> int:  # noqa: ANN001 - Drawing, Scen
     return drawn
 
 
-def _kit_key(paths: list[Path], names: tuple[str, ...], absent: tuple) -> str:
+def _kit_key(paths: list[Path], names: tuple[str, ...], absent: tuple, unit: str) -> str:
     digest = hashlib.sha256()
     for path in paths:
         stat = path.stat()
         digest.update(f"{path.name}|{stat.st_size}|{stat.st_mtime_ns}".encode())
-    digest.update(json.dumps([names, absent], ensure_ascii=False).encode())
+    # Явные единицы улицы - часть ключа; «auto» нет, чтобы не терять прежние склейки.
+    extra = [unit] if unit != "auto" else []
+    digest.update(json.dumps([names, absent, *extra], ensure_ascii=False).encode())
     return digest.hexdigest()[:16]
 
 
@@ -155,11 +157,13 @@ def check(job: tuple[str, str, bool]) -> dict:
     if street is None:
         return {"slug": slug, "error": "нет в каталоге"}
     paths = [street.main, *street.extra]
+    # Единицы улицы из каталога, когда заголовок основы с геометрией спорит (Песчаный).
+    unit = street.drawing_unit or "auto"
     started = time.perf_counter()
     notes: list[str] = []
     source = street.main
     if street.extra:
-        key = _kit_key(paths, street.sources, street.absent_references)
+        key = _kit_key(paths, street.sources, street.absent_references, unit)
         cached = OUT / "cache" / f"{slug}-{key}.dxf"
         if not cached.exists():
             cached.parent.mkdir(parents=True, exist_ok=True)
@@ -167,6 +171,7 @@ def check(job: tuple[str, str, bool]) -> dict:
                 result = EzdxfDrawingMerger().merge(
                     paths,
                     cached,
+                    unit=unit,
                     source_names=street.sources,
                     absent_references=street.absent_references,
                 )
@@ -187,7 +192,7 @@ def check(job: tuple[str, str, bool]) -> dict:
     merged_s = time.perf_counter() - started
     documents = DocumentCache(capacity=1)
     try:
-        scene = EzdxfSceneReader(documents=documents).read(source)
+        scene = EzdxfSceneReader(documents=documents).read(source, unit=unit)
     except Exception as error:  # noqa: BLE001
         return {
             "slug": slug,
@@ -218,6 +223,7 @@ def check(job: tuple[str, str, bool]) -> dict:
         },
         "symbol_drawings": drawn,
         "unit_m": scene.unit_m,
+        "drawing_unit": unit,
         "visited": dict(diagnostics.visited_by_type),
         "outcomes": dict(diagnostics.outcomes),
         "gaps": [

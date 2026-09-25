@@ -68,6 +68,16 @@ UTILITY = re.compile(r"(?<![а-я])(tp|up|kl|pp)(?![a-z])|коммуникац|�
 BOUNDARY = re.compile(r"(?<![a-z])brd(?![a-z])|границ\w*\s*работ", re.I)
 #: Потолок на комплект: планшетов на улицу бывает до трёх, видов сетей четыре, плюс границы.
 MAX_FILES = 16
+# Единицы улицы, когда заголовок основы с геометрией спорит (решение 25.09.2026: заголовку
+# верим, пока геометрия ему явно не противоречит; противоречие снимается только явно).
+UNIT_OVERRIDES = {
+    "2-peschanyy-pereulok": (
+        "m",
+        "заголовок генплана - миллиметры от шаблона, а геометрия метровая: топооснова 1:500 "
+        "вставлена в масштабе 1, координатные кресты через 50 единиц, текст высотой около 1",
+    ),
+}
+
 
 def slugify(name: str) -> str:
     """Имя папки улицы -> короткий латинский идентификатор для путей и адресов.
@@ -396,8 +406,13 @@ class Kit:
                     self.add(member, "ссылка")
                 continue
             self.missing.append(
-                {"host": self.files[host], "block": block, "reference": reference,
-                 "overlay": overlay, "why": how}
+                {
+                    "host": self.files[host],
+                    "block": block,
+                    "reference": reference,
+                    "overlay": overlay,
+                    "why": how,
+                }
             )
 
 
@@ -438,7 +453,9 @@ def main() -> None:
             continue
         print(head)
         for pick in street.picks:
-            print(f"    [{pick.role:<12}] {pick.size / 1024 / 1024:6.1f} МБ  {Path(pick.path).name}")
+            print(
+                f"    [{pick.role:<12}] {pick.size / 1024 / 1024:6.1f} МБ  {Path(pick.path).name}"
+            )
     if args.list:
         return
 
@@ -453,8 +470,14 @@ def main() -> None:
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         while True:
             jobs = [
-                (member, kit.street.slug, kit.roles[member], args.converter, str(out),
-                 kit.files[member])
+                (
+                    member,
+                    kit.street.slug,
+                    kit.roles[member],
+                    args.converter,
+                    str(out),
+                    kit.files[member],
+                )
                 for kit in kits
                 for member in kit.queued
             ]
@@ -497,6 +520,9 @@ def main() -> None:
                 "failed": {kit.files[m]: kit.failed[m] for m in kit.failed},
             }
         )
+        if kit.street.slug in UNIT_OVERRIDES:
+            unit, reason = UNIT_OVERRIDES[kit.street.slug]
+            catalog[-1] |= {"drawing_unit": unit, "drawing_unit_reason": reason}
         print(
             f"{kit.street.number:>2}. {kit.street.slug}: файлов {len(done)}, "
             f"по ссылкам {sum(1 for m in done if kit.roles[m] == 'ссылка')}, "

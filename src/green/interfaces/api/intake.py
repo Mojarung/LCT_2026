@@ -151,6 +151,10 @@ def accept_street_run(
     значит держать event loop на время копирования.
     """
     values = parse_overrides(overrides)
+    # Единицы из каталога - когда заголовок основы с геометрией спорит; явный выбор
+    # человека сильнее каталога.
+    if street.drawing_unit and "drawing_unit" not in values:
+        values["drawing_unit"] = street.drawing_unit
     # Имя прогона проходит ту же проверку, что имя загруженного файла, поэтому расширение
     # обязательно: в реестре человек ищет улицу по названию, а не по имени файла из архива.
     record = container.runs.register(

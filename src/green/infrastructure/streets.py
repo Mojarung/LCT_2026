@@ -79,6 +79,7 @@ class JsonStreetCatalog:
                     size_mb=round(size / _MB, 1),
                     sources=sources,
                     absent_references=absent,
+                    drawing_unit=str(row["drawing_unit"]) if row.get("drawing_unit") else None,
                 )
             )
         return tuple(sorted(streets, key=lambda street: street.number))

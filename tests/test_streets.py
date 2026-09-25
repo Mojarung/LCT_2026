@@ -11,6 +11,7 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from test_pipeline_synthetic import ROOT, _street
 
@@ -18,6 +19,7 @@ from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.infrastructure.streets import JsonStreetCatalog
 from green.interfaces.api.app import create_app
+from green.interfaces.api.intake import accept_street_run
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -184,3 +186,27 @@ def test_catalog_gives_archive_paths_and_absent_references(tmp_path: Path) -> No
     assert street.main == folder / "main.dxf"
     assert street.sources == ("Исходные данные/ГП.dwg", "Исходные данные/сети/tp.dwg")
     assert street.absent_references == (("Исходные данные/ГП.dwg", r".\НО.dwg"),)
+
+
+def test_street_units_from_the_catalog_reach_the_run(tmp_path: Path) -> None:
+    """Песчаный: заголовок генплана говорит «миллиметры», геометрия метровая. Каталог знает
+    ответ, и прогон улицы получает drawing_unit из него, если человек не задал единицы сам."""
+    _catalog_with_street(tmp_path)
+    catalog = json.loads((tmp_path / "catalog.json").read_text(encoding="utf-8"))
+    catalog[0]["drawing_unit"] = "m"
+    (tmp_path / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False), "utf-8")
+    street = JsonStreetCatalog(tmp_path).get("07-test-street")
+    assert street is not None
+    assert street.drawing_unit == "m"
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+
+    record = accept_street_run(container=container, background=BackgroundTasks(), street=street)
+    own = accept_street_run(
+        container=container,
+        background=BackgroundTasks(),
+        street=street,
+        overrides='{"drawing_unit": "mm"}',
+    )
+
+    assert record.overrides["drawing_unit"] == "m"
+    assert own.overrides["drawing_unit"] == "mm"
