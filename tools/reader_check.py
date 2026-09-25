@@ -202,10 +202,12 @@ def check(job: tuple[str, str, bool]) -> dict:
         }
     read_s = time.perf_counter() - started
     doc = documents.load(source)[0]
-    drawn = _draw_symbols(doc, scene, slug)
-    ink = fidelity(doc, scene) if with_fidelity else None
+    # Сбой проверки после чтения пишется в итог улицы, а не обрывает весь прогон.
+    failures: dict[str, str] = {}
+    drawn = _guarded("symbol_drawings", failures, lambda: _draw_symbols(doc, scene, slug))
+    ink = _guarded("fidelity", failures, lambda: fidelity(doc, scene)) if with_fidelity else None
     fidelity_s = time.perf_counter() - started
-    vegetation = _vegetation(doc, scene)
+    vegetation = _guarded("vegetation", failures, lambda: _vegetation(doc, scene)) or {}
     diagnostics = scene.read_diagnostics
     symbols = Counter(local_name(symbol.block) for symbol in scene.symbols)
     return {
@@ -244,11 +246,20 @@ def check(job: tuple[str, str, bool]) -> dict:
         "symbol_blocks": dict(symbols.most_common()),
         "symbol_detail": _symbol_detail(scene),
         "fidelity": _ink(ink) if ink is not None else None,
+        "check_failures": failures,
         "vegetation": vegetation,
         "source": str(source),
         "ezdxf_messages": dict(tally.kinds.most_common()),
         "warnings": list(scene.warnings),
     }
+
+
+def _guarded(name: str, failures: dict[str, str], action):  # noqa: ANN001, ANN202
+    try:
+        return action()
+    except Exception:  # noqa: BLE001 - причина уходит в итог улицы
+        failures[name] = traceback.format_exc(limit=8)
+        return None
 
 
 def _ink(report) -> dict:  # noqa: ANN001 - FidelityReport
@@ -358,10 +369,15 @@ def _summary(row: dict) -> str:
             f"чернил пропущено {ink['missed_m']} м ({ink['missed_share']:.3%}), "
             f"худшее окно {ink['worst_window_share']:.2%}"
         )
-    trees = next((c for c in row["vegetation"]["classes"] if c["class"] == "existing_tree"), None)
+    trees = next(
+        (c for c in row["vegetation"].get("classes", []) if c["class"] == "existing_tree"), None
+    )
     if trees is not None:
         parts.append(f"деревьев {trees['source']}/{trees['scene']}")
-    parts.append("растительность сходится" if row["vegetation"]["matches"] else "РАСХОЖДЕНИЕ")
+    if row["vegetation"]:
+        parts.append("растительность сходится" if row["vegetation"]["matches"] else "РАСХОЖДЕНИЕ")
+    if row.get("check_failures"):
+        parts.append("СБОЙ ПРОВЕРКИ: " + ", ".join(row["check_failures"]))
     return ", ".join(parts)
 
 
