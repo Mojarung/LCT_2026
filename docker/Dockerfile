@@ -8,6 +8,7 @@ ARG UBUNTU_VERSION=26.04
 ARG UV_VERSION=0.12.15
 ARG PYTHON_VERSION=3.14
 ARG LIBREDWG_VERSION=0.14
+ARG NODE_VERSION=24
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
@@ -27,6 +28,15 @@ RUN ./configure --prefix=/opt/libredwg --disable-shared --enable-static --disabl
     && make -j"$(nproc)" -C programs \
     && install -d /opt/libredwg/bin \
     && install -s programs/dwg2dxf programs/dwgread /opt/libredwg/bin/
+
+# Веб-интерфейс (frontend/, React + Vite) собирается в своей стадии: в рабочем образе node
+# нет, туда попадает только статический бандл со Swagger UI внутри (без CDN).
+FROM node:${NODE_VERSION}-slim AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY frontend ./
+RUN npm run build
 
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 ARG PYTHON_VERSION
@@ -64,12 +74,14 @@ COPY --from=libredwg /opt/libredwg/bin /usr/local/bin
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/venv /opt/venv
 COPY config /app/config
+COPY --from=web /web/dist /app/web
 RUN useradd --system --uid 10001 --create-home green \
     && install -d -o green /data/runs
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     GREEN_CONFIG_DIR=/app/config \
     GREEN_RUNS_DIR=/data/runs \
+    GREEN_WEB_DIR=/app/web \
     GREEN_LOG_JSON=true
 WORKDIR /app
 USER green

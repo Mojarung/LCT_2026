@@ -11,12 +11,14 @@ flowchart LR
         browser["Браузер: веб-интерфейс /<br/>Swagger /docs, curl / скрипт"]
     end
     subgraph host["Сервер или ноутбук с Docker (МосТех.ОС)"]
-        subgraph image["Образ green (Ubuntu 26.04, 640-840 МБ)"]
+        subgraph image["Образ green (Ubuntu 26.04, 640-850 МБ)"]
             api["Granian ASGI :8000<br/>FastAPI /api/v1"]
+            web["React-бандл /app/web<br/>интерфейс / и Swagger UI /docs"]
             cli["green CLI<br/>run / audit / inspect / verify"]
             core["Ядро: ezdxf, Shapely, numpy, scipy<br/>config/: rules.yaml, layer_map.yaml, species.yaml, profiles/"]
             dwg["dwg2dxf (LibreDWG 0.14)<br/>ODA File Converter по флагу сборки"]
             api --> core
+            api --> web
             cli --> core
             core --> dwg
         end
@@ -69,8 +71,11 @@ flowchart LR
    ```
 
    Веб-интерфейс: `http://localhost:8000/` - загрузка чертежа, карта плана, объяснения по пунктам
-   НПА, правка посадок. Внешних запросов не делает, интернет на стенде не нужен.
-   Swagger: `http://localhost:8000/docs`. Схема без запущенного сервера: `docs/openapi.json`.
+   НПА, правка посадок. Это React-приложение (`frontend/`): его собирает стадия `node:24-slim`
+   того же Dockerfile, в рабочем образе node нет, только статический бандл в `/app/web`.
+   Внешних запросов не делает, интернет на стенде не нужен.
+   Swagger: `http://localhost:8000/docs`, статика Swagger UI тоже из бандла (без CDN). Схема без
+   запущенного сервера: `docs/openapi.json`.
 
    Опциональная сборка с ODA File Converter (лицензия ODA; сравнительная полнота конвертации в этой ветке не установлена): `docker compose build --build-arg WITH_ODA=true`.
 
@@ -106,8 +111,13 @@ flowchart LR
 ```bash
 uv sync                                   # Python 3.14 и зависимости из uv.lock
 uv run green run улица.dxf --profile strict
+(cd frontend && npm ci && npm run build)  # веб-интерфейс в frontend/dist, нужен Node 24
 uv run green serve --port 8000
 ```
+
+Без собранного интерфейса `/` отвечает 503 с этой командой, API и Swagger работают.
+Разработка интерфейса: `green serve --port 8010` и `npm run dev` в `frontend/` (Vite проксирует
+`/api` на 8010).
 
 Для DWG нужен `dwg2dxf` (LibreDWG 0.14) в `PATH` или путь в `GREEN_LIBREDWG_BINARY`; без него принимаются только DXF.
 
@@ -119,6 +129,7 @@ uv run green serve --port 8000
 |---|---|---|
 | `GREEN_CONFIG_DIR` | `config` (`/app/config` в образе) | нормы, классификатор слоёв, каталог видов, профили |
 | `GREEN_RUNS_DIR` | `var/runs` (`/data/runs` в образе) | прогоны API: вход, артефакты, статусы |
+| `GREEN_WEB_DIR` | `frontend/dist` (`/app/web` в образе) | собранный веб-интерфейс и Swagger UI |
 | `GREEN_DEFAULT_PROFILE` | `strict` | профиль, если запрос его не задал |
 | `GREEN_CONVERTER` | `auto` | `auto`, `libredwg`, `oda`, `none` |
 | `GREEN_LIBREDWG_BINARY`, `GREEN_ODA_BINARY` | `dwg2dxf`, `ODAFileConverter` | пути к конвертерам |

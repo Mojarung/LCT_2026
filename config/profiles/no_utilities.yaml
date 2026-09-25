@@ -1,7 +1,7 @@
 description: Чертёж без подземных сетей (например, выгрузка АСУ ОДХ). Посадки ставятся, но помечаются «требует согласования».
 planting_type: tree
 species_code: tilia_cordata
-spacing_m: 6.0  # 743-ПП, п. 3.6.4, табл. 3.6.2: однорядная посадка деревьев 5-6 м
+spacing_m: 5.0  # 743-ПП, п. 3.6.4, табл. 3.6.2: однорядная 5-6 м, групповая 5-7 м; нижняя граница (docs/notes/30)
 curb_offsets_m: [2.0, 2.5, 3.0]
 require_utility_data: false
 unknown_lines_as_utility: true

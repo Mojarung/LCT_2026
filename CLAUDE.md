@@ -36,11 +36,22 @@ src/green/
                    editing (правка плана: проверка точки, перенос, удаление, кэш контекстов прогонов),
                    progress (этапы прогона, веса из замеров, оценка доли и остатка для интерфейса),
                    quality/ (индекс качества плана: 10 слагаемых с основаниями, проверка перед
-                   оценкой, штрафы, точный вклад каждой посадки; notes/29)
+                   оценкой, штрафы, точный вклад каждой посадки; weights.py - веса по анкетам
+                   экспертов, метод Саати; coverage.py - точная длина бортов под кронами;
+                   notes/29), refine (сдвиг слабых мест от сетей, пока индекс растёт, сдвинутый
+                   план снова проходит validation), shrub_rows (ряд кустарника у борта под кронами
+                   аллеи и изгородь вдоль остальных бортов до 720 кустов на 1 км), understory
+                   (малая группа кустарника под кроной дерева без нижнего яруса), shrub_fill
+                   (группы кустарника на газоне до 600 на 1 км по МГСН В.1) - все внутри варианта
+                   плана до validate_plan и на индексе placement.planting_index с политиками
+                   проверки: ямы не перекрываются (от ствола от 2,1 м, между кустами от 1 м),
+                   лишние кусты этих этапов снимает validation.trim_to_quotas; размещение: аллея,
+                   газон и добор зоны (modes: fill), портфель вариантов (portfolio) - см. notes/30
   infrastructure/  cad/ (ezdxf reader: экземпляры знаков SymbolInstance и учёт исхода каждого
                    примитива; acis_region - REGION из ACIS; xref_package - комплект по внешним
                    ссылкам; fidelity - сверка чернил: исходник рисуется движком ezdxf, каждая линия
-                   ищется в сцене с допуском 0,15 м; census - перепись вставок-знаков своим обходом; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
+                   ищется в сцене с допуском 0,15 м, полоса широкой полилинии - по её ширине;
+                   census - перепись вставок-знаков своим обходом; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
                    улицы: запасной прогон, когда каталог улиц не смонтирован), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    streets (каталог улиц пилота из dataset/streets_dxf/catalog.json),
@@ -49,17 +60,36 @@ src/green/
   interfaces/      cli/main.py (`green run|audit|inspect|verify|serve|openapi`, cyclopts),
                    api/ (FastAPI /api/v1, Swagger, RFC 9457; intake - общий приём файлов,
                    routers/edits - проверка точки, правки, пересборка),
-                   web/ (Jinja2-страницы, canvas-карта плана с растровым кэшем и отсечением,
-                   панель обозначений со слоями, фильтр по видам, ползунок масштаба, правка
-                   посадок; пока прогон идёт - чертёж на карте сразу после чтения и полоса
-                   хода с процентами по GET /runs/{id}; статика в web/static, внешних запросов
-                   нет, node в образе нет)
+                   web/spa.py (раздача собранного React-бандла из GREEN_WEB_DIR: файлы бандла,
+                   на маршруты клиента index.html, 404 на отсутствующий файл, 503 без сборки;
+                   /docs - Swagger UI из бандла, без CDN; ReDoc убран)
+frontend/          веб-интерфейс: React 19 + TypeScript + Vite, SPA ходит только в /api/v1
+                   (спека и план - docs/plans/2026-09-23-react-frontend-*.md, заметка notes/31).
+                   src/pages (ConsolePage - запуск и реестр прогонов, RunPage - рабочее место,
+                   ModelsPage - /models, база моделей растений), src/components/{console,run,detail},
+                   src/map (движок карты на canvas без React: чанки Path2D, растровый кэш, отсечение,
+                   ввод; view.ts - вписывание по медиане посадок; models.ts - база моделей: форма
+                   кроны, листва и цветение всех 55 видов каталога, тест сверяет с species.yaml;
+                   sprites.ts - кроны вектором в кэше спрайтов; paper.ts - бумажная подоснова: газон
+                   и асфальт из карты покрытий фактурой, штриховка зданий; existing.ts - существующие
+                   насаждения бледными кронами; dimensions.ts - размерные выноски выбранной посадки),
+                   src/state (Zustand; editor.ts - правки по очереди, пересборка до нового
+                   updated_at), src/api (клиент, RFC 9457, TanStack Query), src/lib (формат, цитаты
+                   норм, переопределения профиля, альтернативы вида), src/styles (токены: основная
+                   тема «бумага» как на слайдах, тёмная «графит и кость» по переключателю);
+                   npm run dev (прокси /api на :8010), npm test (vitest), npm run build -> dist/,
+                   npm run e2e (Playwright на живом бэкенде :8012)
 config/            acts.yaml, rules.yaml (85 правил: 55 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 84 основание сверено, 14 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц), symbols.yaml (словарь условных знаков: 179 кодов переписи 19 улиц -> класс и роль), vocabulary.yaml (слова имён незнакомых слоёв и блоков -> класс, снос, отрицание, проектная грамматика),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
-docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
+docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset;
+                   стадия node:24-slim собирает frontend/ в /app/web (GREEN_WEB_DIR), node в образе нет
 docker/cadcheck/   образ проверки DXF в LibreCAD под Linux: Xvfb + xdotool, два снимка на файл (docs/deploy.md)
-tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, prepare_streets.py
+tools/             dwg_scan.py, dwg_summary.py (Кирилл); quality_weights.py (веса по анкетам);
+                   research/quality_robustness.py (Монте-Карло по весам); research/pipeline_lab.py
+                   (стенд экспериментов с пайплайном: кэш улиц, этапы, E00-E59 в lab_experiments.py,
+                   прототипы этапов в lab_stages.py, итоговая таблица lab_report.py, устойчивость к
+                   весам lab_robustness.py, абляция lab_ablation.py); extract_street.py, prepare_streets.py
                    (комплект улицы из архива по внешним ссылкам основного чертежа + catalog.json с путями в
                    архиве и ссылками без файла; ODA по умолчанию), converter_diff.py (LibreDWG против ODA по
                    каждому объекту), xref_census.py, reader_check.py (чтение всех улиц: учёт, пробелы, знаки,
@@ -77,6 +107,9 @@ docs/
   requirements/planting-requirements.md          требования к посадке по 10 актам заказчика: цитата, статус в сервисе, пробелы;
                                                  quotes.yaml - цитаты, проверка tools/research/check_law_quotes.py
   plans/2026-09-16-assortment.md                 спецификация и план подбора ассортимента
+  quality-weights.md, quality-ahp-example.yaml   веса индекса: процедура OECD/Саати, анкета, проверка
+  plans/2026-09-22-quality-literature.md         источники весов и целей индекса (33, со статусами)
+  plans/2026-09-22-shrub-row-research.md         ряд кустарника у борта: сторона, высота, правила SR-1..18
   plans/2026-09-22-green-index-research.md       ресерч: критерии качества расстановки, откуда числа,
                                                  предложение сводного индекса и вклада каждой посадки
   notes/01..07 (Кирилл: журнал, данные, решения, проблемы, скан DWG, карта покрытий, сверка норм),
@@ -94,6 +127,15 @@ docs/
   notes/28-all-streets.md                        прогон по всем 19 улицам каталога: числа и замечания
   notes/29-quality-index.md                      индекс качества плана и ценность посадки: устройство,
                                                  решения по данным, числа по улицам, ограничения
+  notes/30-pipeline-experiments.md               60 экспериментов с пайплайном посадок: что поднимает
+                                                 индекс, абляция, ошибка квот, итог по 18 улицам;
+                                                 сырые итоги - notes/data/pipeline-lab.jsonl
+  notes/31-react-frontend.md                     веб-интерфейс на React вместо Jinja2: решения, раздача
+                                                 бандла, перенос без перетаскивания, замеры кадра, проверка
+  notes/32-lossless-reading.md                   чтение DXF без потерь и незнакомые чертежи: учёт
+                                                 примитивов, сверка чернил, вывод классов, итоги по улицам
+  notes/33-paper-map-and-plant-models.md         карта в стиле слайдов и база моделей растений: слои,
+                                                 55 моделей, выноски норм, выбор по стволу, легенда
   design-reviews/                                вердикты жюри по интерфейсу (агент `design-jury`
                                                  в .claude/agents, вызывается после правок вёрстки)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`
@@ -104,12 +146,13 @@ dataset/           датасет и конвертированные DXF, в gi
 ТЗ/                research.md — внешний ресерч (в git); tz_dpioos_2026.pdf/.txt — ТЗ, только локально (документы заказчика не коммитим)
 ```
 
-Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (веб-интерфейс на `/` с выбором улицы пилота, Swagger на `/docs`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
+Запуск: `uv sync`, `uv run green inspect file.dxf`, `uv run green run file.dxf --profile strict --set spacing_m=6`, `uv run green run file.dxf --inventory перечётка.xls` (существующие деревья в квотах разнообразия), `uv run green verify in.dxf out/<run>/result.dxf`, `uv run green audit план.dxf --plantings "^0?6_+ДП_.+_план$"` (нормоконтроль), `uv run green serve` (веб-интерфейс на `/` из `frontend/dist`: сначала `cd frontend; npm ci; npm run build`; Swagger на `/docs`; разработка фронта - `npm run dev` в `frontend/` при `green serve --port 8010`), `uv run green openapi --out docs/openapi.json`, `docker compose up --build`. Линт: `uv run ruff check src`, `uv run ruff format --check src`, `uv run ty check src`, `uv run lint-imports`.
 
 ## Конвенции
 
 - Python 3.14, uv ≥0.12.15 (сборка через `uv_build`), ruff `select = ["ALL"]` с исключениями из `pyproject.toml`, тайпчекер ty, import-linter — всё должно быть зелёным перед коммитом.
 - Ветки от `main`, conventional commits (у Кирилла: `feat(placement): …`, `docs: …`), squash в main. Ветка наших доков — `docs/dataset-research`.
+- **Веб-интерфейс — только React** (SPA в `frontend/`: React 19 + TypeScript + Vite), бэкенд отдаёт JSON API и собранный бандл. Jinja2 и прочие серверные шаблоны не используем (решение команды 23.09.2026, спека `docs/plans/2026-09-23-react-frontend-design.md`).
 - Датасет и ТЗ в git не кладём. Результаты прогонов — `runs/`, `out/` (игнорируются).
 - Windows-грабли: `PYTHONIOENCODING=utf-8` для кириллицы в консоли; Git Bash переписывает аргументы с двоеточием (`origin/main:.gitignore`) — `MSYS_NO_PATHCONV=1`.
 

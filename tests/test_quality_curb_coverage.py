@@ -53,7 +53,10 @@ def _result(
                 object_class=ObjectClass.WORK_BOUNDARY,
             )
         )
-    return dust(Layout.of(trees), site_of(features), PlanParams(dust_target=1.0))
+    # Геометрия меры: крона над бортом засчитывается целиком (индекс v2 по умолчанию берёт
+    # её с коэффициентом dust_crown_factor, здесь проверяется сама длина покрытия).
+    params = PlanParams(dust_target=1.0, dust_crown_factor=1.0)
+    return dust(Layout.of(trees), site_of(features), params)
 
 
 @pytest.mark.parametrize(("x", "y", "expected"), [(5, 2, 3.0), (0, 2, 1.5), (5, 2.5, 0.0)])

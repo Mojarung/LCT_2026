@@ -12,7 +12,7 @@ from test_pipeline_synthetic import ROOT, _street
 
 from green.application.params import PlanParams
 from green.application.use_case import PlanRequest
-from green.application.validation import validate_plan
+from green.application.validation import trim_to_quotas, validate_plan
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.domain.norms import (
@@ -157,6 +157,41 @@ def test_quota_is_recomputed_instead_of_trusting_a_stale_summary() -> None:
         i.code == "quota"
         for i in verify(points, params=replace(PARAMS, assortment_mode="auto")).issues
     )
+
+
+def test_trim_removes_only_stage_additions_until_quotas_hold() -> None:
+    """Добавочные этапы кустарника подбирают вид в своей выборке; квота - по всему плану.
+    Обрезка снимает только разрешённые посадки и ровно до выполнения квот."""
+    kinds = [
+        replace(TREE, code=f"s{i}", genus=f"g{i}", family=f"f{i}", name_lat=f"G{i} s")
+        for i in range(10)
+    ]
+    # Основа разнообразна и сама квоты держит; этап добавил пять посадок одного вида.
+    base = [
+        replace(placement(i * 10, identity=f"base-{i}"), species=kind)
+        for i, kind in enumerate(kinds)
+    ]
+    extra = [
+        replace(placement(200 + i * 10, identity=f"stage-{i}"), species=kinds[0]) for i in range(5)
+    ]
+    params = replace(PARAMS, assortment_mode="auto")
+    assert not any(i.code == "quota" for i in verify(base, params=params).issues)
+    assert any(i.code == "quota" for i in verify([*base, *extra], params=params).issues)
+
+    kept = trim_to_quotas(
+        (*base, *extra), params, kinds, {}, removable=lambda p: p.placement_id.startswith("st")
+    )
+
+    assert [p.placement_id for p in kept[: len(base)]] == [p.placement_id for p in base]
+    assert not any(i.code == "quota" for i in verify(kept, params=params).issues)
+    assert len(kept) < len(base) + len(extra)
+
+
+def test_trim_leaves_the_plan_alone_when_nothing_may_be_removed() -> None:
+    points = tuple(placement(i * 10, identity=str(i)) for i in range(10))
+    params = replace(PARAMS, assortment_mode="auto")
+
+    assert trim_to_quotas(points, params, (TREE,), {}, removable=lambda _: False) == points
 
 
 def test_site_conditions_are_checked_after_a_manual_species_change() -> None:

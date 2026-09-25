@@ -38,13 +38,22 @@ STAGES: tuple[Stage, ...] = (
     Stage("place", "Размещение посадок", 0.14),
     Stage("assort", "Подбор ассортимента", 0.03),
     Stage("shrub_groups", "Группы кустарников", 0.04),
+    Stage("surface", "Карта покрытий: где грунт, где твёрдое", 0.03),
+    Stage("shrub_rows", "Ряд кустарника у борта", 0.01),
+    Stage("understory", "Кустарник под кронами", 0.01),
+    Stage("shrub_fill", "Группы кустарника на газоне", 0.02),
+    Stage("quotas", "Шаг ям и квоты кустарника", 0.01),
+    Stage("validate_plan", "Независимая проверка плана", 0.03),
     Stage("quality", "Индекс качества и ценность посадок", 0.01),
+    Stage("refine", "Сдвиг слабых мест от ближайшей нормы", 0.01),
     Stage("explain", "Объяснения по нормам", 0.01),
     Stage("write_dxf", "Запись DXF", 0.18),
     Stage("verify", "Сверка целостности исходника", 0.19),
     Stage("artifacts", "Отчёты и выгрузки", 0.02),
 )
 BY_ID = {stage.id: stage for stage in STAGES}
+# Вес этапа, которого нет в таблице: новый этап сценария не ломает оценку хода.
+_UNKNOWN_WEIGHT = 0.01
 # Этапы, которые есть не у каждого прогона.
 OPTIONAL = frozenset({"convert", "merge"})
 
@@ -92,8 +101,8 @@ def estimate(progress: RunProgress, now: datetime) -> ProgressView:
     этапа перескакивает к его концу. Затянувшийся этап удлиняет оценку прогона на своё
     превышение - остаток растёт, а не замирает на одном числе.
     """
-    total_weight = sum(BY_ID[s].weight for s in progress.stages) or 1.0
-    weights = {s: BY_ID[s].weight / total_weight for s in progress.stages}
+    total_weight = sum(_weight(s) for s in progress.stages) or 1.0
+    weights = {s: _weight(s) / total_weight for s in progress.stages}
 
     prior = max(MIN_PRIOR_S, SECONDS_PER_MB * progress.source_bytes / _MB) * total_weight
     done_weight = sum(weights.get(t.stage, 0.0) for t in progress.done)
@@ -118,7 +127,7 @@ def estimate(progress: RunProgress, now: datetime) -> ProgressView:
     steps = tuple(
         Step(
             id=s,
-            title=BY_ID[s].title,
+            title=_title(s),
             state="done" if s in finished else "active" if s == stage else "pending",
             ms=finished.get(s),
         )
@@ -126,12 +135,23 @@ def estimate(progress: RunProgress, now: datetime) -> ProgressView:
     )
     return ProgressView(
         stage=stage,
-        title=BY_ID[stage].title if stage else "Готовимся к расчёту",
+        title=_title(stage) if stage else "Готовимся к расчёту",
         fraction=round(fraction, 3),
         elapsed_s=round(elapsed, 1),
         eta_s=round(max(total - elapsed, 0.0), 1) if stage else None,
         steps=steps,
     )
+
+
+def _weight(stage: str) -> float:
+    known = BY_ID.get(stage)
+    return known.weight if known is not None else _UNKNOWN_WEIGHT
+
+
+def _title(stage: str) -> str:
+    """Название этапа; этап, которого нет в таблице, не роняет полосу хода, а называется кодом."""
+    known = BY_ID.get(stage)
+    return known.title if known is not None else stage
 
 
 __all__ = ["STAGES", "ProgressView", "Stage", "Step", "estimate", "plan_stages"]

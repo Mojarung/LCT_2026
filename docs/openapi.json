@@ -7,6 +7,18 @@
             "title": "Name",
             "type": "string"
           },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Размер файла; null, если его нет",
+            "title": "Size Bytes"
+          },
           "url": {
             "title": "Url",
             "type": "string"
@@ -38,10 +50,17 @@
             "title": "Extra"
           },
           "file": {
-            "contentMediaType": "application/octet-stream",
-            "description": "Чертёж DXF или DWG",
-            "title": "File",
-            "type": "string"
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Чертёж DXF или DWG; или street, но не оба",
+            "title": "File"
           },
           "inventory": {
             "anyOf": [
@@ -79,11 +98,20 @@
             ],
             "description": "Профиль параметров из /meta",
             "title": "Profile"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Улица пилотного проекта из /streets (slug); или file",
+            "title": "Street"
           }
         },
-        "required": [
-          "file"
-        ],
         "title": "Body_create_run_api_v1_runs_post",
         "type": "object"
       },
@@ -276,6 +304,19 @@
         "title": "EditsIn",
         "type": "object"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthOut": {
         "properties": {
           "status": {
@@ -441,6 +482,72 @@
           "status"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "ProfileOut": {
+        "description": "Параметры профиля, которые показывает форма запуска.\n\nФорма заполняется ими и отправляет в overrides только изменённое человеком: иначе выбор\nпрофиля терялся под значениями формы по умолчанию.",
+        "properties": {
+          "curb_hedges": {
+            "title": "Curb Hedges",
+            "type": "boolean"
+          },
+          "modes": {
+            "description": "Приёмы размещения: alley, lawn, fill",
+            "items": {
+              "type": "string"
+            },
+            "title": "Modes",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "planting_type": {
+            "description": "tree или shrub",
+            "title": "Planting Type",
+            "type": "string"
+          },
+          "root_barriers": {
+            "title": "Root Barriers",
+            "type": "boolean"
+          },
+          "shrub_fill": {
+            "description": "Группы кустарника на свободном газоне",
+            "title": "Shrub Fill",
+            "type": "boolean"
+          },
+          "shrub_groups": {
+            "title": "Shrub Groups",
+            "type": "boolean"
+          },
+          "shrub_rows": {
+            "title": "Shrub Rows",
+            "type": "boolean"
+          },
+          "spacing_m": {
+            "description": "Шаг посадки, м",
+            "title": "Spacing M",
+            "type": "number"
+          },
+          "understory": {
+            "title": "Understory",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "planting_type",
+          "spacing_m",
+          "modes",
+          "root_barriers",
+          "shrub_groups",
+          "shrub_rows",
+          "curb_hedges",
+          "understory",
+          "shrub_fill"
+        ],
+        "title": "ProfileOut",
         "type": "object"
       },
       "ProgressOut": {
@@ -786,6 +893,46 @@
         ],
         "title": "StreetOut",
         "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
       }
     }
   },
@@ -834,6 +981,49 @@
           }
         },
         "summary": "Meta",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/profiles/{name}": {
+      "get": {
+        "description": "Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов.",
+        "operationId": "profile_api_v1_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile",
         "tags": [
           "system"
         ]
@@ -915,7 +1105,7 @@
         ]
       },
       "post": {
-        "description": "Принять чертёж и поставить прогон в очередь. Статус: GET /runs/{id}.",
+        "description": "Принять чертёж или улицу из каталога и поставить прогон в очередь.\n\nИсточник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного\nпроекта (`street`, её комплект уже лежит в каталоге). Статус: GET /runs/{id}.",
         "operationId": "create_run_api_v1_runs_post",
         "requestBody": {
           "content": {
@@ -924,8 +1114,7 @@
                 "$ref": "#/components/schemas/Body_create_run_api_v1_runs_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
@@ -980,6 +1169,68 @@
           }
         },
         "summary": "Create Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/demo": {
+      "post": {
+        "description": "Прогон встроенного фрагмента улицы Берзарина с профилем по умолчанию.\n\nФрагмент лежит в пакете: на стенде жюри датасета нет, а показывать сервис надо с\nпервого клика, не заставляя искать DXF. Статус: GET /runs/{id}.",
+        "operationId": "create_demo_run_api_v1_runs_demo_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Create Demo Run",
         "tags": [
           "runs"
         ]

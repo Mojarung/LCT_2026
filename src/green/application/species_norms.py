@@ -57,12 +57,18 @@ class _Site:
 
     territory: Territory
     category: str
+    act_over_allergen: bool = True
 
 
 def species_norms(
-    species: Species, rulebook: RuleBook, territory: str, category: str = "streets"
+    species: Species,
+    rulebook: RuleBook,
+    territory: str,
+    category: str = "streets",
+    *,
+    allergen_act_priority: bool = True,
 ) -> SpeciesNorms:
-    site = _Site(Territory(territory), category)
+    site = _Site(Territory(territory), category, act_over_allergen=allergen_act_priority)
     reasons: list[Reason] = []
     for check in (_invasive, _category, _female_fluff, _fruit_litter, _mass_allergen):
         blocking = check(species, rulebook, site, reasons)
@@ -125,7 +131,7 @@ def _category(
     if mark == MINUS:
         return Reason(
             NORM,
-            f"{species.name_ru} не рекомендован для категории насаждений «{label}» ({basis})",
+            f"вид не рекомендован для категории насаждений «{label}» ({basis})",
             rule_id=rule_id,
             source=source,
         )
@@ -133,7 +139,7 @@ def _category(
     reasons.append(
         Reason(
             NORM,
-            f"{species.name_ru} рекомендован{limited} для категории «{label}» ({basis})",
+            f"вид рекомендован{limited} для категории «{label}» ({basis})",
             rule_id=rule_id,
             source=source,
         )
@@ -184,27 +190,34 @@ def _mass_allergen(
 ) -> Reason | None:
     """Пункт 3.6.18 видов не называет, отнесение к массовым аллергенам справочное.
 
-    Если московский акт (МГСН 1.02-02, табл. В.6) рекомендует вид для категории участка,
-    справочное отнесение запретом не считается: правительство Москвы под п. 3.6.18 такой вид не
-    подводит (берёза; её же рекомендует 515-ПП). Аллергенность тогда только снижает оценку.
+    МГСН 1.02-02 (табл. В.6) и 515-ПП берёзу рекомендуют, заказчик считает акты
+    непротиворечивыми (docs/notes/15-organizers-qa.md, вопросы 7 и 17). Поэтому вид, который
+    московский акт называет для категории участка, допускается, и основание говорит, какой
+    акт решил; аллергенность снижает оценку. Параметр профиля allergen_act_priority=false
+    ставит запрет п. 3.6.18 выше: вопрос про берёзу заказчику задан (там же, раздел 5).
     """
     if species.allergen < _MASS_ALLERGEN:
         return None
-    if species.categories.get(site.category) in {PLUS, LIMITED}:
+    categories = species.sources.get("categories", "МГСН 1.02-02, табл. В.6")
+    allergen = species.sources.get("allergen", "справочник")
+    recommended = species.categories.get(site.category) in {PLUS, LIMITED}
+    if recommended and site.act_over_allergen:
+        # Две короткие строки вместо одной длинной: факт и чем он разрешён.
+        reasons.append(Reason(REFERENCE, "пыльца - сильный аллерген", source=allergen))
         reasons.append(
             Reason(
                 REFERENCE,
-                f"{species.name_ru}: пыльца аллергенна "
-                f"({species.sources.get('allergen', 'справочник')}), но вид рекомендован актом "
-                "для этой категории насаждений, запрет п. 3.6.18 743-ПП не применён",
-                source=species.sources.get("categories", "МГСН 1.02-02, табл. В.6"),
+                f"{_PP743_3618} видов не называет, {categories} вид рекомендует: решает акт, "
+                "называющий вид",
+                source=categories,
             )
         )
         return None
+    also = f"; {categories} вид рекомендует, но запрет строже" if recommended else ""
     return _restricted(
         rulebook,
         RestrictionKind.MASS_ALLERGEN,
-        f"{species.name_ru} вызывает массовые аллергические реакции во время цветения",
+        f"{species.name_ru} вызывает массовые аллергические реакции во время цветения{also}",
         basis=species.sources.get("allergen", "каталог"),
     )
 

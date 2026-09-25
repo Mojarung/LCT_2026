@@ -314,8 +314,9 @@ def test_ordinary_demo_runs_with_inferred_semantics(tmp_path: Path) -> None:
     и осторожной заменой по геометрии, основание каждого вывода лежит в отчёте распознавания."""
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
     with TestClient(create_app(container)) as client:
-        created = client.post("/web/demo", follow_redirects=False)
-        run_id = created.headers["location"].rsplit("/", 1)[-1]
+        # Демо запускается через API: страницы рисует React-приложение, сервер отдаёт JSON.
+        created = client.post(f"{API_PREFIX}/runs/demo")
+        run_id = created.json()["id"]
         state = client.get(f"{API_PREFIX}/runs/{run_id}").json()
         assert state["state"] == "succeeded", state
         assert (container.store.run_dir(run_id) / "result.dxf").exists()

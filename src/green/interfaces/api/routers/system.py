@@ -5,12 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from green import __version__
+from green.application.errors import NotFoundError
 from green.infrastructure.cad.writer import LAYER_COLORS, REJECT_BLOCK
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.schemas import (
     ConverterOut,
     HealthOut,
     MetaOut,
+    ProfileOut,
     RulesOut,
     SpeciesOut,
     StreetOut,
@@ -22,6 +24,27 @@ router = APIRouter(tags=["system"])
 @router.get("/health")
 def health() -> HealthOut:
     return HealthOut(version=__version__)
+
+
+@router.get("/profiles/{name}")
+def profile(name: str, container: ContainerDep) -> ProfileOut:
+    """Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов."""
+    names = container.profiles.names()
+    if name not in names:
+        raise NotFoundError(f"Профиля '{name}' нет. Доступны: {', '.join(names)}")
+    params = container.profiles.load(name)
+    return ProfileOut(
+        name=name,
+        planting_type=params.planting_type.value,
+        spacing_m=params.spacing_m,
+        modes=list(params.modes),
+        root_barriers=params.root_barriers,
+        shrub_groups=params.shrub_groups,
+        shrub_rows=params.shrub_rows,
+        curb_hedges=params.curb_hedges,
+        understory=params.understory,
+        shrub_fill=params.shrub_fill,
+    )
 
 
 @router.get("/meta")

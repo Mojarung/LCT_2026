@@ -107,6 +107,8 @@ class EzdxfDrawingMerger:
         package.resolve()
         base = package.documents[0]
         notes = package.notes
+        # То, что меняет смысл плана (листы не перекрываются), - отдельно от журнала склейки.
+        warnings: list[str] = []
         assembly = package.report()
         for binding in assembly.references:
             notes.append(
@@ -135,7 +137,7 @@ class EzdxfDrawingMerger:
             if box is not None and base_box is not None and _area(base_box) > 0:
                 shared = _overlap(base_box, box)
                 if shared < _MIN_OVERLAP:
-                    notes.append(
+                    warnings.append(
                         f"Склейка: габариты {path.name} и уже склеенного комплекта "
                         f"перекрываются на {shared:.0%} - возможно, это разные листы или "
                         "разные объекты"
@@ -160,7 +162,9 @@ class EzdxfDrawingMerger:
                 f"Склейка: удалено {dropped} устаревших записей словарей (ассоциативные связи "
                 "и поля, которые ezdxf не переносит между файлами); геометрия не затронута"
             )
-        return MergeResult(path=target, notes=tuple(notes), assembly=assembly)
+        return MergeResult(
+            path=target, notes=tuple(notes), assembly=assembly, warnings=tuple(warnings)
+        )
 
 
 def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> None:

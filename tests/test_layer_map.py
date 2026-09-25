@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 from typing import TYPE_CHECKING
 
 import pytest
@@ -17,7 +16,7 @@ from green.infrastructure.config.repositories import YamlLayerMapSource
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
 
-LAYER_MAP =YamlLayerMapSource(
+LAYER_MAP = YamlLayerMapSource(
     Path(__file__).resolve().parents[1] / "config" / "layer_map.yaml"
 ).load()
 DESIGNER = "link-улица Берзарина_Покрытия — Новые$0$"
@@ -54,6 +53,14 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         (f"{GEOTREST}tp$0$Платформы ЖД", ObjectClass.STRUCTURE),
         (f"{GEOTREST}up$0$Водосточный коллектор", ObjectClass.UTILITY_STORM),
         (f"{GEOTREST}tp$0$Территории", ObjectClass.IGNORE),
+        # Контур площадки со своим покрытием - граница покрытий, а не мусор (Харьковская).
+        (f"{GEOTREST}tp$2$Граница площадки", ObjectClass.PAVEMENT_EDGE),
+        ("ДВ_ПП_ДО_Тип2_Ремонт_покрытия_ПЧ_Местные", ObjectClass.ROAD),
+        ("ДВ_ПП_ДО_Тип4_Устройство_уширений_местные", ObjectClass.ROAD),
+        ("ДВ_ПП_ДО_Тип5_Замена_покрытия_трот_более_2м", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип5а_Капремонт_трот", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип9_Устройство_трот_менее_2м", ObjectClass.SIDEWALK),
+        ("ДВ_ПП_ДО_Тип_Устройство_площадки", ObjectClass.SIDEWALK),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:

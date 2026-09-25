@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from green.application.classification import ClassificationReport, LayerCoverage
     from green.application.editing import RunContext
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.application.validation import PlanValidation
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
@@ -86,9 +87,13 @@ class RunReport:
     output_dxf: Path
     converter: str | None
     warnings: tuple[str, ...] = field(default=())
+    # Журнал чтения чертежа и склейки комплекта: аудит, ремонт строк, единицы, блоки.
+    load_notes: tuple[str, ...] = field(default=())
     # Подоснова для карты в вебе. Может отсутствовать: прогон из CLI её не требует, а на
     # чертеже без классифицированных объектов рисовать нечего.
     basemap: Basemap | None = None
+    # Карта покрытий прогона: грунт и твёрдое, как их понял сервис. Уходит в веб растром.
+    surface: SurfaceMap | None = None
     # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None
@@ -117,6 +122,7 @@ class RunReport:
             "total_ms": round(sum(t.ms for t in self.timings), 1),
             "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),
+            "load_notes": list(self.load_notes),
         }
 
 

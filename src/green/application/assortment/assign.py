@@ -61,6 +61,7 @@ _MIP_GAP = 0.005
 # важнее, чем добрать хвойных до нижней границы коридора.
 _FILL_BONUS = 10.0
 _CONIFER_PENALTY = 3.0
+ROW_KIND = "row"  # структура-ряд (assortment.structures.ROW), без импорта по кругу
 _HALF = 0.5  # порог округления двоичной переменной
 _EPS = 1e-9
 
@@ -84,6 +85,8 @@ class Assignment:
     notes: tuple[str, ...] = field(default=())
     # Посадки, получившие вид вторым шагом: их структура одним видом в квоты не влезла.
     split_placements: frozenset[str] = frozenset()
+    # Вид -> какая квота выбрана до конца (Quotas.used_up): почему не он у альтернатив.
+    used_up: Mapping[str, str] = field(default_factory=dict)
 
 
 def assign(
@@ -104,6 +107,17 @@ def assign(
 
 
 # --- квоты ---
+
+
+def _quota_label(key: Key, share: float) -> str:
+    level, name = key
+    if key == CONIFER_KEY:
+        return f"доля хвойных {share:.0%}"
+    if level == SPECIES_LEVEL:
+        return f"квота вида {share:.0%}"
+    if level == GENUS_LEVEL:
+        return f"квота рода {name.capitalize()} {share:.0%}"
+    return f"квота семейства {name} {share:.0%}"
 
 
 def allowance(share: float, planned: int) -> int:
@@ -135,6 +149,27 @@ class Quotas:
             for key in keys:
                 if key != CONIFER_KEY:  # коридор хвойных задан для плана, не для популяции
                     self.existing[key] += count
+
+    def adapt(self, candidates: Sequence[Candidate]) -> None:
+        """Квота уровня не строже, чем позволяет выбор на месте: 1 / (медиана вариантов).
+
+        Если на типичном месте нормы оставляют четыре вида из двух семейств, квоты 10% и 30%
+        невыполнимы при любом числе посадок: сумма долей меньше единицы, и задача оставляет
+        участок вовсе без деревьев (Измайловская площадь: 0 из 38 мест). Тот же принцип, что у
+        цели разнообразия в индексе: не требовать больше видов, чем допускают нормы.
+        """
+        by_place: defaultdict[str, list[Species]] = defaultdict(list)
+        for candidate in candidates:
+            by_place[candidate.placement_id].append(candidate.species)
+        if not by_place:
+            return
+        for level, index in ((SPECIES_LEVEL, 0), (GENUS_LEVEL, 1), (FAMILY_LEVEL, 2)):
+            options = sorted(
+                len({self.keys(s)[index] for s in species}) for species in by_place.values()
+            )
+            median = options[len(options) // 2]
+            if median > 0:
+                self.shares[level] = max(self.shares[level], 1.0 / median)
 
     def keys(self, species: Species) -> tuple[Key, ...]:
         keys: tuple[Key, ...] = (
@@ -178,6 +213,37 @@ class Quotas:
                 found.append(f"{label}: {count + self.existing[key]} из {population} на улице")
         return tuple(found)
 
+    def used_up(self, chosen: Mapping[str, str]) -> dict[str, str]:
+        """Какая квота не пускает в план ещё одно растение вида: причина для альтернатив.
+
+        Вид с оценкой выше выбранного уступил либо квоте, либо однородности структуры;
+        эксперту нужна одна из двух причин, а не обе через «или».
+        """
+        planned = len(chosen)
+        counts = self.counts(chosen)
+        found: dict[str, str] = {}
+        for code, species in self.catalog.items():
+            for key in self.keys(species):
+                reason = self._used_up(key, counts[key], planned)
+                if reason:
+                    found[code] = reason
+                    break
+        return found
+
+    def _used_up(self, key: Key, count: int, planned: int) -> str:
+        share = self.share(key)
+        label = _quota_label(key, share)
+        if count >= allowance(share, planned):
+            return f"{label} выбрана"
+        if key == CONIFER_KEY or not self.existing_total:
+            return ""
+        population = planned + self.existing_total
+        if self.exhausted(key) or count + self.existing[key] >= math.floor(
+            share * population + _EPS
+        ):
+            return f"{label} выбрана с существующими деревьями"
+        return ""
+
     def exhausted_notes(self, codes: Sequence[str]) -> list[str]:
         keys = sorted({k for code in codes for k in self.keys(self.catalog[code])})
         return [
@@ -205,6 +271,8 @@ class _QuotaAssignment:
         usable = [c for c in candidates if c.species.code in catalog]
         self.candidates = sorted(usable, key=lambda c: (c.placement_id, c.species.code))
         self.codes = sorted({c.species.code for c in self.candidates})
+        if params.quota_adaptive:
+            self.quotas.adapt(self.candidates)
 
     def run(self) -> Assignment:
         notes: list[str] = []
@@ -244,6 +312,7 @@ class _QuotaAssignment:
             quota_violations=self.quotas.violations(chosen),
             notes=tuple(notes),
             split_placements=frozenset(split),
+            used_up=self.quotas.used_up(chosen),
         )
 
     def _conifer_notes(self, chosen: Mapping[str, str]) -> list[str]:
@@ -281,28 +350,37 @@ def _milp(
             in_key[key].append(position)
     keys = sorted(in_key)
     count = len(pairs)
-    # Исключение «один экземпляр» нужно, только пока доля меньше одного растения: при N
-    # местах и доле 10% это N < 10. На большом плане без него квота лишь строже, а
-    # двоичные переменные с большой константой делают задачу в десятки раз тяжелее.
+    # Исключение «один экземпляр» нужно, пока доля меньше одного растения от числа ЗАНЯТЫХ
+    # мест, а не от числа мест вообще: при 19 местах, из которых квоты дают занять меньше
+    # десяти, доля вида 10% - это меньше одного растения, и без исключения задача находила
+    # единственное решение - ноль посадок (Багрицкого, Измайловская площадь, 23.09.2026).
+    # Поэтому двоичные переменные заводятся, пока мест меньше quota_single_places долей; на
+    # большом плане занято всегда больше десятка, а двоичные переменные с большой константой
+    # делают задачу в десятки раз тяжелее.
     places = len(fixed) + len({c.placement_id for g in groups.values() for c in g})
-    small = [key for key in keys if places * quotas.share(key) < 1]
+    limit = quotas.params.quota_single_places
+    small = [key for key in keys if places * quotas.share(key) < limit]
     single = {key: count + i for i, key in enumerate(small)}  # столбцы b
     slack = count + len(small)  # недобор хвойных до нижней границы
-    size = slack + 1
+    # Мягкие квоты: перебор доли ключа - непрерывная переменная со штрафом в цели. Штраф меньше
+    # премии за занятое место, поэтому место не пустеет, но из видов берётся тот, что квоту
+    # держит, пока такой есть.
+    over = _soft_columns(keys, slack + 1, quotas.params.quota_penalty)
+    size = slack + 1 + len(over)
     rows = _one_species_per_group(pairs, size)
     big = float(len(fixed) + weights.sum())
-    ctx = _Context(weights, quotas, quotas.counts(fixed), float(len(fixed)), single, big)
+    ctx = _Context(weights, quotas, quotas.counts(fixed), float(len(fixed)), single, big, over)
     for key in keys:
         _share_rows(rows, key, in_key[key], ctx)
     _conifer_floor(rows, in_key.get(CONIFER_KEY, []), ctx, slack)
-    cost = np.zeros(size)
-    for position, pair in enumerate(pairs):
-        cost[position] = -sum(c.score + _FILL_BONUS for c in members[pair])
+    cost, upper, integrality = _objective(pairs, members, size, quotas.params)
     cost[slack] = _CONIFER_PENALTY
-    upper = np.ones(size)
     upper[slack] = big
-    integrality = np.ones(size)
     integrality[slack] = 0
+    for column in over.values():
+        cost[column] = quotas.params.quota_penalty
+        upper[column] = big
+        integrality[column] = 0
     result = milp(
         c=cost,
         constraints=rows.constraint(),
@@ -318,10 +396,35 @@ def _milp(
         if result.x[position] > _HALF
         for candidate in members[pair]
     }
-    # Кончилось время, но допустимое решение найдено: берём его, если квоты целы.
-    if not result.success and quotas.violations({**fixed, **chosen}):
+    # Кончилось время, но допустимое решение найдено: берём его, если квоты целы (при мягких
+    # квотах перебор доли допустим по постановке).
+    if not result.success and not over and quotas.violations({**fixed, **chosen}):
         return None
     return chosen
+
+
+def _soft_columns(keys: Sequence[Key], first: int, penalty: float) -> dict[Key, int]:
+    """Столбцы перебора мягких квот: по одному на ключ, кроме хвойных (у них свой коридор)."""
+    if penalty <= 0:
+        return {}
+    soft = [key for key in keys if key != CONIFER_KEY]
+    return {key: first + i for i, key in enumerate(soft)}
+
+
+def _objective(
+    pairs: Sequence[tuple[str, str]],
+    members: Mapping[tuple[str, str], list[Candidate]],
+    size: int,
+    params: PlanParams,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Цель: премия за занятое место (у мест ряда - с надбавкой) плюс оценка вида."""
+    cost = np.zeros(size)
+    for position, pair in enumerate(pairs):
+        cost[position] = -sum(
+            c.score + _FILL_BONUS + (params.alley_priority if c.structure_kind == ROW_KIND else 0.0)
+            for c in members[pair]
+        )
+    return cost, np.ones(size), np.ones(size)
 
 
 def _one_species_per_group(pairs: Sequence[tuple[str, str]], size: int) -> _Rows:
@@ -344,6 +447,7 @@ class _Context:
     fixed_total: float
     single: Mapping[Key, int]
     big: float
+    over: Mapping[Key, int] = field(default_factory=dict)  # столбцы перебора мягкой квоты
 
 
 def _share_rows(rows: _Rows, key: Key, positions: Sequence[int], ctx: _Context) -> None:
@@ -357,6 +461,8 @@ def _share_rows(rows: _Rows, key: Key, positions: Sequence[int], ctx: _Context) 
         return
     # c + F - share * (F_T + T) - b <= 0: доля в плане, b разрешает один экземпляр.
     plan = {p: weights[p] * ((1.0 if p in inside else 0.0) - share) for p in range(len(weights))}
+    if key in ctx.over:
+        plan[ctx.over[key]] = -1.0
     if key in single:
         plan[single[key]] = -1.0
         # b = 1 только если ключ взят не больше одного раза: c + F + big * b <= 1 + big.

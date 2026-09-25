@@ -1,5 +1,5 @@
-"""Веб-интерфейс: тонкая обёртка над теми же сценариями, что CLI и HTTP API."""
+"""Веб-интерфейс: раздача собранного React-бандла (frontend/) и Swagger без интернета."""
 
-from green.interfaces.web.pages import router
+from green.interfaces.web.spa import mount_spa
 
-__all__ = ["router"]
+__all__ = ["mount_spa"]

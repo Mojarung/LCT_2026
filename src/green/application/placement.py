@@ -2,8 +2,10 @@
 
 Приём «alley»: рядовая посадка вдоль бортового камня, станции по линиям и штрихам борта,
 отступы из профиля с обеих сторон. Приём «lawn»: заполнение грунта шахматной сеткой с шагом
-посадки по карте покрытий, как сажают проектировщики во дворах. Оба приёма проверяются
-одним ConstraintIndex, посадки держат шаг между собой. Результат детерминирован.
+посадки по карте покрытий, как сажают проектировщики во дворах. Приём «fill»: добор зоны -
+сетка с шагом шесть метров пропускает узкие полосы и карманы газона, поэтому после неё
+проверяются все ячейки грунта через метр, сначала те, где запас до сетей больше. Все приёмы
+проверяются одним ConstraintIndex, посадки держат шаг между собой. Результат детерминирован.
 """
 
 from __future__ import annotations
@@ -24,9 +26,9 @@ from green.application.errors import InputError
 from green.application.params import active_distance_rules, species_distance_rules
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
-from green.application.zones import build_zones
+from green.application.zones import MAX_ZONE_POINTS, build_zones, zone_capacity
 from green.domain.objects import ObjectClass
-from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict
+from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -37,18 +39,27 @@ if TYPE_CHECKING:
 
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
-    from green.domain.norms import RuleBook
+    from green.domain.norms import DistanceRule, RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Species
     from green.domain.selection import SelectionReport
 
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
+MODE_FILL = "fill"  # добор зоны; посадки подписаны как заполнение газона
 MODE_SHRUB_GROUP = "shrub_group"
+MODE_SHRUB_ROW = "shrub_row"
+MODE_CURB_HEDGE = "curb_hedge"
+MODE_UNDERSTORY = "understory"
+MODE_SHRUB_FILL = "shrub_fill"
 MODE_LABELS = {
     MODE_ALLEY: "аллея вдоль борта",
     MODE_LAWN: "заполнение газона",
     MODE_SHRUB_GROUP: "группа кустарников на месте дерева",
+    MODE_SHRUB_ROW: "ряд кустарника у борта под кронами аллеи",
+    MODE_CURB_HEDGE: "живая изгородь вдоль борта",
+    MODE_UNDERSTORY: "кустарник под кроной дерева",
+    MODE_SHRUB_FILL: "группа кустарников на газоне",
 }
 _TANGENT_STEP_M = 0.5
 _SPACING_TOLERANCE = 0.95
@@ -103,7 +114,13 @@ class GreedyPlantingStrategy:
         # паре «посадка - вид» (assortment.filters), а вид профиля лишь задаёт отступы по роду.
         single = params.assortment_mode == "single"
         if single:
-            norms = species_norms(species, rulebook, params.territory, params.planting_category)
+            norms = species_norms(
+                species,
+                rulebook,
+                params.territory,
+                params.planting_category,
+                allergen_act_priority=params.allergen_act_priority,
+            )
             if norms.blocking is not None:
                 raise InputError(
                     f"Вид {species.name_lat} недопустим: {norms.blocking.text} "
@@ -151,16 +168,18 @@ class GreedyPlantingStrategy:
             candidates = _lawn_candidates(index.surface, params)
             stats["lawn_candidates"] = len(candidates)
             stats["lawn_plantable"] = _offer(index, selector, candidates)
+        if MODE_FILL in params.modes and index.surface is not None:
+            before = len(selector.placements)
+            stats["fill_candidates"] = _fill(index, selector, params)
+            stats["fill_planted"] = len(selector.placements) - before
         selection = selector.optimize() if params.placement_solver == "milp" else None
-        if index.surface is not None:
-            stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
-        zones = build_zones(index, params.zone_cell_m) if params.zones else ()
-        for zone in zones:
-            stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+        zones = _zones(index, params, stats)
         return Plan(
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
-            warnings=_warnings(features, index, selector.rejections, params),
+            warnings=_warnings(
+                features, index, selector.rejections, params, disabled_rules_note(rulebook, params)
+            ),
             stats=stats,
             zones=zones,
             selection=selection,
@@ -241,6 +260,22 @@ def _shrub_offsets(params: PlanParams) -> list[tuple[float, float]]:
     return [(dx * c - dy * s, dx * s + dy * c) for dx in offsets for dy in offsets]
 
 
+def _zones(
+    index: ConstraintIndex, params: PlanParams, stats: dict[str, int | float]
+) -> tuple[Zone, ...]:
+    """Зоны допустимости и их сводка в статистике плана."""
+    if index.surface is not None:
+        stats.update({f"surface_{k}": v for k, v in index.surface.summary().items()})
+    zones = build_zones(index, params.zone_cell_m) if params.zones else ()
+    for zone in zones:
+        stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+    # Вместимость зоны - свойство участка; по ней индекс меряет плотность «при условии
+    # допустимости насаждений» (МГСН 1.02-02, табл. В.1).
+    if zones:
+        stats["zone_capacity_trees"] = zone_capacity(zones)
+    return zones
+
+
 def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
     """Проверяет кандидатов пачкой и предлагает отборщику; возвращает число допустимых точек."""
     if not candidates:
@@ -256,6 +291,53 @@ def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candid
         selector.offer(candidates[position], row)
     selector.flush()
     return len(positions)
+
+
+def planting_index(  # noqa: PLR0913 - те же политики, что у независимой проверки плана
+    features: Sequence[Feature],
+    labels: Sequence[TextLabel],
+    rules: Sequence[DistanceRule],
+    params: PlanParams,
+    *,
+    surface: SurfaceMap | None = None,
+    barrier_distance_m: float | None = None,
+) -> ConstraintIndex:
+    """Индекс ограничений с теми же требованиями к месту, что у проверки плана (validation):
+    грунт, граница работ и посадочное место радиуса footprint_radius_m целиком на грунте.
+
+    Этапы, которые добавляют посадки к готовому плану (ряд кустарника, подлесок, группы на
+    газоне, сдвиг слабых мест), строят индекс только так: иначе они ставят то, что проверка
+    потом отвергает, и вариант плана целиком не проходит.
+    """
+    index = ConstraintIndex(
+        features,
+        rules,
+        require_utility_data=params.require_utility_data,
+        barrier_distance_m=barrier_distance_m,
+        require_soil=params.require_soil,
+        require_work_boundary=params.require_work_boundary,
+        planting_radius_m=params.footprint_radius_m,
+    )
+    if params.require_soil:
+        index.surface = surface or build_surface_map(
+            features,
+            labels,
+            index.boundary,
+            params.surface_cell_m,
+            max_distance_m=params.surface_max_distance_m,
+            ambiguity_m=params.surface_ambiguity_m,
+            tree_distance_m=params.tree_seed_distance_m,
+            inference_mode=params.surface_inference_mode,
+        )
+    return index
+
+
+def curb_lines(features: Sequence[Feature]) -> list[LineString]:
+    """Линии бортового камня, сшитые в непрерывные куски, в порядке обхода вдоль улицы.
+
+    Все борта чертежа, без отсечения по границе работ: ряды кустарника и группы на газоне
+    отбирают места сами, по карте покрытий и границе."""
+    return _curb_lines(features)
 
 
 def _curb_lines(
@@ -401,6 +483,60 @@ def _oriented_lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_
         for x, y in world[soil].tolist():
             candidates.append(_Candidate(1_000_000 + len(candidates), MODE_LAWN, x, y))
     return candidates
+
+
+# Запас до сети сверх этого добору уже не важен: цель запаса - полметра (СП 317.1325800.2017,
+# п. 5.3.5.3), дальше места равны и решает порядок обхода, дающий плотную упаковку.
+_FILL_SLACK_CAP_M = 1.0
+
+
+def _fill(index: ConstraintIndex, selector: _Selector, params: PlanParams) -> int:
+    """Добор зоны: каждая ячейка грунта через fill_step_m, допустимые - по убыванию запаса.
+
+    Отбираются только точки с принимаемым вердиктом: недопустимые ячейки - это зона запрета,
+    отметки отказа на каждой из них засорили бы план. Место принимается, если до всех уже
+    поставленных деревьев не меньше шага посадки (тот же отборщик, что у аллеи и газона).
+    Порядок: сначала без замечаний, затем с барьером, затем на согласование; внутри - запас
+    до сетей (до _FILL_SLACK_CAP_M), при равенстве - построчно.
+    """
+    surface = index.surface
+    if surface is None:
+        return 0
+    stride = max(1, round(params.fill_step_m / surface.cell))
+    soil = surface.grid[::stride, ::stride] == Material.SOIL
+    # Чертёж без границы работ (Нижние Поля) - это весь лист: шаг растёт, как у зон.
+    while soil.sum() > MAX_ZONE_POINTS:
+        stride *= 2
+        soil = surface.grid[::stride, ::stride] == Material.SOIL
+    rows, cols = np.nonzero(soil)
+    xy = np.column_stack(
+        [
+            surface.origin[0] + (cols * stride + 0.5) * surface.cell,
+            surface.origin[1] + (rows * stride + 0.5) * surface.cell,
+        ]
+    )
+    points = shapely.points(xy)
+    keep = np.flatnonzero(index.plantable(points))
+    if not len(keep):
+        return 0
+    xy, batch = xy[keep], index.evaluate(points[keep])
+    ranks = {Verdict.ALLOWED: 0}
+    if params.allow_needs_approval:
+        ranks[Verdict.NEEDS_APPROVAL] = 2
+    verdicts = [batch.verdict(k) for k in range(len(xy))]
+    usable = [k for k in range(len(xy)) if verdicts[k] in ranks]
+    slack = batch.slack()
+    slack = np.where(np.isfinite(slack), np.minimum(slack, _FILL_SLACK_CAP_M), _FILL_SLACK_CAP_M)
+    usable.sort(
+        key=lambda k: (ranks[verdicts[k]] + int(batch.needs_barrier(k)), -float(slack[k]), k)
+    )
+    selector.batch = batch
+    station = 2_000_000  # у аллеи и газона свои диапазоны станций
+    for k in usable:
+        selector.offer(_Candidate(station, MODE_LAWN, float(xy[k, 0]), float(xy[k, 1])), k)
+        station += 1
+    selector.flush()
+    return len(usable)
 
 
 def _coords(line: LineString, distances: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -571,18 +707,35 @@ def _stable_id(prefix: str, params: PlanParams, candidate: _Candidate) -> str:
     return f"{prefix}-{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
 
+def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
+    """Какие нормы профиль не применяет - пунктом акта. Идентификаторы - в параметрах прогона
+    (disabled_rules), в строке для человека они шум."""
+    if not params.disabled_rules:
+        return None
+    named = []
+    for rule_id in sorted(params.disabled_rules):
+        rule = rulebook.rule(rule_id)
+        if rule is None:
+            named.append(rule_id)
+            continue
+        # Свой пункт без связанных ссылок и пометки о сверке: в строке-сводке она повторяла
+        # оговорку, которая уже стоит в тексте пункта.
+        act = rulebook.label_of(rule.citation.act_id)
+        named.append(f"{act}, {rule.citation.clause}")
+    return "Профиль не применяет: " + "; ".join(named) + "."
+
+
 def _warnings(
     features: Sequence[Feature],
     index: ConstraintIndex,
     plan_rejections: Sequence[Rejection],
     params: PlanParams,
+    disabled: str | None,
 ) -> tuple[str, ...]:
     max_rejections = params.max_rejections
     warnings = list(index.surface.review_notes()) if index.surface is not None else []
-    if params.disabled_rules:
-        warnings.append(
-            "Профиль отключает правила: " + ", ".join(sorted(params.disabled_rules)) + "."
-        )
+    if disabled:
+        warnings.append(disabled)
     if params.require_soil and index.surface is None:
         warnings.append(
             "Карта покрытий не построена: нет пригодных площадей или подписей покрытия. "

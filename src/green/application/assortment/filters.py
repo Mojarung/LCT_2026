@@ -18,6 +18,7 @@ from green.application.assortment.context import nearest_clearance
 from green.application.barriers import BARRIER_CONDITION, barrier_distance
 from green.application.explain import OBJECT_LABELS, citation_text
 from green.application.species_norms import species_norms
+from green.application.wording import decimal, plural
 from green.domain.norms import PlantingType, RestrictionKind, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import Reason
@@ -69,7 +70,8 @@ def species_verdict(
         if blocking is not None:
             return SpeciesVerdict(species=species, allowed=False, reasons=(*reasons, blocking))
     if species.pilot_streets:
-        reasons.append(Reason(PILOT, f"применён в {species.pilot_streets} паспортах пилота"))
+        passports = plural(species.pilot_streets, "паспорте", "паспортах", "паспортах")
+        reasons.append(Reason(PILOT, f"применён в {species.pilot_streets} {passports} пилота"))
     return SpeciesVerdict(species=species, allowed=True, reasons=tuple(reasons))
 
 
@@ -93,7 +95,13 @@ def _species_norms(
     reasons: list[Reason],
 ) -> Reason | None:
     """369-ПП и 743-ПП п. 3.6.18: запрет или условие для вида, одинаковые в любой точке."""
-    verdict = species_norms(species, rulebook, params.territory, params.planting_category)
+    verdict = species_norms(
+        species,
+        rulebook,
+        params.territory,
+        params.planting_category,
+        allergen_act_priority=params.allergen_act_priority,
+    )
     reasons.extend(verdict.reasons)
     return verdict.blocking
 
@@ -133,7 +141,7 @@ def _distances(
             reasons.append(
                 Reason(
                     NORM,
-                    f"до {target} {measured:.1f} м при норме {threshold:.1f} м "
+                    f"до {target} {decimal(measured)} м при норме {decimal(threshold)} м "
                     f"{_rule_scope(species, rule)}",
                     rule_id=rule.rule_id,
                     source=citation_text(rule, rulebook),
@@ -193,13 +201,15 @@ def _salt(
     if species.salt_tolerance == 0:
         return Reason(
             REFERENCE,
-            f"вид не переносит реагенты, до проезжей части {salt:.1f} м "
+            f"вид не переносит реагенты, до проезжей части {decimal(salt)} м "
             f"при полосе засоления {params.salt_zone_m:.0f} м",
             source=source,
         )
     if species.salt_tolerance >= _SALT_PROOF:
         reasons.append(
-            Reason(REFERENCE, f"солеустойчив при {salt:.1f} м до проезжей части", source=source)
+            Reason(
+                REFERENCE, f"солеустойчив при {decimal(salt)} м до проезжей части", source=source
+            )
         )
     return None
 
@@ -223,9 +233,9 @@ def _with_barrier(
     basis = rulebook.restriction(RestrictionKind.ROOT_BARRIER)
     return Reason(
         NORM,
-        f"до {target} {measured:.1f} м при норме {rule.min_distance_m:.1f} м: допустимо с "
-        f"прикорневым барьером, для дерева высотой {species.height_m:.0f} м не ближе "
-        f"{required:.1f} м",
+        f"до {target} {decimal(measured)} м при норме {decimal(rule.min_distance_m)} м: "
+        f"допустимо с прикорневым барьером, для дерева высотой {species.height_m:.0f} м не ближе "
+        f"{decimal(required)} м",
         rule_id=basis.rule_id if basis else rule.rule_id,
         source=citation_text(basis or rule, rulebook),
         condition=(
@@ -241,16 +251,17 @@ def _too_close(
     if threshold > rule.min_distance_m:  # порог подняла крона шире 5 м
         text = (
             f"крона {species.crown_mature_m:.0f} м больше {_CROWN_BASE_M:.0f} м: отступ до "
-            f"{target} увеличен с {rule.min_distance_m:.1f} до {threshold:.1f} м, "
-            f"измерено {measured:.1f} м (величину увеличения акт не задаёт: принят прирост "
+            f"{target} увеличен с {decimal(rule.min_distance_m)} до {decimal(threshold)} м, "
+            f"измерено {decimal(measured)} м (величину увеличения акт не задаёт: принят прирост "
             "радиуса кроны, толкование проекта)"
         )
     elif rule.is_species_specific:
         text = (
-            f"до {target} {measured:.1f} м при норме {threshold:.1f} м {_rule_scope(species, rule)}"
+            f"до {target} {decimal(measured)} м при норме {decimal(threshold)} м "
+            f"{_rule_scope(species, rule)}"
         )
     else:
-        text = f"до {target} {measured:.1f} м при норме {threshold:.1f} м"
+        text = f"до {target} {decimal(measured)} м при норме {decimal(threshold)} м"
     return Reason(NORM, text, rule_id=rule.rule_id, source=citation_text(rule, rulebook))
 
 

@@ -63,8 +63,8 @@ def test_api_review_rerun_and_changed_source_rejection(tmp_path: Path) -> None:
         )
         assert len(geo["features"]) == report["features"] == 1
         assert geo["features"][0]["geometry"]["type"] == "Polygon"
-        assert client.get(f"/runs/{failed['id']}/review").status_code == 200
-        assert "Уточнить объекты на чертеже" in client.get(f"/runs/{failed['id']}").text
+        # Страница уточнения - маршрут React-приложения (/runs/:id/review), её данные - эти
+        # артефакты; вход на неё в панели прогона проверяет frontend (ReviewPage.test.tsx).
 
         overrides = {
             "infer_unknown": False,

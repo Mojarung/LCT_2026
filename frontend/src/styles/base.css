@@ -1,0 +1,461 @@
+* {
+  box-sizing: border-box;
+}
+
+/* Подвал прижат низом окна на короткой странице и уезжает за содержимым на длинной. */
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  color: var(--bone);
+  font-family: var(--sans);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  display: block;
+  flex: 1 0 auto;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Текст только для читалки экрана: в разметке есть, на экране нет. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Заголовки без висячего слова в последней строке: имя улицы в шапке прогона бывает длинным.
+   pretty, а не balance: balance переносил «улица Берзарина - фрагмент.dxf» перед дефисом. */
+h1,
+h2,
+h3 {
+  text-wrap: pretty;
+}
+
+/* Флажки и ползунок - цветом интерфейса, а не браузерным синим: синий на этой карте значит
+   водопровод. */
+input[type='checkbox'],
+input[type='range'] {
+  accent-color: var(--bone);
+}
+
+/* Двойной тап по кнопке не масштабирует страницу и не задерживает нажатие на планшете. */
+a,
+button,
+label,
+summary,
+input,
+select {
+  touch-action: manipulation;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--hair-2);
+  text-underline-offset: 3px;
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 2px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  padding: 8px 14px;
+  background: var(--bone);
+  color: var(--inverse);
+  z-index: 60;
+}
+.skip:focus {
+  left: 8px;
+}
+
+/* --- шапка: две пилюли поверх содержимого, а не полоса во всю ширину --- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: var(--inset) var(--inset) 0;
+  /* Между пилюлями шапка ничего не ловит: под ней лежит план, и его надо таскать мышью. */
+  pointer-events: none;
+  flex-shrink: 0;
+}
+.topbar > * {
+  pointer-events: auto;
+}
+
+.topbar-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--bar);
+  padding: 0 5px;
+  flex-shrink: 0;
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+/* Значок без подписи обязан быть достаточно крупной целью: 34x34 при требовании 24x24
+   (WCAG 2.5.8). Что делает кнопка, говорят title и aria-label - иначе значок молчит. */
+.topbar-nav > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--bone-2);
+  background: none;
+  border: 0;
+  border-radius: var(--r-control);
+  text-decoration: none;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+/* Имя сервиса - единственный элемент пилюли с подписью, отделён тонкой чертой. */
+.topbar-nav > .brand {
+  width: auto;
+  gap: 7px;
+  padding: 0 10px 0 7px;
+  margin-right: 3px;
+  border-right: 1px solid var(--hair);
+  border-radius: var(--r-control) 0 0 var(--r-control);
+  font-family: var(--mono);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone);
+}
+.brand img {
+  display: block;
+  border-radius: 4px;
+}
+.topbar-nav > *:hover {
+  background: var(--panel-2);
+  color: var(--bone);
+  text-decoration: none;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Значок показывает тему, в которую переводит нажатие: в тёмной горит солнце. */
+.icon-moon {
+  display: none;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .icon-sun {
+    display: none;
+  }
+  :root:not([data-theme='dark']) .icon-moon {
+    display: inline-block;
+  }
+}
+:root[data-theme='light'] .icon-sun {
+  display: none;
+}
+:root[data-theme='light'] .icon-moon {
+  display: inline-block;
+}
+
+/* --- элементы управления --- */
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary {
+  padding: 9px 18px;
+  background: var(--bone);
+  color: var(--inverse);
+  border: 1px solid var(--bone);
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    transform 0.1s;
+}
+.primary:hover:not(:disabled) {
+  background: var(--bone-hover);
+  border-color: var(--bone-hover);
+}
+.primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.primary:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+.primary.small {
+  padding: 7px 12px;
+  font-size: var(--fs-micro);
+}
+
+.ghost {
+  padding: 9px 16px;
+  background: transparent;
+  color: var(--bone);
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-control);
+  font-size: var(--fs-small);
+  transition:
+    border-color 0.12s,
+    background-color 0.12s,
+    transform 0.1s;
+}
+.ghost:hover {
+  border-color: var(--bone);
+  background: var(--panel-2);
+}
+.ghost:active {
+  transform: translateY(1px);
+}
+.ghost.small {
+  padding: 7px 12px;
+  font-size: var(--fs-micro);
+}
+/* Нажатая кнопка-переключатель читается без слов: заливка вместо контура. */
+.ghost[aria-pressed='true'] {
+  background: var(--bone);
+  color: var(--inverse);
+  border-color: var(--bone);
+}
+
+input[type='text'],
+input[type='number'],
+select,
+textarea {
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--panel-2);
+  color: var(--bone);
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-control);
+  font: inherit;
+  font-size: var(--fs-body);
+  transition: border-color 0.12s;
+}
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--bone-3);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--bone);
+}
+textarea {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  resize: vertical;
+}
+
+/* Системный select выпадает из набора: своя стрелка вместо платформенной. */
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) calc(50% + 1px),
+    calc(100% - 12px) calc(50% + 1px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Родной input[type=file] показывает системную надпись «Файл не выбран», которую нельзя
+   ни перевести, ни набрать своим шрифтом. Сам input остаётся в разметке и получает фокус,
+   видимой его частью работает подпись. */
+/* Поле файла - строка графы с волосяной линией снизу, а не пунктирная зона «перетащите
+   сюда»: на листе чертежа так заполняют графу. */
+.filefield {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--hair-2);
+}
+.filefield:hover {
+  border-bottom-color: var(--bone-3);
+}
+/* Сам input растянут на всё поле и прозрачен: клик в любую точку открывает выбор файла,
+   а системная надпись рядом с кнопкой не показывается. */
+.filefield input[type='file'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.filefield:has(input[type='file']:focus-visible) {
+  outline: 2px solid var(--bone);
+  outline-offset: 2px;
+}
+.filefield .pick {
+  padding: 7px 13px;
+  background: var(--bone);
+  color: var(--inverse);
+  border-radius: var(--r-control);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filefield:hover .pick {
+  background: var(--bone-hover);
+}
+.filefield .chosen {
+  flex: 1;
+  min-width: 0;
+  color: var(--bone-3);
+  font-size: var(--fs-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filefield .chosen[data-chosen='1'] {
+  color: var(--bone);
+  font-family: var(--mono);
+}
+
+.field {
+  margin-bottom: 20px;
+}
+/* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field и без
+   исключения набирались бы капсом вместе с заголовками полей. */
+/* Подписи полей строчные: капс с разрядкой оставлен только разделам страницы, иначе он
+   перестаёт быть приёмом и становится единственным способом подписать что угодно. */
+.field > label:not(.check),
+.field > legend,
+.field > .field-title {
+  display: block;
+  margin-bottom: 7px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone-2);
+}
+fieldset.field {
+  border: 0;
+  padding: 0;
+  margin-inline: 0;
+}
+fieldset.field > legend {
+  margin-bottom: 10px;
+}
+.hint {
+  margin: 6px 0 0;
+  color: var(--bone-3);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  max-width: 60ch;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 20px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 8px;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
+  cursor: pointer;
+}
+.check:hover {
+  color: var(--bone);
+}
+.check input {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--bone);
+}
+
+.advanced {
+  margin-bottom: 20px;
+  border-top: 1px solid var(--hair);
+  padding-top: 13px;
+}
+.advanced > summary {
+  cursor: pointer;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone-2);
+  user-select: none;
+  list-style: none;
+}
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.advanced > summary::before {
+  content: '+ ';
+  font-family: var(--mono);
+}
+.advanced[open] > summary::before {
+  content: '- ';
+}
+.advanced[open] > summary {
+  color: var(--bone);
+  margin-bottom: 16px;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 22px;
+  padding: 13px var(--gutter);
+  border-top: 1px solid var(--hair);
+  color: var(--bone-3);
+  font-size: var(--fs-micro);
+  flex-shrink: 0;
+}
+
+/* Корень React не должен ломать колонку body: подвал прижат к низу, рабочее место на весь экран. */
+#root {
+  display: contents;
+}

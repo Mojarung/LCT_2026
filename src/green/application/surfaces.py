@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -31,8 +32,15 @@ if TYPE_CHECKING:
 
 PAVED_LABELS = frozenset({"А", "Ц", "ПЛ", "БР", "Б", "Щ", "ГР", "АСФ", "ПЛИТКА"})
 SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
+# Подписи-фразы площадок и покрытий: «ДЕТ.ПЛ.», «СПОРТ ПЛ.», «СПЕЦ.ПОКРЫТИЕ», «ПЛИТКА БЕТОННАЯ».
+# Короткие обозначения («А», «Б») фразами не ищутся: «ж.б.» у трубы - не бетонное покрытие.
+PAVED_PHRASE = re.compile(r"ПОКР|^(ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК|АСФАЛЬТ|БРУСЧ|ПЛИТК|ТЕРРАВЕЙ")
+SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
+# Полигоны, чья середина - известный материал: штриховки газонов, тротуаров, проезжей части.
+SOIL_AREAS = frozenset({ObjectClass.LAWN})
+PAVED_AREAS = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})
 MAX_CELLS = 20_000_000
-_LINE_TYPES = frozenset({"LineString", "MultiLineString"})
+_LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _TREE_SEED = 4
 # Знак массива (LISTVL, SM): грунт, занятый существующими деревьями - посадки внутри нет.
@@ -515,15 +523,10 @@ def _seeds(
     xy: list[tuple[float, float]] = []
     kind: list[int] = []
     for label in labels:
-        if label.surface_role == "ignore":
-            continue
-        text = label.text.strip().upper().rstrip(".")
-        if label.surface_role == "paved" or (label.surface_role == "auto" and text in PAVED_LABELS):
+        material = _label_seed(label)
+        if material is not None:
             xy.append((label.x, label.y))
-            kind.append(int(Material.PAVED))
-        elif label.surface_role == "soil" or (label.surface_role == "auto" and text in SOIL_LABELS):
-            xy.append((label.x, label.y))
-            kind.append(int(Material.SOIL))
+            kind.append(int(material))
     # Знак газона или массива внутри контура - признак материала, как подпись.
     for feature in features:
         if feature.source_entity_type != "SYMBOL_MARKER":
@@ -549,6 +552,33 @@ def _seeds(
     kinds = np.array(kind, dtype=np.int8)
     finite = np.isfinite(coordinates).all(axis=1)
     return coordinates[finite], kinds[finite]
+
+
+def _label_seed(label: TextLabel) -> Material | None:
+    """Материал подписи. Роль задана явно (label_roles) - решает она; иначе материал по
+    тексту: короткое обозначение целиком или фраза площадки и покрытия («ДЕТ.ПЛ.»)."""
+    if label.surface_role == "paved":
+        return Material.PAVED
+    if label.surface_role == "soil":
+        return Material.SOIL
+    if label.surface_role == "auto":
+        return label_material(label.text)
+    return None
+
+
+def label_material(text: str) -> Material | None:
+    """Материал по подписи: короткое обозначение целиком или фраза площадки и покрытия."""
+    normalized = text.strip().upper().rstrip(".")
+    if normalized in PAVED_LABELS:
+        return Material.PAVED
+    if normalized in SOIL_LABELS:
+        return Material.SOIL
+    paved, soil = bool(PAVED_PHRASE.search(normalized)), bool(SOIL_PHRASE.search(normalized))
+    if paved and not soil:
+        return Material.PAVED
+    if soil and not paved:
+        return Material.SOIL
+    return None
 
 
 def _barrier_lines(features: Sequence[Feature]) -> NDArray[np.object_]:

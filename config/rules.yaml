@@ -303,7 +303,7 @@ distance_rules:
     measure_to: axis
     citation:
       act_id: PPRF878
-      clause: "охранная зона газопровода 2 м с каждой стороны (по ресерчу, пункт не сверен)"
+      clause: "охранная зона газопровода 2 м с каждой стороны (пункт не сверен с текстом акта)"
   - rule_id: R-SEWER-TREE-001
     object_class: utility.sewer
     planting_type: tree
@@ -357,7 +357,7 @@ distance_rules:
     genera: [Tilia, Acer]
     citation:
       act_id: PP623
-      clause: "МГСН 1.02-02, п. 4.2.8: липа, клён у теплотрасс не ближе 2 м"
+      clause: "п. 4.2.8: липа, клён у теплотрасс не ближе 2 м"
       quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
       status: verified
   - rule_id: R-HEAT-TREE-003
@@ -368,7 +368,7 @@ distance_rules:
     genera: [Populus, Crataegus, Larix, Betula]
     citation:
       act_id: PP623
-      clause: "МГСН 1.02-02, п. 4.2.8: тополь, боярышник, лиственница, берёза у теплотрасс не ближе 3-4 м (принято 4 м)"
+      clause: "п. 4.2.8: тополь, боярышник, лиственница, берёза у теплотрасс не ближе 3-4 м (принято 4 м)"
       quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
       status: verified
   - rule_id: R-HEAT-SHRUB-002
@@ -379,7 +379,7 @@ distance_rules:
     genera: [Syringa, Lonicera]
     citation:
       act_id: PP623
-      clause: "МГСН 1.02-02, п. 4.2.8: сирень, жимолость у теплотрасс не ближе 2 м"
+      clause: "п. 4.2.8: сирень, жимолость у теплотрасс не ближе 2 м"
       quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
       status: verified
   - rule_id: R-HEAT-SHRUB-003
@@ -390,7 +390,7 @@ distance_rules:
     genera: [Cotoneaster, Cornus, Crataegus]
     citation:
       act_id: PP623
-      clause: "МГСН 1.02-02, п. 4.2.8: кизильник, дёрен у теплотрасс не ближе 3-4 м (принято 4 м)"
+      clause: "п. 4.2.8: кизильник, дёрен у теплотрасс не ближе 3-4 м (принято 4 м)"
       quote: "У теплотрасс не следует размещать: липу, клен, сирень, жимолость - ближе 2 м, тополь, боярышник, кизильник, дерен, лиственницу, березу - ближе 3-4 м."
       status: verified
   - rule_id: R-WATER-TREE-001
@@ -460,19 +460,20 @@ distance_rules:
       status: verified
       related: *table_trees
 
-  # Fail-closed: сеть неизвестного типа получает наибольший отступ из правил для сетей.
+  # Сеть неизвестного типа получает наибольший отступ из правил для сетей: с запасом, чтобы
+  # неопознанная линия не оказалась под стволом.
   - rule_id: R-UTILUNK-TREE-001
     object_class: utility.unknown
     planting_type: tree
     min_distance_m: 2.0
     measure_to: outer_wall
-    citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
+    citation: {act_id: PROJECT, clause: "неизвестная сеть: наибольший из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
   - rule_id: R-UTILUNK-SHRUB-001
     object_class: utility.unknown
     planting_type: shrub
     min_distance_m: 1.0
     measure_to: outer_wall
-    citation: {act_id: PROJECT, clause: "fail-closed: максимум из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
+    citation: {act_id: PROJECT, clause: "неизвестная сеть: наибольший из отступов до подземных сетей по табл. 9.1 СП 42.13330.2016", status: verified}
   # Колодец - единственный признак сети в чертежах без линий сетей (выгрузка АСУ ОДХ).
   - rule_id: R-ACCESS-TREE-001
     object_class: utility.access

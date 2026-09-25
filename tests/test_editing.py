@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from typing import TYPE_CHECKING
 
@@ -47,9 +48,22 @@ def run_id(client: TestClient, work: Path) -> str:
         files={"file": ("street.dxf", path.read_bytes(), "image/vnd.dxf")},
         # Preserve the historical exploratory layout for this quota-deletion
         # regression. Strict surface evidence has separate end-to-end coverage.
+        # Историческая раскладка - и без этапов, пришедших позже: шаг 6 м, аллея и газон без
+        # добора зоны, без ряда кустарника, подлеска и групп на газоне.
         data={
             "profile": "strict",
-            "overrides": '{"placement_solver":"greedy","surface_inference_mode":"distance"}',
+            "overrides": json.dumps(
+                {
+                    "placement_solver": "greedy",
+                    "surface_inference_mode": "distance",
+                    "spacing_m": 6,
+                    "modes": ["alley", "lawn"],
+                    "shrub_rows": False,
+                    "curb_hedges": False,
+                    "understory": False,
+                    "shrub_fill": False,
+                }
+            ),
         },
     )
     return str(response.json()["id"])

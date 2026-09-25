@@ -41,11 +41,17 @@ class DrawingConverter(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class MergeResult:
-    """Объединённый чертёж комплекта и заметки о склейке для предупреждений прогона."""
+    """Объединённый чертёж комплекта: журнал склейки и то, что меняет смысл плана.
+
+    notes - журнал (что прочитано, сколько сущностей, переименованные блоки); warnings -
+    листы не совпали, часть сущностей потеряна, разные единицы: об этом нужно сказать рядом
+    с числом посадок.
+    """
 
     path: Path
     notes: tuple[str, ...] = ()
     assembly: PackageAssembly | None = None
+    warnings: tuple[str, ...] = ()
 
 
 class DrawingMerger(Protocol):

@@ -3,6 +3,8 @@ planting_type: shrub
 species_code: syringa_meyeri
 spacing_m: 1.0  # 743-ПП, п. 3.6.4, табл. 3.6.2: однорядная посадка высоких кустарников 0,5-1 м
 curb_offsets_m: [1.0, 1.5, 2.0]
+# Добор зоны (fill) для кустарника не нужен: сетка газона с шагом 1 м и так проверяет каждую ячейку.
+modes: [alley, lawn]
 require_utility_data: true
 unknown_lines_as_utility: true
 allow_needs_approval: true

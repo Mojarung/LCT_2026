@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -115,54 +116,61 @@ def test_api_lists_streets(client: TestClient) -> None:
     assert rows[0]["files"] == 2, "комплект считается вместе с сетями"
 
 
-def test_index_offers_the_street(client: TestClient) -> None:
-    page = client.get("/").text
+def test_api_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
+    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
+    created = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street", "profile": "strict", "overrides": '{"spacing_m": 6}'},
+    )
 
-    assert "Улица пилотного проекта" in page
-    assert "07-test-street" in page
-
-
-def test_built_in_fragment_gives_way_to_the_catalog(client: TestClient) -> None:
-    """Когда улицы есть, встроенный фрагмент с первого экрана уходит.
-
-    Он нужен ровно там, где датасет не смонтирован: иначе он занимает первое место формы
-    и предлагает триста метров улицы вместо девятнадцати настоящих.
-    """
-    page = client.get("/").text
-
-    assert "Встроенный участок" not in page
-    assert "/web/demo" not in page
-    assert "Тестовая улица" in page
+    assert created.status_code == 202, created.text
+    record = client.get(f"/api/v1/runs/{created.json()['id']}").json()
+    assert record["state"] == "succeeded", record.get("error")
+    assert record["summary"]["placements"] > 0
+    assert record["source_name"] == "Тестовая улица.dxf"
+    assert record["overrides"] == {"spacing_m": 6}
 
 
-def test_unknown_street_is_refused(client: TestClient) -> None:
-    response = client.post("/web/runs", data={"street": "нет-такой-улицы"}, follow_redirects=False)
+def test_api_refuses_unknown_street(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"street": "нет-такой-улицы"})
 
     assert response.status_code == 422
     assert "нет в каталоге" in response.json()["detail"]
 
 
-def test_run_without_any_source_says_what_to_do(client: TestClient) -> None:
-    response = client.post("/web/runs", data={}, follow_redirects=False)
+def test_api_run_needs_a_source(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"profile": "strict"})
 
     assert response.status_code == 422
     assert "улицу" in response.json()["detail"]
 
 
-def test_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
-    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
-    created = client.post(
-        "/web/runs",
-        data={"street": "07-test-street", "profile": "strict", "spacing_m": "6"},
-        follow_redirects=False,
+def test_api_refuses_street_and_file_together(client: TestClient, work: Path) -> None:
+    """Два источника - два разных прогона: сервис не выбирает за человека, какой из них нужен."""
+    path = work / "own.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"file": ("own.dxf", path.read_bytes(), "image/vnd.dxf")},
     )
 
-    assert created.status_code == 303
-    run_id = created.headers["location"].rsplit("/", 1)[-1]
-    record = client.get(f"/api/v1/runs/{run_id}").json()
-    assert record["state"] == "succeeded", record.get("error")
-    assert record["summary"]["placements"] > 0
-    assert record["source_name"] == "Тестовая улица.dxf", "в реестре улица названа улицей"
+    assert response.status_code == 422
+    assert "одно" in response.json()["detail"]
+
+
+def test_api_street_takes_no_extra_drawings(client: TestClient, work: Path) -> None:
+    """У улицы свой комплект: чужой лист сети рядом с ним склеился бы молча."""
+    path = work / "extra.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"extra": ("extra.dxf", path.read_bytes(), "image/vnd.dxf")},
+    )
+
+    assert response.status_code == 422
+    assert "комплект" in response.json()["detail"]
 
 
 def test_catalog_gives_archive_paths_and_absent_references(tmp_path: Path) -> None:
@@ -200,12 +208,17 @@ def test_street_units_from_the_catalog_reach_the_run(tmp_path: Path) -> None:
     assert street.drawing_unit == "m"
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
 
-    record = accept_street_run(container=container, background=BackgroundTasks(), street=street)
-    own = accept_street_run(
-        container=container,
-        background=BackgroundTasks(),
-        street=street,
-        overrides='{"drawing_unit": "mm"}',
+    # Приём прогона асинхронный (перечётная ведомость читается из запроса), фон не запускается.
+    record = asyncio.run(
+        accept_street_run(container=container, background=BackgroundTasks(), street=street)
+    )
+    own = asyncio.run(
+        accept_street_run(
+            container=container,
+            background=BackgroundTasks(),
+            street=street,
+            overrides='{"drawing_unit": "mm"}',
+        )
     )
 
     assert record.overrides["drawing_unit"] == "m"

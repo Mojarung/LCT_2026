@@ -92,8 +92,18 @@ def run(
     source = work / "street.dxf"
     _street(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
+    # Ряд кустарника у борта, кустарник под кронами и группы на газоне проверяются своими тестами
+    # (tests/test_shrub_rows.py, tests/test_pipeline_levers.py): эти писались под план из
+    # деревьев и по нему сверяют аллею, газон и блоки видов.
     params = container.profiles.load(
-        "strict", {"max_rejections": 50, "placement_solver": request.param}
+        "strict",
+        {
+            "max_rejections": 50,
+            "placement_solver": request.param,
+            "shrub_rows": False,
+            "understory": False,
+            "shrub_fill": False,
+        },
     )
     report = container.use_case.execute(PlanRequest("test", source, work / "out", "strict", params))
     artifacts = container.artifacts.save(work / "out", report)
@@ -280,3 +290,16 @@ def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> 
     assert report.plan.placements
     assert report.summary()["surface_inference_review_required"] is True
     assert any("Исследовательский режим покрытий" in warning for warning in report.warnings)
+
+
+def test_moved_weak_places_keep_every_norm(run: dict[str, object]) -> None:
+    """Сдвиг слабого места (application/refine) не имеет права купить запас нарушением."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    moved = [p for p in plan.placements if any(n.startswith("сдвинута сервисом") for n in p.notes)]
+    for placement in moved:
+        assert placement.verdict.value != "forbidden"
+        assert all(c.outcome.value != "fail" for c in placement.checks)
+    assert plan.quality is not None
+    assert plan.quality.index is not None
+    if moved:
+        assert any(w.startswith("Сдвиг от сетей:") for w in plan.warnings)

@@ -278,7 +278,7 @@ class ProfileModel(_Strict):
     description: str = ""
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
-    spacing_m: float = Field(default=6.0, ge=0.3, le=50)
+    spacing_m: float = Field(default=5.0, ge=0.3, le=50)
     curb_offsets_m: tuple[float, ...] = Field(default=(2.0, 2.5, 3.0), min_length=1, max_length=10)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
@@ -302,7 +302,10 @@ class ProfileModel(_Strict):
     surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
-    modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
+    modes: tuple[Literal["alley", "lawn", "fill"], ...] = Field(
+        default=("alley", "lawn", "fill"), min_length=1
+    )
+    fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
     placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
@@ -325,11 +328,32 @@ class ProfileModel(_Strict):
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
+    allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
     root_barriers: bool = False
     shrub_groups: bool = True
     shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
     shrub_group_size: int = Field(default=3, ge=1, le=5)
+    shrub_rows: bool = True
+    shrub_row_curb_offsets_m: tuple[float, ...] = Field(default=(1.3, 1.0), min_length=1)
+    shrub_row_spacing_m: float = Field(default=0.4, ge=0.2, le=2.0)
+    shrub_row_tree_gap_m: float = Field(default=1.25, ge=0, le=5)
+    shrub_row_access_gap_m: float = Field(default=1.0, ge=0, le=5)
+    shrub_row_gap_buffer_m: float = Field(default=5.0, ge=0, le=20)
+    shrub_row_min_length_m: float = Field(default=3.0, ge=0, le=50)
+    shrub_row_height_m: float = Field(default=1.0, gt=0, le=3)
+    hedge_species_balance: bool = True
+    curb_hedges: bool = True
+    curb_hedge_spacing_m: float = Field(default=1.0, ge=0.2, le=2.0)
+    curb_hedge_density_cap: bool = True
+    understory: bool = True
+    understory_trees: Literal["alley", "all"] = "alley"
+    understory_size: int = Field(default=3, ge=1, le=7)
+    understory_radii_m: tuple[float, ...] = Field(default=(2.2, 2.6, 3.0), min_length=1)
+    shrub_fill: bool = True
+    shrub_fill_tree_gap_m: float = Field(default=3.0, ge=0, le=20)
+    shrub_fill_shrub_gap_m: float = Field(default=2.0, ge=0, le=20)
+    shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
     shrub_quota_species: float = Field(default=0.20, gt=0, le=1)
     shrub_quota_genus: float = Field(default=0.35, gt=0, le=1)
     shrub_quota_family: float = Field(default=0.50, gt=0, le=1)
@@ -340,15 +364,24 @@ class ProfileModel(_Strict):
     quota_family: float = Field(default=0.30, gt=0, le=1)
     conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
     structure_patch_size: int = Field(default=10, ge=1, le=200)
+    alley_priority: float = Field(default=2.0, ge=0, le=100)
+    quota_penalty: float = Field(default=0.0, ge=0, le=100)
+    quota_adaptive: bool = False
+    quota_single_places: float = Field(default=30.0, ge=1, le=10_000)
+    condition_penalty: float = Field(default=0.2, ge=0, le=1)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     quality_weights: dict[str, float] = Field(default_factory=dict)
     density_trees_per_km: tuple[float, float] = Field(default=(150.0, 180.0))
     density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
-    canopy_target: float = Field(default=1.0, gt=0, le=5)
+    canopy_target: float = Field(default=0.75, gt=0, le=5)
     dust_target: float = Field(default=0.50, gt=0, le=1)
-    margin_target: float = Field(default=0.20, gt=0, le=5)
+    dust_strip_m: float = Field(default=2.0, ge=0, le=10)
+    dust_crown_factor: float = Field(default=0.5, ge=0, le=1)
+    margin_target_m: float = Field(default=0.5, gt=0, le=5)
     diversity_target: int = Field(default=10, ge=1, le=100)
+    density_admissible: bool = True
+    dust_admissible: bool = True
 
     @field_validator("density_trees_per_km", "density_shrubs_per_km", "row_spacing_m")
     @classmethod

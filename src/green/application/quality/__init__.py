@@ -70,7 +70,7 @@ TERMS: dict[str, tuple[str, str]] = {
     ),
     "category": (
         "Категория насаждений",
-        "МГСН 1.02-02, прил. В, табл. В.6: рекомендация вида для категории территории",
+        "МГСН 1.02-02, прил. В, табл. В.6; вид, о котором таблица молчит, в оценку не входит",
     ),
     "canopy": (
         "Тень: площадь взрослых крон",
@@ -85,7 +85,7 @@ TERMS: dict[str, tuple[str, str]] = {
     ),
     "margin": (
         "Запас до норм",
-        "ТЗ: корректность отступов; запас 20% на неточность подосновы - параметр проекта",
+        "СП 317.1325800.2017, п. 5.3.5.3: сети на плане 1:500 - до 0,5 м от натуры",
     ),
     "season": (
         "Сезонность",
@@ -100,6 +100,13 @@ PENALTIES: dict[str, tuple[float, str]] = {
     "lost": (0.05, "места, допустимые по нормам, но оставшиеся без посадки"),
 }
 _EPS = 1e-12
+# Вклад меньше половины сотой промилле индекса - ноль: такая посадка не сильна и не слаба.
+WEAK_PERMILLE = 0.005
+# Слабое место на карте - посадка, которая тянет индекс вниз больше чем на десятую долю
+# средней доли одной посадки (индекс / число посадок). На плане из полутора тысяч посадок
+# куст вида чуть ниже среднего по категории даёт -0,03 ‰: это не повод его двигать, и тысяча
+# треугольников на карте прятала бы настоящие слабые места - дерево впритык к кабелю.
+WEAK_SHARE = 0.1
 _TOP_REASONS = 3
 
 
@@ -116,7 +123,7 @@ def assess(plan: Plan, site: Site, params: PlanParams) -> Plan:
 def evaluate(plan: Plan, site: Site, params: PlanParams) -> PlanQuality:
     layout = Layout.of(plan.placements)
     results: dict[str, TermResult] = {
-        "density": density(layout, site, params),
+        "density": density(layout, site, params, _capacity(plan)),
         "fit": fit(layout),
         "diversity": diversity(layout, params),
         "rows": rows(layout, params),
@@ -151,7 +158,15 @@ def evaluate(plan: Plan, site: Site, params: PlanParams) -> PlanQuality:
         for key, result in results.items()
     )
     values = (
-        _values(plan, results, share, penalty_deltas, penalty_flags, unclipped=raw - penalty)
+        _values(
+            plan,
+            results,
+            share,
+            penalty_deltas,
+            penalty_flags,
+            unclipped=raw - penalty,
+            threshold=weak_threshold(index, len(plan.placements)),
+        )
         if index is not None
         else {}
     )
@@ -167,12 +182,26 @@ def evaluate(plan: Plan, site: Site, params: PlanParams) -> PlanQuality:
     )
 
 
+def weak_threshold(index: float | None, count: int) -> float:
+    """Вклад, ниже которого посадка - слабое место: большее из WEAK_PERMILLE и доли WEAK_SHARE."""
+    floor = WEAK_PERMILLE / 1000
+    if not count or index is None:
+        return floor
+    return max(floor, WEAK_SHARE * index / count)
+
+
 def _zone_m2(plan: Plan) -> float | None:
     """Площадь зоны допустимости из статистики размещения (разрешено и на согласование)."""
     zone = float(plan.stats.get("zone_allowed_m2", 0)) + float(
         plan.stats.get("zone_needs_approval_m2", 0)
     )
     return zone or None
+
+
+def _capacity(plan: Plan) -> float | None:
+    """Сколько деревьев вмещает зона допустимости (считает размещение, zones.zone_capacity)."""
+    value = plan.stats.get("zone_capacity_trees")
+    return float(value) if value is not None else None
 
 
 def _gate(plan: Plan, site: Site) -> str:
@@ -229,6 +258,7 @@ def _values(  # noqa: PLR0913 - term and penalty decomposition of the counterfac
     penalty_flags: list[list[str]],
     *,
     unclipped: float,
+    threshold: float,
 ) -> dict[str, PlantingValue]:
     n = len(plan.placements)
     if not n:
@@ -257,20 +287,23 @@ def _values(  # noqa: PLR0913 - term and penalty decomposition of the counterfac
         parts = {key: float(contribution[i]) for key, contribution in by_term.items()}
         if penalty_deltas[i]:
             parts["penalties"] = -float(penalty_deltas[i])
+        reasons, weak = _reasons(i, parts, results, penalty_flags[i])
         values[placement.placement_id] = PlantingValue(
             placement_id=placement.placement_id,
             delta=round(float(delta[i]), 6),
             by_term={key: round(value, 6) for key, value in parts.items() if abs(value) > _EPS},
-            reasons=_reasons(i, parts, results, penalty_flags[i]),
+            reasons=reasons,
+            weak=weak,
             percentile=round(float(ranks[i]) / max(n - 1, 1), 4),
+            flagged=bool(delta[i] <= -threshold),
         )
     return values
 
 
 def _reasons(
     i: int, parts: dict[str, float], results: dict[str, TermResult], flags: list[str]
-) -> tuple[str, ...]:
-    """Главные причины ценности: слагаемые с наибольшим вкладом и то, что тянет вниз."""
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Чем посадка ценна и что в ней слабо: слагаемые с наибольшим вкладом в обе стороны."""
     positive = sorted(
         (key for key, value in parts.items() if value > _EPS and key in results),
         key=lambda key: -parts[key],
@@ -279,13 +312,9 @@ def _reasons(
         (key for key, value in parts.items() if value < -_EPS and key in results),
         key=lambda key: parts[key],
     )
-    chosen = [results[key].details[i] for key in positive if results[key].details[i]]
-    reasons = chosen[:_TOP_REASONS]
-    reasons += [
-        f"против: {results[key].details[i]}" for key in negative[:1] if results[key].details[i]
-    ]
-    reasons += [f"против: {flag}" for flag in flags]
-    return tuple(reasons)
+    reasons = [results[key].details[i] for key in positive if results[key].details[i]]
+    weak = [results[key].details[i] for key in negative if results[key].details[i]]
+    return tuple(reasons[:_TOP_REASONS]), (*weak[:2], *flags)
 
 
 def _num(value: float, digits: int = 2) -> str:
@@ -299,20 +328,13 @@ def _summary(
     penalties: dict[str, float],
     values: dict[str, PlantingValue],
 ) -> tuple[str, ...]:
-    """Сводка плана словами: оценка, сильное, слабое и что поднимет индекс сильнее всего."""
+    """Сводка плана словами: оценка, что поднимет индекс сильнее всего, штрафы, слабые места.
+
+    Сильные и слабые слагаемые не пересказываются: каждое стоит рядом со своей оценкой.
+    """
     lines = [gate] if gate else [f"Индекс качества плана {_num(index or 0.0)} из 1."]
     scored = [t for t in terms if t.score is not None and t.weight > 0]
     if scored:
-        best = sorted(scored, key=lambda t: -(t.score or 0.0))[:2]
-        worst = sorted(scored, key=lambda t: t.score or 0.0)[:2]
-        lines.append(
-            "Сильное: " + "; ".join(f"{t.title.lower()} {_num(t.score or 0.0)}" for t in best) + "."
-        )
-        lines.append(
-            "Слабое: "
-            + "; ".join(f"{t.title.lower()} {_num(t.score or 0.0)} ({t.note})" for t in worst)
-            + "."
-        )
         gains = sorted(scored, key=lambda t: -t.weight * (1 - (t.score or 0.0)))[:2]
         lines.append(
             "Резерв при максимальной оценке отдельного показателя: "
@@ -328,8 +350,11 @@ def _summary(
         )
     penalty = sum(penalties.values())
     if penalty > _EPS:
+        shares = _thousandths(penalties, penalty)
         named = [
-            f"{PENALTIES[key][1]} -{_num(value, 3)}" for key, value in penalties.items() if value
+            f"{PENALTIES[key][1]} -{_num(share / 1000, 3)}"
+            for key, share in shares.items()
+            if share > 0  # «-0,000» ничего не говорит
         ]
         lines.append(f"Штрафы -{_num(penalty, 3)}: " + "; ".join(named) + ".")
     harmful = sum(1 for v in values.values() if v.delta < -_EPS)
@@ -339,7 +364,34 @@ def _summary(
             "повышает расчётный индекс; это не разрешение на удаление. Нужно заново "
             "проверить квоты и остальные ограничения. Эффекты удалений не складываются."
         )
+    weak = sum(1 for v in values.values() if v.flagged)
+    if weak:
+        lines.append(f"Слабых мест: {weak}, на карте - треугольник.")
     return tuple(lines)
 
 
-__all__ = ["PENALTIES", "TERMS", "Site", "assess", "evaluate", "site_of"]
+def _thousandths(parts: dict[str, float], total: float) -> dict[str, int]:
+    """Части в тысячных, которые складываются в округлённый итог (метод наибольших остатков).
+
+    Каждая часть, округлённая сама по себе, в сумме расходится с итогом: -0,006 при видимых
+    -0,002, -0,002 и -0,001 читается как ошибка счёта.
+    """
+    scaled = {key: value * 1000 for key, value in parts.items()}
+    shares = {key: int(value) for key, value in scaled.items()}
+    missing = round(total * 1000) - sum(shares.values())
+    for key in sorted(scaled, key=lambda k: shares[k] - scaled[k])[: max(missing, 0)]:
+        shares[key] += 1
+    return shares
+
+
+__all__ = [
+    "PENALTIES",
+    "TERMS",
+    "WEAK_PERMILLE",
+    "WEAK_SHARE",
+    "Site",
+    "assess",
+    "evaluate",
+    "site_of",
+    "weak_threshold",
+]
