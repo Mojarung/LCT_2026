@@ -2,6 +2,7 @@
 
 import { Link } from 'react-router';
 
+import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
 import { integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
@@ -10,6 +11,29 @@ import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
+
+/** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
+ *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
+ *  эскизом, и больше нигде. */
+function ReviewLinks({ run }: { run: RunOut }) {
+  const names = new Set((run.artifacts ?? []).map((a) => a.name));
+  return (
+    <>
+      {names.has('semantic-review.geojson') ? (
+        <p className="hint">
+          <Link to={`/runs/${encodeURIComponent(run.id)}/review`}>Уточнить объекты на чертеже</Link>
+        </p>
+      ) : null}
+      {names.has('classification.json') ? (
+        <p className="hint">
+          <a href={artifactUrl(run.id, 'classification.json')} download>
+            Скачать отчёт распознавания объектов
+          </a>
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 /** Свернуть панель - значок в её верхнем углу. Свёрнутая панель остаётся одной кнопкой, и вся
  *  ширина экрана уходит плану: на ленте улицы это решает, видно чертёж или нет. */
@@ -69,6 +93,11 @@ export function RunMetrics({ run }: { run: RunOut }) {
   const barrierPlaces = num(stats.barrier_places);
   const warnings = Array.isArray(summary.warnings) ? summary.warnings.map(String) : [];
   const notices = keyNotices(warnings);
+  // Строгий прогон тиммейта: объекты не уточнены или грунт выведен по расстоянию - план
+  // посчитан эскизом, и это говорится рядом с числом, а не в журнале.
+  const sketch =
+    summary.semantic_assignments_complete === false ||
+    summary.surface_inference_review_required === true;
   return (
     <>
       <p className="metric">
@@ -95,6 +124,15 @@ export function RunMetrics({ run }: { run: RunOut }) {
           {plural(barrierPlaces, 'место станет', 'места станут', 'мест станут')} допустимыми с
           прикорневым барьером
         </p>
+      ) : null}
+      {sketch ? (
+        <div className="notice">
+          <p>
+            Исследовательский эскиз: требуется уточнить объекты или границы покрытий. Допустимость
+            посадок не подтверждена.
+          </p>
+          <ReviewLinks run={run} />
+        </div>
       ) : null}
       {notices.length ? (
         <div className="notice">
@@ -144,6 +182,7 @@ export function RunStatus({ run }: { run: RunOut }) {
         <div>
           <p className="status-title">Прогон не удался</p>
           <p className="error-text">{run.error || 'Причина не записана.'}</p>
+          <ReviewLinks run={run} />
           <p className="hint">
             <Link to="/">К консоли запуска</Link>
           </p>

@@ -56,6 +56,13 @@
   --utility-opacity: 0.62;
   --c-existing-crown: #d6d5bd;
   --c-existing-shrub: #d9dcc0;
+  /* Карта уточнения объектов (/runs/:id/review): серый - контекст, оранжевый - выбранная
+     группа, красный - выбранный объект; подписи и выбранная подпись. */
+  --review-context: #8a918b;
+  --review-group: #b66100;
+  --review-object: #c41c2e;
+  --review-label: #3a4a40;
+  --review-label-active: #1f45c8;
   /* Сетка чертёжного листа под планом: заметна только как фактура бумаги, спорить с линиями
      подосновы ей нельзя. */
   --grid: rgba(140, 116, 78, 0.16);
@@ -146,6 +153,11 @@
   --utility-opacity: 1;
   --c-existing-crown: #4b5347;
   --c-existing-shrub: #4f5749;
+  --review-context: #5d646d;
+  --review-group: #e3902f;
+  --review-object: #f06070;
+  --review-label: #c3cbc6;
+  --review-label-active: #86a8ff;
   --grid: rgba(233, 230, 224, 0.052);
 
   --r-panel: 16px;
