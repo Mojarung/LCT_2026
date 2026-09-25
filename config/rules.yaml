@@ -493,6 +493,66 @@ distance_rules:
       quote: "С однорядной посадкой деревьев | 5-6; С двухрядной посадкой деревьев | 7-8; С групповой посадкой: деревьев | 5-7"
       status: verified
 
+  # Посадочное место не заходит на объект (25.09.2026). Для этих пар норма расстояния не задана
+  # (прочерк в табл. 9.1 СП 42.13330.2016 или объект вне таблицы), но объект без правила
+  # размещению не виден: куст вставал на опору, люк и ствол, дерево - на ограду и памятник.
+  # Числа - из посадочного места параметров проекта: яма дерева 2,2 x 2,2 м (половина стороны
+  # 1,1 м), яма кустарника диаметром 1 м (радиус 0,5 м); ствол и фундамент опоры - до 0,5 м.
+  - rule_id: R-OBST-TREE-001
+    object_class: obstacle
+    planting_type: tree
+    min_distance_m: 1.1
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма дерева 2,2 x 2,2 м не заходит на препятствие (крыльцо, фонтан, памятник, тумба, шлагбаум, береговая линия); внутри замкнутого контура посадки нет", status: verified}
+  - rule_id: R-OBST-SHRUB-001
+    object_class: obstacle
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма кустарника диаметром 1 м не заходит на препятствие; внутри замкнутого контура посадки нет", status: verified}
+  - rule_id: R-FENCE-TREE-001
+    object_class: fence
+    planting_type: tree
+    min_distance_m: 1.1
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма дерева 2,2 x 2,2 м не заходит на ограду и её фундамент", status: verified}
+  - rule_id: R-FENCE-SHRUB-001
+    object_class: fence
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма кустарника диаметром 1 м не заходит на ограду", status: verified}
+  - rule_id: R-EXSHRUB-TREE-001
+    object_class: existing_shrub
+    planting_type: tree
+    min_distance_m: 1.1
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма дерева 2,2 x 2,2 м не заходит на существующий кустарник", status: verified}
+  - rule_id: R-EXSHRUB-SHRUB-001
+    object_class: existing_shrub
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма кустарника диаметром 1 м не заходит на существующий кустарник", status: verified}
+  - rule_id: R-EXTREE-SHRUB-001
+    object_class: existing_tree
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: axis
+    citation: {act_id: PROJECT, clause: "яма кустарника (радиус 0,5 м) не заходит на ствол существующего дерева (принят радиус ствола до 0,5 м)", status: verified}
+  - rule_id: R-POLE-SHRUB-001
+    object_class: pole
+    planting_type: shrub
+    min_distance_m: 1.0
+    measure_to: axis
+    citation: {act_id: PROJECT, clause: "в табл. 9.1 СП 42.13330.2016 для кустарника у опоры прочерк; яма кустарника (радиус 0,5 м) не заходит на фундамент опоры (принят радиус до 0,5 м)", status: verified}
+  - rule_id: R-ACCESS-SHRUB-001
+    object_class: utility.access
+    planting_type: shrub
+    min_distance_m: 0.5
+    measure_to: edge
+    citation: {act_id: PROJECT, clause: "яма кустарника диаметром 1 м не заходит на крышку колодца: люк остаётся доступным", status: verified}
+
   # Охранная зона ВЛ (ТЗ: «охранные зоны ЛЭП»). Класс напряжения в чертеже не подписан: взята зона
   # для ВЛ до 1 кВ. Посадка в зоне требует письменного согласования сетевой организации, а не запрещена.
   - rule_id: R-OHL-TREE-001

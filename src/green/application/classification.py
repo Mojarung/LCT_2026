@@ -66,6 +66,8 @@ class LayerRule:
     confirmed: bool
     geometry: GeometryKind = GeometryKind.ANY
     priority: int = 0
+    # Почему объекты слоя не участвуют в расчёте (для ignore обязательна в layer_map.yaml).
+    reason: str = ""
 
     def matches(self, feature: Feature) -> bool:
         value = feature.block if self.target is MatchTarget.BLOCK else feature.layer
@@ -324,6 +326,7 @@ class RuleDescription:
     object_class: ObjectClass
     priority: int
     seen_in_pilot: bool
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,7 +411,14 @@ def classification_report(
         ),
         rules=tuple(
             RuleDescription(
-                i, r.pattern.pattern, r.target, r.geometry, r.object_class, r.priority, r.confirmed
+                i,
+                r.pattern.pattern,
+                r.target,
+                r.geometry,
+                r.object_class,
+                r.priority,
+                r.confirmed,
+                r.reason,
             )
             for i, r in enumerate(layer_map.rules)
         ),

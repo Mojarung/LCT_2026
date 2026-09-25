@@ -62,6 +62,12 @@ class ObjectClass(StrEnum):
         return self.is_utility or self in {ObjectClass.CURB, ObjectClass.ROAD}
 
     @property
+    def occupies_interior(self) -> bool:
+        """Замкнутый контур занимает площадь внутри: в середине фонтана или памятника посадки нет,
+        хотя до линии контура оттуда дальше нормы."""
+        return self is ObjectClass.OBSTACLE
+
+    @property
     def is_hard_surface(self) -> bool:
         """Покрытие, внутри которого посадочное место не рассматривается вовсе."""
         return self in {

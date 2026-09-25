@@ -122,6 +122,8 @@ class LayerRuleModel(_Strict):
     object_class: ObjectClass
     confirmed: bool = False
     note: str = ""
+    # Почему слой не участвует в расчёте: обязательна для ignore, попадает в отчёт.
+    reason: str = ""
     priority: int = 0
 
     @field_validator("pattern")
@@ -129,6 +131,12 @@ class LayerRuleModel(_Strict):
     def _compiles(cls, value: str) -> str:
         re.compile(value)
         return value
+
+    @model_validator(mode="after")
+    def _ignore_is_explained(self) -> LayerRuleModel:
+        if self.object_class is ObjectClass.IGNORE and not self.reason.strip():
+            raise ValueError(f"правило {self.pattern!r} с классом ignore без reason")
+        return self
 
 
 class LayerMapFile(_Strict):

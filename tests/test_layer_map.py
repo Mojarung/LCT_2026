@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 from shapely.geometry import LineString
 
-from green.domain.objects import Feature, ObjectClass, SourceRef
+from green.application.classification import classification_report
+from green.application.errors import ConfigurationError
+from green.domain.objects import Feature, ObjectClass, Scene, SourceRef
 from green.infrastructure.config.repositories import YamlLayerMapSource
 
 LAYER_MAP = YamlLayerMapSource(
@@ -32,6 +34,12 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         (f"{GEOTREST}tp$0$Бортовой камень", ObjectClass.CURB),
         (f"{GEOTREST}up$0$Кабель электрический", ObjectClass.UTILITY_POWER),
         (f"{GEOTREST}up$0$Топливопровод", ObjectClass.UTILITY_UNKNOWN),
+        (f"{GEOTREST}tp$0$Крыльца", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Фонтаны", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Памятники", ObjectClass.OBSTACLE),
+        ("3-я Парковая|Топо_Береговая линия", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Вентиляторы", ObjectClass.STRUCTURE),
+        (f"{GEOTREST}kl$0$Красные линии", ObjectClass.IGNORE),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:
@@ -41,3 +49,29 @@ def test_layer_classes(layer: str, expected: ObjectClass) -> None:
         geometry=LineString([(0, 0), (1, 1)]),
     )
     assert LAYER_MAP.classify(feature) is expected
+
+
+def test_ignore_rule_without_a_reason_does_not_load(tmp_path: Path) -> None:
+    """Игнор слоя - решение, которое надо объяснить: без причины карта слоёв не читается."""
+    path = tmp_path / "layer_map.yaml"
+    path.write_text(
+        'version: 1\nrules:\n  - {pattern: "Рамк", object_class: ignore}\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="reason"):
+        YamlLayerMapSource(path, tmp_path / "no-symbols.yaml").load()
+
+
+def test_report_names_the_reason_of_every_ignored_layer() -> None:
+    frame = Feature(
+        ref=SourceRef("00000000", "00000000", "1"),
+        layer=f"{GEOTREST}tp$0$Рамка",
+        geometry=LineString([(0, 0), (1, 1)]),
+    )
+    scene = Scene("s.dxf", "0" * 64, "AC1032", (frame,))
+
+    report = classification_report(scene, LAYER_MAP)
+
+    ignored = [r for r in report.rules if r.object_class is ObjectClass.IGNORE]
+    assert ignored
+    assert all(r.reason for r in ignored)

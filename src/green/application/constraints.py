@@ -250,7 +250,20 @@ def _index(features: tuple[Feature, ...]) -> _ClassIndex:
     errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
     if not np.isfinite(errors).all() or (errors < 0).any():
         raise ValueError("Unbounded or invalid input geometry error")
-    return _ClassIndex(STRtree([f.geometry for f in features]), features, halves, errors)
+    return _ClassIndex(STRtree([_occupied(f) for f in features]), features, halves, errors)
+
+
+def _occupied(feature: Feature) -> BaseGeometry:
+    """Место, которое объект занимает на земле: у замкнутого контура - вместе с площадью."""
+    geometry = feature.geometry
+    if not (
+        feature.object_class.occupies_interior
+        and geometry.geom_type == "LineString"
+        and geometry.is_closed
+    ):
+        return geometry
+    area = shapely.make_valid(shapely.Polygon(geometry.coords))
+    return area if area.area > 0 else geometry
 
 
 def _nearest_clearance(
