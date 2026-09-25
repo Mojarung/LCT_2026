@@ -101,13 +101,37 @@ def test_geometry_symbol_keeps_its_strokes_as_the_object(tmp_path: Path) -> None
     assert len(scene.features) == 3
 
 
-def test_unknown_symbol_stops_a_strict_run_instead_of_a_layer_guess(tmp_path: Path) -> None:
-    scene, layer_map = _classified(tmp_path, [("NEZNAKOMY_7", (1, 1), "Полоса деревьев")])
+def test_unknown_symbol_stops_a_verified_run_instead_of_a_layer_guess(tmp_path: Path) -> None:
+    scene, layer_map = _classified(
+        tmp_path, [("NEZNAKOMY_7", (1, 1), "Полоса деревьев")], infer_unknown=False
+    )
 
     assert {f.object_class for f in scene.features} == {ObjectClass.UNKNOWN}
-    report = classification_report(scene, layer_map, PlanParams())
+    verified = PlanParams(infer_unknown=False)
+    report = classification_report(scene, layer_map, verified)
     with pytest.raises(ClassificationError):
-        require_classified(report, PlanParams(), scene=scene)
+        require_classified(report, verified, scene=scene)
+
+
+def test_unknown_symbol_on_a_tree_layer_is_inferred_a_tree(tmp_path: Path) -> None:
+    """Задача 14: незнакомый код на слое со словом «деревьев» - дерево в точке вставки."""
+    scene, _ = _classified(tmp_path, [("NEZNAKOMY_7", (1, 1), "Полоса деревьев")])
+
+    trees = [f for f in scene.features if f.object_class is ObjectClass.EXISTING_TREE]
+    assert [(t.geometry.x, t.geometry.y) for t in trees] == [(1, 1)]
+    assert trees[0].classification.method == "symbol_inferred:NEZNAKOMY:дерев"
+    assert ObjectClass.UNKNOWN not in {f.object_class for f in scene.features}
+
+
+def test_unknown_symbol_without_words_is_a_point_obstacle(tmp_path: Path) -> None:
+    """Слов нет ни в блоке, ни в слое - небольшой знак на земле: препятствие в точке."""
+    scene, _ = _classified(tmp_path, [("QX_7", (4, 5), "Level 3")])
+
+    points = [f for f in scene.features if f.source_entity_type == "SYMBOL"]
+    assert [(p.object_class, p.geometry.x, p.geometry.y) for p in points] == [
+        (ObjectClass.OBSTACLE, 4, 5)
+    ]
+    assert points[0].classification.method == "symbol_assumed:QX"
 
 
 def test_explicit_block_class_beats_the_dictionary(tmp_path: Path) -> None:

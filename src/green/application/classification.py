@@ -8,9 +8,10 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import shapely
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 
 from green.application.errors import InputError
+from green.application.name_semantics import Vocabulary
 from green.application.semantic_names import (
     base_name,
     local_name,
@@ -18,7 +19,7 @@ from green.application.semantic_names import (
     name_key,
 )
 from green.application.surface_labels import classify_labels, label_report_groups
-from green.application.symbols import SymbolCatalog, SymbolRole
+from green.application.symbols import SymbolCatalog, SymbolEntry, SymbolRole
 from green.application.tree_strips import chain_tree_strips
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
@@ -89,6 +90,8 @@ class LayerMap:
     fingerprint: str
     # Словарь условных знаков (config/symbols.yaml): знак решает раньше слоя.
     symbols: SymbolCatalog = field(default_factory=SymbolCatalog)
+    # Слова имён (config/vocabulary.yaml): вывод для незнакомого, когда правила молчат.
+    vocabulary: Vocabulary = field(default_factory=Vocabulary)
 
     def classify(self, feature: Feature) -> ObjectClass:
         return self.decide(feature)[0]
@@ -123,7 +126,12 @@ class LayerCoverage:
 def classify_scene(
     scene: Scene, layer_map: LayerMap, params: PlanParams | None = None
 ) -> tuple[Scene, tuple[LayerCoverage, ...]]:
-    """Присваивает классы всем объектам и возвращает отчёт покрытия по слоям."""
+    """Присваивает классы всем объектам и возвращает отчёт покрытия по слоям.
+
+    Порядок: словарь знаков, правила слоёв, затем для незнакомого (задача 14) вывод по словам
+    имени блока и слоя и осторожная замена по геометрии; параметр infer_unknown=False
+    оставляет незнакомое неизвестным, и строгий прогон остановится, как задумано проверкой.
+    """
     if (
         params
         and params.semantic_source_sha256
@@ -134,12 +142,13 @@ def classify_scene(
             "Загрузите review-input.dxf из проверенного прогона или выполните уточнение заново."
         )
     overrides = _Overrides(params)
-    catalog = layer_map.symbols
+    infer = params.infer_unknown if params else True
+    entries = _symbol_entries(scene.symbols, layer_map, infer=infer)
     instances = {str(symbol.ref): symbol for symbol in scene.symbols}
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
     classified = []
     for feature in scene.features:
-        decided = _stroke_decision(feature, instances, catalog)
+        decided = _stroke_decision(feature, instances, entries, active=bool(layer_map.symbols))
         if decided is None:
             key = (
                 feature.layer,
@@ -149,7 +158,11 @@ def classify_scene(
             )
             if key not in cache:
                 cache[key] = layer_map.decide(feature)
+                if infer and cache[key][0] is ObjectClass.UNKNOWN:
+                    cache[key] = _inferred(feature, layer_map.vocabulary, cache[key][1])
             decided = cache[key]
+            if infer and decided[0] is ObjectClass.UNKNOWN:
+                decided = _assumed(feature, decided[1])
         kind, evidence = decided
         explicit = overrides.decide(feature)
         if explicit is not None:
@@ -160,7 +173,7 @@ def classify_scene(
     for feature in scene.features:
         if feature.symbol is not None:
             strokes[feature.symbol].append(feature.geometry)
-    classified.extend(_symbol_features(scene.symbols, catalog, overrides, strokes))
+    classified.extend(_symbol_features(scene.symbols, entries, overrides, strokes))
     classified = list(chain_tree_strips(classified))
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
@@ -171,32 +184,159 @@ def classify_scene(
     return replace(scene, features=tuple(classified), labels=labels), coverage
 
 
+# Малый круг без смысла - предмет в точке (колонка, столбик, ствол): препятствие, а не контур.
+_SMALL_CIRCLE_M = 1.5
+# Рамка листа Мосгеотреста на слое «0» ссылки (Камчатская: прямоугольник 250 x 400 м с
+# легендой и штампом): отрезок или прямоугольник строго по осям координат от 100 м. Съёмка
+# так не рисует - борт и край газона по осям на 100 м не идут; контуром рамка резала бы газоны
+# по границам листов.
+_FRAME_M = 100.0
+_AXIS_TOLERANCE_M = 1e-6
+_POINT_CLASSES = frozenset(
+    {
+        ObjectClass.EXISTING_TREE,
+        ObjectClass.EXISTING_SHRUB,
+        ObjectClass.UTILITY_ACCESS,
+        ObjectClass.POLE,
+    }
+)
+_MARKER_CLASSES = frozenset({ObjectClass.LAWN, ObjectClass.EXISTING_WOODLAND})
+
+
+def _inferred(
+    feature: Feature, vocabulary: Vocabulary, previous: ClassificationEvidence
+) -> tuple[ObjectClass, ClassificationEvidence]:
+    """Вывод по словам имени блока и слоя; совпавшие правила остаются в основании."""
+    found = vocabulary.infer(feature.block, feature.layer)
+    if found is None:
+        return ObjectClass.UNKNOWN, previous
+    return found.object_class, ClassificationEvidence(
+        found.method, previous.matched_rules, previous.chosen_rules
+    )
+
+
+def _assumed(
+    feature: Feature, previous: ClassificationEvidence
+) -> tuple[ObjectClass, ClassificationEvidence]:
+    """Осторожная замена по геометрии, когда слов нет: точка - отметка, малый круг - предмет,
+    остальное - контур, который разделяет покрытия, но отступа не даёт."""
+    if feature.geometry.geom_type in {"Point", "MultiPoint"}:
+        kind, method = ObjectClass.IGNORE, "assumed_geometry:point"
+    elif _sheet_frame(feature.geometry):
+        kind, method = ObjectClass.IGNORE, "assumed_geometry:sheet_frame"
+    elif feature.circle_radius_m is not None and feature.circle_radius_m <= _SMALL_CIRCLE_M:
+        kind, method = ObjectClass.OBSTACLE, "assumed_geometry:small_circle"
+    else:
+        kind, method = ObjectClass.CONTOUR, "assumed_geometry:contour"
+    return kind, ClassificationEvidence(method, previous.matched_rules, previous.chosen_rules)
+
+
+def _sheet_frame(geometry: BaseGeometry) -> bool:
+    """Отрезок или прямоугольник строго по осям координат со стороной от 100 м."""
+    if geometry.geom_type == "Polygon":
+        x0, y0, x1, y1 = geometry.bounds
+        return (
+            min(x1 - x0, y1 - y0) >= _FRAME_M
+            and len(geometry.interiors) == 0
+            and abs(geometry.area - (x1 - x0) * (y1 - y0)) <= _AXIS_TOLERANCE_M * geometry.area
+        )
+    if geometry.geom_type == "LineString":
+        coords = list(geometry.coords)
+        if len(coords) == 2:  # noqa: PLR2004 - отрезок
+            (ax, ay), (bx, by) = coords[0][:2], coords[1][:2]
+            axis = abs(ax - bx) <= _AXIS_TOLERANCE_M or abs(ay - by) <= _AXIS_TOLERANCE_M
+            return axis and geometry.length >= _FRAME_M
+        if coords[0] == coords[-1] and len(coords) >= 4:  # noqa: PLR2004 - замкнутая ломаная
+            return _sheet_frame(Polygon(coords))
+    return False
+
+
+def _symbol_role(kind: ObjectClass) -> SymbolRole:
+    if kind in _POINT_CLASSES:
+        return SymbolRole.POINT
+    if kind in _MARKER_CLASSES:
+        return SymbolRole.MARKER
+    if kind is ObjectClass.IGNORE:
+        return SymbolRole.ANNOTATION
+    return SymbolRole.GEOMETRY
+
+
+def _symbol_entries(
+    symbols: Iterable[SymbolInstance], layer_map: LayerMap, *, infer: bool
+) -> dict[str, tuple[SymbolEntry, str]]:
+    """Запись словаря знаков для каждого экземпляра и основание.
+
+    Незнакомый код - вывод по словам имени блока, затем слоя («Урна_Город» - препятствие,
+    блок на слое «Деревья_сущ» - дерево); без слов - препятствие в точке: небольшой знак на
+    земле, на который не сажают. Без словаря знаков экземпляры не разбираются вовсе.
+    """
+    catalog = layer_map.symbols
+    if not catalog:
+        return {}
+    entries: dict[str, tuple[SymbolEntry, str]] = {}
+    guessed: dict[tuple[str, str], tuple[SymbolEntry, str]] = {}
+    for symbol in symbols:
+        code = base_name(symbol.block)
+        entry = catalog.get(symbol.block)
+        if entry is not None:
+            entries[str(symbol.ref)] = (entry, "")
+            continue
+        if not infer:
+            continue
+        key = (code, symbol.layer)
+        if key not in guessed:
+            found = layer_map.vocabulary.infer(symbol.block, symbol.layer)
+            guessed[key] = (
+                (
+                    SymbolEntry(ObjectClass.OBSTACLE, SymbolRole.POINT, confirmed=False),
+                    f"symbol_assumed:{code}",
+                )
+                if found is None
+                else (
+                    SymbolEntry(
+                        found.object_class,
+                        _symbol_role(found.object_class),
+                        confirmed=False,
+                        note=found.method,
+                    ),
+                    f"symbol_inferred:{code}:{found.word}",
+                )
+            )
+        entries[str(symbol.ref)] = guessed[key]
+    return entries
+
+
 def _stroke_decision(
-    feature: Feature, instances: Mapping[str, SymbolInstance], catalog: SymbolCatalog
+    feature: Feature,
+    instances: Mapping[str, SymbolInstance],
+    entries: Mapping[str, tuple[SymbolEntry, str]],
+    *,
+    active: bool,
 ) -> tuple[ObjectClass, ClassificationEvidence] | None:
     """Штрих условного знака: класс решает словарь знаков, а не слой.
 
     Штрих знака-точки, маркера или оформления - рисунок, а не объект: объектом становится сам
-    экземпляр знака (_symbol_features). Незнакомый знак оставляет штрихи неизвестными, и
-    строгий прогон остановится: словарь нужно дополнить, а не угадывать по слою.
+    экземпляр знака (_symbol_features). Незнакомый знак без вывода (infer_unknown=False)
+    оставляет штрихи неизвестными, и строгий прогон остановится.
     """
-    if not catalog or feature.symbol is None:
+    if not active or feature.symbol is None:
         return None
     instance = instances.get(feature.symbol)
     if instance is None:
         return None
     code = base_name(instance.block)
-    entry = catalog.get(instance.block)
-    if entry is None:
+    resolved = entries.get(feature.symbol)
+    if resolved is None:
         return ObjectClass.UNKNOWN, ClassificationEvidence(f"symbol_unknown:{code}")
+    entry, method = resolved
     if entry.role is SymbolRole.GEOMETRY:
-        return entry.object_class, ClassificationEvidence(f"symbol_geometry:{code}")
+        return entry.object_class, ClassificationEvidence(method or f"symbol_geometry:{code}")
     return ObjectClass.IGNORE, ClassificationEvidence(f"symbol_stroke:{code}")
 
 
 def _symbol_features(
     symbols: Iterable[SymbolInstance],
-    catalog: SymbolCatalog,
+    entries: Mapping[str, tuple[SymbolEntry, str]],
     overrides: _Overrides,
     strokes: Mapping[str, list[BaseGeometry]],
 ) -> list[Feature]:
@@ -206,12 +346,15 @@ def _symbol_features(
     знака: отступ считается от наружной стенки, точка в центре занизила бы его на радиус.
     """
     features = []
-    for symbol in symbols if catalog else ():
-        entry = catalog.get(symbol.block)
-        if entry is None or entry.role not in {SymbolRole.POINT, SymbolRole.MARKER}:
+    for symbol in symbols:
+        resolved = entries.get(str(symbol.ref))
+        if resolved is None or resolved[0].role not in {SymbolRole.POINT, SymbolRole.MARKER}:
             continue
+        entry, method = resolved
         kind = entry.object_class
-        evidence = ClassificationEvidence(f"symbol_{entry.role}:{base_name(symbol.block)}")
+        evidence = ClassificationEvidence(
+            method or f"symbol_{entry.role}:{base_name(symbol.block)}"
+        )
         drawn = strokes.get(str(symbol.ref))
         geometry = (
             shapely.union_all(drawn).convex_hull
@@ -247,6 +390,10 @@ def _classify_feature(
             error = 0.0
         else:
             geometry = geometry.centroid
+    elif kind is ObjectClass.CONTOUR and geometry.geom_type in {"Polygon", "MultiPolygon"}:
+        # Контур без смысла, даже залитый штриховкой: внутренность не объект, а область, чей
+        # материал решают подписи; контур только разделяет покрытия.
+        geometry = geometry.boundary
     elif (
         kind in {ObjectClass.CURB, ObjectClass.PAVEMENT_EDGE, ObjectClass.FENCE}
         and geometry.geom_type in {"Polygon", "MultiPolygon"}
@@ -363,9 +510,15 @@ def classification_report(
         tuple[str, str | None, str, ObjectClass, ClassificationEvidence], list[Feature]
     ] = defaultdict(list)
     unresolved = 0
+    # С выводом незнакомого сеть неизвестного типа решена: у неё наибольший отступ сетей.
+    unresolved_classes = (
+        {ObjectClass.UNKNOWN}
+        if params is None or params.infer_unknown
+        else {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}
+    )
     for feature in scene.features:
         evidence = feature.classification or ClassificationEvidence("unmatched")
-        if feature.object_class in {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}:
+        if feature.object_class in unresolved_classes:
             unresolved += 1
         groups[
             (

@@ -122,8 +122,6 @@ rules:
   - {pattern: "Водосточный коллектор", object_class: utility.storm, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)Территории$", object_class: ignore, confirmed: true,
      reason: "контуры территорий: стройплощадки, склады, навалы на момент съёмки и зоны регулирования застройки - временное или правовое, а не предмет на земле; бытовки, траншеи, ограды и покрытия внутри нарисованы своими слоями"}
-  - {pattern: "(?:^|[|$])Defpoints$", object_class: ignore, confirmed: true,
-     reason: "служебный слой AutoCAD: не печатается, хранит точки определения размеров"}
   - {pattern: "Железные дороги", object_class: railway, confirmed: true}
   - {pattern: "Топливопровод", object_class: utility.unknown, confirmed: true,
      note: "продуктопровод: отдельной строки нормы нет, требуется уточнение"}

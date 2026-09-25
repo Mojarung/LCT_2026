@@ -50,7 +50,8 @@ def test_api_review_rerun_and_changed_source_rejection(tmp_path: Path) -> None:
             assert response.status_code == 202
             return client.get(response.headers["Location"]).json()
 
-        failed = upload(source.read_bytes(), {})
+        # Режим проверки: незнакомое не выводится, прогон ждёт уточнения (по умолчанию - вывод).
+        failed = upload(source.read_bytes(), {"infer_unknown": False})
         assert failed["state"] == "failed"
         base = f"{API_PREFIX}/runs/{failed['id']}/artifacts/"
         geo = client.get(base + "semantic-review.geojson").json()
@@ -66,6 +67,7 @@ def test_api_review_rerun_and_changed_source_rejection(tmp_path: Path) -> None:
         assert "Уточнить объекты на чертеже" in client.get(f"/runs/{failed['id']}").text
 
         overrides = {
+            "infer_unknown": False,
             "semantic_source_sha256": geo["source_sha256"],
             "feature_classes": {geo["features"][0]["id"]: "work_boundary"},
             "placement_solver": "greedy",

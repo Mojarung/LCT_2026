@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
+from green.application.name_semantics import Vocabulary, build_vocabulary
 from green.application.params import PlanParams
 from green.application.symbols import SymbolCatalog, SymbolEntry
 from green.domain.norms import (
@@ -34,6 +35,7 @@ from green.infrastructure.config.schemas import (
     SpeciesFile,
     SpeciesModel,
     SymbolsFile,
+    VocabularyFile,
 )
 
 if TYPE_CHECKING:
@@ -189,11 +191,17 @@ class YamlRuleBookSource:
 
 
 class YamlLayerMapSource:
-    """Карта слоёв и словарь условных знаков рядом с ней (symbols.yaml, если он есть)."""
+    """Карта слоёв, словарь условных знаков и словарь слов имён рядом с ней (symbols.yaml,
+    vocabulary.yaml - если есть)."""
 
-    def __init__(self, path: Path, symbols: Path | None = None) -> None:
+    def __init__(
+        self, path: Path, symbols: Path | None = None, vocabulary: Path | None = None
+    ) -> None:
         self._path = path
         self._symbols = symbols if symbols is not None else path.with_name("symbols.yaml")
+        self._vocabulary = (
+            vocabulary if vocabulary is not None else path.with_name("vocabulary.yaml")
+        )
 
     def load(self) -> LayerMap:
         data, digest = _read(self._path)
@@ -223,7 +231,13 @@ class YamlLayerMapSource:
             )
             # Отпечаток семантики прогона учитывает и слои, и знаки.
             digest = hashlib.sha256(f"{digest}:{symbol_digest}".encode()).hexdigest()
-        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog)
+        vocabulary = Vocabulary()
+        if self._vocabulary.exists():
+            words_data, words_digest = _read(self._vocabulary)
+            parsed_words = _validate(VocabularyFile, words_data, self._vocabulary)
+            vocabulary = build_vocabulary(parsed_words.model_dump(mode="json"), words_digest)
+            digest = hashlib.sha256(f"{digest}:{words_digest}".encode()).hexdigest()
+        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary)
 
 
 class YamlSpeciesCatalog:

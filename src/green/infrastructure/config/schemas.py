@@ -152,6 +152,39 @@ class SymbolModel(_Strict):
     source: str = ""
 
 
+class VocabularyClassModel(_Strict):
+    rank: Literal["point", "line", "object", "surface", "boundary"]
+    words: list[str] = Field(default_factory=list)
+    phrases: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("patterns")
+    @classmethod
+    def _compiles(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            re.compile(pattern)
+        return value
+
+
+class VocabularyAnnotationModel(_Strict):
+    words: list[str] = Field(default_factory=list)
+    phrases: list[str] = Field(default_factory=list)
+
+
+class VocabularyFile(_Strict):
+    """config/vocabulary.yaml: слова имён слоёв и блоков -> класс незнакомого объекта."""
+
+    version: int = 1
+    separators: list[str] = Field(default_factory=list)
+    negations: list[str] = Field(default_factory=list)
+    removal: list[str] = Field(default_factory=list)
+    proposed: list[str] = Field(default_factory=list)
+    existing: list[str] = Field(default_factory=list)
+    annotation: VocabularyAnnotationModel = Field(default_factory=VocabularyAnnotationModel)
+    weak: dict[str, ObjectClass] = Field(default_factory=dict)
+    classes: dict[ObjectClass, VocabularyClassModel]
+
+
 class SymbolsFile(_Strict):
     """config/symbols.yaml: код условного знака -> класс объекта и роль знака."""
 
@@ -250,6 +283,7 @@ class ProfileModel(_Strict):
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
+    infer_unknown: bool = True
     semantic_source_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     layer_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     block_classes: dict[str, ObjectClass] = Field(default_factory=dict)

@@ -48,6 +48,9 @@ class ObjectClass(StrEnum):
     # Наземное препятствие в точке, не сеть и не опора: афишная тумба, шлагбаум, колонка.
     OBSTACLE = "obstacle"
     LAWN = "lawn"
+    # Линия или контур без известного смысла на незнакомом чертеже (задача 14): разделяет
+    # покрытия, как граница, но отступа не даёт - материал внутри решают подписи.
+    CONTOUR = "contour"
     IGNORE = "ignore"
     UNKNOWN = "unknown"
 
@@ -92,6 +95,7 @@ class ObjectClass(StrEnum):
             ObjectClass.TRAM,
             ObjectClass.RAILWAY,
             ObjectClass.WORK_BOUNDARY,
+            ObjectClass.CONTOUR,
         }
 
 

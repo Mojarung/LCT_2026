@@ -52,6 +52,10 @@ class PlanParams:
     # Name matches are evidence, not proof. Unmatched/conflicting spatial objects
     # stop the run; exact per-input assignments resolve them without editing code.
     require_known_objects: bool = True
+    # Незнакомое на новом чертеже (задача 14, решение пользователя 25.09.2026): вывод по словам
+    # имени и осторожная замена по геометрии вместо остановки; сеть неизвестного типа получает
+    # наибольший отступ сетей и прогон не останавливает. False - поведение проверки тиммейта.
+    infer_unknown: bool = True
     # Generated review assignments are pinned to the exact computational DXF.
     semantic_source_sha256: str | None = None
     layer_classes: Mapping[str, str] = field(default_factory=dict)

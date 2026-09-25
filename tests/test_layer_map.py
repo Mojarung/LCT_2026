@@ -54,7 +54,6 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         (f"{GEOTREST}tp$0$Платформы ЖД", ObjectClass.STRUCTURE),
         (f"{GEOTREST}up$0$Водосточный коллектор", ObjectClass.UTILITY_STORM),
         (f"{GEOTREST}tp$0$Территории", ObjectClass.IGNORE),
-        ("Defpoints", ObjectClass.IGNORE),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:

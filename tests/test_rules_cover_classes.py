@@ -27,6 +27,7 @@ NOT_OBSTACLES = frozenset(
     {
         ObjectClass.IGNORE,
         ObjectClass.UNKNOWN,
+        ObjectClass.CONTOUR,
         ObjectClass.LAWN,
         ObjectClass.WORK_BOUNDARY,
         ObjectClass.EXISTING_WOODLAND,

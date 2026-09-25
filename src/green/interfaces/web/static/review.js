@@ -25,6 +25,8 @@ const CLASS_NAMES = {
   existing_tree: 'Существующее дерево', existing_shrub: 'Существующий кустарник',
   lawn: 'Газон / грунт для выбранной стадии', ignore: 'Оформление — исключить из расчёта',
   unknown: 'Неизвестно', 'utility.unknown': 'Неуточнённая сеть',
+  contour: 'Контур без смысла: разделяет покрытия', obstacle: 'Препятствие',
+  existing_woodland: 'Древесный массив',
 };
 for (const option of $('class').options) {
   if (option.value) option.textContent = CLASS_NAMES[option.value] || option.value;
