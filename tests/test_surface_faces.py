@@ -34,6 +34,15 @@ def test_tree_in_a_grate_does_not_establish_surrounding_soil() -> None:
     assert surface is None or material(surface, 5.1, 5.1) is Material.UNKNOWN
 
 
+def test_paved_only_input_has_no_soil_and_does_not_crash() -> None:
+    sidewalk = feature(ObjectClass.SIDEWALK, box(0, 0, 10, 10))
+    surface = build_surface_map([sidewalk], [], box(0, 0, 20, 20), 0.5)
+    assert surface is not None
+    assert surface.soil_area is None
+    assert material(surface, 5, 5) is Material.PAVED
+    assert material(surface, 15, 15) is Material.UNKNOWN
+
+
 def test_two_conflicting_labels_do_not_split_one_material_region_by_distance() -> None:
     border = feature(ObjectClass.PAVEMENT_EDGE, box(0, 0, 100, 20).boundary)
     surface = build_surface_map(

@@ -53,9 +53,9 @@ def main() -> None:
     body = ParagraphStyle(
         "BriefBody",
         fontName="Body",
-        fontSize=10.1,
-        leading=14.5,
-        spaceAfter=9,
+        fontSize=9.6,
+        leading=13.5,
+        spaceAfter=8,
         textColor=colors.black,
         alignment=TA_LEFT,
     )

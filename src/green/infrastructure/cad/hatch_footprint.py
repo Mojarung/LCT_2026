@@ -10,9 +10,17 @@ import math
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
+import shapely
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
 from ezdxf.math import Vec3, bulge_center, bulge_radius
+from shapely.errors import GEOSException
 from shapely.geometry import Polygon, box
+
+from green.infrastructure.cad.hatch_geometry import (
+    HatchGeometryError,
+    _checked_ring,
+    _path_polygon,
+)
 
 if TYPE_CHECKING:
     from ezdxf.entities.polygon import DXFPolygon
@@ -102,17 +110,38 @@ def _edges(bounds: _Bounds, path: EdgePath) -> bool:
     return True
 
 
-def bounded_hatch_footprint(hatch: DXFPolygon, reserve: float) -> Polygon | None:
-    """Enclose all source edges, including complete circles around arc/bulge pieces."""
+def bounded_hatch_footprint(
+    hatch: DXFPolygon, reserve: float
+) -> Polygon | shapely.MultiPolygon | None:
+    """Enclose each path's possible fill, without boxing distant loops together."""
     if not math.isfinite(reserve) or reserve <= 0 or not hatch.paths.paths:
         return None
     try:
-        bounds = _Bounds(hatch)
+        footprints = []
+        global_bounds = _Bounds(hatch)
         for path in hatch.paths.paths:
+            bounds = _Bounds(hatch)
             if isinstance(path, PolylinePath):
                 _polyline(bounds, path)
-            elif not isinstance(path, EdgePath) or not _edges(bounds, path):
+                _polyline(global_bounds, path)
+            elif (
+                not isinstance(path, EdgePath)
+                or not _edges(bounds, path)
+                or not _edges(global_bounds, path)
+            ):
                 return None
-        return bounds.polygon(reserve)
-    except ArithmeticError, TypeError, ValueError, OverflowError:
+            path_box = bounds.polygon(reserve)
+            if path_box is None:
+                return None
+            try:
+                polygon, error, _ = _path_polygon(hatch, path, reserve, reserve * 0.02)
+                ring = _checked_ring(polygon)
+                footprints.append(ring.buffer(reserve + error))
+            except HatchGeometryError, GEOSException, ValueError:
+                footprints.append(path_box)
+        result = shapely.union_all(footprints)
+        if result.is_valid and not result.is_empty:
+            return result
+        return global_bounds.polygon(reserve)
+    except ArithmeticError, GEOSException, TypeError, ValueError, OverflowError:
         return None

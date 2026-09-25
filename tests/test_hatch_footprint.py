@@ -84,6 +84,27 @@ def test_open_polyline_last_bulge_is_still_enclosed() -> None:
     assert envelope.covers(box(0, -5, 10, 5))
 
 
+def test_distant_valid_paths_and_one_bad_path_do_not_mask_the_gap(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    hatch = doc.modelspace().add_hatch(dxfattribs={"layer": "Асфальт"})
+    hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10), (0, 10)], is_closed=True)
+    hatch.paths.add_polyline_path([(100, 100), (110, 100), (110, 110), (100, 110)], is_closed=True)
+    hatch.paths.add_polyline_path([(5, 5), (5.1, 5.1)], is_closed=True)
+    source = tmp_path / "distant_paths.dxf"
+    doc.saveas(source)
+
+    scene = EzdxfSceneReader().read(source, unit="m")
+    require_complete_geometry(scene)
+
+    assert scene.read_diagnostics.bounded_uncertainty_by_type == {"HATCH": 1}
+    uncertain = scene.features[0]
+    assert uncertain.uncertain_footprint
+    assert uncertain.geometry.covers(box(0, 0, 10, 10))
+    assert uncertain.geometry.covers(box(100, 100, 110, 110))
+    assert not uncertain.geometry.covers(Point(50, 50))
+    assert uncertain.geometry.area < 300
+
+
 def test_nested_bad_hatch_keeps_metre_scale_footprint(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
     doc.units = 4  # millimetres

@@ -1,0 +1,67 @@
+{
+  "scope": "Same converted Plan благоустройства DXF and strict-profile greedy diagnostic. HATCH assignments were exact per feature; require_known_objects=false makes all generated plans exploratory, not safe construction plans. Single-run timing/RSS on macOS are not stable benchmarks.",
+  "source_dxf_sha256": "75ea5d3f66d1845662b50f4db3c77934c631d03ed569399b18bd04a775ff132c",
+  "plant_reference_dxf_sha256": "2a7b567fa69d5d89bdc420980a80cc67244e904fbe70b53034603f76ad25b8d2",
+  "reference_material_crosscheck": {
+    "project_signs": 111,
+    "centres_in_lawn": 22,
+    "centres_in_mulch": 99,
+    "centres_in_lawn_or_mulch": 111,
+    "centres_in_both": 10,
+    "pdf_visible_material_example": "Physical page 18 of the project PDF labels decorative wood chips for compositions and tree rings. Surface cover alone does not prove rootable soil."
+  },
+  "unreadable_asphalt_hatch": {
+    "handle": "B175",
+    "paths": 3,
+    "path_vertex_counts": [205, 16, 2],
+    "before_global_rectangle_m2": 240011.787,
+    "after_pathwise_footprint_m2": 23757.075,
+    "still_unknown": true
+  },
+  "aggregate_uncertainty_m2": {
+    "before": 241747.347,
+    "after": 33563.782,
+    "before_overlap_with_candidate_soil": 10324.401,
+    "after_overlap_with_candidate_soil": 1222.36
+  },
+  "same_input_runs": [
+    {
+      "material_assignment": "none",
+      "before": "GEOSException while subtracting paved area from empty soil; experiment e79-counterfactual-none",
+      "after_placements": 0,
+      "after_elapsed_s": 16.27,
+      "after_peak_rss_mb_macos": 380.36,
+      "after_experiment": "e79-counterfactual-none-after"
+    },
+    {
+      "material_assignment": "96 readable lawn HATCHs",
+      "before_placements": 0,
+      "after_placements": 3,
+      "before_elapsed_s": 17.041,
+      "after_elapsed_s": 17.321,
+      "before_peak_rss_mb_macos": 406.41,
+      "after_peak_rss_mb_macos": 388.92,
+      "before_experiment": "e79-counterfactual-lawn-before",
+      "after_experiment": "e79-counterfactual-lawn-after"
+    },
+    {
+      "material_assignment": "96 readable lawn HATCHs plus 182 readable mulch HATCHs",
+      "before_placements": 0,
+      "after_placements": 3,
+      "before_elapsed_s": 16.611,
+      "after_elapsed_s": 17.16,
+      "before_peak_rss_mb_macos": 406.92,
+      "after_peak_rss_mb_macos": 424.53,
+      "before_experiment": "e79-counterfactual-lawn-mulch-before",
+      "after_experiment": "e79-counterfactual-lawn-mulch-after"
+    }
+  ],
+  "other_diagnostics": {
+    "same_input_lawn_mulch_reviewed_garden_edging_placements": 3,
+    "reference_signs_fit_combined_raw_surface_at_0_5m_radius": 90,
+    "reference_signs_fit_pipeline_surface_with_uncertainty_at_0_5m_radius": 13,
+    "reference_signs_clearing_uncertainty_at_0_5m_radius": 13,
+    "semantic_assignments_complete": false,
+    "note": "Garden edging was reviewed in the project PDF and assigned pavement_edge only in this diagnostic. The 111 symbols include trees and shrubs; a generic tree norm check of all signs is not a valid expert-plan compliance score."
+  }
+}

@@ -361,6 +361,8 @@ def _exact_areas(
     paved = shapely.union_all([outer_area(f) for f in polygons if f.object_class.is_hard_surface])
     if extent is not None:
         soil, paved = soil.intersection(extent), paved.intersection(extent)
+    if soil.is_empty:
+        return None, None if paved.is_empty else paved
     soil = soil.difference(paved)
     return (None if soil.is_empty else soil, None if paved.is_empty else paved)
 
