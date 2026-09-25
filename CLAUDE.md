@@ -20,7 +20,8 @@ src/green/
                    quality (PlanQuality, QualityTerm, PlantingValue)
   application/     use_case.PlanSite (сценарий), classification (знак решает раньше слоя: словарь
                    symbols.SymbolCatalog, штрихи знака - рисунок, экземпляр - объект; tree_strips - ряд
-                   кружков «Полосы деревьев» - одна полоса MultiPoint, а не стволы), diameters,
+                   кружков «Полосы деревьев» - одна полоса MultiPoint, а не стволы; vegetation - перепись
+                   растительности: знаки исходника против якорей сцены по классам), diameters,
                    constraints.ConstraintIndex
                    (STRtree+numpy), surfaces (карта покрытий, Дейкстра), placement.GreedyPlantingStrategy
                    (аллея вдоль борта + сетка по газону), zones (зоны допустимости),
