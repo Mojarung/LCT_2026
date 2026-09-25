@@ -11,6 +11,7 @@ from ezdxf import xref
 from test_pipeline_synthetic import ROOT, _street
 
 from green.application.errors import InputError
+from green.application.input_quality import require_complete_geometry
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
@@ -54,6 +55,23 @@ def test_short_pipe_inside_a_block_keeps_its_transformed_axis(tmp_path: Path) ->
     assert scene.features[0].geometry.geom_type == "LineString"
     assert list(scene.features[0].geometry.coords) == pytest.approx([(100, 200), (100, 204)])
     assert scene.features[0].layer == "Водопровод"
+
+
+def test_roundoff_length_line_becomes_point_but_short_line_remains_axis(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    doc.units = 6
+    start = 18_000.0
+    doc.modelspace().add_line((start, 15_000), (start + 4 * math.ulp(start), 15_000))
+    doc.modelspace().add_line((0, 0), (0.00001, 0))
+    source = tmp_path / "lines.dxf"
+    doc.saveas(source)
+
+    scene = EzdxfSceneReader().read(source)
+    require_complete_geometry(scene)
+    assert [feature.geometry.geom_type for feature in scene.features] == ["Point", "LineString"]
+    assert scene.features[0].geometry_error_m == pytest.approx(4 * math.ulp(start))
+    assert scene.features[1].geometry.length == pytest.approx(0.00001)
+    assert any("LINE с совпадающими" in warning for warning in scene.warnings)
 
 
 def test_minsert_retains_all_instances(tmp_path: Path) -> None:

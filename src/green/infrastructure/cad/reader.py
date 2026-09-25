@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -65,6 +66,7 @@ _GAP_EXAMPLES = 5
 _MAX_HATCH_CLOSURE_M = 0.002
 _ASSOCIATIVE_HATCH_MIN_AREA_RATIO = 0.5
 _ASSOCIATIVE_HATCH_MAX_AREA_RATIO = 1.5
+_DEGENERATE_LINE_ULPS = 64
 _SKIPPED = frozenset(
     {
         "ATTDEF",
@@ -165,6 +167,7 @@ class _Walker:
     matched_region_hatches: int = 0
     matched_hatch_polylines: int = 0
     matched_local_hatches: int = 0
+    collapsed_lines: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -413,6 +416,11 @@ class _Walker:
                 )
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
+                extent = max(abs(start.x), abs(start.y), abs(end.x), abs(end.y))
+                length = math.hypot(start.x - end.x, start.y - end.y)
+                if length <= _DEGENERATE_LINE_ULPS * math.ulp(extent):
+                    self.collapsed_lines += 1
+                    return Point(start.x, start.y), length
                 return LineString([(start.x, start.y), (end.x, end.y)]), 0.0
             if kind == "POINT":
                 location = entity.dxf.location
@@ -597,6 +605,11 @@ class _Walker:
             messages.append(
                 "Прямые контуры HATCH объединены до преобразования блока: "
                 f"{self.matched_local_hatches}"
+            )
+        if self.collapsed_lines:
+            messages.append(
+                "LINE с совпадающими в пределах округления концами представлены точкой: "
+                f"{self.collapsed_lines}"
             )
         return messages
 
