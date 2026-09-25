@@ -14,7 +14,7 @@ import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dim
 import type { ExistingPlant } from './existing';
 import { type Box, boundsOfPoints, contentPoints, type Point, principalAxis } from './geometry';
 import { Palette } from './palette';
-import { orderItems, pick, shown } from './picking';
+import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
 import {
   type BaseCache,
   drawGrid,
@@ -96,6 +96,7 @@ export class PlanEngine {
     selected: null,
     dragging: null,
     dragVerdict: null,
+    editing: false,
   };
   private readonly palette = new Palette();
   private readonly base = document.createElement('canvas');
@@ -240,8 +241,10 @@ export class PlanEngine {
 
   setEditing(on: boolean): void {
     this.editing = on;
+    this.marks.editing = on;
     this.canvas.classList.toggle('editable', on);
     if (!on) this.setPlacing(false);
+    this.schedule();
   }
 
   /** Перенос без перетаскивания (WCAG 2.2, 2.5.7): следующий клик по карте становится новым
@@ -698,6 +701,29 @@ export class PlanEngine {
     );
   }
 
+  /** Отметки, чьи стволы под курсором, ближайшие первыми. */
+  private trunksAt(event: PointerEvent | MouseEvent): MapItem[] {
+    return candidatesAt(
+      this.worldOf(event),
+      [...this.scene.placements, ...this.scene.rejections],
+      this.view.scale,
+      this.marks.layers,
+      this.marks.speciesOff,
+    );
+  }
+
+  /** Щелчок без переноса: один ствол - выбор; несколько - список для человека; ни одного -
+   *  крона под точкой. */
+  private clickAt(event: PointerEvent): void {
+    const trunks = this.trunksAt(event);
+    if (trunks.length > 1) {
+      const rect = this.canvas.getBoundingClientRect();
+      this.hooks.ambiguous(trunks, event.clientX - rect.left, event.clientY - rect.top);
+      return;
+    }
+    this.select(trunks[0] ?? this.pickAt(event));
+  }
+
   private listen<K extends keyof HTMLElementEventMap>(
     type: K,
     handler: (event: HTMLElementEventMap[K]) => void,
@@ -722,7 +748,11 @@ export class PlanEngine {
       moved = 0;
       last = { x: event.clientX, y: event.clientY };
       // Пока ждём клик с новым местом, другую посадку не хватаем: клик ставит выбранную.
-      const hit = this.editing && !this.placing ? this.pickAt(event) : null;
+      // Хватается ствол; выбранная из списка спорного клика - раньше соседки рядом.
+      const hit =
+        this.editing && !this.placing
+          ? (preferSelected(this.trunksAt(event), this.marks.selected) ?? this.pickAt(event))
+          : null;
       grabbed = hit?.kind === 'placement' ? hit : null;
       this.canvas.setPointerCapture(event.pointerId);
       this.canvas.classList.add('dragging');
@@ -785,7 +815,7 @@ export class PlanEngine {
         this.schedule();
         return;
       }
-      if (moved < 4) this.select(this.pickAt(event));
+      if (moved < 4) this.clickAt(event);
       this.schedule();
     });
 

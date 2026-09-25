@@ -11,8 +11,12 @@
 import type { Form, PlantModel } from './models';
 
 /** plan - посадка плана; lift - подсвеченный вид; dim - вид в тени подсветки другого;
- *  existing - то, что уже растёт на участке. */
-export type Look = 'plan' | 'lift' | 'dim' | 'existing';
+ *  existing - то, что уже растёт на участке; xray - режим правки: крона прозрачная, ствол
+ *  крупной точкой, чтобы в перекрытых кронах было видно, за что хватать. */
+export type Look = 'plan' | 'lift' | 'dim' | 'existing' | 'xray';
+
+/** Радиус точки ствола в режиме правки, CSS-пиксели: цель для клика и пальца. */
+export const XRAY_TRUNK_PX = 3;
 
 export interface Sprite {
   canvas: HTMLCanvasElement;
@@ -103,18 +107,27 @@ function render(key: string, model: PlantModel, r: number, look: Look, dpr: numb
     ctx.lineJoin = 'round';
     ctx.stroke(outline);
   }
-  ctx.globalAlpha = look === 'dim' ? 0.34 : look === 'existing' ? 0.9 : 1;
+  ctx.globalAlpha = FILL_ALPHA[look];
   ctx.fillStyle = model.tone;
   ctx.fill(outline);
   if (look === 'plan' || look === 'lift') details(ctx, model, r, outline, rand);
-  ctx.globalAlpha = look === 'dim' ? 0.4 : 1;
+  ctx.globalAlpha = look === 'dim' ? 0.4 : look === 'xray' ? 0.65 : 1;
   ctx.lineJoin = 'round';
-  ctx.lineWidth = look === 'lift' ? width + 0.8 : width;
+  ctx.lineWidth = look === 'lift' ? width + 0.8 : look === 'xray' ? 1 : width;
   ctx.strokeStyle = ink;
   ctx.stroke(outline);
   center(ctx, model.form, r, look);
   return made;
 }
+
+/** Непрозрачность заливки кроны по состоянию. */
+const FILL_ALPHA: Record<Look, number> = {
+  plan: 1,
+  lift: 1,
+  dim: 0.34,
+  existing: 0.9,
+  xray: 0.25,
+};
 
 /** Контур модели: лопастное облако, звезда из хвои или розетка кустарника. */
 function shape(form: Form, r: number, lobes: number, rand: () => number): Path2D {
@@ -248,8 +261,20 @@ function details(
   ctx.restore();
 }
 
-/** Центр: ствол у дерева, точка у кустарника, крестик съёмки у существующего. */
+/** Центр: ствол у дерева, точка у кустарника, крестик съёмки у существующего; в режиме
+ *  правки - крупная точка чернил со светлой каймой, одна для всех форм. */
 function center(ctx: CanvasRenderingContext2D, form: Form, r: number, look: Look): void {
+  if (look === 'xray') {
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, XRAY_TRUNK_PX, 0, Math.PI * 2);
+    ctx.fillStyle = INK;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = HALO;
+    ctx.stroke();
+    return;
+  }
   ctx.globalAlpha = look === 'dim' ? 0.4 : 1;
   if (look === 'existing') {
     const arm = Math.max(1.6, r * 0.22);

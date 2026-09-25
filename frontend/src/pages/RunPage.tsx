@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 
 import type { BasemapJson, PlanJson, QualityJson, RulesJson, SurfaceMeta } from '../api/artifacts';
@@ -10,6 +10,7 @@ import { Downloads } from '../components/run/Downloads';
 import { EditBar } from '../components/run/EditBar';
 import { Legend } from '../components/run/Legend';
 import { MapHud } from '../components/run/MapHud';
+import { type Choice, PickChooser } from '../components/run/PickChooser';
 import { PlanMap } from '../components/run/PlanMap';
 import { ProgressHud } from '../components/run/ProgressHud';
 import { PanelToggle, RunHeader, RunMetrics, RunStatus } from '../components/run/RunParts';
@@ -32,7 +33,13 @@ const idle: EngineHooks = {
   remove: () => undefined,
   viewChanged: () => undefined,
   placingChanged: () => undefined,
+  ambiguous: () => undefined,
 };
+
+/** Фокус обратно на карту: после выбора из списка стрелки и Delete снова работают по ней. */
+function focusMap(): void {
+  document.getElementById('plan-canvas')?.focus({ preventScroll: true });
+}
 
 /** Рабочее место прогона: план во весь экран, панели поверх. Пока прогон идёт - ход расчёта и
  *  чертёж на карте сразу после чтения; когда готов - план, объяснения и правка. Переход из
@@ -125,6 +132,13 @@ export function RunPage() {
   const leftScroll = useOverflowMark<HTMLDivElement>();
   const planData = useRef(plan.data);
   const hashApplied = useRef(false);
+  // Спорный щелчок: под курсором стволы нескольких посадок. id меняется на каждый щелчок, и
+  // список монтируется заново с первого пункта.
+  const [choice, setChoice] = useState<(Choice & { id: number }) | null>(null);
+  const closeChoice = useCallback(() => {
+    setChoice(null);
+    focusMap();
+  }, []);
 
   const editor = useMemo(() => new PlanEditor(runId), [runId]);
 
@@ -161,6 +175,9 @@ export function RunPage() {
       },
       placingChanged: (on) => {
         useWorkspace.getState().setPlacing(on);
+      },
+      ambiguous: (candidates, x, y) => {
+        setChoice((previous) => ({ items: candidates, x, y, id: (previous?.id ?? 0) + 1 }));
       },
     };
   });
@@ -251,6 +268,18 @@ export function RunPage() {
           )}
           {withMap ? <MapHud /> : null}
           {withMap ? <Legend done={done} /> : null}
+          {choice ? (
+            <PickChooser
+              key={choice.id}
+              choice={choice}
+              onChoose={(item) => {
+                setChoice(null);
+                hooks.current.select(item);
+                focusMap();
+              }}
+              onClose={closeChoice}
+            />
+          ) : null}
         </div>
 
         {live && data ? <ProgressHud run={data} fetchedAt={run.dataUpdatedAt} /> : null}

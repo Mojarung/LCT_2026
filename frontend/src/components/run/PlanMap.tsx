@@ -40,6 +40,9 @@ export function PlanMap({
       placingChanged: (on) => {
         hooks.current.placingChanged(on);
       },
+      ambiguous: (items, x, y) => {
+        hooks.current.ambiguous(items, x, y);
+      },
     });
     engineRef.current = created;
     return () => {
