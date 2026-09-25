@@ -117,6 +117,9 @@ class EzdxfSceneReader:
                 raise InputError("ACIS sidecar: одинаковые SAB дали разные SAT")
             region_sat_by_sab[sab_digest] = sat
         units = decide_units(doc, unit)
+        dynamic_block_metadata = sum(
+            obj.dxftype() == "ACDB_BLOCKREPRESENTATION_DATA" for obj in doc.objects
+        )
         # Обход идёт в единицах чертежа, поэтому метровые пороги делятся на размер единицы.
         walker = _Walker(
             doc=doc,
@@ -129,6 +132,17 @@ class EzdxfSceneReader:
         for entity in doc.modelspace():
             walker.visit(entity, parent_layer=None, chain=(), parent_handle="", index=0)
         features, labels = _to_metres(walker.features, walker.labels, units.unit_m)
+        dynamic_notes = (
+            (
+                (
+                    "Обнаружены данные динамических блоков "
+                    f"ACDB_BLOCKREPRESENTATION_DATA: {dynamic_block_metadata}; "
+                    "их параметры ezdxf не интерпретирует. Проверьте условные знаки в CAD."
+                ),
+            )
+            if dynamic_block_metadata
+            else ()
+        )
         return Scene(
             source_name=path.name,
             source_sha256=digest,
@@ -139,6 +153,7 @@ class EzdxfSceneReader:
                 *warnings,
                 *units.notes,
                 *((f"Восстановлен ACIS REGION: {len(region_sat)}",) if region_sat else ()),
+                *dynamic_notes,
                 *walker.warnings(),
             ),
             unit_m=units.unit_m,
@@ -160,6 +175,7 @@ class EzdxfSceneReader:
                 max_approximation_error_m=max(
                     (f.geometry_error_m or 0.0 for f in features), default=0.0
                 ),
+                dynamic_block_metadata=dynamic_block_metadata,
             ),
         )
 

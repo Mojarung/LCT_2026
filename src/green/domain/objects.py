@@ -198,6 +198,7 @@ class ReadDiagnostics:
     geometry_gaps: tuple[GeometryGap, ...] = ()
     approximation_features: int = 0
     max_approximation_error_m: float = 0.0
+    dynamic_block_metadata: int = 0
 
     @property
     def block_failures(self) -> tuple[str, ...]:
