@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typing import TYPE_CHECKING
+
 import pytest
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 from green.application.classification import classification_report
 from green.application.errors import ConfigurationError
 from green.domain.objects import Feature, ObjectClass, Scene, SourceRef
 from green.infrastructure.config.repositories import YamlLayerMapSource
 
-LAYER_MAP = YamlLayerMapSource(
+if TYPE_CHECKING:
+    from shapely.geometry.base import BaseGeometry
+
+LAYER_MAP =YamlLayerMapSource(
     Path(__file__).resolve().parents[1] / "config" / "layer_map.yaml"
 ).load()
 DESIGNER = "link-улица Берзарина_Покрытия — Новые$0$"
@@ -40,6 +45,16 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         ("3-я Парковая|Топо_Береговая линия", ObjectClass.OBSTACLE),
         (f"{GEOTREST}tp$0$Вентиляторы", ObjectClass.STRUCTURE),
         (f"{GEOTREST}kl$0$Красные линии", ObjectClass.IGNORE),
+        # Слои топоплана, которых не было в словаре (перепись слоёв 19 улиц, 25.09.2026).
+        (f"{GEOTREST}tp$0$Граница площадки", ObjectClass.PAVEMENT_EDGE),
+        (f"{GEOTREST}tp$0$Топографические объекты", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Грунты", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Указатель подз коммуникаций", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Подъемные краны", ObjectClass.OBSTACLE),
+        (f"{GEOTREST}tp$0$Платформы ЖД", ObjectClass.STRUCTURE),
+        (f"{GEOTREST}up$0$Водосточный коллектор", ObjectClass.UTILITY_STORM),
+        (f"{GEOTREST}tp$0$Территории", ObjectClass.IGNORE),
+        ("Defpoints", ObjectClass.IGNORE),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:
@@ -47,6 +62,27 @@ def test_layer_classes(layer: str, expected: ObjectClass) -> None:
         ref=SourceRef("00000000", "00000000", "1"),
         layer=layer,
         geometry=LineString([(0, 0), (1, 1)]),
+    )
+    assert LAYER_MAP.classify(feature) is expected
+
+
+@pytest.mark.parametrize(
+    ("geometry", "radius", "expected"),
+    [
+        (Point(0, 0).buffer(0.25), 0.25, ObjectClass.EXISTING_TREE),
+        (Point(0, 0).buffer(0.25), None, ObjectClass.EXISTING_TREE),
+        (LineString([(0, 0), (7, 0)]), None, ObjectClass.LAWN),
+    ],
+)
+def test_tree_strip_layer_by_geometry(
+    geometry: BaseGeometry, radius: float | None, expected: ObjectClass
+) -> None:
+    """Залитый ствол полосы (REGION до 0,5 м) - дерево, как кружок; пунктир - контур грунта."""
+    feature = Feature(
+        ref=SourceRef("00000000", "00000000", "1"),
+        layer=f"{GEOTREST}tp$0$Полоса деревьев",
+        geometry=geometry,
+        circle_radius_m=radius,
     )
     assert LAYER_MAP.classify(feature) is expected
 

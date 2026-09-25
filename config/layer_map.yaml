@@ -89,6 +89,9 @@ rules:
   - {pattern: "Полоса деревьев", geometry: circle, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: point, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: line, object_class: lawn, confirmed: true}
+  # Залитый ствол в ряду полосы - область REGION до 0,5 м (Макеева 18, Грузинская 11, всего 98 на
+  # шести улицах); мелкие точки пунктира той же заливкой лежат в ряду между стволами.
+  - {pattern: "Полоса деревьев", geometry: area, object_class: existing_tree, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Колодцы|Люки|Решетки)$", object_class: utility.access, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)ЛЭП$", object_class: power_line_overhead, confirmed: true}
@@ -104,6 +107,23 @@ rules:
      note: "вентиляционные киоски подземных сооружений"}
   - {pattern: "(?:^|[|$]|Топо_)Выгребные ямы$", object_class: utility.sewer, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)Трубы$|Трубы под дорогами", object_class: utility.unknown, confirmed: true}
+  # Слои топоплана, которых словарь не знал (перепись слоёв 19 улиц, 25.09.2026). Смысл взят
+  # из картинок слоя и подписей рядом с его линиями по всем улицам (docs/notes/32).
+  # Контур площадки - граница покрытия, как «Граница улицы»; внутри подписи СПЕЦ.ПОКР., ГРАВИЙ,
+  # рядом ДЕТ.ПЛ., СПОРТ ПЛ. (14 улиц, 9396 объектов).
+  - {pattern: "(?:^|[|$]|Топо_)Граница площадки$", object_class: pavement_edge, confirmed: true}
+  # Предметы на земле с подписью: велопарковки, лифты, бытовки, деревянные настилы, клумбы,
+  # гаражи, летние кафе, трибуны; траншеи и навалы грунта; столбики-указатели подземных сетей
+  # (сама сеть - слоями сетей); башенные краны. Посадки нет ни на них, ни внутри контура.
+  - {pattern: "(?:^|[|$]|Топо_)(Топографические объекты|Грунты|Указатель подз коммуникаций|Подъемные краны)$",
+     object_class: obstacle, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Платформы ЖД$", object_class: structure, confirmed: true}
+  # Коллектор водостока: стенки двумя линиями и ось (Нижние Поля, Песчаный, Макеева).
+  - {pattern: "Водосточный коллектор", object_class: utility.storm, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Территории$", object_class: ignore, confirmed: true,
+     reason: "контуры территорий: стройплощадки, склады, навалы на момент съёмки и зоны регулирования застройки - временное или правовое, а не предмет на земле; бытовки, траншеи, ограды и покрытия внутри нарисованы своими слоями"}
+  - {pattern: "(?:^|[|$])Defpoints$", object_class: ignore, confirmed: true,
+     reason: "служебный слой AutoCAD: не печатается, хранит точки определения размеров"}
   - {pattern: "Железные дороги", object_class: railway, confirmed: true}
   - {pattern: "Топливопровод", object_class: utility.unknown, confirmed: true,
      note: "продуктопровод: отдельной строки нормы нет, требуется уточнение"}
