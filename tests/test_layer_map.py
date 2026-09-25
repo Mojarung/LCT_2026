@@ -32,6 +32,8 @@ GEOTREST = "output[1-12]_3_ДЖКХ-24_03233"
         (f"{GEOTREST}tp$0$Бортовой камень", ObjectClass.CURB),
         (f"{GEOTREST}up$0$Кабель электрический", ObjectClass.UTILITY_POWER),
         (f"{GEOTREST}up$0$Топливопровод", ObjectClass.UTILITY_UNKNOWN),
+        ("Новый_!!!_Границы работ_Ном._пера__173", ObjectClass.WORK_BOUNDARY),
+        ("ДВ_ГП_П_Граница работ", ObjectClass.WORK_BOUNDARY),
     ],
 )
 def test_layer_classes(layer: str, expected: ObjectClass) -> None:

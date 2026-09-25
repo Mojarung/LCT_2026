@@ -1,0 +1,97 @@
+{
+  "method": "Compare visible final lawn quantity table on each PDF plan sheet to sum of readable HATCH geometries on corresponding numbered Газон фр layers in supplied DWG; overlapping HATCH counted separately as in CAD quantity, not distinct rootable soil. Superseded PDF tables ignored after visual page inspection.",
+  "dwg_sha256": "ffdac1218cf37890a5daa848a52d34ddf97ee1864cb46c56fd25681b09d3486a",
+  "pdf_sha256": "f5d6d252a08395c4a8c03f085ecb1bfd754ee08105ae85ff676dccab95977e4d",
+  "converted_dxf_sha256": "75ea5d3f66d1845662b50f4db3c77934c631d03ed569399b18bd04a775ff132c",
+  "geometry_complete": true,
+  "features": 41222,
+  "unresolved_xrefs": 0,
+  "geometry_gaps": 0,
+  "bounded_uncertainty": {
+    "HATCH": 3
+  },
+  "baseline_automatic_lawn_features": 0,
+  "rows": [
+    {
+      "fragment": 1,
+      "pdf_page": 14,
+      "pdf_visible_lawn_m2": 1118.44,
+      "dxf_readable_hatch_m2": 1119.704,
+      "difference_m2": 1.264,
+      "relative_error_percent": 0.113,
+      "readable_hatches": 14,
+      "quarantined_hatches": 0
+    },
+    {
+      "fragment": 2,
+      "pdf_page": 15,
+      "pdf_visible_lawn_m2": 867.45,
+      "dxf_readable_hatch_m2": 866.518,
+      "difference_m2": -0.932,
+      "relative_error_percent": -0.1075,
+      "readable_hatches": 18,
+      "quarantined_hatches": 1
+    },
+    {
+      "fragment": 3,
+      "pdf_page": 16,
+      "pdf_visible_lawn_m2": 1360.97,
+      "dxf_readable_hatch_m2": 1361.653,
+      "difference_m2": 0.683,
+      "relative_error_percent": 0.0502,
+      "readable_hatches": 10,
+      "quarantined_hatches": 0
+    },
+    {
+      "fragment": 4,
+      "pdf_page": 17,
+      "pdf_visible_lawn_m2": 1353.53,
+      "dxf_readable_hatch_m2": 1353.047,
+      "difference_m2": -0.483,
+      "relative_error_percent": -0.0357,
+      "readable_hatches": 19,
+      "quarantined_hatches": 0
+    },
+    {
+      "fragment": 5,
+      "pdf_page": 18,
+      "pdf_visible_lawn_m2": 1369.59,
+      "dxf_readable_hatch_m2": 1369.614,
+      "difference_m2": 0.024,
+      "relative_error_percent": 0.0018,
+      "readable_hatches": 9,
+      "quarantined_hatches": 0
+    },
+    {
+      "fragment": 6,
+      "pdf_page": 19,
+      "pdf_visible_lawn_m2": 2662.77,
+      "dxf_readable_hatch_m2": 2659.575,
+      "difference_m2": -3.195,
+      "relative_error_percent": -0.12,
+      "readable_hatches": 26,
+      "quarantined_hatches": 0
+    }
+  ],
+  "max_absolute_relative_error_percent": 0.12,
+  "boundary_comparison": [
+    {
+      "case": "baseline",
+      "layer_map_sha256": "ad9bb84f1bf636c966b51793291abf98006af962392e8fb5b4ed11ba710eec5d",
+      "boundary_features": 1,
+      "boundary_area_m2": 321.93,
+      "unresolved_features": 17690,
+      "unresolved_work_intersections": 10,
+      "classification_seconds": 0.66
+    },
+    {
+      "case": "plural-boundary",
+      "layer_map_sha256": "d70f3f4fa08a746cf5a257a0bbe76487c0a1e03a442105890ac3412ace37324e",
+      "boundary_features": 2,
+      "boundary_area_m2": 41853.42,
+      "unresolved_features": 17689,
+      "unresolved_work_intersections": 8242,
+      "classification_seconds": 0.53
+    }
+  ]
+}

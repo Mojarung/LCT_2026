@@ -42,7 +42,7 @@ rules:
   - {pattern: "СМЕЖ_ПЧ|_ПЧ$|Проезжая часть", object_class: road, confirmed: true}
   - {pattern: "СМЕЖ_ТРОТ|Тротуар|_АБ ТР", object_class: sidewalk, confirmed: true}
   - {pattern: "Газон|ГЗН", object_class: lawn, confirmed: true}
-  - {pattern: "Граница работ", object_class: work_boundary, confirmed: true}
+  - {pattern: "Границ[аы] работ", object_class: work_boundary, confirmed: true}
   - {pattern: "Трамвайные линии", object_class: tram, confirmed: true}
   - {pattern: "Подземный переход", object_class: structure, confirmed: true}
   - {pattern: "_НО_Опора|Опора_КО|СУЩ\\.ОПОРА|нумерация опор", object_class: pole, confirmed: true}
