@@ -85,6 +85,46 @@ def test_wide_polyline_is_covered_by_its_axis_and_counted(tmp_path: Path) -> Non
     assert report.wide_polylines == 1
 
 
+def _wide_frame(tmp_path: Path) -> tuple[Path, str]:
+    """Замкнутая скошенная рамка шириной 5 м, как ДВ_ГП_П_ПС на Куликовской (844E7)."""
+    doc = ezdxf.new("R2018", setup=True)
+    handle = (
+        doc.modelspace()
+        .add_lwpolyline(
+            [(0, 160), (514, 160), (511, 0), (-3, 0)],
+            close=True,
+            dxfattribs={"const_width": 5.0},
+        )
+        .dxf.handle
+    )
+    path = tmp_path / "frame.dxf"
+    doc.saveas(path)
+    return path, handle
+
+
+def test_very_wide_polyline_is_covered_by_its_own_width(tmp_path: Path) -> None:
+    """Края полосы шириной 5 м - в 2,5 м от оси: допуск берётся из ширины самой полилинии,
+    а не из общего потолка для залитых фигур."""
+    path, handle = _wide_frame(tmp_path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+
+    report = fidelity(ezdxf.readfile(path), scene)
+
+    assert handle not in {m.handle for m in report.misses}
+    assert report.missed_m == pytest.approx(0, abs=0.05)
+
+
+def test_very_wide_polyline_lost_from_the_scene_is_still_reported(tmp_path: Path) -> None:
+    path, handle = _wide_frame(tmp_path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    without = replace(scene, features=())
+
+    report = fidelity(ezdxf.readfile(path), without)
+
+    assert [m.handle for m in report.misses] == [handle]
+    assert report.missed_m > 1000
+
+
 def test_annotation_ink_is_kept_apart_from_drawing_ink(tmp_path: Path) -> None:
     path, handles = _drawing(tmp_path)
     scene = EzdxfSceneReader().read(path, unit="m")
