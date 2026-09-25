@@ -70,13 +70,17 @@ _ROUNDING_PAIR_RESERVE_M = 0.002
 
 
 class PlacementStrategy(Protocol):
-    def plan(
+    """surface - карта покрытий прогона; None - стратегия строит её сама по тем же параметрам."""
+
+    def plan(  # noqa: PLR0913 - входы прогона плюс его карта покрытий
         self,
         features: Sequence[Feature],
         labels: Sequence[TextLabel],
         rulebook: RuleBook,
         species: Species,
         params: PlanParams,
+        *,
+        surface: SurfaceMap | None = None,
     ) -> Plan: ...
 
     def shrub_groups(  # noqa: PLR0913 - те же входы, что у plan, плюс центры групп
@@ -88,6 +92,7 @@ class PlacementStrategy(Protocol):
         params: PlanParams,
         *,
         centers: Sequence[tuple[float, float]],
+        surface: SurfaceMap | None = None,
     ) -> tuple[Placement, ...]: ...
 
 
@@ -102,13 +107,15 @@ class _Candidate:
 class GreedyPlantingStrategy:
     """Аллея вдоль борта, затем заполнение газона; первый допустимый вариант на станции."""
 
-    def plan(
+    def plan(  # noqa: PLR0913 - входы прогона плюс его карта покрытий
         self,
         features: Sequence[Feature],
         labels: Sequence[TextLabel],
         rulebook: RuleBook,
         species: Species,
         params: PlanParams,
+        *,
+        surface: SurfaceMap | None = None,
     ) -> Plan:
         # В режиме одного вида видовые нормы проверяются здесь; в режиме подбора - на каждой
         # паре «посадка - вид» (assortment.filters), а вид профиля лишь задаёт отступы по роду.
@@ -146,16 +153,7 @@ class GreedyPlantingStrategy:
             planting_radius_m=params.footprint_radius_m,
         )
         if params.require_soil:
-            index.surface = build_surface_map(
-                features,
-                labels,
-                index.boundary,
-                params.surface_cell_m,
-                max_distance_m=params.surface_max_distance_m,
-                ambiguity_m=params.surface_ambiguity_m,
-                tree_distance_m=params.tree_seed_distance_m,
-                inference_mode=params.surface_inference_mode,
-            )
+            index.surface = surface or _surface_map(features, labels, index, params)
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
         if MODE_ALLEY in params.modes:
@@ -194,6 +192,7 @@ class GreedyPlantingStrategy:
         params: PlanParams,
         *,
         centers: Sequence[tuple[float, float]],
+        surface: SurfaceMap | None = None,
     ) -> tuple[Placement, ...]:
         """Группы кустарников: квадрат size x size с шагом spacing_m вокруг каждого центра.
 
@@ -214,16 +213,7 @@ class GreedyPlantingStrategy:
             planting_radius_m=params.footprint_radius_m,
         )
         if params.require_soil:
-            index.surface = build_surface_map(
-                features,
-                labels,
-                index.boundary,
-                params.surface_cell_m,
-                max_distance_m=params.surface_max_distance_m,
-                ambiguity_m=params.surface_ambiguity_m,
-                tree_distance_m=params.tree_seed_distance_m,
-                inference_mode=params.surface_inference_mode,
-            )
+            index.surface = surface or _surface_map(features, labels, index, params)
         offsets = _shrub_offsets(params)
         candidates = [
             _Candidate(station, MODE_SHRUB_GROUP, round(cx + dx, 3), round(cy + dy, 3))
@@ -319,17 +309,27 @@ def planting_index(  # noqa: PLR0913 - те же политики, что у н�
         planting_radius_m=params.footprint_radius_m,
     )
     if params.require_soil:
-        index.surface = surface or build_surface_map(
-            features,
-            labels,
-            index.boundary,
-            params.surface_cell_m,
-            max_distance_m=params.surface_max_distance_m,
-            ambiguity_m=params.surface_ambiguity_m,
-            tree_distance_m=params.tree_seed_distance_m,
-            inference_mode=params.surface_inference_mode,
-        )
+        index.surface = surface or _surface_map(features, labels, index, params)
     return index
+
+
+def _surface_map(
+    features: Sequence[Feature],
+    labels: Sequence[TextLabel],
+    index: ConstraintIndex,
+    params: PlanParams,
+) -> SurfaceMap | None:
+    """Карта покрытий по границе работ индекса - та же, что строит сценарий прогона."""
+    return build_surface_map(
+        features,
+        labels,
+        index.boundary,
+        params.surface_cell_m,
+        max_distance_m=params.surface_max_distance_m,
+        ambiguity_m=params.surface_ambiguity_m,
+        tree_distance_m=params.tree_seed_distance_m,
+        inference_mode=params.surface_inference_mode,
+    )
 
 
 def curb_lines(features: Sequence[Feature]) -> list[LineString]:

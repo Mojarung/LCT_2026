@@ -110,9 +110,19 @@ class RunContext:
 
     def site(self) -> Site:
         if self._site is None:
-            surface = self._surface_map(self.index_for(None)) if self.params.require_soil else None
-            self._site = site_of(self.features, surface)
+            self._site = site_of(self.features, self.surface_map())
         return self._site
+
+    def surface_map(self) -> SurfaceMap | None:
+        """Карта покрытий прогона - та же, что у размещения; строится не больше одного раза.
+
+        Её же берёт проверка правленого плана: иначе каждая правка строила бы карту заново
+        (на улице пилота - десятки секунд на одно перетаскивание)."""
+        if not self.params.require_soil:
+            return None
+        if not self._surface_built:
+            return self._surface_map(self.index_for(None))
+        return self._surface
 
     def index_for(
         self, species: Species | None, kind: PlantingType | None = None
@@ -266,6 +276,7 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
         context.params,
         catalog=catalog,
         existing=plan.assortment_summary.existing if plan.assortment_summary else None,
+        surface=context.surface_map(),
     )
     # Keep the draft editable when spacing/quotas need further changes, but do
     # not advertise a quality index or removal advice for an invalid plan.

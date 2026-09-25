@@ -99,7 +99,7 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
     if not centers:
         return plan
     points = strategy.shrub_groups(
-        features, labels, rulebook, shrubs[0], shrub_params, centers=centers
+        features, labels, rulebook, shrubs[0], shrub_params, centers=centers, surface=surface
     )
     drafts = tuple(
         replace(p, placement_id=f"F{p.placement_id}", notes=(FILL_LABEL, *p.notes[1:]))

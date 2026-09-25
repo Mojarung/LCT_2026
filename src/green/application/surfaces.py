@@ -45,6 +45,30 @@ _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _TREE_SEED = 4
 # Знак массива (LISTVL, SM): грунт, занятый существующими деревьями - посадки внутри нет.
 _WOODLAND_SEED = 5
+# Запас к радиусу при отборе близких точек: dwithin и distance идут в GEOS разными путями, и
+# точку у самой границы радиуса решает то же точное расстояние, что и раньше.
+_NEAR_MARGIN_M = 1e-6
+
+
+def distance_at_least(
+    geometry: BaseGeometry, points: NDArray[np.object_], radius_m: float
+) -> NDArray[np.bool_]:
+    """То же, что `shapely.distance(points, geometry) >= radius_m`, без перебора вершин.
+
+    Точное расстояние до контура газона улицы - перебор всех его вершин для каждой точки: на
+    Кустанайской это 60 с на вариант плана. Подготовленная проверка dwithin отсекает дальние
+    точки по индексу отрезков, точное расстояние считается только у близких, поэтому ответ тот
+    же, включая точку ровно на radius_m. У пустого контура расстояние NaN: не проходит никто.
+    """
+    if geometry.is_empty:
+        return np.zeros(len(points), dtype=bool)
+    shapely.prepare(geometry)
+    near = shapely.dwithin(geometry, points, radius_m + _NEAR_MARGIN_M)
+    result = ~near
+    rows = np.flatnonzero(near)
+    if len(rows):
+        result[rows] = shapely.distance(points[rows], geometry) >= radius_m
+    return result
 
 
 class Material(IntEnum):
@@ -87,6 +111,8 @@ class SurfaceMap:
     fallback_paved_m2: float = 0.0
     fallback_labels: int = 0
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
+    # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
+    _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
         """Материал под каждой точкой; вне растра UNKNOWN."""
@@ -123,8 +149,12 @@ class SurfaceMap:
             return on_soil
         fits = np.zeros(len(points), dtype=bool)
         if self.soil_area is not None:
-            fits |= shapely.contains(self.soil_area, points) & (
-                shapely.distance(points, self.soil_area.boundary) >= radius_m
+            edge = self._soil_edge
+            if edge is None:
+                edge = self.soil_area.boundary
+                object.__setattr__(self, "_soil_edge", edge)
+            fits |= shapely.contains(self.soil_area, points) & distance_at_least(
+                edge, points, radius_m
             )
         grid = self.grid if self.inferred_grid is None else self.inferred_grid
         distances = self._soil_distances
@@ -143,9 +173,9 @@ class SurfaceMap:
         lower = distances[rr, cc] - self.cell / np.sqrt(2) - offset
         fits[inside] |= (grid[rr, cc] == Material.SOIL) & (lower >= radius_m)
         if self.paved_area is not None:
-            fits &= shapely.distance(points, self.paved_area) >= radius_m
+            fits &= distance_at_least(self.paved_area, points, radius_m)
         if self.uncertainty_area is not None:
-            fits &= shapely.distance(points, self.uncertainty_area) >= radius_m
+            fits &= distance_at_least(self.uncertainty_area, points, radius_m)
         return fits & on_soil
 
     def _clear_of_woodland(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
@@ -153,7 +183,7 @@ class SurfaceMap:
             return np.ones(len(points), dtype=bool)
         clear = ~shapely.intersects(self.woodland_area, points)
         if radius_m > 0:
-            clear &= shapely.distance(points, self.woodland_area) >= radius_m
+            clear &= distance_at_least(self.woodland_area, points, radius_m)
         return clear
 
     def summary(self) -> dict[str, int | float]:

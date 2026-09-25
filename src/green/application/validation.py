@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import DistanceRule, RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Placement, Plan, Species
@@ -143,7 +144,14 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
     *,
     catalog: Sequence[Species] = (),
     existing: Mapping[str, int] | None = None,
+    surface: SurfaceMap | None = None,
 ) -> PlanValidation:
+    """Проверка плана заново от объектов чертежа: отступы, посадочные места, квоты.
+
+    surface - карта покрытий прогона. Она функция чертежа и параметров покрытий, построенная
+    той же build_surface_map, поэтому взять её у сценария - не довериться генератору: каждое
+    расстояние, место и квоту проверка всё равно считает сама. None - построить здесь.
+    """
     issues: list[ValidationIssue] = []
     groups = _group_placements(plan.placements, params, issues)
     by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
@@ -151,8 +159,10 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
         by_class[feature.object_class].append(feature)
     objects = {cls: _Objects(items) for cls, items in by_class.items()}
     base_index = ConstraintIndex(features, [], require_utility_data=params.require_utility_data)
-    surface = (
-        build_surface_map(
+    if not params.require_soil:
+        surface = None
+    elif surface is None:
+        surface = build_surface_map(
             features,
             labels,
             base_index.boundary,
@@ -162,9 +172,6 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             tree_distance_m=params.tree_seed_distance_m,
             inference_mode=params.surface_inference_mode,
         )
-        if params.require_soil
-        else None
-    )
     for (_, kind), placements in groups.items():
         local = replace(params, planting_type=kind)
         species = placements[0].species

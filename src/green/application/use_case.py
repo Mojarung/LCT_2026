@@ -257,7 +257,9 @@ class PlanSite:
 
         def complete_variant(params: PlanParams) -> tuple[Plan, PlanValidation]:
             with watch.stage("place"):
-                plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
+                plan = self._strategy.plan(
+                    features, scene.labels, rulebook, species, params, surface=surface
+                )
             with watch.stage("assort"):
                 plan = assign_species(plan, rulebook, self._species.all(), params, existing)
                 if inventory is not None:
@@ -272,6 +274,7 @@ class PlanSite:
                     catalog=self._species.all(),
                     params=params,
                     existing=existing,
+                    surface=surface,
                 )
             # Кустарник вдоль бортов, под кронами аллеи и на газоне ставится до проверки плана:
             # независимая проверка видит план целиком, и вариант с нарушением не проходит.
@@ -330,6 +333,7 @@ class PlanSite:
                     params,
                     catalog=self._species.all(),
                     existing=existing,
+                    surface=surface,
                 )
             # Индекс качества считается до объяснений: ценность посадки входит в её текст.
             with watch.stage("quality"):
@@ -363,6 +367,7 @@ class PlanSite:
                     params,
                     catalog=self._species.all(),
                     existing=existing,
+                    surface=surface,
                 )
                 if recheck.ok:
                     plan, validation = refined.plan, recheck
@@ -456,6 +461,7 @@ class PlanSite:
                 existing=context.report.plan.assortment_summary.existing
                 if context.report.plan.assortment_summary
                 else None,
+                surface=context.surface_map(),
             )
             require_valid_plan(validation)
         with watch.stage("write_dxf"):
