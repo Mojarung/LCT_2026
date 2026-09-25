@@ -54,6 +54,9 @@ if TYPE_CHECKING:
 install_ezdxf_fixes()
 
 MAX_BLOCK_DEPTH = 8
+# Починка геометрии без переосмысления: расхождение с нарисованным не больше этого (единицы
+# чертежа) - та же линия, а не новая.
+_EXACT_REPAIR = 1e-6
 # Контейнер, а не знак: обёртки MicroStation, выноски DIMTXT и анонимные блоки AutoCAD
 # (*U, *D, *T), а также пустые, многолюдные и крупные блоки - листы и сборки, не значки.
 CONTAINER_PREFIXES = ("msdelementtype", "dimtxt", "*")
@@ -205,8 +208,10 @@ class _Walker:
         if not np.isfinite(shapely.get_coordinates(geometry)).all():
             return self._skip(kind, layer, block, "non-finite-coordinates", ref)
         if not geometry.is_valid:
-            geometry = shapely.make_valid(geometry)
-            error = None
+            repaired = shapely.make_valid(geometry)
+            if not _same_ink(geometry, repaired):
+                error = None
+            geometry = repaired
         if error is None:
             self._gap(kind, layer, block, "approximation-error-not-bounded", ref)
         radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" else None
@@ -566,6 +571,22 @@ class _Walker:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
         return messages
+
+
+def _same_ink(drawn: BaseGeometry, repaired: BaseGeometry) -> bool:
+    """Починка ничего не переосмыслила: площадей в ней нет, а точки и линии - те же чернила.
+
+    Отрезок нулевой длины становится точкой, сложенный контур нулевой площади - линией, и
+    погрешность остаётся прежней. Самопересекающийся контур с площадью («бабочка») - другое:
+    смысл площади при починке меняется, это пробел (решение тиммейта, test_curve_clearance).
+    """
+    parts = list(shapely.get_parts(repaired))
+    while any(part.geom_type == "GeometryCollection" for part in parts):
+        parts = [p for part in parts for p in shapely.get_parts(part)]
+    if any(part.geom_type in {"Polygon", "MultiPolygon"} for part in parts):
+        return False
+    lines = shapely.boundary(drawn) if drawn.geom_type == "Polygon" else drawn
+    return shapely.hausdorff_distance(lines, repaired) <= _EXACT_REPAIR
 
 
 def _to_metres(

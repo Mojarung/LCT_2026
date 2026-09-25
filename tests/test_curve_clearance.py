@@ -217,3 +217,29 @@ def test_unbounded_spline_and_repaired_ring_are_rejected(tmp_path: Path) -> None
     assert all(f.geometry_error_m is None for f in scene.features)
     with pytest.raises(InputError, match="approximation-error-not-bounded"):
         require_complete_geometry(scene)
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [("zero_line", {"Point"}), ("folded_ring", {"LineString", "MultiLineString"})],
+)
+def test_exact_repair_of_degenerate_drawing_keeps_its_bound(
+    tmp_path: Path, kind: str, expected: set[str]
+) -> None:
+    """Отрезок нулевой длины - точка, сложенный контур нулевой площади - линия: починка не
+    меняет нарисованного, и погрешность остаётся ограниченной (Куликовская: 455 таких
+    отрезков останавливали строгий прогон). «Бабочка» с площадью по-прежнему пробел."""
+    doc = ezdxf.new()
+    if kind == "zero_line":
+        doc.modelspace().add_line((5, 5), (5, 5))
+    else:
+        doc.modelspace().add_lwpolyline([(0, 0), (10, 0), (5, 0)], close=True)
+    source = tmp_path / f"{kind}.dxf"
+    doc.saveas(source)
+
+    scene = EzdxfSceneReader().read(source, unit="m")
+
+    assert scene.read_diagnostics.geometry_gaps == ()
+    (feature,) = scene.features
+    assert feature.geometry.geom_type in expected
+    assert feature.geometry_error_m == 0.0
