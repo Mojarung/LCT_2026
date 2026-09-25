@@ -10,6 +10,7 @@
 import type { BasemapJson } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { buildChunks } from './chunks';
+import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
 import type { ExistingPlant } from './existing';
 import { type Box, boundsOfPoints, contentPoints, type Point, principalAxis } from './geometry';
 import { Palette } from './palette';
@@ -117,6 +118,10 @@ export class PlanEngine {
   private pan = 0;
   private lastCenter: Point | null = null;
   private reportedScale = 0;
+  /** Геометрия подосновы по классам: к ней ведут размерные выноски выбранной посадки. */
+  private classIndex: ClassIndex | null = null;
+  /** Выноски выбранного считаются один раз на положение и набор проверок, а не на кадр. */
+  private dims: { key: string; list: Dimension[] } = { key: '', list: [] };
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -163,6 +168,8 @@ export class PlanEngine {
     const existing: ExistingPlant[] = [];
     this.scene.chunks = buildChunks(basemap.features, basemap.bbox, existing);
     this.scene.existing = existing;
+    this.classIndex = new ClassIndex(basemap.features);
+    this.dims = { key: '', list: [] };
     this.scene.labels = basemap.labels ?? [];
     this.outline = contentPoints(basemap.features);
     this.mapBox = validBox(basemap.bbox);
@@ -574,6 +581,13 @@ export class PlanEngine {
     const area = this.clearArea();
     const font = this.palette.get('--sans');
     drawSelection(ctx, this.view, this.marks, this.palette);
+    // Выноски поверх кольца выбора: подпись нормы важнее обводки.
+    const chosen = this.marks.selected;
+    if (chosen && this.classIndex && !this.marks.dragging) {
+      const key = `${chosen.id}|${String(chosen.x)}|${String(chosen.y)}|${String(chosen.checks.length)}`;
+      if (this.dims.key !== key) this.dims = { key, list: dimensionsFor(chosen, this.classIndex) };
+      drawDimensions(ctx, this.view, chosen, this.dims.list, this.palette.get('--mono'));
+    }
     drawNorth(ctx, area, this.view, this.palette, font);
     drawScaleBar(ctx, area, this.view, this.palette, font);
 
