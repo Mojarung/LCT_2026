@@ -2,6 +2,7 @@
 
 import { artifactUrl } from '../api/client';
 import type { PlanJson, SurfaceMeta } from '../api/artifacts';
+import { surfaceMasks } from './paper';
 import type { MapItem, SurfaceImage } from './types';
 
 /** Крона по умолчанию, если у посадки нет вида: радиус такой, чтобы отметка читалась. */
@@ -54,11 +55,14 @@ export async function loadSurface(runId: string, meta: SurfaceMeta): Promise<Sur
   } catch {
     return null;
   }
+  const masks = surfaceMasks(img);
   return {
     img,
     x: meta.origin[0],
     y: meta.origin[1],
     w: meta.width * meta.cell_m,
     h: meta.height * meta.cell_m,
+    soil: masks?.soil ?? null,
+    paved: masks?.paved ?? null,
   };
 }

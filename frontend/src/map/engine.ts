@@ -10,6 +10,7 @@
 import type { BasemapJson } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { buildChunks } from './chunks';
+import type { ExistingPlant } from './existing';
 import { type Box, boundsOfPoints, contentPoints, type Point, principalAxis } from './geometry';
 import { Palette } from './palette';
 import { orderItems, pick, shown } from './picking';
@@ -83,6 +84,7 @@ export class PlanEngine {
     chunks: [],
     labels: [],
     surface: null,
+    existing: [],
     placements: [],
     rejections: [],
   };
@@ -158,7 +160,9 @@ export class PlanEngine {
 
   /** Подоснова: чертёж становится картой, по которой можно ездить, пока считаются посадки. */
   setBasemap(basemap: BasemapJson): void {
-    this.scene.chunks = buildChunks(basemap.features, basemap.bbox);
+    const existing: ExistingPlant[] = [];
+    this.scene.chunks = buildChunks(basemap.features, basemap.bbox, existing);
+    this.scene.existing = existing;
     this.scene.labels = basemap.labels ?? [];
     this.outline = contentPoints(basemap.features);
     this.mapBox = validBox(basemap.bbox);
@@ -562,7 +566,7 @@ export class PlanEngine {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     const visible = worldBounds(this.view, 0, 0, rect.width, rect.height);
-    drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette);
+    drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette, dpr);
 
     // Отметка выбранного, север и линейка - в экранных пикселях: их размер не зависит от
     // масштаба, иначе на общем виде обводка вырождается в волос.

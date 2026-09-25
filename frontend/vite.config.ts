@@ -32,6 +32,9 @@ export default defineConfig({
   plugins: [react(), swaggerVendor()],
   server: {
     port: 5173,
+    // Кроме самого фронтенда - только каталог config/: тест базы моделей сверяет её с
+    // config/species.yaml, чтобы новый вид каталога не рисовался запасной моделью молча.
+    fs: { allow: ['.', '../config'] },
     proxy: {
       '/api': { target: api, changeOrigin: true },
       '/docs': { target: api, changeOrigin: true },

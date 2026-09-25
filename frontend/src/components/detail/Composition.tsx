@@ -1,19 +1,27 @@
 import { integer } from '../../lib/format';
+import { modelKey, modelOf } from '../../map/models';
 import type { MapItem } from '../../map/types';
 import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
+import { ModelSwatch } from '../run/ModelSwatch';
 
 interface Row {
   code: string;
   name: string;
   count: number;
+  plantingType: string;
 }
 
 function rowsOf(placements: readonly MapItem[]): Row[] {
   const byCode = new Map<string, Row>();
   for (const item of placements) {
     const code = item.species_code ?? '';
-    const row = byCode.get(code) ?? { code, name: item.species_ru || 'вид не назначен', count: 0 };
+    const row = byCode.get(code) ?? {
+      code,
+      name: item.species_ru || 'вид не назначен',
+      count: 0,
+      plantingType: item.planting_type,
+    };
     row.count += 1;
     byCode.set(code, row);
   }
@@ -82,6 +90,13 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
                 <span
                   className="composition-bar"
                   style={{ ['--share' as string]: `${((row.count / top) * 100).toFixed(1)}%` }}
+                />
+                {/* Образец модели - то, чем вид нарисован на карте: состав плана он же и
+                    легенда видов. */}
+                <ModelSwatch
+                  model={modelOf(row.code, row.plantingType)}
+                  modelKey={modelKey(row.code, row.plantingType)}
+                  size={22}
                 />
                 <span className="composition-name">{row.name}</span>
                 <span className="composition-count">{integer(row.count)}</span>

@@ -115,7 +115,7 @@ a:hover {
   padding: 0 5px;
   flex-shrink: 0;
   background: var(--glass);
-  border: 1px solid var(--hair);
+  border: 1px solid var(--edge);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
   backdrop-filter: blur(18px) saturate(140%);

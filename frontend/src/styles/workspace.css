@@ -55,7 +55,7 @@ body.shell-map .topbar {
   position: absolute;
   z-index: 2;
   background: var(--glass);
-  border: 1px solid var(--hair);
+  border: 1.5px solid var(--edge);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
   backdrop-filter: blur(18px) saturate(140%);
@@ -1040,4 +1040,88 @@ body.shell-map .topbar {
   to {
     background-position: -200% 0;
   }
+}
+
+/* Образцы моделей растений: тот же спрайт, что на карте (ModelSwatch.tsx). */
+.model-swatch {
+  flex-shrink: 0;
+  display: block;
+}
+.legend-models {
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+}
+.hud-legend .legend-models span {
+  align-items: center;
+}
+.hud-legend .legend-models i {
+  margin-top: 0;
+}
+/* Кольцо вердикта «требует согласования» - как на карте: пунктир вокруг кроны. */
+.legend i.approval {
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  flex-shrink: 0;
+  border: 1.8px dashed var(--warn);
+  border-radius: 50%;
+}
+.legend i.swatch-lawn {
+  background:
+    repeating-linear-gradient(
+      100deg,
+      transparent 0 3px,
+      var(--c-lawn-blade) 3px 4px,
+      transparent 4px 7px
+    ),
+    var(--c-lawn-fill);
+}
+.legend i.swatch-asphalt {
+  background:
+    radial-gradient(var(--c-asphalt-speck) 0.7px, transparent 0.9px) 0 0 / 4px 4px,
+    var(--c-asphalt);
+}
+.legend-group .key.swatch-building {
+  width: 16px;
+  height: 12px;
+  border: 1.2px solid var(--c-building);
+  border-top-width: 1.2px;
+  background:
+    repeating-linear-gradient(135deg, var(--c-building-hatch) 0 1px, transparent 1px 4px),
+    var(--c-building-fill);
+  box-shadow: 2px 2px 0 var(--c-shadow);
+}
+
+/* Слои результата в DXF - тёмные плашки, как на слайде «Выход». */
+.legend-dxf {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+}
+.legend-dxf summary {
+  cursor: pointer;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone);
+}
+.legend-dxf p {
+  margin: 6px 0 8px;
+}
+.dxf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dxf-chips li {
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #2b211c;
+  color: #f3ead8;
+  font: 500 var(--fs-micro) / 1.2 var(--mono);
+  letter-spacing: 0.02em;
 }

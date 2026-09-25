@@ -8,16 +8,27 @@ export interface ClassStyle {
   /** Толщина в экранных пикселях. */
   width: number;
   dash?: number[];
+  /** Фактура заливки поверх цвета (paper.ts): трава газона, штриховка здания. */
+  texture?: 'grass' | 'hatch';
+  /** Тень вниз-вправо, как у зданий на слайдах: план читается объёмным, а не схемой. */
+  shadow?: boolean;
 }
 
 export const STYLES: Record<string, ClassStyle> = {
-  lawn: { group: 'surfaces', fill: '--c-lawn', width: 0 },
-  building: { group: 'buildings', fill: '--c-building-fill', stroke: '--c-building', width: 1 },
+  lawn: { group: 'surfaces', fill: '--c-lawn', width: 0, texture: 'grass' },
+  building: {
+    group: 'buildings',
+    fill: '--c-building-fill',
+    stroke: '--c-building',
+    width: 1.3,
+    texture: 'hatch',
+    shadow: true,
+  },
   structure: { group: 'buildings', stroke: '--c-building', width: 1 },
   road: { group: 'surfaces', stroke: '--c-road', width: 1 },
   sidewalk: { group: 'surfaces', stroke: '--c-pavement', width: 1 },
   pavement_edge: { group: 'surfaces', stroke: '--c-pavement', width: 1 },
-  curb: { group: 'surfaces', stroke: '--c-curb', width: 1.4 },
+  curb: { group: 'surfaces', stroke: '--c-curb', width: 2 },
   tram: { group: 'surfaces', stroke: '--c-road', width: 1.2 },
   railway: { group: 'surfaces', stroke: '--c-road', width: 1.2 },
   slope: { group: 'surfaces', stroke: '--c-slope', width: 1 },

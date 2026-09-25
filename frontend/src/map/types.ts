@@ -18,7 +18,8 @@ export type LayerKey =
 export type Layers = Record<LayerKey, boolean>;
 
 /** Что видно по умолчанию: отказы выключены - их сотни, и без вопроса «почему здесь нет»
- *  они только засоряют план; карта покрытий тоже - это проверка разбора чертежа, а не план. */
+ *  они только засоряют план. Карта покрытий включена: это газон и асфальт бумажной
+ *  подосновы, по ним же видно, как сервис понял участок. */
 export const DEFAULT_LAYERS: Layers = {
   utilities: true,
   surfaces: true,
@@ -28,7 +29,7 @@ export const DEFAULT_LAYERS: Layers = {
   rejections: false,
   weak: true,
   barrier: true,
-  surfacemap: false,
+  surfacemap: true,
   labels: true,
 };
 
@@ -62,6 +63,9 @@ export interface SurfaceImage {
   y: number;
   w: number;
   h: number;
+  /** Маски грунта и твёрдого покрытия: по ним подоснова красится газоном и асфальтом. */
+  soil: CanvasImageSource | null;
+  paved: CanvasImageSource | null;
 }
 
 export interface ViewState {

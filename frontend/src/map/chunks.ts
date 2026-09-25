@@ -6,6 +6,7 @@
  * пикселя. */
 
 import type { BasemapFeature } from '../api/artifacts';
+import { type ExistingPlant, plantsOf } from './existing';
 import { addGeometry, type Box, measure } from './geometry';
 import { STYLES, type ClassStyle } from './palette';
 
@@ -22,6 +23,8 @@ export interface Chunk {
   fillVar: string | undefined;
   width: number;
   dash: number[];
+  texture: ClassStyle['texture'];
+  shadow: boolean;
   path: Path2D;
   span: number;
   minX: number;
@@ -30,7 +33,13 @@ export interface Chunk {
   maxY: number;
 }
 
-export function buildChunks(features: readonly BasemapFeature[], bbox: Box | null): Chunk[] {
+/** Куски подосновы и существующие насаждения. Одиночная крона уходит в модели (existing.ts),
+ *  а не в линии: иначе под бледной кроной модели проступал бы знак съёмки. */
+export function buildChunks(
+  features: readonly BasemapFeature[],
+  bbox: Box | null,
+  existing: ExistingPlant[] = [],
+): Chunk[] {
   const [x0, y0, x1, y1] = bbox ?? [0, 0, 0, 0];
   const cell = Math.max(x1 - x0, y1 - y0) / GRID || 1;
   const byKey = new Map<string, Chunk>();
@@ -38,6 +47,11 @@ export function buildChunks(features: readonly BasemapFeature[], bbox: Box | nul
   for (const feature of features) {
     const style = STYLES[feature.properties.class];
     if (!style) continue;
+    const plants = plantsOf(feature);
+    if (plants) {
+      existing.push(...plants);
+      continue;
+    }
     box[0] = Infinity;
     box[1] = Infinity;
     box[2] = -Infinity;
@@ -62,6 +76,8 @@ export function buildChunks(features: readonly BasemapFeature[], bbox: Box | nul
         fillVar: style.fill,
         width: style.width,
         dash: style.dash ?? [],
+        texture: style.texture,
+        shadow: style.shadow ?? false,
         path: new Path2D(),
         span: 0,
         minX: Infinity,

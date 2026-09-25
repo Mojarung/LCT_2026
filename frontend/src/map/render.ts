@@ -9,9 +9,13 @@
 import type { MaterialLabel } from '../api/artifacts';
 import type { Chunk } from './chunks';
 import { MIN_PX } from './chunks';
+import type { ExistingPlant } from './existing';
 import type { Box } from './geometry';
+import { EXISTING_SHRUB, EXISTING_TREE, modelKey, modelOf } from './models';
 import { type Palette, VERDICT_TOKEN } from './palette';
+import { paintMaterial, pinToScreen, type Textures, texturesFor } from './paper';
 import { isWeak } from './picking';
+import { type Look, sprite, stamp } from './sprites';
 import type { Area, Layers, MapItem, SurfaceImage, ViewState } from './types';
 import { niceLength, toScreen, worldBounds } from './view';
 
@@ -32,6 +36,8 @@ export interface Scene {
   chunks: Chunk[];
   labels: MaterialLabel[];
   surface: SurfaceImage | null;
+  /** Существующие деревья и кустарники подосновы: рисуются моделями, а не знаками съёмки. */
+  existing: ExistingPlant[];
   placements: MapItem[];
   rejections: MapItem[];
 }
@@ -91,22 +97,51 @@ export function renderBase(
   ctx.lineCap = 'butt';
 
   const visible = worldBounds(view, -PAD, -PAD, width, height);
-  // Карта покрытий - под линиями: грунт и твёрдое так, как их понял сервис. Растр строкой 0
+  const textures = texturesFor(ctx, palette, dpr);
+  const place = (target: CanvasRenderingContext2D) => {
+    worldTransform(target, view, dpr, PAD, PAD);
+  };
+  // Газон и асфальт - под линиями: грунт и твёрдое так, как их понял сервис. Растр строкой 0
   // лежит на минимальном Y, и мировая матрица с разворотом Y кладёт его как надо. Клетка
   // растра на приближении крупнее бордюра: со сглаживанием её край не читается как ступень
   // чертежа.
   if (layers.surfacemap && scene.surface) {
-    const { img, x, y, w, h } = scene.surface;
-    ctx.drawImage(img, x, y, w, h);
+    const { img, x, y, w, h, soil, paved } = scene.surface;
+    if (textures && soil && paved) {
+      paintMaterial(ctx, paved, scene.surface, textures.asphalt, place);
+      paintMaterial(ctx, soil, scene.surface, textures.grass, place);
+    } else {
+      ctx.drawImage(img, x, y, w, h);
+    }
   }
-  for (const chunk of scene.chunks) {
-    if (!layers[chunk.group]) continue;
-    if (chunk.span * view.scale < MIN_PX) continue;
-    if (chunk.maxX < visible[0] || chunk.minX > visible[2]) continue;
-    if (chunk.maxY < visible[1] || chunk.minY > visible[3]) continue;
+  const shown = scene.chunks.filter(
+    (chunk) =>
+      layers[chunk.group] &&
+      chunk.span * view.scale >= MIN_PX &&
+      chunk.maxX >= visible[0] &&
+      chunk.minX <= visible[2] &&
+      chunk.maxY >= visible[1] &&
+      chunk.minY <= visible[3],
+  );
+  // Тени зданий - отдельным проходом до заливок: тень соседнего куска не ложится на крышу.
+  // Сдвиг в экранных пикселях: свет на слайдах всегда слева сверху.
+  worldTransform(ctx, view, dpr, PAD + SHADOW_PX, PAD + SHADOW_PX);
+  ctx.fillStyle = palette.get('--c-shadow');
+  for (const chunk of shown) if (chunk.shadow) ctx.fill(chunk.path);
+  place(ctx);
+  // Сети на бумаге тише, чем в CAD: на слайдах план - это газон, здания и посадки, а
+  // сети - справка под ними. Насколько тише, решает тема (--utility-opacity).
+  const utilityAlpha = Number.parseFloat(palette.get('--utility-opacity')) || 1;
+  for (const chunk of shown) {
+    ctx.globalAlpha = chunk.group === 'utilities' ? utilityAlpha : 1;
     if (chunk.fillVar) {
       ctx.fillStyle = palette.get(chunk.fillVar);
       ctx.fill(chunk.path);
+      const texture = textureOf(chunk, textures);
+      if (texture) {
+        ctx.fillStyle = pinToScreen(ctx, texture);
+        ctx.fill(chunk.path);
+      }
     }
     if (chunk.strokeVar && chunk.width) {
       ctx.strokeStyle = palette.get(chunk.strokeVar);
@@ -116,10 +151,51 @@ export function renderBase(
       if (chunk.dash.length) ctx.setLineDash([]);
     }
   }
+  ctx.globalAlpha = 1;
+  if (layers.existing && scene.existing.length) {
+    drawExisting(ctx, visible, dpr, view, scene.existing, palette);
+  }
   if (layers.labels && scene.labels.length && view.scale >= LABEL_MIN_SCALE) {
     drawLabels(ctx, visible, dpr, view, scene.labels, palette);
   }
   return { ...view, dpr, width: rect.width, height: rect.height };
+}
+
+/** Сдвиг тени здания, экранные пиксели. */
+const SHADOW_PX = 4;
+
+function textureOf(chunk: Chunk, textures: Textures | null): CanvasPattern | null {
+  if (!textures || !chunk.texture) return null;
+  return chunk.texture === 'grass' ? textures.grass : textures.hatch;
+}
+
+/** Существующие насаждения моделями в экранных пикселях подосновы: бледная крона с крестиком
+ *  съёмки. Мельче MIN_CROWN_PX кроны тянутся до него, как и посадки плана. */
+function drawExisting(
+  ctx: CanvasRenderingContext2D,
+  visible: Box,
+  dpr: number,
+  view: ViewState,
+  plants: readonly ExistingPlant[],
+  palette: Palette,
+): void {
+  // Цвет кроны - из темы: бледная на бумаге, приглушённая на графите, где бледная кричала бы.
+  const treeTone = palette.get('--c-existing-crown');
+  const shrubTone = palette.get('--c-existing-shrub');
+  const tree = { ...EXISTING_TREE, tone: treeTone };
+  const shrub = { ...EXISTING_SHRUB, tone: shrubTone };
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+  for (const plant of plants) {
+    if (plant.x < visible[0] - plant.r || plant.x > visible[2] + plant.r) continue;
+    if (plant.y < visible[1] - plant.r || plant.y > visible[3] + plant.r) continue;
+    const radius = Math.max(plant.r * view.scale, MIN_CROWN_PX * (plant.shrub ? 0.7 : 1));
+    const key = plant.shrub ? `~existing-shrub|${shrubTone}` : `~existing-tree|${treeTone}`;
+    const s = sprite(key, plant.shrub ? shrub : tree, radius, 'existing', dpr);
+    const { sx, sy } = toScreen(view, plant.x, plant.y);
+    stamp(ctx, s, sx, sy, radius);
+  }
+  ctx.restore();
 }
 
 /** Подписи материала с чертежа («А», «ГАЗОН», «ДЕТ.ПЛ.») в экранных пикселях: текст не
@@ -270,7 +346,8 @@ function inView(item: MapItem, visible: Box, pad: number): boolean {
   );
 }
 
-/** Отметки плана в мировых координатах: вызывающий уже поставил мировую матрицу. */
+/** Отметки плана: вызывающий уже поставил мировую матрицу. Кроны моделей кладутся в экранных
+ *  пикселях (dpr - плотность холста), отказы и знаки - в мировых координатах. */
 export function drawPlan(
   ctx: CanvasRenderingContext2D,
   visible: Box,
@@ -278,14 +355,18 @@ export function drawPlan(
   scene: Scene,
   marks: Marks,
   palette: Palette,
+  dpr: number,
 ): void {
   if (marks.layers.rejections) drawRejections(ctx, visible, view, scene, palette);
   if (marks.layers.barrier) drawBarrierPlaces(ctx, visible, view, scene, palette);
-  if (marks.layers.placements) drawPlacements(ctx, visible, view, scene, marks, palette);
+  if (marks.layers.placements) drawPlacements(ctx, visible, view, scene, marks, palette, dpr);
   if (marks.layers.placements && marks.layers.weak)
     drawWeak(ctx, visible, view, scene, marks, palette);
 }
 
+/** Посадки моделями видов (models.ts): крона своей формы и цвета, тень, ствол. Вердикт виден
+ *  отдельно: «требует согласования» - пунктирное кольцо поверх кроны, иначе цвет кроны спорил
+ *  бы с цветом вида. */
 function drawPlacements(
   ctx: CanvasRenderingContext2D,
   visible: Box,
@@ -293,43 +374,55 @@ function drawPlacements(
   scene: Scene,
   marks: Marks,
   palette: Palette,
+  dpr: number,
 ): void {
   const minRadius = MIN_CROWN_PX / view.scale;
   // При подсветке вида его кроны подрастают: на общем виде разница одной прозрачности на
-  // кружке в четыре пикселя почти не читается.
+  // кроне в четыре пикселя почти не читается.
   const liftRadius = (MIN_CROWN_PX + 2.5) / view.scale;
-  const groups = new Map<string, { verdict: string; dim: boolean; items: MapItem[] }>();
-  for (const p of scene.placements) {
-    if (marks.speciesOff.has(p.species_code ?? '')) continue;
-    if (!inView(p, visible, p.radius + minRadius)) continue;
-    const dim = marks.highlight !== null && p.species_code !== marks.highlight;
-    const key = `${p.verdict}|${dim ? 'dim' : 'on'}`;
-    let group = groups.get(key);
-    if (!group) {
-      group = { verdict: p.verdict, dim, items: [] };
-      groups.set(key, group);
+  // Кольца вердикта: needs_approval - янтарное, запрет после переноса - красное.
+  const rings = new Map<string, Path2D>();
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Приглушённые рисуются первым проходом, чтобы подсвеченный вид лёг поверх. Приглушённые не
+  // исчезают: подсветка вида оставляет план на месте, иначе вместо «где эти тридцать»
+  // получается «где остальные двести семьдесят».
+  for (const pass of [true, false]) {
+    for (const p of scene.placements) {
+      if (marks.speciesOff.has(p.species_code ?? '')) continue;
+      const dim = marks.highlight !== null && p.species_code !== marks.highlight;
+      if (dim !== pass) continue;
+      if (!inView(p, visible, p.radius + liftRadius)) continue;
+      const lifted = !dim && marks.highlight !== null;
+      const radius = Math.max(p.radius, lifted ? liftRadius : minRadius) * view.scale;
+      const look: Look = dim ? 'dim' : lifted ? 'lift' : 'plan';
+      const key = modelKey(p.species_code, p.planting_type);
+      const s = sprite(key, modelOf(p.species_code, p.planting_type), radius, look, dpr);
+      const { sx, sy } = toScreen(view, p.x, p.y);
+      stamp(ctx, s, sx, sy, radius);
+      if (!dim && p.verdict !== 'allowed') {
+        const token = VERDICT_TOKEN[p.verdict] ?? '--warn';
+        let ring = rings.get(token);
+        if (!ring) {
+          ring = new Path2D();
+          rings.set(token, ring);
+        }
+        ring.moveTo(sx + radius + 3, sy);
+        ring.arc(sx, sy, radius + 3, 0, Math.PI * 2);
+      }
     }
-    group.items.push(p);
   }
-  // Приглушённые рисуются первыми, чтобы подсвеченный вид лёг поверх.
-  const ordered = [...groups.values()].sort((a, b) => (b.dim ? 1 : 0) - (a.dim ? 1 : 0));
-  for (const group of ordered) {
-    const color = palette.get(VERDICT_TOKEN[group.verdict] ?? '--bone-3');
-    const lifted = !group.dim && marks.highlight !== null;
-    const path = new Path2D();
-    for (const p of group.items) {
-      const r = Math.max(p.radius, lifted ? liftRadius : minRadius);
-      path.moveTo(p.x + r, p.y);
-      path.arc(p.x, p.y, r, 0, Math.PI * 2);
-    }
-    // Приглушённые не исчезают: подсветка вида оставляет план на месте, иначе вместо «где эти
-    // тридцать» получается «где остальные двести семьдесят».
-    ctx.fillStyle = color + (group.dim ? '22' : lifted ? '88' : '55');
-    ctx.fill(path);
-    ctx.strokeStyle = color + (group.dim ? '55' : 'ff');
-    ctx.lineWidth = (group.dim ? 1 : lifted ? 2.2 : 1.4) / view.scale;
-    ctx.stroke(path);
+  ctx.setLineDash([4, 3]);
+  for (const [token, ring] of rings) {
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = palette.get('--accent-halo');
+    ctx.stroke(ring);
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = palette.get(token);
+    ctx.stroke(ring);
   }
+  ctx.setLineDash([]);
+  ctx.restore();
 }
 
 function drawRejections(
