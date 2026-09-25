@@ -140,3 +140,52 @@ def test_associative_open_hatch_uses_only_matching_region(tmp_path: Path, deviat
     assert sum(gap.count for gap in scene.read_diagnostics.geometry_gaps) == (
         0 if deviation < 0.002 else 1
     )
+
+
+def test_virtual_region_recovers_sat_by_sab_when_insert_drops_handle(tmp_path: Path) -> None:
+    mesh = MeshBuilder()
+    mesh.add_face([(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)])
+    sat_doc = ezdxf.new("R2010")
+    sat_region = sat_doc.modelspace().add_region()
+    api.export_dxf(sat_region, [api.body_from_mesh(mesh)])
+    sab_sat = []
+    for line in sat_region.sat:
+        fields = line.split()
+        if line.startswith("coedge "):
+            fields.insert(-2, "0")
+        elif line.startswith("vertex "):
+            fields.insert(-2, "1")
+        sab_sat.append(" ".join(fields))
+
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    block = doc.blocks.new("renamable-block")
+    region = block.add_region()
+    region.sab = b"sample sab for virtual entity"
+    doc.modelspace().add_blockref("renamable-block", (50, 60))
+    source = tmp_path / "nested.dxf"
+    doc.saveas(source)
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    sidecar_path(source).write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "engine": "acadrust",
+                "engine_version": "0.5.5",
+                "dxf_sha256": digest,
+                "source_regions": 1,
+                "regions": {
+                    region.dxf.handle: {
+                        "sab_sha256": hashlib.sha256(region.sab).hexdigest(),
+                        "sat": "\n".join(sab_sat),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    scene = EzdxfSceneReader().read(source)
+    found = [feature for feature in scene.features if feature.source_entity_type == "REGION"]
+    assert len(found) == 1
+    assert found[0].geometry.bounds == pytest.approx((50, 60, 52, 62))
+    assert not scene.read_diagnostics.geometry_gaps

@@ -17,6 +17,7 @@ from ezdxf.tools.text import fast_plain_mtext, plain_text
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
 
+from green.application.errors import InputError
 from green.domain.objects import (
     NO_XREF,
     Feature,
@@ -88,6 +89,16 @@ class EzdxfSceneReader:
         digest = _sha256(path)
         doc, warnings = self._documents.load(path) if self._documents else load_document(path)
         region_sat = load_region_sidecar(path, digest, doc)
+        region_sat_by_sab: dict[bytes, tuple[str, ...]] = {}
+        for handle, sat in region_sat.items():
+            region = doc.entitydb.get(handle)
+            if not isinstance(region, Region):
+                raise InputError(f"ACIS sidecar: REGION {handle} исчез после чтения")
+            sab_digest = hashlib.sha256(region.sab).digest()
+            previous = region_sat_by_sab.get(sab_digest)
+            if previous is not None and previous != sat:
+                raise InputError("ACIS sidecar: одинаковые SAB дали разные SAT")
+            region_sat_by_sab[sab_digest] = sat
         units = decide_units(doc, unit)
         # Обход идёт в единицах чертежа, поэтому метровые пороги делятся на размер единицы.
         walker = _Walker(
@@ -96,6 +107,7 @@ class EzdxfSceneReader:
             flatten=self._flatten / units.unit_m,
             unit_m=units.unit_m,
             region_sat=region_sat,
+            region_sat_by_sab=region_sat_by_sab,
         )
         for entity in doc.modelspace():
             walker.visit(entity, parent_layer=None, chain=(), parent_handle="", index=0)
@@ -133,6 +145,7 @@ class _Walker:
     flatten: float
     unit_m: float = 1.0
     region_sat: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    region_sat_by_sab: dict[bytes, tuple[str, ...]] = field(default_factory=dict)
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
@@ -364,7 +377,7 @@ class _Walker:
                     entity,
                     flatten=self.flatten,
                     block_matrix=block_matrix,
-                    sat_lines=self.region_sat.get(entity.dxf.handle),
+                    sat_lines=self._region_sat(entity),
                 )
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
@@ -425,7 +438,7 @@ class _Walker:
         ):
             raise HatchGeometryError("hatch-open-boundary")
         local, error = region_polygon(
-            source, flatten=self.flatten, sat_lines=self.region_sat.get(source.dxf.handle)
+            source, flatten=self.flatten, sat_lines=self._region_sat(source)
         )
         if not path.vertices:
             raise HatchGeometryError("hatch-open-boundary")
@@ -451,8 +464,16 @@ class _Walker:
             source,
             flatten=self.flatten,
             block_matrix=block_matrix,
-            sat_lines=self.region_sat.get(source.dxf.handle),
+            sat_lines=self._region_sat(source),
         )
+
+    def _region_sat(self, region: Region) -> tuple[str, ...] | None:
+        handle = region.dxf.get("handle")
+        if handle in self.region_sat:
+            return self.region_sat[handle]
+        if region.sab:
+            return self.region_sat_by_sab.get(hashlib.sha256(region.sab).digest())
+        return None
 
     def warnings(self) -> list[str]:
         messages = []
