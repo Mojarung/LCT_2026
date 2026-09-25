@@ -401,7 +401,13 @@ def _seeds(
             kind.append(int(Material.SOIL))
     trees = [f.geometry for f in features if f.object_class is ObjectClass.EXISTING_TREE]
     if trees:
-        centers = shapely.get_coordinates(shapely.centroid(np.array(trees, dtype=object)))
+        # Ствол и каждый кружок полосы деревьев - грунт; центр изогнутой полосы может лежать
+        # на тротуаре, поэтому у точек берутся сами точки, центр - только у прочих фигур.
+        points = [g for g in trees if g.geom_type in {"Point", "MultiPoint"}]
+        shapes = [g for g in trees if g.geom_type not in {"Point", "MultiPoint"}]
+        centers = shapely.get_coordinates(
+            np.array([*points, *shapely.centroid(np.array(shapes, dtype=object))], dtype=object)
+        )
         xy.extend(map(tuple, centers))
         kind.extend([_TREE_SEED] * len(centers))
     coordinates = np.array(xy, dtype=np.float64).reshape(-1, 2)

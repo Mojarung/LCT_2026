@@ -19,6 +19,7 @@ from green.application.semantic_names import (
 )
 from green.application.surface_labels import classify_labels, label_report_groups
 from green.application.symbols import SymbolCatalog, SymbolRole
+from green.application.tree_strips import chain_tree_strips
 from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, Scene
 
 if TYPE_CHECKING:
@@ -160,6 +161,7 @@ def classify_scene(
         if feature.symbol is not None:
             strokes[feature.symbol].append(feature.geometry)
     classified.extend(_symbol_features(scene.symbols, catalog, overrides, strokes))
+    classified = list(chain_tree_strips(classified))
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)
