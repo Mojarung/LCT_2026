@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="610" viewBox="0 0 1100 610">
+<rect width="100%" height="100%" fill="#faf8f2"/>
+<text x="30" y="33" font-size="20" font-family="sans-serif">Назначение видов — одинаковые места и DXF, strip-0.0</text>
+<text x="35" y="60" font-size="18" font-family="sans-serif">До: 62 деревьев</text>
+<rect x="35.0" y="256.0" width="465.00000000000006" height="46.5" fill="#dfddd8"/>
+<rect x="35.0" y="93.25" width="465.00000000000006" height="162.75" fill="#e2edcf"/>
+<rect x="35.0" y="70.0" width="465.00000000000006" height="23.25" fill="#c7c3be"/>
+<line x1="35.0" x2="500.00000000000006" y1="172.3" y2="172.3" stroke="#5999c6" stroke-width="2"/>
+<rect x="35" y="70" width="465.00000000000006" height="232.50000000000003" fill="none" stroke="#333"/>
+<circle cx="48.95" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-7</title></circle>
+<circle cx="76.85" cy="246.70" r="4" fill="#6b8d26" stroke="#222" stroke-width="0.9"><title>prunus_virginiana row-7</title></circle>
+<circle cx="160.55" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="188.45" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-7</title></circle>
+<circle cx="216.35" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="244.25" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="272.15" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-8</title></circle>
+<circle cx="300.05" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-8</title></circle>
+<circle cx="327.95" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="355.85" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="383.75" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="411.65" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-8</title></circle>
+<circle cx="439.55" cy="246.70" r="4" fill="#278f87" stroke="#222" stroke-width="0.9"><title>pinus_mugo row-8</title></circle>
+<circle cx="467.45" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="47.79" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-1</title></circle>
+<circle cx="75.69" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-1</title></circle>
+<circle cx="103.59" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-1</title></circle>
+<circle cx="131.49" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-1</title></circle>
+<circle cx="159.39" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-2</title></circle>
+<circle cx="187.29" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-2</title></circle>
+<circle cx="215.19" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-2</title></circle>
+<circle cx="243.09" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-2</title></circle>
+<circle cx="270.99" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-5</title></circle>
+<circle cx="298.89" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-5</title></circle>
+<circle cx="326.79" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-5</title></circle>
+<circle cx="354.69" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-5</title></circle>
+<circle cx="382.59" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-4</title></circle>
+<circle cx="410.49" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-4</title></circle>
+<circle cx="438.39" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-4</title></circle>
+<circle cx="466.29" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-4</title></circle>
+<circle cx="61.74" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="89.64" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-1</title></circle>
+<circle cx="117.54" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="145.44" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="173.34" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-2</title></circle>
+<circle cx="201.24" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="229.14" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="257.04" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="284.94" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-5</title></circle>
+<circle cx="312.84" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-5</title></circle>
+<circle cx="340.74" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-5</title></circle>
+<circle cx="368.64" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-5</title></circle>
+<circle cx="396.54" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-4</title></circle>
+<circle cx="424.44" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-4</title></circle>
+<circle cx="452.34" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-4</title></circle>
+<circle cx="480.24" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-4</title></circle>
+<circle cx="61.74" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="89.64" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="117.54" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-6</title></circle>
+<circle cx="145.44" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="173.34" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="201.24" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="229.14" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-6</title></circle>
+<circle cx="257.04" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="284.94" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-3</title></circle>
+<circle cx="312.84" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="340.74" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="368.64" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="396.54" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-3</title></circle>
+<circle cx="424.44" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="452.34" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-3</title></circle>
+<circle cx="480.24" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-3</title></circle>
+<text x="570" y="60" font-size="18" font-family="sans-serif">После: 62 деревьев</text>
+<rect x="570.0" y="256.0" width="465.00000000000006" height="46.5" fill="#dfddd8"/>
+<rect x="570.0" y="93.25" width="465.00000000000006" height="162.75" fill="#e2edcf"/>
+<rect x="570.0" y="70.0" width="465.00000000000006" height="23.25" fill="#c7c3be"/>
+<line x1="570.0" x2="1035.0" y1="172.3" y2="172.3" stroke="#5999c6" stroke-width="2"/>
+<rect x="570" y="70" width="465.00000000000006" height="232.50000000000003" fill="none" stroke="#333"/>
+<circle cx="583.95" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="611.85" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="695.55" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="723.45" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="751.35" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="779.25" cy="246.70" r="4" fill="#c73b3b" stroke="#222" stroke-width="0.9"><title>acer_ginnala row-7</title></circle>
+<circle cx="807.15" cy="246.70" r="4" fill="#278f87" stroke="#222" stroke-width="0.9"><title>pinus_mugo row-8</title></circle>
+<circle cx="835.05" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="862.95" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="890.85" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="918.75" cy="246.70" r="4" fill="#6b8d26" stroke="#222" stroke-width="0.9"><title>prunus_virginiana row-8</title></circle>
+<circle cx="946.65" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="974.55" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="1002.45" cy="246.70" r="4" fill="#da9b22" stroke="#222" stroke-width="0.9"><title>crataegus_laevigata row-8</title></circle>
+<circle cx="582.79" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-1</title></circle>
+<circle cx="610.69" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-1</title></circle>
+<circle cx="638.59" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-1</title></circle>
+<circle cx="666.49" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-1</title></circle>
+<circle cx="694.39" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-2</title></circle>
+<circle cx="722.29" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-2</title></circle>
+<circle cx="750.19" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-2</title></circle>
+<circle cx="778.09" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-2</title></circle>
+<circle cx="805.99" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-5</title></circle>
+<circle cx="833.89" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-5</title></circle>
+<circle cx="861.79" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-5</title></circle>
+<circle cx="889.69" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-5</title></circle>
+<circle cx="917.59" cy="219.96" r="2.8" fill="#2b9d5c" stroke="none" stroke-width="0.9"><title>ulmus_laevis group-4</title></circle>
+<circle cx="945.49" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-4</title></circle>
+<circle cx="973.39" cy="219.96" r="2.8" fill="#346cc9" stroke="none" stroke-width="0.9"><title>acer_platanoides group-4</title></circle>
+<circle cx="1001.29" cy="219.96" r="2.8" fill="#a5783c" stroke="none" stroke-width="0.9"><title>tilia_cordata group-4</title></circle>
+<circle cx="596.74" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="624.64" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-1</title></circle>
+<circle cx="652.54" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="680.44" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-1</title></circle>
+<circle cx="708.34" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-2</title></circle>
+<circle cx="736.24" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="764.14" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="792.04" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-2</title></circle>
+<circle cx="819.94" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-5</title></circle>
+<circle cx="847.84" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-5</title></circle>
+<circle cx="875.74" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-5</title></circle>
+<circle cx="903.64" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-5</title></circle>
+<circle cx="931.54" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-4</title></circle>
+<circle cx="959.44" cy="192.06" r="2.8" fill="#d65d95" stroke="none" stroke-width="0.9"><title>sorbus_aucuparia group-4</title></circle>
+<circle cx="987.34" cy="192.06" r="2.8" fill="#ad5b22" stroke="none" stroke-width="0.9"><title>populus_simonii group-4</title></circle>
+<circle cx="1015.24" cy="192.06" r="2.8" fill="#8b53b1" stroke="none" stroke-width="0.9"><title>picea_abies group-4</title></circle>
+<circle cx="596.74" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="624.64" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="652.54" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-6</title></circle>
+<circle cx="680.44" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="708.34" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-6</title></circle>
+<circle cx="736.24" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="764.14" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-6</title></circle>
+<circle cx="792.04" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-6</title></circle>
+<circle cx="819.94" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-3</title></circle>
+<circle cx="847.84" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="875.74" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="903.64" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="931.54" cy="136.26" r="2.8" fill="#278f87" stroke="none" stroke-width="0.9"><title>pinus_mugo group-3</title></circle>
+<circle cx="959.44" cy="136.26" r="2.8" fill="#4b607c" stroke="none" stroke-width="0.9"><title>thuja_occidentalis group-3</title></circle>
+<circle cx="987.34" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-3</title></circle>
+<circle cx="1015.24" cy="136.26" r="2.8" fill="#6b8d26" stroke="none" stroke-width="0.9"><title>prunus_virginiana group-3</title></circle>
+<text x="35" y="335" font-size="14" font-family="sans-serif">Крупный кружок: дерево в ряду. Цвет: вид. Линия: водопровод.</text>
+<circle cx="42" cy="360" r="5" fill="#c73b3b"/><text x="55" y="365" font-size="12" font-family="sans-serif">acer_ginnala</text>
+<circle cx="42" cy="387" r="5" fill="#346cc9"/><text x="55" y="392" font-size="12" font-family="sans-serif">acer_platanoides</text>
+<circle cx="42" cy="414" r="5" fill="#da9b22"/><text x="55" y="419" font-size="12" font-family="sans-serif">crataegus_laevigata</text>
+<circle cx="42" cy="441" r="5" fill="#8b53b1"/><text x="55" y="446" font-size="12" font-family="sans-serif">picea_abies</text>
+<circle cx="42" cy="468" r="5" fill="#278f87"/><text x="55" y="473" font-size="12" font-family="sans-serif">pinus_mugo</text>
+<circle cx="42" cy="495" r="5" fill="#ad5b22"/><text x="55" y="500" font-size="12" font-family="sans-serif">populus_simonii</text>
+<circle cx="42" cy="522" r="5" fill="#6b8d26"/><text x="55" y="527" font-size="12" font-family="sans-serif">prunus_virginiana</text>
+<circle cx="42" cy="549" r="5" fill="#d65d95"/><text x="55" y="554" font-size="12" font-family="sans-serif">sorbus_aucuparia</text>
+<circle cx="382" cy="360" r="5" fill="#4b607c"/><text x="395" y="365" font-size="12" font-family="sans-serif">thuja_occidentalis</text>
+<circle cx="382" cy="387" r="5" fill="#a5783c"/><text x="395" y="392" font-size="12" font-family="sans-serif">tilia_cordata</text>
+<circle cx="382" cy="414" r="5" fill="#2b9d5c"/><text x="395" y="419" font-size="12" font-family="sans-serif">ulmus_laevis</text>
+</svg>

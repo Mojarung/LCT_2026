@@ -8,17 +8,23 @@ from importlib import import_module
 from itertools import product
 from random import Random
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import numpy as np
+import pytest
 
-from green.application.assortment.assign import GREEDY, MILP, Assignment, Candidate, Quotas, assign
+from green.application.assortment.assign import (
+    GREEDY,
+    MILP,
+    Assignment,
+    Candidate,
+    Quotas,
+    _repair_mixed_rows,
+    assign,
+)
 from green.application.assortment.structures import Structure
 from green.application.params import PlanParams
 from green.domain.planting import LifeForm, Species
-
-if TYPE_CHECKING:
-    import pytest
 
 PARAMS = PlanParams()
 
@@ -120,6 +126,73 @@ def test_rows_that_do_not_fit_the_quota_are_split_not_overfilled() -> None:
     assert max(counts.values()) <= 3
     assert not result.quota_violations
     assert result.split_placements
+
+
+@pytest.mark.parametrize(("alternative_score", "homogeneous"), [(0.95, True), (0.1, False)])
+def test_final_occupancy_can_make_a_row_species_quota_feasible(
+    alternative_score: float, *, homogeneous: bool
+) -> None:
+    """The first pass sees 9 places; filling the tenth permits two trees of one species."""
+    codes = ["S", "T", "U", *(f"F{i}" for i in range(6))]
+    catalog = {code: _species(code) for code in codes}
+    structures = [
+        Structure("A", "row", ("a1", "a2")),
+        Structure("B", "row", ("b1", "b2")),
+        *(Structure(f"F{i}", "single", (f"f{i}",)) for i in range(6)),
+    ]
+    candidates = [
+        Candidate(place, "A", "row", catalog[code], score)
+        for place in ("a1", "a2")
+        for code, score in (("S", 1.0), ("T", alternative_score))
+    ]
+    candidates.extend(
+        [
+            Candidate("b1", "B", "row", catalog["S"], 1.0),
+            Candidate("b2", "B", "row", catalog["U"], 1.0),
+        ]
+    )
+    candidates.extend(
+        Candidate(f"f{i}", f"F{i}", "single", catalog[f"F{i}"], 1.0) for i in range(6)
+    )
+    params = replace(
+        PARAMS, quota_species=0.2, quota_genus=1.0, quota_family=1.0, conifer_share=(0, 1)
+    )
+    result = assign(candidates, structures, catalog, {}, params)
+    assert len(result.species_by_placement) == 10
+    assert not result.quota_violations
+    assert (result.species_by_placement["a1"] == result.species_by_placement["a2"]) is homogeneous
+    assert ("a1" in result.split_placements) is not homogeneous
+    assert {"b1", "b2"} <= result.split_placements
+
+
+def test_row_repair_preserves_fill_quotas_and_each_rows_dominance() -> None:
+    random = Random(9641)  # noqa: S311 - deterministic compatibility patterns
+    codes = [f"species-{i}" for i in range(6)]
+    catalog = {code: _species(code) for code in codes}
+    params = replace(
+        PARAMS, quota_species=0.3, quota_genus=1.0, quota_family=1.0, conifer_share=(0, 1)
+    )
+    quotas = Quotas(catalog, {}, params)
+    places = [f"p-{i}" for i in range(10)]
+    rows = {"row-1": places[:4], "row-2": places[4:8]}
+    chosen = {place: codes[i % 5] for i, place in enumerate(places)}
+    for _ in range(60):
+        candidates = []
+        for i, place in enumerate(places):
+            row_id = "row-1" if i < 4 else "row-2" if i < 8 else f"single-{i}"
+            kind = "row" if i < 8 else "single"
+            compatible = {chosen[place], *random.sample(codes, random.randint(1, 4))}
+            candidates.extend(
+                Candidate(place, row_id, kind, catalog[code], random.random())
+                for code in sorted(compatible)
+            )
+        result = _repair_mixed_rows(chosen, candidates, quotas)
+        assert set(result) == set(chosen)
+        assert not quotas.violations(result)
+        for members in rows.values():
+            before = max(Counter(chosen[place] for place in members).values())
+            after = max(Counter(result[place] for place in members).values())
+            assert after >= before
 
 
 def test_quota_limits_a_species_when_structures_are_small() -> None:

@@ -16,10 +16,12 @@
 c_s + E_s <= 0,1 * (T + E). Если вида на улице уже больше доли, новых посадок этого вида
 нет вовсе.
 
-Проход в два шага. Сначала структура (ряд, участок группы) получает один вид целиком - так
-аллея однородна. Места, которые целиком одним видом в квоты не влезли, вторым шагом
-получают виды поодиночке, в тех же квотах с учётом уже занятого. Место, под которое ни один
-допустимый вид в квоты не укладывается, остаётся пустым, и это видно в плане.
+Сначала структура (ряд, участок группы) получает один вид целиком. Остальные места
+получают виды поодиночке. Затем ограниченный совместный пересчёт уже занятых смешанных
+рядов учитывает итоговую численность плана: квота может разрешить однородный ряд только
+после заполнения других мест. Пересчёт сохраняет места, проверяет квоты и не ухудшает
+долю преобладающего вида ни в одном затронутом ряду. Место без допустимого вида остаётся
+пустым и видно в плане.
 
 Нижняя граница доли хвойных мягкая: хвойных мест на участке может не быть, и жёсткий
 минимум оставил бы пустым весь план. Недобор записывается в заметки.
@@ -62,6 +64,11 @@ _MIP_GAP = 0.005
 # важнее, чем добрать хвойных до нижней границы коридора.
 _FILL_BONUS = 10.0
 _CONIFER_PENALTY = 3.0
+# Small preference for row cohesion in the repair, measured in per-place fit-score units.
+# By itself it cannot justify a mean fit loss above 0.05 in that row.
+_ROW_COHESION_BONUS = 0.05
+_ROW_REPAIR_TIME_LIMIT_S = 5.0
+_ROW_REPAIR_MAX_OPTIONS = 3000
 _HALF = 0.5  # порог округления двоичной переменной
 _EPS = 1e-9
 
@@ -83,7 +90,7 @@ class Assignment:
     solver: str
     quota_violations: tuple[str, ...] = ()
     notes: tuple[str, ...] = field(default=())
-    # Посадки, получившие вид вторым шагом: их структура одним видом в квоты не влезла.
+    # Посадки в структурах, которые фактически получили несколько видов.
     split_placements: frozenset[str] = frozenset()
 
 
@@ -211,8 +218,8 @@ class _QuotaAssignment:
         notes: list[str] = []
         if self.params.assortment_solver == GREEDY:
             notes.append("виды назначены жадным обходом структур по настройке профиля")
-            chosen, split = _greedy_plan(self.candidates, self.quotas)
-            return self._assignment(chosen, split, GREEDY, notes)
+            chosen, _ = _greedy_plan(self.candidates, self.quotas)
+            return self._assignment(chosen, GREEDY, notes)
         by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             by_structure[candidate.structure_id].append(candidate)
@@ -225,18 +232,19 @@ class _QuotaAssignment:
         rest = _milp(singles, whole, self.quotas) if whole is not None and singles else {}
         if whole is None or rest is None:
             notes.append("решатель не справился, виды назначены жадным обходом структур")
-            chosen, split = _greedy_plan(self.candidates, self.quotas)
-            return self._assignment(chosen, split, GREEDY, notes)
-        return self._assignment({**whole, **rest}, set(rest), MILP, notes)
+            chosen, _ = _greedy_plan(self.candidates, self.quotas)
+            return self._assignment(chosen, GREEDY, notes)
+        chosen = {**whole, **rest}
+        chosen = _repair_mixed_rows(chosen, self.candidates, self.quotas)
+        return self._assignment(chosen, MILP, notes)
 
-    def _assignment(
-        self, chosen: Mapping[str, str], split: set[str], solver: str, notes: list[str]
-    ) -> Assignment:
+    def _assignment(self, chosen: Mapping[str, str], solver: str, notes: list[str]) -> Assignment:
+        split = _actual_splits(chosen, self.candidates)
         notes = [*notes, *self.quotas.exhausted_notes(self.codes), *self._conifer_notes(chosen)]
         if split:
             split_note = (
-                f"{len(split)} посадок получили вид вне своей структуры: одним видом структура "
-                "в квоты разнообразия не влезла"
+                f"{len(split)} посадок находятся в структурах с несколькими видами "
+                "после отбора по совместимости, оценке видов и квотам"
             )
             notes.append(split_note)
         return Assignment(
@@ -262,6 +270,157 @@ class _QuotaAssignment:
             "(нижняя граница мягкая)"
         )
         return [short_note]
+
+
+def _actual_splits(chosen: Mapping[str, str], candidates: Sequence[Candidate]) -> set[str]:
+    """Only label a structure split when its final plants really have different species."""
+    members: defaultdict[str, set[str]] = defaultdict(set)
+    for candidate in candidates:
+        if candidate.placement_id in chosen and candidate.structure_kind != "single":
+            members[candidate.structure_id].add(candidate.placement_id)
+    return {
+        placement_id
+        for places in members.values()
+        if len({chosen[placement_id] for placement_id in places}) > 1
+        for placement_id in places
+    }
+
+
+def _repair_mixed_rows(  # noqa: C901, PLR0911, PLR0912, PLR0915 - quota model and rejection gates
+    chosen: dict[str, str], candidates: Sequence[Candidate], quotas: Quotas
+) -> dict[str, str]:
+    """Reassign occupied mixed rows jointly while preserving fill and hard quotas.
+
+    The first MILP cannot count places that will be occupied in its second pass.
+    Consequently it can miss a homogeneous row whose species quota becomes
+    feasible only after those places are filled. This bounded repair revisits
+    only the mixed rows and keeps every other species and planting place fixed.
+    """
+    rows: defaultdict[str, set[str]] = defaultdict(set)
+    for candidate in candidates:
+        if candidate.structure_kind == "row" and candidate.placement_id in chosen:
+            rows[candidate.structure_id].add(candidate.placement_id)
+    mixed = {
+        row_id: tuple(sorted(places))
+        for row_id, places in rows.items()
+        if len(places) >= 2 and len({chosen[place] for place in places}) > 1  # noqa: PLR2004
+    }
+    if not mixed:
+        return chosen
+    mutable = {place for places in mixed.values() for place in places}
+    options = {
+        (candidate.placement_id, candidate.species.code): candidate
+        for candidate in candidates
+        if candidate.placement_id in mutable and math.isfinite(candidate.score)
+    }
+    if len(options) > _ROW_REPAIR_MAX_OPTIONS or any(
+        (place, chosen[place]) not in options for place in mutable
+    ):
+        return chosen
+    pairs = sorted(options)
+    x_index = {pair: index for index, pair in enumerate(pairs)}
+    by_place: defaultdict[str, list[int]] = defaultdict(list)
+    codes_by_place: defaultdict[str, set[str]] = defaultdict(set)
+    in_key: defaultdict[Key, list[int]] = defaultdict(list)
+    for pair, index in x_index.items():
+        by_place[pair[0]].append(index)
+        codes_by_place[pair[0]].add(pair[1])
+        for key in quotas.keys(options[pair].species):
+            in_key[key].append(index)
+    whole = [
+        (row_id, code, places)
+        for row_id, places in sorted(mixed.items())
+        for code in sorted(set.intersection(*(codes_by_place[place] for place in places)))
+    ]
+    if not whole:
+        return chosen
+    fixed = {place: code for place, code in chosen.items() if place not in mutable}
+    fixed_counts = quotas.counts(fixed)
+    x_count, y_count = len(pairs), len(whole)
+    slack = x_count + y_count
+    constraints = _Rows(slack + 1)
+    for positions in by_place.values():
+        constraints.add(dict.fromkeys(positions, 1.0), 1.0, 1.0)
+    by_row: defaultdict[str, list[int]] = defaultdict(list)
+    for offset, (row_id, code, places) in enumerate(whole):
+        column = x_count + offset
+        by_row[row_id].append(column)
+        for place in places:
+            constraints.add({column: 1.0, x_index[(place, code)]: -1.0}, -np.inf, 0.0)
+    for positions in by_row.values():
+        constraints.add(dict.fromkeys(positions, 1.0), 0.0, 1.0)
+    total = len(chosen)
+    for key, positions in in_key.items():
+        share = quotas.share(key)
+        limit = allowance(share, total) - fixed_counts[key]
+        if key != CONIFER_KEY and quotas.existing_total:
+            if quotas.exhausted(key):
+                limit = -fixed_counts[key]
+            else:
+                population = math.floor(share * (total + quotas.existing_total) + _EPS)
+                limit = min(limit, population - quotas.existing[key] - fixed_counts[key])
+        if limit < 0:
+            return chosen
+        constraints.add(dict.fromkeys(positions, 1.0), 0.0, float(limit))
+    low = quotas.params.conifer_share[0]
+    if low > 0 and in_key.get(CONIFER_KEY):
+        floor = dict.fromkeys(in_key[CONIFER_KEY], 1.0)
+        floor[slack] = 1.0
+        constraints.add(floor, low * total - fixed_counts[CONIFER_KEY], np.inf)
+    cost = np.zeros(slack + 1)
+    for pair, position in x_index.items():
+        cost[position] = -options[pair].score
+    for offset, (_, _, places) in enumerate(whole):
+        cost[x_count + offset] = -_ROW_COHESION_BONUS * len(places)
+    cost[slack] = _CONIFER_PENALTY
+    upper = np.ones(slack + 1)
+    upper[slack] = total
+    constraint = constraints.constraint()
+    try:
+        result = milp(
+            c=cost,
+            constraints=constraint,
+            integrality=np.r_[np.ones(slack), 0],
+            bounds=Bounds(np.zeros(slack + 1), upper),
+            options={"time_limit": _ROW_REPAIR_TIME_LIMIT_S, "mip_rel_gap": _MIP_GAP},
+        )
+    except ValueError, RuntimeError:
+        return chosen
+    if result.x is None or not _valid_primal(result.x, constraint, upper, slack):
+        return chosen
+    improved = dict(fixed)
+    improved.update(pair for pair, position in x_index.items() if result.x[position] > _HALF)
+    if set(improved) != set(chosen) or quotas.violations(improved):
+        return chosen
+    if any(
+        max(Counter(improved[place] for place in places).values())
+        < max(Counter(chosen[place] for place in places).values())
+        for places in mixed.values()
+    ):
+        return chosen
+    more_whole = sum(len({improved[place] for place in places}) == 1 for places in mixed.values())
+    if not more_whole:
+        return chosen
+    before = _row_repair_value(chosen, options, mixed, quotas)
+    after = _row_repair_value(improved, options, mixed, quotas)
+    return improved if after > before + _EPS else chosen
+
+
+def _row_repair_value(
+    chosen: Mapping[str, str],
+    options: Mapping[tuple[str, str], Candidate],
+    mixed: Mapping[str, tuple[str, ...]],
+    quotas: Quotas,
+) -> float:
+    fit = sum(
+        options[(place, chosen[place])].score for places in mixed.values() for place in places
+    )
+    cohesion = _ROW_COHESION_BONUS * sum(
+        len(places) for places in mixed.values() if len({chosen[place] for place in places}) == 1
+    )
+    conifers = sum(quotas.catalog[code].is_conifer for code in chosen.values())
+    deficit = max(0.0, quotas.params.conifer_share[0] * len(chosen) - conifers)
+    return fit + cohesion - _CONIFER_PENALTY * deficit
 
 
 def _milp(
