@@ -34,7 +34,8 @@ src/green/
                    оценкой, штрафы, точный вклад каждой посадки; notes/29)
   infrastructure/  cad/ (ezdxf reader: экземпляры знаков SymbolInstance и учёт исхода каждого
                    примитива; acis_region - REGION из ACIS; xref_package - комплект по внешним
-                   ссылкам; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
+                   ссылкам; fidelity - сверка чернил: исходник рисуется движком ezdxf, каждая линия
+                   ищется в сцене с допуском 0,15 м; census - перепись вставок-знаков своим обходом; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
                    улицы: запасной прогон, когда каталог улиц не смонтирован), config/ (YAML-репозитории),
                    convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
                    streets (каталог улиц пилота из dataset/streets_dxf/catalog.json),

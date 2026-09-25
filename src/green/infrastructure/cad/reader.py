@@ -51,12 +51,12 @@ if TYPE_CHECKING:
 MAX_BLOCK_DEPTH = 8
 # Контейнер, а не знак: обёртки MicroStation, выноски DIMTXT и анонимные блоки AutoCAD
 # (*U, *D, *T), а также пустые, многолюдные и крупные блоки - листы и сборки, не значки.
-_CONTAINER_PREFIXES = ("msdelementtype", "dimtxt", "*")
-_SYMBOL_MAX_PRIMITIVES = 64
-_SYMBOL_MAX_SIZE_M = 12.0
+CONTAINER_PREFIXES = ("msdelementtype", "dimtxt", "*")
+SYMBOL_MAX_PRIMITIVES = 64
+SYMBOL_MAX_SIZE_M = 12.0
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
-_ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
+ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
 _GAP_EXAMPLES = 5
 _SKIPPED = frozenset(
     {
@@ -175,7 +175,7 @@ class _Walker:
         elif kind in _SKIPPED:
             self.skipped[kind] += 1
             outcome = f"skipped:{kind}:annotation"
-            if kind not in _ANNOTATIONS:
+            if kind not in ANNOTATIONS:
                 reason = "unsupported-spatial-entity"
                 if isinstance(entity, Body) and not entity.acis_data:
                     reason = "missing-acis-data"
@@ -360,15 +360,15 @@ class _Walker:
 
     def _is_container(self, insert: Insert, block: BlockLayout) -> bool:
         """Контейнер - обёртка или сборка, а не значок: знак - то, что внутри неё."""
-        if local_name(decode_dxf_unicode(block.name)).casefold().startswith(_CONTAINER_PREFIXES):
+        if local_name(decode_dxf_unicode(block.name)).casefold().startswith(CONTAINER_PREFIXES):
             return True
-        if len(block) > _SYMBOL_MAX_PRIMITIVES:
+        if len(block) > SYMBOL_MAX_PRIMITIVES:
             return True
         size = self._block_size(block)
         if size is None:
             return True
         scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
-        return size * scale * self.unit_m > _SYMBOL_MAX_SIZE_M
+        return size * scale * self.unit_m > SYMBOL_MAX_SIZE_M
 
     def _block_size(self, block: BlockLayout) -> float | None:
         """Наибольший размер рисунка блока в его единицах; None - пустой или неизмеримый."""
@@ -388,7 +388,7 @@ class _Walker:
         self.sizes[block.name] = None  # защита от цикла вставок
         for entity in block:
             kind = entity.dxftype()
-            if kind in _ANNOTATIONS:
+            if kind in ANNOTATIONS:
                 continue
             if not isinstance(entity, Insert):
                 box.extend(bbox.extents([entity], fast=True))
