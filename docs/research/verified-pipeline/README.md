@@ -145,3 +145,6 @@ DXF, три независимых входа и оставшаяся семан
 Аналитическое ограничение повреждённых HATCH без объявления их материалом:
 [E63](findings.md#e63--аналитическая-карантинная-область-для-hatch-25092026),
 локальный `out/runtime/full-project/third-park/hatch-bounds-e63-final.json`.
+Рамки IMAGE с обязательным уточнением роли растра:
+[E64](findings.md#e64--рамки-image-без-выдумывания-содержимого-25092026),
+локальный `out/runtime/full-project/third-park/raster-footprints-e64.json`.

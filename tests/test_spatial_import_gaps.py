@@ -12,9 +12,14 @@ from ezdxf.render import forms
 from shapely.geometry import Point, box
 from test_pipeline_synthetic import ROOT, _street
 
-from green.application.classification import classify_scene
+from green.application.classification import (
+    classification_report,
+    classify_scene,
+    require_classified,
+)
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
+from green.application.params import PlanParams
 from green.application.results import SourceSnapshot
 from green.application.surfaces import Material, build_surface_map
 from green.application.use_case import PlanRequest
@@ -129,9 +134,75 @@ def test_inverted_wipeout_clip_mode_still_blocks_planning(tmp_path: Path) -> Non
 
 def test_image_cannot_silently_become_available_land(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
+    doc.units = 6
+    doc.layers.add("Газон")
+    doc.modelspace().add_lwpolyline(
+        [(0, 0), (40, 0), (40, 40), (0, 40)],
+        close=True,
+        dxfattribs={"layer": "Газон"},
+    )
     image = doc.add_image_def(filename="missing-survey.png", size_in_pixel=(100, 100))
-    doc.modelspace().add_image(image, insert=(0, 0), size_in_units=(20, 20))
+    doc.modelspace().add_image(
+        image, insert=(0, 0), size_in_units=(20, 20), dxfattribs={"layer": "Газон"}
+    )
     path = tmp_path / "raster.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    raster = next(feature for feature in scene.features if feature.source_entity_type == "IMAGE")
+    assert raster.geometry.area == pytest.approx(400)
+    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
+    classified, _ = classify_scene(scene, rules)
+    raster = next(
+        feature for feature in classified.features if feature.source_entity_type == "IMAGE"
+    )
+    assert raster.object_class.value == "unknown"
+    params = PlanParams()
+    with pytest.raises(InputError, match="Требуется уточнить классы"):
+        require_classified(classification_report(classified, rules, params), params)
+    surface = build_surface_map(classified.features, [], box(0, 0, 40, 40), 0.5)
+    assert surface is not None
+    assert surface.material(np.array([Point(10, 10)], dtype=object))[0] == Material.UNKNOWN
+    assert surface.material(np.array([Point(30, 30)], dtype=object))[0] == Material.SOIL
+    ignored, _ = classify_scene(
+        scene, rules, PlanParams(feature_classes={str(raster.ref): "ignore"})
+    )
+    ignored_raster = next(
+        feature for feature in ignored.features if feature.source_entity_type == "IMAGE"
+    )
+    assert ignored_raster.object_class.value == "ignore"
+    reviewed = build_surface_map(ignored.features, [], box(0, 0, 40, 40), 0.5)
+    assert reviewed is not None
+    assert reviewed.material(np.array([Point(10, 10)], dtype=object))[0] == Material.SOIL
+    with pytest.raises(InputError, match="IMAGE"):
+        classify_scene(scene, rules, PlanParams(feature_classes={str(raster.ref): "lawn"}))
+
+
+def test_nested_image_footprint_keeps_transform_and_units(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    doc.units = 4
+    definition = doc.add_image_def(filename="survey.png", size_in_pixel=(100, 100))
+    block = doc.blocks.new("unfamiliar")
+    block.add_image(definition, insert=(0, 0), size_in_units=(1000, 1000))
+    doc.modelspace().add_blockref(
+        block.name, (100_000, 200_000), dxfattribs={"rotation": 37, "xscale": 2, "yscale": 2}
+    )
+    path = tmp_path / "nested-image.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path)
+    require_complete_geometry(scene)
+    assert len(scene.features) == 1
+    assert scene.features[0].source_entity_type == "IMAGE"
+    assert scene.features[0].block == block.name
+    assert scene.features[0].geometry.area == pytest.approx(4)
+
+
+def test_invalid_image_frame_remains_a_geometry_gap(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    definition = doc.add_image_def(filename="survey.png", size_in_pixel=(100, 100))
+    image = doc.modelspace().add_image(definition, insert=(0, 0), size_in_units=(20, 20))
+    image.dxf.image_size = (0, 100)
+    path = tmp_path / "broken-image.dxf"
     doc.saveas(path)
     with pytest.raises(InputError, match="IMAGE"):
         require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))

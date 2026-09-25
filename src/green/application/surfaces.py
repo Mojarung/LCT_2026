@@ -368,6 +368,9 @@ def _exact_areas(
 def _uncertainty_area(features: Sequence[Feature]) -> BaseGeometry | None:
     bands = []
     for feature in features:
+        if feature.source_entity_type == "IMAGE" and feature.object_class is not ObjectClass.IGNORE:
+            bands.append(feature.geometry)
+            continue
         if feature.object_class in {ObjectClass.DRAWING_MASK, ObjectClass.UNCERTAIN_AREA}:
             bands.append(feature.geometry)
             continue

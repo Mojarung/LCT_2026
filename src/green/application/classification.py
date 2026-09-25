@@ -147,6 +147,24 @@ def classify_scene(
                 )
             )
             continue
+        if feature.source_entity_type == "IMAGE":
+            exact = overrides.maps["feature"].get(name_key(str(feature.ref)))
+            if exact is not None and exact[1] is not ObjectClass.IGNORE:
+                raise InputError(
+                    f"IMAGE {feature.ref}: можно только явно исключить этот растр как "
+                    "справочную подложку после проверки исходного изображения и векторных данных"
+                )
+            classified.append(
+                replace(
+                    feature,
+                    object_class=ObjectClass.IGNORE if exact else ObjectClass.UNKNOWN,
+                    classification=ClassificationEvidence(
+                        "explicit_feature" if exact else "raster_review_required",
+                        override_key=exact[0] if exact else None,
+                    ),
+                )
+            )
+            continue
         key = (
             feature.layer,
             feature.block,

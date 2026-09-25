@@ -12,7 +12,7 @@ import numpy as np
 import shapely
 from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
 from ezdxf.entities.boundary_paths import PolylinePath
-from ezdxf.entities.image import Wipeout
+from ezdxf.entities.image import Image, Wipeout
 from ezdxf.entities.polygon import DXFPolygon
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
@@ -47,6 +47,7 @@ from green.infrastructure.cad.hatch_geometry import (
     linear_hatch_from_local_source,
     match_region_outline,
 )
+from green.infrastructure.cad.image_footprint import image_footprint
 from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
 from green.infrastructure.cad.units import AUTO, decide_units
 
@@ -79,7 +80,6 @@ _SKIPPED = frozenset(
         "LEADER",
         "MULTILEADER",
         "VIEWPORT",
-        "IMAGE",
         "OLE2FRAME",
         "3DSOLID",
         "BODY",
@@ -176,6 +176,7 @@ class _Walker:
     matched_local_hatches: int = 0
     collapsed_lines: int = 0
     bounded_unreadable_hatches: int = 0
+    raster_footprints: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -450,6 +451,11 @@ class _Walker:
                 )
             if isinstance(entity, Wipeout):
                 return _wipeout_geometry(entity)
+            if isinstance(entity, Image):
+                footprint = image_footprint(entity)
+                if footprint is not None:
+                    self.raster_footprints += 1
+                return footprint, 0.0 if footprint is not None else None
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 extent = max(abs(start.x), abs(start.y), abs(end.x), abs(end.y))
@@ -651,6 +657,11 @@ class _Walker:
             messages.append(
                 "Повреждённые HATCH ограничены неопределённой областью без посадки: "
                 f"{self.bounded_unreadable_hatches}"
+            )
+        if self.raster_footprints:
+            messages.append(
+                "Рамки IMAGE прочитаны, содержимое растров не распознано: "
+                f"{self.raster_footprints}. Уточните роль каждого изображения."
             )
         return messages
 
