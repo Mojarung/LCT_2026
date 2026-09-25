@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import replace
+from importlib import import_module
+from itertools import product
+from random import Random
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
-from green.application.assortment.assign import GREEDY, MILP, Candidate, Quotas, assign
+import numpy as np
+
+from green.application.assortment.assign import GREEDY, MILP, Assignment, Candidate, Quotas, assign
 from green.application.assortment.structures import Structure
 from green.application.params import PlanParams
 from green.domain.planting import LifeForm, Species
+
+if TYPE_CHECKING:
+    import pytest
 
 PARAMS = PlanParams()
 
@@ -85,8 +95,8 @@ def _candidates(structures: list[Structure], codes: list[str]) -> list[Candidate
     ]
 
 
-def _counts(result: object) -> Counter[str]:
-    return Counter(result.species_by_placement.values())  # type: ignore[attr-defined]
+def _counts(result: Assignment) -> Counter[str]:
+    return Counter(result.species_by_placement.values())
 
 
 def test_each_row_gets_exactly_one_species_when_the_quota_allows() -> None:
@@ -131,17 +141,52 @@ def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
     assert any("tilia_cordata" in note for note in result.notes)
 
 
-def test_exhausted_diversity_leaves_places_empty_instead_of_breaking_quotas() -> None:
-    """Два вида, один уже выбрал долю на улице: второй один не может быть 10% плана.
-
-    Квоты жёсткие, поэтому места остаются пустыми, а не досаживаются одним видом.
-    Исключение «один экземпляр» действует только на участке меньше десяти мест.
-    """
+def test_exhausted_species_does_not_block_one_other_plant() -> None:
+    """Доля считается от занятых мест, а не от числа всех доступных точек."""
     structures = _singles(30)
     candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
-    assert result.species_by_placement == {}
+    assert list(result.species_by_placement.values()) == ["acer_platanoides"]
     assert not result.quota_violations
+
+
+def test_one_compatible_species_can_fill_one_of_many_available_places() -> None:
+    structures = _singles(30)
+    candidates = _candidates(structures, ["tilia_cordata"])
+    result = assign(candidates, structures, CATALOG, {}, PARAMS)
+    assert list(result.species_by_placement.values()) == ["tilia_cordata"]
+    assert not result.quota_violations
+
+
+def test_sparse_assignments_match_exhaustive_maximum_fill() -> None:
+    """A seeded mix of unfamiliar compatibility patterns guards against fixture fitting."""
+    random = Random(7342)  # noqa: S311 - deterministic test cases, not secrets
+    structures = _singles(5)
+    candidates = _candidates(structures, list(CATALOG))
+    quotas = Quotas(CATALOG, {}, PARAMS)
+    for _ in range(100):
+        options = [random.sample(list(CATALOG), random.randint(1, 5)) for _ in structures]
+        allowed = {
+            structure.placement_ids[0]: set(codes)
+            for structure, codes in zip(structures, options, strict=True)
+        }
+        usable = [
+            candidate
+            for candidate in candidates
+            if candidate.species.code in allowed[candidate.placement_id]
+        ]
+        result = assign(usable, structures, CATALOG, {}, PARAMS)
+        maximum = 0
+        for selection in product(*(("", *codes) for codes in options)):
+            chosen = {
+                structure.placement_ids[0]: code
+                for structure, code in zip(structures, selection, strict=True)
+                if code
+            }
+            if not quotas.violations(chosen):
+                maximum = max(maximum, len(chosen))
+        assert len(result.species_by_placement) == maximum
+        assert not result.quota_violations
 
 
 def test_a_tiny_site_may_hold_one_plant_of_a_species() -> None:
@@ -257,6 +302,21 @@ def test_the_same_input_gives_the_same_assignment() -> None:
 
 def test_no_candidates_give_an_empty_assignment() -> None:
     assert assign([], [], CATALOG, {}, PARAMS).species_by_placement == {}
+
+
+def test_invalid_solver_primal_falls_back_to_checked_greedy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def invalid_primal(*_args: object, **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(x=np.full(len(cast("np.ndarray", kwargs["c"])), 0.6), success=True)
+
+    monkeypatch.setattr(
+        import_module("green.application.assortment.assign"), "milp", invalid_primal
+    )
+    structures = _singles(10)
+    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
+    assert result.solver == GREEDY
+    assert not result.quota_violations
 
 
 def test_greedy_fallback_stays_close_to_the_solver_and_holds_quotas() -> None:

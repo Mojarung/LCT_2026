@@ -9,7 +9,8 @@
 а это число - переменная той же задачи: «посадок вида не больше 10% от всех занятых» -
 линейное ограничение c_s <= 0,1 * T. На участке, где доля меньше одного растения (для
 вида - меньше десяти мест), один экземпляр квоту не нарушает, иначе такой участок нельзя
-было бы засадить вовсе; это допущение задано двоичной переменной «ключ взят один раз».
+было бы засадить вовсе; это допущение задано двоичной переменной для каждой доли,
+которая действует только пока фактически занятых мест меньше порога этой доли.
 
 Каждая доля проверяется и в популяции улицы вместе с существующими деревьями:
 c_s + E_s <= 0,1 * (T + E). Если вида на улице уже больше доли, новых посадок этого вида
@@ -266,7 +267,63 @@ class _QuotaAssignment:
 def _milp(
     groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], quotas: Quotas
 ) -> dict[str, str] | None:
-    """y - группа занята видом целиком (двоичная), b - ключ взят в одном экземпляре."""
+    """Keep the small MILP's incumbent; retry exact one-specimen quotas only if useful."""
+    original = _solve_milp(groups, fixed, quotas, exceptions_enabled=False)
+    shares = {share for share in quotas.shares.values() if 0 < share < 1}
+    if not shares:
+        return original
+    largest_small_total = max(math.ceil(1 / share - _EPS) - 1 for share in shares)
+    available = {candidate.placement_id for members in groups.values() for candidate in members}
+    small_new = min(len(available), max(0, largest_small_total - len(fixed)))
+    max_score = max(
+        (candidate.score for members in groups.values() for candidate in members), default=0
+    )
+    upper_bound = small_new * max(0.0, _FILL_BONUS + max_score)
+    if original is not None and _assignment_value(original, groups, fixed, quotas) >= upper_bound:
+        return original
+    corrected = _solve_milp(groups, fixed, quotas, exceptions_enabled=True)
+    if corrected is None:
+        return original
+    if (
+        original is None
+        or _assignment_value(corrected, groups, fixed, quotas)
+        > _assignment_value(original, groups, fixed, quotas) + _EPS
+    ):
+        return corrected
+    return original
+
+
+def _assignment_value(
+    chosen: Mapping[str, str],
+    groups: Mapping[str, list[Candidate]],
+    fixed: Mapping[str, str],
+    quotas: Quotas,
+) -> float:
+    scores = {
+        (candidate.placement_id, candidate.species.code): candidate.score
+        for members in groups.values()
+        for candidate in members
+    }
+    gain = sum(_FILL_BONUS + scores[(placement_id, code)] for placement_id, code in chosen.items())
+    total = len(fixed) + len(chosen)
+    conifers = sum(quotas.catalog[code].is_conifer for code in (*fixed.values(), *chosen.values()))
+    conifer_available = any(
+        candidate.species.is_conifer for members in groups.values() for candidate in members
+    )
+    deficit = (
+        max(0.0, quotas.params.conifer_share[0] * total - conifers) if conifer_available else 0.0
+    )
+    return gain - _CONIFER_PENALTY * deficit
+
+
+def _solve_milp(  # noqa: C901 - quota rows and bounds share the same indexed variables
+    groups: Mapping[str, list[Candidate]],
+    fixed: Mapping[str, str],
+    quotas: Quotas,
+    *,
+    exceptions_enabled: bool,
+) -> dict[str, str] | None:
+    """y selects one species per group; z enables one-specimen small-plan quotas."""
     members: defaultdict[tuple[str, str], list[Candidate]] = defaultdict(list)
     for group_id, candidates in groups.items():
         for candidate in candidates:
@@ -281,17 +338,24 @@ def _milp(
             in_key[key].append(position)
     keys = sorted(in_key)
     count = len(pairs)
-    # Исключение «один экземпляр» нужно, только пока доля меньше одного растения: при N
-    # местах и доле 10% это N < 10. На большом плане без него квота лишь строже, а
-    # двоичные переменные с большой константой делают задачу в десятки раз тяжелее.
-    places = len(fixed) + len({c.placement_id for g in groups.values() for c in g})
-    small = [key for key in keys if places * quotas.share(key) < 1]
-    single = {key: count + i for i, key in enumerate(small)}  # столбцы b
-    slack = count + len(small)  # недобор хвойных до нижней границы
+    # T is the number actually selected, not the number of available places.
+    # One binary per distinct quota share enables a single specimen only while
+    # T * share < 1. Sharing the binary across keys avoids one binary per species.
+    shares = (
+        sorted({quotas.share(key) for key in keys if 0 < quotas.share(key) < 1})
+        if exceptions_enabled
+        else []
+    )
+    exceptions = {share: count + i for i, share in enumerate(shares)}
+    slack = count + len(shares)  # недобор хвойных до нижней границы
     size = slack + 1
     rows = _one_species_per_group(pairs, size)
-    big = float(len(fixed) + weights.sum())
-    ctx = _Context(weights, quotas, quotas.counts(fixed), float(len(fixed)), single, big)
+    capacity: defaultdict[str, int] = defaultdict(int)
+    for pair in pairs:
+        capacity[pair[0]] = max(capacity[pair[0]], len(members[pair]))
+    maximum_total = float(len(fixed) + sum(capacity.values()))
+    _exception_rows(rows, weights, exceptions, float(len(fixed)), maximum_total)
+    ctx = _Context(weights, quotas, quotas.counts(fixed), float(len(fixed)), exceptions)
     for key in keys:
         _share_rows(rows, key, in_key[key], ctx)
     _conifer_floor(rows, in_key.get(CONIFER_KEY, []), ctx, slack)
@@ -300,28 +364,49 @@ def _milp(
         cost[position] = -sum(c.score + _FILL_BONUS for c in members[pair])
     cost[slack] = _CONIFER_PENALTY
     upper = np.ones(size)
-    upper[slack] = big
+    upper[slack] = maximum_total
     integrality = np.ones(size)
     integrality[slack] = 0
+    constraint = rows.constraint()
     result = milp(
         c=cost,
-        constraints=rows.constraint(),
+        constraints=constraint,
         integrality=integrality,
         bounds=Bounds(np.zeros(size), upper),
         options={"time_limit": _TIME_LIMIT_S, "mip_rel_gap": _MIP_GAP},
     )
-    if result.x is None:
+    if result.x is None or not _valid_primal(result.x, constraint, upper, slack):
         return None
-    chosen = {
-        candidate.placement_id: pair[1]
-        for position, pair in enumerate(pairs)
-        if result.x[position] > _HALF
-        for candidate in members[pair]
-    }
-    # Кончилось время, но допустимое решение найдено: берём его, если квоты целы.
-    if not result.success and quotas.violations({**fixed, **chosen}):
+    selected = [pair for position, pair in enumerate(pairs) if result.x[position] > _HALF]
+    chosen = {candidate.placement_id: pair[1] for pair in selected for candidate in members[pair]}
+    if (
+        len(chosen) != sum(len(members[pair]) for pair in selected)
+        or set(chosen) & fixed.keys()
+        or quotas.violations({**fixed, **chosen})
+    ):
         return None
     return chosen
+
+
+def _valid_primal(
+    primal: np.ndarray, constraint: LinearConstraint, upper: np.ndarray, binary: int
+) -> bool:
+    """A timeout's primal must still satisfy every row, bound, and binary variable."""
+    values = np.asarray(primal, dtype=float)
+    if values.shape != upper.shape or not np.isfinite(values).all():
+        return False
+    tolerance = 1e-6
+    if (
+        (values < -tolerance).any()
+        or (values > upper + tolerance).any()
+        or (np.abs(values[:binary] - np.rint(values[:binary])) > tolerance).any()
+    ):
+        return False
+    measured = constraint.A @ values
+    return bool(
+        (measured >= constraint.lb - tolerance).all()
+        and (measured <= constraint.ub + tolerance).all()
+    )
 
 
 def _one_species_per_group(pairs: Sequence[tuple[str, str]], size: int) -> _Rows:
@@ -342,28 +427,42 @@ class _Context:
     quotas: Quotas
     used: Counter[Key]
     fixed_total: float
-    single: Mapping[Key, int]
-    big: float
+    exceptions: Mapping[float, int]
+
+
+def _exception_rows(
+    rows: _Rows,
+    weights: np.ndarray,
+    exceptions: Mapping[float, int],
+    fixed_total: float,
+    maximum_total: float,
+) -> None:
+    """An exception can turn on only below the share's first whole plant."""
+    for share, column in exceptions.items():
+        largest_exempt_total = math.ceil(1 / share - _EPS) - 1
+        excess = maximum_total - largest_exempt_total
+        if excess <= 0:
+            continue
+        entries = dict(enumerate(weights))
+        entries[column] = excess
+        rows.add(entries, -np.inf, maximum_total - fixed_total)
 
 
 def _share_rows(rows: _Rows, key: Key, positions: Sequence[int], ctx: _Context) -> None:
     """Доля ключа в плане (с исключением «один экземпляр») и в популяции улицы."""
-    weights, quotas, single, big = ctx.weights, ctx.quotas, ctx.single, ctx.big
+    weights, quotas = ctx.weights, ctx.quotas
     used, fixed_total = ctx.used[key], ctx.fixed_total
     share = quotas.share(key)
     inside = set(positions)
     if key != CONIFER_KEY and quotas.existing_total and quotas.exhausted(key):
         rows.add({p: weights[p] for p in positions}, -np.inf, float(-used))
         return
-    # c + F - share * (F_T + T) - b <= 0: доля в плане, b разрешает один экземпляр.
+    # c + F - share * (F_T + T) - z <= 0; z is shared by keys with this share.
     plan = {p: weights[p] * ((1.0 if p in inside else 0.0) - share) for p in range(len(weights))}
-    if key in single:
-        plan[single[key]] = -1.0
-        # b = 1 только если ключ взят не больше одного раза: c + F + big * b <= 1 + big.
-        once = {p: weights[p] for p in positions}
-        once[single[key]] = big
-        rows.add(once, -np.inf, 1.0 + big - used)
-    rows.add(_nonzero(plan), -np.inf, share * fixed_total - used)
+    if share in ctx.exceptions:
+        plan[ctx.exceptions[share]] = -1.0
+    exception = 1.0 if share == 0 else 0.0
+    rows.add(_nonzero(plan), -np.inf, share * fixed_total - used + exception)
     if key == CONIFER_KEY or not quotas.existing_total:
         return
     grown = float(quotas.existing[key])
