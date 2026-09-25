@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
 import pytest
 import shapely
 from shapely.affinity import rotate, translate
 from shapely.geometry import LineString, Point, box
 from test_surface_uncertainty import feature, label, material
 
+from green.application.surface_faces import _roundoff_grid
 from green.application.surfaces import Material, build_surface_map
 from green.domain.objects import ObjectClass
 
@@ -85,6 +87,50 @@ def test_straight_polygonized_edges_assign_adjacent_regions_without_leakage() ->
     assert material(surface, 5, 5) is Material.SOIL
     assert material(surface, 15, 5) is Material.PAVED
     assert material(surface, 22, 5) is Material.UNKNOWN
+
+
+def test_shared_edge_survives_independent_rotation_at_large_cad_coordinates() -> None:
+    def transformed(geometry: shapely.Geometry) -> shapely.Geometry:
+        return translate(rotate(geometry, 23, origin=(0, 0)), 1_000_000, -1_000_000)
+
+    outer = transformed(box(0, 0, 100, 40).boundary)
+    divider = transformed(LineString([(50, 0), (50, 40)]))
+    soil = transformed(Point(5, 5))
+    paved = transformed(Point(95, 5))
+    expected = [Material.SOIL, Material.PAVED]
+    surface = build_surface_map(
+        [feature(ObjectClass.CURB, outer), feature(ObjectClass.PAVEMENT_EDGE, divider)],
+        [label("ГАЗОН", soil.x, soil.y), label("А", paved.x, paved.y)],
+        transformed(box(-5, -5, 105, 45)),
+        0.5,
+    )
+    probes = shapely.points([transformed(Point(x, 5)).coords[0] for x in (7, 90)])
+    assert surface is not None
+    assert surface.material(probes).tolist() == expected
+
+
+@pytest.mark.parametrize("gap_m", [1e-5, 1e-8, 1e-9])
+def test_visible_divider_gap_stays_open_at_large_cad_coordinates(gap_m: float) -> None:
+    offset = 1_000_000
+    outer = feature(ObjectClass.CURB, translate(box(0, 0, 20, 10).boundary, offset, 0))
+    divider = feature(
+        ObjectClass.PAVEMENT_EDGE,
+        LineString([(offset + 10, 0), (offset + 10, 10 - gap_m)]),
+    )
+    surface = build_surface_map(
+        [outer, divider],
+        [label("ГАЗОН", offset + 5, 5)],
+        translate(box(-5, -5, 25, 15), offset, 0),
+        0.5,
+    )
+    assert material(surface, offset + 5, 5) is Material.UNKNOWN
+
+
+def test_roundoff_grid_disables_snapping_when_coordinates_are_too_large() -> None:
+    line = LineString([(1e12, 0), (1e12 + 10, 10)])
+    assert _roundoff_grid(np.array([line], dtype=object)) == 0.0
+    degenerate = LineString([(0, 0), (0, 0)])
+    assert _roundoff_grid(np.array([degenerate], dtype=object)) == 0.0
 
 
 def test_unfinished_internal_boundary_does_not_authorize_the_whole_outer_face() -> None:

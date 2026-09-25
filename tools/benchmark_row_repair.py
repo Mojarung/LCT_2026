@@ -9,6 +9,7 @@ will prefer the new design.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.metadata
 import json
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "out/row-repair-benchmark"
 RESULT = ROOT / "docs/research/verified-pipeline/row_repair_comparison.json"
+REAL_RESULT = ROOT / "docs/research/verified-pipeline/row_repair_real_demo.json"
 BASELINE_COMMIT = "06517b1"
 ANGLES = (0.0, 0.37, 0.83)
 NAMES = ("strip", "crossing", "courtyard")
@@ -102,7 +104,49 @@ def _record(plan: Plan) -> dict[str, object]:
     }
 
 
+def _write_report(report: dict[str, Any], research_demo: dict[str, Any] | None) -> Path:
+    if research_demo is None:
+        target = RESULT
+    else:
+        target = REAL_RESULT
+        report = {
+            "scope": (
+                "Flattened real demo with deliberately incomplete semantics and exploratory "
+                "distance surface inference; an ablation of species assignment, not a safe or "
+                "expert-reviewed planting plan. Single runs on macOS."
+            ),
+            "baseline_commit": BASELINE_COMMIT,
+            "current_assign_sha256": report["current_assign_sha256"],
+            "scipy_version": report["scipy_version"],
+            "research_demo": research_demo,
+            "batch_peak_rss_bytes_including_synthetic_cases": report["batch_peak_rss_bytes"],
+            "synthetic_reference": RESULT.name,
+        }
+    target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    return target
+
+
+def _valid_research_demo(row: dict[str, Any]) -> bool:
+    before, after = row["baseline"], row["repaired"]
+    valid_outputs = all(
+        version["ok"] and not version["geometry_gaps"] and not version["quota_violations"]
+        for version in (before, after)
+    )
+    return bool(
+        valid_outputs
+        and before["placements"] == after["placements"]
+        and after["index"] + 1e-9 >= before["index"]
+    )
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--real-demo",
+        action="store_true",
+        help="also compare on the flattened Berzarina demo with exploratory soil inference",
+    )
+    args = parser.parse_args()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     baseline = _baseline_assign()
     current = assortment.assign
@@ -115,12 +159,20 @@ def main() -> int:
             _scene(path, name, angle)
             sources[(name, angle)] = path
 
-    def compare(name: str, angle: float, solver: str) -> dict[str, Any]:
-        source = sources[(name, angle)]
-        source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
-        params = container.profiles.load(
-            "strict", {"placement_solver": solver, "placement_time_limit_s": 5.0}
+    def compare(name: str, angle: float, solver: str, *, real_demo: bool = False) -> dict[str, Any]:
+        source = (
+            ROOT / "src/green/infrastructure/cad/samples/berzarina_fragment.dxf"
+            if real_demo
+            else sources[(name, angle)]
         )
+        source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+        overrides: dict[str, Any] = {
+            "placement_solver": solver,
+            "placement_time_limit_s": 5.0,
+        }
+        if real_demo:
+            overrides.update(require_known_objects=False, surface_inference_mode="distance")
+        params = container.profiles.load("strict", overrides)
         pair: list[dict[str, Any]] = []
         for label, method in (("baseline", baseline), ("repaired", current)):
             assortment.assign = method  # ty: ignore[invalid-assignment] - controlled comparison
@@ -145,6 +197,9 @@ def main() -> int:
                 ),
                 geometry_gaps=sum(gap.count for gap in report.read_diagnostics.geometry_gaps),
                 semantics_ready=bool(report.classification and report.classification.ready),
+                semantic_unknown=report.classification.unresolved_features
+                if report.classification
+                else None,
                 seconds=round(time.perf_counter() - started, 3),
             )
             pair.append(evidence)
@@ -153,6 +208,7 @@ def main() -> int:
             "case": f"{name}-{angle}",
             "placement_solver": solver,
             "source_sha256": source_sha,
+            "semantic_mode": "exploratory-distance" if real_demo else "strict-closed-faces",
             "baseline": before,
             "repaired": after,
             "same_species_counts": before["species"] == after["species"],
@@ -165,6 +221,9 @@ def main() -> int:
             for name in NAMES
             for solver in ("greedy", "milp", "portfolio")
         ]
+        research_demo = (
+            compare("berzarina-demo", 0.0, "portfolio", real_demo=True) if args.real_demo else None
+        )
     finally:
         assortment.assign = current
     report = {
@@ -180,9 +239,10 @@ def main() -> int:
         "scipy_version": importlib.metadata.version("scipy"),
         "rotations": rotations,
         "solver_variants": solvers,
+        **({"research_demo": research_demo} if research_demo is not None else {}),
         "batch_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
     }
-    RESULT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    target = _write_report(report, research_demo)
     ok = True
     for row in (*rotations, *solvers):
         before, after = row["baseline"], row["repaired"]
@@ -197,6 +257,7 @@ def main() -> int:
         ok &= after["index"] + 1e-9 >= before["index"]
         if before["row_score"] is not None and after["row_score"] is not None:
             ok &= after["row_score"] + 1e-9 >= before["row_score"]
+    ok &= research_demo is None or _valid_research_demo(research_demo)
     for row in rotations:
         before, after = row["baseline"], row["repaired"]
         print(
@@ -204,7 +265,7 @@ def main() -> int:
             f"mixed {len(before['mixed_rows'])}->{len(after['mixed_rows'])}",
             f"index {before['index']:.6f}->{after['index']:.6f}",
         )
-    print(f"comparison={RESULT} complete={ok}")
+    print(f"comparison={target} complete={ok}")
     return 0 if ok else 1
 
 

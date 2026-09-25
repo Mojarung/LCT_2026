@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
+_MAX_ROUNDOFF_GRID_M = 1e-6
+
 
 @dataclass(frozen=True, slots=True)
 class FaceMaterials:
@@ -34,9 +36,12 @@ def closed_face_materials(
     *,
     material_lines: NDArray[np.object_],
 ) -> FaceMaterials:
-    # Noding only splits actual intersections. No snapping or arbitrary bridge
-    # may turn an unfinished contour into a positive planting region.
-    noded = shapely.union_all(lines)
+    # Independent CAD transforms can round the same shared vertex differently.
+    # A grid of four ULP at the drawing's coordinate scale joins only seams at
+    # floating-point precision; larger gaps remain open. Never use a tolerance
+    # larger than one micrometre in the drawing's metre coordinates.
+    grid = _roundoff_grid(lines)
+    noded = shapely.union_all(lines, grid_size=grid or None)
     polygons, cuts, dangles, invalid = shapely.polygonize_full(shapely.get_parts(noded))
     faces = shapely.get_parts(polygons)
     index = STRtree(faces)
@@ -44,7 +49,7 @@ def closed_face_materials(
     # establish a homogeneous material enclosure. Only the exterior needs
     # positive support: interior holes remain outside the assigned material.
     missing = shapely.difference(
-        shapely.get_exterior_ring(faces), shapely.union_all(material_lines)
+        shapely.get_exterior_ring(faces), shapely.union_all(material_lines, grid_size=grid or None)
     )
     supported = shapely.is_empty(missing)
 
@@ -79,3 +84,16 @@ def closed_face_materials(
         open_edges=sum(int(shapely.get_num_geometries(g)) for g in (cuts, dangles, invalid)),
         unsupported_boundaries=int((~supported).sum()),
     )
+
+
+def _roundoff_grid(lines: NDArray[np.object_]) -> float:
+    if not len(lines):
+        return 0.0
+    bounds = shapely.total_bounds(lines)
+    if not np.isfinite(bounds).all():
+        return 0.0
+    scale = float(np.max(np.abs(bounds)))
+    if scale == 0:
+        return 0.0
+    grid = 4 * float(np.spacing(scale))
+    return grid if 0 < grid <= _MAX_ROUNDOFF_GRID_M else 0.0
