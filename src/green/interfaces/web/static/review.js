@@ -4,8 +4,10 @@ const id = root.dataset.runId;
 const $ = name => document.getElementById(`review-${name}`);
 const canvas = $('canvas'), ctx = canvas.getContext('2d');
 let data, report, record, groups, paths, groupPaths, assignments = {}, labelAssignments = {};
+let layerAssignments = {}, layerSummary = new Map();
 let view = { x: 0, y: 0, scale: 1 }, drawing = false, drag;
 const UNKNOWN = new Set(['unknown', 'utility.unknown']);
+const LARGE_REVIEW_FEATURES = 50000;
 const LABEL_ROLES = {auto: 'по тексту и контексту', ignore: 'не использовать для покрытия', soil: 'грунт / газон', paved: 'твёрдое покрытие'};
 const EVIDENCE_NAMES = {
   unmatched: 'имя не распознано', conflict: 'правила противоречат друг другу',
@@ -31,8 +33,10 @@ const CLASS_NAMES = {
   uncertain_area: 'Непрочитанная область — посадка запрещена',
   unknown: 'Неизвестно', 'utility.unknown': 'Неуточнённая сеть',
 };
-for (const option of $('class').options) {
-  if (option.value) option.textContent = CLASS_NAMES[option.value] || option.value;
+for (const select of [$('class'), $('layer-class')]) {
+  for (const option of select.options) {
+    if (option.value) option.textContent = CLASS_NAMES[option.value] || option.value;
+  }
 }
 
 async function json(url) {
@@ -126,10 +130,10 @@ function refresh() {
   $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}. ${typeof group.work_intersections !== 'number' ? 'Пересечение с границей работ не измерено.' : `Пересекают границу работ: ${group.work_intersections} из ${group.features}.`}` : 'Геометрических объектов нет.';
   const current = indices.length === 1 ? data.features[indices[0]] : null;
   $('detail').textContent = current
-    ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\n${current.properties.source_entity_type === 'IMAGE' ? 'Содержимое внешнего растра не прочитано. Исключайте только после проверки изображения и полноты векторных данных.' : (current.properties.uncertain_footprint ? 'Внутри ограничивающей области материал не подтверждён; назначение класса недоступно.' : `Резерв геометрии, м: ${current.properties.error_m}`)}`
+    ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || layerAssignments[report.groups[current.properties.group].layer] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\n${current.properties.source_entity_type === 'IMAGE' ? 'Содержимое внешнего растра не прочитано. Исключайте только после проверки изображения и полноты векторных данных.' : (current.properties.uncertain_footprint ? 'Внутри ограничивающей области материал не подтверждён; назначение класса недоступно.' : `Резерв геометрии, м: ${current.properties.error_m}`)}`
     : `Выбрано объектов: ${indices.length}. Назначение применяется ко всем выбранным объектам.`;
   let unresolved = 0;
-  for (const f of data.features) if (UNKNOWN.has(assignments[f.id] || f.properties.class)) unresolved++;
+  for (const f of data.features) if (UNKNOWN.has(assignments[f.id] || layerAssignments[report.groups[f.properties.group].layer] || f.properties.class)) unresolved++;
   $('status').textContent = `Объектов: ${data.features.length}. Не уточнено: ${unresolved}.${typeof report.unresolved_work_intersections !== 'number' ? '' : ` Изначально не уточнено в границе работ: ${report.unresolved_work_intersections}.`} Ваших назначений: ${Object.keys(assignments).length}.`;
   $('assign').textContent = `Назначить класс (${indices.length} объектов)`;
   const readOnly = indices.some(i => data.features[i].properties.read_only);
@@ -147,6 +151,69 @@ function refresh() {
   if (!$('output-label').hidden) $('output').value = reviewJSON();
   draw();
 }
+function summaryJSON() {
+  const values = {...record.overrides};
+  values.layer_classes = {...(values.layer_classes || {}), ...layerAssignments};
+  values.semantic_source_sha256 = report.source_sha256;
+  values.require_known_objects = true;
+  return JSON.stringify(values, null, 2) + '\n';
+}
+function refreshLayer() {
+  const layer = $('layer').value, info = layerSummary.get(layer);
+  if (!info) return;
+  const currentClass = layerAssignments[layer] || record.overrides.layer_classes?.[layer];
+  const priorExact = Object.keys(record.overrides.feature_classes || {}).length > 0 ||
+    Object.keys(record.overrides.block_classes || {}).length > 0;
+  const reason = info.locked ? 'Слой содержит маску, неоднозначную область или растр: используйте подробную карту и точечное уточнение.'
+    : (priorExact ? 'В исходных параметрах есть назначения блоков или отдельных объектов с более высоким приоритетом. Используйте подробную карту.' : 'Назначайте весь слой только после проверки исходника и легенды.');
+  $('layer-detail').textContent = `Всего: ${info.features}; не уточнено: ${info.unknown}; ${info.measured ? `не уточнено в границе работ: ${info.work}` : 'граница работ не определена'}. ${currentClass ? `Класс в параметрах: ${CLASS_NAMES[currentClass] || currentClass}. ` : ''}${reason}`;
+  $('layer-assign').disabled = info.locked || priorExact;
+  $('layer-reset').disabled = !layerAssignments[layer];
+}
+function setupSummary() {
+  layerSummary = new Map();
+  for (const group of report.groups) {
+    if (!layerSummary.has(group.layer)) layerSummary.set(group.layer, {
+      features: 0, unknown: 0, work: 0, measured: report.work_boundary_present,
+      locked: false,
+    });
+    const info = layerSummary.get(group.layer);
+    info.features += group.features;
+    if (UNKNOWN.has(group.object_class)) {
+      info.unknown += group.features;
+      info.work += group.work_intersections || 0;
+    }
+    info.locked ||= ['uncertain_area', 'drawing_mask'].includes(group.object_class) || group.evidence.method === 'raster_review_required';
+  }
+  [...layerSummary].sort((a, b) =>
+    Number(b[1].unknown > 0) - Number(a[1].unknown > 0) ||
+    b[1].work - a[1].work || b[1].unknown - a[1].unknown
+  ).forEach(([name, info]) => {
+    const option = document.createElement('option'); option.value = name;
+    option.textContent = `${name} · не уточнено ${info.unknown}${info.measured ? ` · в работах ${info.work}` : ''}`;
+    $('layer').append(option);
+  });
+  $('layer-summary').hidden = false;
+  $('map-placeholder').hidden = false;
+  $('status').textContent = `Объектов: ${report.features}. Не уточнено: ${report.unresolved_features}. Подробная карта большого чертежа пока не загружена.`;
+  $('show').disabled = false; $('download').disabled = false;
+  refreshLayer();
+}
+$('layer').addEventListener('change', refreshLayer);
+$('layer-assign').addEventListener('click', () => {
+  const layer = $('layer').value, kind = $('layer-class').value;
+  if (!kind || !layer || $('layer-assign').disabled) return;
+  layerAssignments[layer] = kind;
+  refreshLayer();
+  if (!$('output-label').hidden) $('output').value = reviewJSON();
+  if (data) refresh();
+});
+$('layer-reset').addEventListener('click', () => {
+  delete layerAssignments[$('layer').value];
+  refreshLayer();
+  if (!$('output-label').hidden) $('output').value = reviewJSON();
+  if (data) refresh();
+});
 $('group').addEventListener('change', () => { $('object').value = 0; refresh(); fit(selected()); });
 $('object').addEventListener('input', refresh);
 $('object').addEventListener('change', () => {
@@ -181,14 +248,17 @@ $('label-reset').addEventListener('click', () => {
   refresh();
 });
 function reviewJSON() {
+  if (!data) return summaryJSON();
   // Preserve non-semantic parameters. Exact refs replace broad layer/block maps.
   const values = {...record.overrides};
   delete values.layer_classes; delete values.block_classes; delete values.feature_classes;
   delete values.label_roles;
   const explicit = {};
   for (const f of data.features) {
-    if (report.groups[f.properties.group].evidence.method.startsWith('explicit_')) explicit[f.id] = f.properties.class;
+    const group = report.groups[f.properties.group];
+    if (group.evidence.method.startsWith('explicit_') && !layerAssignments[group.layer]) explicit[f.id] = f.properties.class;
   }
+  values.layer_classes = {...layerAssignments};
   values.feature_classes = {...explicit, ...assignments};
   const explicitLabels = {};
   for (const label of data.labels || []) {
@@ -230,12 +300,8 @@ canvas.addEventListener('wheel', e => {
 }, {passive: false});
 new ResizeObserver(draw).observe(canvas);
 
-try {
-  const base = `/api/v1/runs/${id}`;
-  [data, report, record] = await Promise.all([
-    json(`${base}/artifacts/semantic-review.geojson`),
-    json(`${base}/artifacts/classification.json`), json(base),
-  ]);
+async function loadMap() {
+  data = await json(`/api/v1/runs/${id}/artifacts/semantic-review.geojson`);
   if (data.source_sha256 !== report.source_sha256) throw new Error('Геометрия и отчёт относятся к разным исходникам.');
   groups = report.groups.map(() => []);
   paths = data.features.map((f, i) => { groups[f.properties.group].push(i); return pathOf(f.geometry); });
@@ -254,4 +320,20 @@ try {
   $('label-index').disabled = !data.labels?.length;
   $('label-index').max = data.labels?.length || 0;
   refresh(); fit(selected());
+  $('map-placeholder').hidden = true;
+  $('load-map').disabled = true;
+}
+$('load-map').addEventListener('click', async () => {
+  $('load-map').disabled = true;
+  $('status').textContent = 'Загружаем полную геометрию чертежа…';
+  try { await loadMap(); }
+  catch (error) { $('status').textContent = error.message; $('load-map').disabled = false; }
+});
+try {
+  const base = `/api/v1/runs/${id}`;
+  [report, record] = await Promise.all([
+    json(`${base}/artifacts/classification.json`), json(base),
+  ]);
+  if (report.features > LARGE_REVIEW_FEATURES) setupSummary();
+  else await loadMap();
 } catch (error) { $('status').textContent = error.message; }
