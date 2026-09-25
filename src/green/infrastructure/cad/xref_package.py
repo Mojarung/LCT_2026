@@ -32,6 +32,16 @@ if TYPE_CHECKING:
 MAX_REFERENCE_DEPTH = 8
 
 
+def file_name(reference: str) -> str:
+    """Имя файла из пути внешней ссылки или имени файла комплекта.
+
+    Путь с диска проектировщика («..\\..\\Исходные данные\\сети.dwg») в журнале чтения ничего
+    не говорит и не помещается в панель интерфейса; различает ссылки имя файла. Разделители
+    Windows и POSIX - оба: пути в DWG пишут и так, и так.
+    """
+    return reference.replace("\\", "/").rsplit("/", 1)[-1] or reference
+
+
 @dataclass(frozen=True, slots=True)
 class _Link:
     block: BlockLayout
@@ -159,8 +169,8 @@ class DrawingPackage:
             raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
         _clear_xref_flags(block)
         self.notes.append(
-            f"XREF {block.name}: файла {link.reference!r} нет в исходных данных заказчика, "
-            f"его объектов на плане нет ({self.names[index]})"
+            f"XREF {block.name}: файла «{file_name(link.reference)}» нет в исходных данных "
+            f"заказчика, его объектов на плане нет ({file_name(self.names[index])})"
         )
         self.bindings.append(
             ReferenceBinding(

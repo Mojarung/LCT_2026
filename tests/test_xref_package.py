@@ -367,6 +367,19 @@ def test_catalogue_names_resolve_boundary_references_and_keep_the_base_once(
         "00.1_10004141_Топография": "provided_as_input",
         "00.2_10004141_Сети": "embedded",
     }
+    # Журнал чтения читает эксперт: коды остаются в отчёте сборки, в журнале - слова и имя
+    # файла, а не путь (жюри дизайна, итерация 7).
+    xref_notes = [note for note in result.notes if note.startswith("XREF ")]
+    assert xref_notes == [
+        (
+            "XREF 00.1_10004141_Топография: ссылка на основу комплекта "
+            "«00-1-10004141-topografiya.dxf», основа загружена один раз"
+        ),
+        (
+            "XREF 00.2_10004141_Сети: вставлен файл «00-2-10004141-seti.dxf», масштаб и положение "
+            "заданы исходной вставкой"
+        ),
+    ]
 
 
 def test_base_reference_with_an_offset_is_rejected(tmp_path: Path) -> None:
@@ -406,7 +419,12 @@ def test_reference_absent_from_customer_data_is_a_named_gap_only_when_declared(
     scene = EzdxfSceneReader().read(result.path)
     require_complete_geometry(scene)
     assert len(scene.features) == 2
-    assert any("нет в исходных данных заказчика" in note for note in result.notes)
+    assert [note for note in result.notes if note.startswith("XREF ")] == [
+        (
+            "XREF НО: файла «НО наташинский пр.dwg» нет в исходных данных заказчика, его "
+            "объектов на плане нет (АПОТ.dwg)"
+        )
+    ]
     assert [(b.block, b.action) for b in result.assembly.references] == [("НО", "absent_in_source")]
 
 

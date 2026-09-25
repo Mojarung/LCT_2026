@@ -20,6 +20,7 @@ from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
 from green.application.surface_faces import FaceMaterials, closed_face_materials
+from green.application.wording import counted
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -213,11 +214,12 @@ class SurfaceMap:
         if self.fallback_labels:
             soil = f"{self.fallback_soil_m2:,.0f}".replace(",", " ")
             paved = f"{self.fallback_paved_m2:,.0f}".replace(",", " ")
+            # Короткой фразой (жюри дизайна, итерация 7): как считался разлив, говорит заметка
+            # о карте покрытий, здесь - сколько и откуда.
+            labels = counted(self.fallback_labels, "подписи", "подписей", "подписей")
             notes.append(
-                f"Грунт по близости подписи: {soil} м², покрытие {paved} м² от "
-                f"{self.fallback_labels} подписей вне замкнутого контура (до "
-                f"{self.max_distance_m:g} м, границы не переходит, спорные места между разными "
-                "подписями остаются неизвестными)."
+                f"Грунт по близости подписи: газон {soil} м², покрытие {paved} м² не дальше "
+                f"{self.max_distance_m:g} м от {labels} вне замкнутых контуров."
             )
         if self.conflicting_faces:
             notes.append(
