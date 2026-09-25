@@ -6,6 +6,8 @@
   out/reader-check/census/symbols.json   базовое имя -> число, улицы, слои, штрихи, примеры
   out/reader-check/census/sheet-NN.png   листы рисунков по 48 знаков: имя, число, главный слой
   out/reader-check/census/unlisted.txt   знаки, которых нет в config/symbols.yaml
+  out/reader-check/census/questions.png  сомнительные знаки под номерами (нет в словаре или
+  out/reader-check/census/questions.md   confirmed: false) и список вопросов к ним
 
     uv run python tools/symbol_census.py
 """
@@ -46,8 +48,14 @@ def collect() -> dict[str, dict]:
         for base, info in row["symbol_detail"].items():
             entry = census.setdefault(
                 base,
-                {"count": 0, "streets": {}, "layers": Counter(), "strokes": Counter(),
-                 "examples": [], "drawing": None},
+                {
+                    "count": 0,
+                    "streets": {},
+                    "layers": Counter(),
+                    "strokes": Counter(),
+                    "examples": [],
+                    "drawing": None,
+                },
             )
             entry["count"] += info["count"]
             entry["streets"][row["slug"]] = info["count"]
@@ -67,10 +75,20 @@ def collect() -> dict[str, dict]:
     return dict(sorted(census.items(), key=lambda kv: -kv[1]["count"]))
 
 
-def sheets(census: dict[str, dict]) -> list[Path]:
+ANSWERS = (
+    "дерево, куст, опора, люк или решётка, препятствие, газон, массив деревьев, "
+    "сооружение, оформление (не объект)"
+)
+
+
+def sheets(
+    census: dict[str, dict], names: list[str] | None = None, prefix: str = "sheet"
+) -> list[Path]:
+    """Листы рисунков; с `names` - только эти знаки, под номерами (лист вопросов)."""
     font = _font(15)
     small = _font(12)
-    names = list(census)
+    numbered = names is not None
+    names = list(census) if names is None else names
     produced = []
     for start in range(0, len(names), PER_SHEET):
         chunk = names[start : start + PER_SHEET]
@@ -88,9 +106,10 @@ def sheets(census: dict[str, dict]) -> list[Path]:
                 draw.text((x + 10, y + CELL // 2), "нет рисунка", fill="red", font=small)
             layer = entry["layers"].most_common(1)[0][0] if entry["layers"] else ""
             draw.rectangle((x, y, x + CELL - 1, y + CELL + LABEL - 1), outline="#cccccc")
-            draw.text((x + 4, y + CELL), f"{base}  {entry['count']}", fill="black", font=font)
+            title = f"{start + index + 1}. {base}" if numbered else base
+            draw.text((x + 4, y + CELL), f"{title}  {entry['count']}", fill="black", font=font)
             draw.text((x + 4, y + CELL + 20), layer[:30], fill="#555555", font=small)
-        path = OUT / f"sheet-{start // PER_SHEET + 1:02d}.png"
+        path = OUT / f"{prefix}-{start // PER_SHEET + 1:02d}.png"
         sheet.save(path)
         produced.append(path)
     return produced
@@ -103,20 +122,41 @@ def main() -> None:
         sys.exit("нет итогов reader_check с деталями знаков")
     (OUT / "symbols.json").write_text(
         json.dumps(
-            {base: {**e, "layers": dict(e["layers"].most_common()),
-                    "strokes": dict(e["strokes"].most_common())} for base, e in census.items()},
-            ensure_ascii=False, indent=1,
+            {
+                base: {
+                    **e,
+                    "layers": dict(e["layers"].most_common()),
+                    "strokes": dict(e["strokes"].most_common()),
+                }
+                for base, e in census.items()
+            },
+            ensure_ascii=False,
+            indent=1,
         ),
         encoding="utf-8",
     )
-    listed = set()
+    listed: dict[str, dict] = {}
     if DICTIONARY.exists():
-        listed = set((yaml.safe_load(DICTIONARY.read_text(encoding="utf-8")) or {}).get("symbols", {}))
+        listed = (yaml.safe_load(DICTIONARY.read_text(encoding="utf-8")) or {}).get("symbols", {})
     unlisted = [base for base in census if base not in listed]
     (OUT / "unlisted.txt").write_text(
         "\n".join(f"{census[b]['count']:>7}  {b}" for b in unlisted), encoding="utf-8"
     )
     produced = sheets(census)
+    doubtful = [b for b in census if b not in listed or not listed[b].get("confirmed")]
+    if doubtful:
+        produced += sheets(census, doubtful, prefix="questions")
+        lines = [f"Варианты ответа: {ANSWERS}.", ""]
+        for number, base in enumerate(doubtful, 1):
+            e = census[base]
+            layer = e["layers"].most_common(1)[0][0] if e["layers"] else ""
+            now = listed.get(base)
+            current = f"сейчас {now['class']}, {now['role']}" if now else "нет в словаре"
+            lines.append(
+                f"{number}. {base}: {e['count']} шт. на {len(e['streets'])} ул., "
+                f"слой «{layer}»; {current}"
+            )
+        (OUT / "questions.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     total = sum(e["count"] for e in census.values())
     print(f"знаков {total}, базовых имён {len(census)}, без словаря {len(unlisted)}")
     print(f"листы: {', '.join(p.name for p in produced)} в {OUT}")
