@@ -1,0 +1,722 @@
+{
+  "scope": "Three 14m windows around deterministically selected project signs; 0.5m grid. Counts are candidate points, not plant counts or area accuracy. Manual scenarios represent proposed surface design; mulch soil and remaining semantics are unverified. Automatic rows bypass the semantic stop for diagnosis only. Reference geometry gaps outside selected signs are not used as planting input.",
+  "surface_sha256": "75ea5d3f66d1845662b50f4db3c77934c631d03ed569399b18bd04a775ff132c",
+  "reference_sha256": "2a7b567fa69d5d89bdc420980a80cc67244e904fbe70b53034603f76ad25b8d2",
+  "rows": [
+    {
+      "scenario": "automatic",
+      "fragment": 2,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 14,
+        "uncertain_area": 2,
+        "utility.unknown": 24,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "automatic",
+      "fragment": 4,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "unknown": 57,
+        "sidewalk": 1,
+        "utility.unknown": 37,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "automatic",
+      "fragment": 6,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 46,
+        "utility.unknown": 34,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "automatic",
+      "fragment": 2,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 14,
+        "uncertain_area": 2,
+        "utility.unknown": 24,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "automatic",
+      "fragment": 4,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "unknown": 57,
+        "sidewalk": 1,
+        "utility.unknown": 37,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "automatic",
+      "fragment": 6,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 46,
+        "utility.unknown": 34,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 2,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 11,
+      "norm_allowed": 0,
+      "norm_verdicts": {
+        "forbidden": 11
+      },
+      "failed_rules": {
+        "R-CURB-TREE-001": 11,
+        "R-STORM-TREE-001": 9,
+        "R-ACCESS-TREE-001": 6,
+        "R-UTILUNK-TREE-001": 2
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 13,
+        "lawn": 1,
+        "uncertain_area": 2,
+        "utility.unknown": 24,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 4,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 2,
+        "sidewalk": 1,
+        "unknown": 55,
+        "utility.unknown": 37,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 6,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 2,
+        "unknown": 44,
+        "utility.unknown": 34,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 2,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 109,
+      "norm_allowed": 45,
+      "norm_verdicts": {
+        "forbidden": 64,
+        "allowed": 45
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 42,
+        "R-UTILUNK-SHRUB-001": 31,
+        "R-POWER-SHRUB-001": 6
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 13,
+        "lawn": 1,
+        "uncertain_area": 2,
+        "utility.unknown": 24,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 4,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 54,
+      "norm_allowed": 6,
+      "norm_verdicts": {
+        "forbidden": 48,
+        "allowed": 6
+      },
+      "failed_rules": {
+        "R-POWER-SHRUB-001": 16,
+        "R-UTILUNK-SHRUB-001": 43,
+        "R-CURB-SHRUB-001": 19
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 2,
+        "sidewalk": 1,
+        "unknown": 55,
+        "utility.unknown": 37,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn",
+      "fragment": 6,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 75,
+      "norm_allowed": 8,
+      "norm_verdicts": {
+        "forbidden": 67,
+        "allowed": 8
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 33,
+        "R-UTILUNK-SHRUB-001": 45
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 2,
+        "unknown": 44,
+        "utility.unknown": 34,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 2,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 11,
+      "norm_allowed": 0,
+      "norm_verdicts": {
+        "forbidden": 11
+      },
+      "failed_rules": {
+        "R-CURB-TREE-001": 11,
+        "R-STORM-TREE-001": 9,
+        "R-ACCESS-TREE-001": 6
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 7,
+        "lawn": 1,
+        "uncertain_area": 2,
+        "pavement_edge": 18,
+        "utility.unknown": 12,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 4,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 2,
+        "sidewalk": 1,
+        "unknown": 48,
+        "pavement_edge": 21,
+        "utility.unknown": 23,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 6,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 2,
+        "unknown": 28,
+        "pavement_edge": 40,
+        "utility.unknown": 10,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 2,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 109,
+      "norm_allowed": 64,
+      "norm_verdicts": {
+        "forbidden": 45,
+        "allowed": 64
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 42,
+        "R-UTILUNK-SHRUB-001": 4,
+        "R-POWER-SHRUB-001": 6
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 7,
+        "lawn": 1,
+        "uncertain_area": 2,
+        "pavement_edge": 18,
+        "utility.unknown": 12,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 4,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 54,
+      "norm_allowed": 12,
+      "norm_verdicts": {
+        "forbidden": 42,
+        "allowed": 12
+      },
+      "failed_rules": {
+        "R-POWER-SHRUB-001": 16,
+        "R-UTILUNK-SHRUB-001": 20,
+        "R-CURB-SHRUB-001": 19
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 2,
+        "sidewalk": 1,
+        "unknown": 48,
+        "pavement_edge": 21,
+        "utility.unknown": 23,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_edging",
+      "fragment": 6,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 75,
+      "norm_allowed": 42,
+      "norm_verdicts": {
+        "forbidden": 33,
+        "allowed": 42
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 33
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 2,
+        "unknown": 28,
+        "pavement_edge": 40,
+        "utility.unknown": 10,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 2,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 11,
+      "norm_allowed": 0,
+      "norm_verdicts": {
+        "forbidden": 11
+      },
+      "failed_rules": {
+        "R-CURB-TREE-001": 11,
+        "R-STORM-TREE-001": 9,
+        "R-ACCESS-TREE-001": 6
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 3,
+        "lawn": 5,
+        "uncertain_area": 2,
+        "pavement_edge": 18,
+        "utility.unknown": 12,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 4,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 6,
+        "sidewalk": 1,
+        "pavement_edge": 21,
+        "utility.unknown": 23,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "unknown": 44,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 6,
+      "planting_type": "tree",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 0,
+      "norm_allowed": 0,
+      "norm_verdicts": {},
+      "failed_rules": {},
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 6,
+        "pavement_edge": 40,
+        "utility.unknown": 10,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "unknown": 24,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 2,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:9411",
+      "grid_points": 784,
+      "surface_boundary_fit": 109,
+      "norm_allowed": 64,
+      "norm_verdicts": {
+        "forbidden": 45,
+        "allowed": 64
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 42,
+        "R-UTILUNK-SHRUB-001": 4,
+        "R-POWER-SHRUB-001": 6
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "unknown": 3,
+        "lawn": 5,
+        "uncertain_area": 2,
+        "pavement_edge": 18,
+        "utility.unknown": 12,
+        "curb": 15,
+        "utility.power_cable": 11,
+        "utility.storm": 18,
+        "utility.sewer": 6,
+        "utility.drain": 2,
+        "utility.water": 1,
+        "utility.heat": 5,
+        "utility.access": 3,
+        "work_boundary": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 4,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93C7",
+      "grid_points": 784,
+      "surface_boundary_fit": 82,
+      "norm_allowed": 12,
+      "norm_verdicts": {
+        "forbidden": 70,
+        "allowed": 12
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 47,
+        "R-POWER-SHRUB-001": 16,
+        "R-UTILUNK-SHRUB-001": 20
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "lawn": 6,
+        "sidewalk": 1,
+        "pavement_edge": 21,
+        "utility.unknown": 23,
+        "curb": 38,
+        "utility.sewer": 12,
+        "utility.telecom": 14,
+        "utility.water": 12,
+        "utility.storm": 4,
+        "utility.power_cable": 6,
+        "unknown": 44,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    },
+    {
+      "scenario": "lawn_mulch_edging",
+      "fragment": 6,
+      "planting_type": "shrub",
+      "reference_sign": "2a7b567f:00000000:93CF",
+      "grid_points": 784,
+      "surface_boundary_fit": 81,
+      "norm_allowed": 46,
+      "norm_verdicts": {
+        "forbidden": 35,
+        "allowed": 46
+      },
+      "failed_rules": {
+        "R-CURB-SHRUB-001": 35
+      },
+      "semantics_ready": false,
+      "intersecting_classes": {
+        "sidewalk": 1,
+        "lawn": 6,
+        "pavement_edge": 40,
+        "utility.unknown": 10,
+        "curb": 15,
+        "slope": 7,
+        "utility.sewer": 16,
+        "utility.storm": 2,
+        "utility.access": 2,
+        "unknown": 24,
+        "work_boundary": 1,
+        "uncertain_area": 1
+      }
+    }
+  ]
+}
