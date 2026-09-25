@@ -1,15 +1,17 @@
 """Сборка улицы обратно: чернила чертежа против разобранной сцены.
 
 Учёт исходов доказывает, что каждый примитив получил решение, но не что его геометрия цела.
-Здесь исходник рисуется движком ezdxf (Frontend + Recorder), как его показал бы CAD, и каждая
+Здесь исходник рисуется движком ezdxf (Frontend), как его показал бы CAD, и каждая
 нарисованная линия проверяется шагом не длиннее допуска: есть ли в сцене объект ближе
 допуска. Непокрытая длина - чернила, которые ридер не отдал расчёту.
 
 Текст не рисуется (подписи идут отдельным каналом), штриховка - контуром, типы линий -
-сплошной линией. Размеры, выноски и определения атрибутов считаются отдельно: это
-оформление, ридер берёт из них только текст. Ридер хранит ось полилинии с шириной, поэтому у
-залитых фигур допуск шире на половину их толщины (для полосы ширины w толщина 2S/P = w);
-число таких полилиний в чертеже выводится в отчёт, чтобы упрощение было видно.
+сплошной линией, точки - точкой. Размеры, выноски и определения атрибутов считаются
+отдельно: это оформление, ридер берёт из них только текст. Ридер хранит ось полилинии с
+шириной, поэтому у залитых фигур допуск шире на половину их толщины (для полосы ширины w
+толщина 2S/P = w); число таких полилиний в чертеже выводится в отчёт, чтобы упрощение было
+видно. Отрисовка не копится: каждая запись сразу режется и проверяется пачками, в памяти
+остаются только итоги по окнам и сущностям (улица на 400 МБ не помещалась в память).
 """
 
 from __future__ import annotations
@@ -67,6 +69,8 @@ ANNOTATION_TYPES = frozenset(
 _MAX_HALF_WIDTH_M = 1.0
 _BATCH = 200_000
 
+type _Key = tuple[str, str, str]
+
 
 @dataclass(frozen=True, slots=True)
 class InkMiss:
@@ -107,55 +111,13 @@ class FidelityReport:
         return max((w.missed_share for w in self.windows), default=0.0)
 
 
-@dataclass(slots=True)
-class _Samples:
-    xy: list[NDArray[np.float64]]
-    weight: list[NDArray[np.float64]]
-    extra: list[NDArray[np.float64]]
-    stroke: list[NDArray[np.int64]]
-
-
 def fidelity(
     doc: Drawing, scene: Scene, *, tolerance_m: float = 0.15, window_m: float = 100.0
 ) -> FidelityReport:
     """Сверка отрисовки исходника с геометрией сцены (до классификации, в метрах)."""
     if tolerance_m <= 0 or window_m <= 0:
         raise ValueError("Tolerance and window must be positive")
-    unit = scene.unit_m
-    step = tolerance_m
-    samples = _Samples([], [], [], [])
-    strokes: list[tuple[str, str]] = []
-    for record, properties in _render(doc, flattening=0.01 * tolerance_m / unit):
-        for line, filled in _polylines(record, flattening=0.01 * tolerance_m / unit):
-            coords = line * unit
-            extra = _half_thickness(coords) if filled else 0.0
-            if _sample(coords, step, extra, len(strokes), samples):
-                strokes.append((properties.handle, properties.layer))
-    if not strokes:
-        return FidelityReport(0.0, 0.0, 0.0, 0.0, _wide_polylines(doc), (), ())
-    xy = np.concatenate(samples.xy)
-    weight = np.concatenate(samples.weight)
-    extra = np.concatenate(samples.extra)
-    stroke = np.concatenate(samples.stroke)
-    covered = _covered(scene, xy, tolerance_m + extra)
-    types = [_entity_type(doc, handle) for handle, _ in strokes]
-    annotation = np.array([t in ANNOTATION_TYPES for t in types], dtype=bool)[stroke]
-    missed = ~covered
-    drawing = ~annotation
-    return FidelityReport(
-        ink_m=float(weight[drawing].sum()),
-        missed_m=float(weight[drawing & missed].sum()),
-        annotation_ink_m=float(weight[annotation].sum()),
-        annotation_missed_m=float(weight[annotation & missed].sum()),
-        wide_polylines=_wide_polylines(doc),
-        windows=_windows(xy[drawing], weight[drawing], missed[drawing], window_m),
-        misses=_misses(
-            strokes, types, xy=xy, weight=weight, stroke=stroke, missed=drawing & missed
-        ),
-    )
-
-
-def _render(doc: Drawing, *, flattening: float) -> Iterator[tuple[DataRecord, BackendProperties]]:
+    check = _Check(doc, scene, tolerance_m, window_m)
     config = Configuration(
         text_policy=TextPolicy.IGNORE,
         hatch_policy=HatchPolicy.SHOW_OUTLINE,
@@ -163,11 +125,132 @@ def _render(doc: Drawing, *, flattening: float) -> Iterator[tuple[DataRecord, Ba
         image_policy=ImagePolicy.IGNORE,
         # Точка - точкой: значок $PDMODE (крест, круг размером $PDSIZE) шире допуска.
         pdmode=0,
-        max_flattening_distance=flattening,
+        max_flattening_distance=check.flattening,
     )
-    recorder = Recorder()
-    Frontend(RenderContext(doc), recorder, config=config).draw_layout(doc.modelspace())
-    yield from recorder.player().recordings()
+    Frontend(RenderContext(doc), _Stream(check), config=config).draw_layout(doc.modelspace())
+    return check.report(_wide_polylines(doc))
+
+
+class _Stream(Recorder):
+    """Recorder без записи: каждая запись сразу уходит в проверку."""
+
+    def __init__(self, check: _Check) -> None:
+        super().__init__()
+        self._check = check
+
+    def store(self, record: DataRecord, properties: BackendProperties) -> None:
+        self._check.add(record, properties)
+
+
+class _Check:
+    def __init__(self, doc: Drawing, scene: Scene, tolerance_m: float, window_m: float) -> None:
+        self.doc = doc
+        self.unit = scene.unit_m
+        self.tolerance = tolerance_m
+        self.window = window_m
+        self.flattening = 0.01 * tolerance_m / scene.unit_m
+        geometries = [f.geometry for f in scene.features if not f.geometry.is_empty]
+        self.tree = STRtree(geometries) if geometries else None
+        self.types: dict[str, str] = {}
+        self.keys: list[_Key] = []
+        self.xy: list[NDArray[np.float64]] = []
+        self.weight: list[NDArray[np.float64]] = []
+        self.extra: list[NDArray[np.float64]] = []
+        self.owner: list[NDArray[np.int64]] = []
+        self.pending = 0
+        self.ink = self.missed = self.annotation_ink = self.annotation_missed = 0.0
+        self.windows: dict[tuple[int, int], list[float]] = defaultdict(lambda: [0.0, 0.0])
+        self.lost: dict[_Key, float] = defaultdict(float)
+        self.where: dict[_Key, tuple[float, float]] = {}
+
+    def add(self, record: DataRecord, properties: BackendProperties) -> None:
+        handle = properties.handle
+        if handle not in self.types:
+            entity = self.doc.entitydb.get(handle) if handle else None
+            self.types[handle] = entity.dxftype() if entity is not None else "?"
+        index = len(self.keys)
+        self.keys.append((handle, self.types[handle], properties.layer))
+        for line, filled in _polylines(record, flattening=self.flattening):
+            coords = line * self.unit
+            xy, weight = _cut(coords, self.tolerance)
+            self.xy.append(xy)
+            self.weight.append(weight)
+            self.extra.append(np.full(len(xy), _half_thickness(coords) if filled else 0.0))
+            self.owner.append(np.full(len(xy), index, dtype=np.int64))
+            self.pending += len(xy)
+        if self.pending >= _BATCH:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self.pending:
+            return
+        xy = np.concatenate(self.xy)
+        weight = np.concatenate(self.weight)
+        owner = np.concatenate(self.owner)
+        missed = ~self._covered(xy, self.tolerance + np.concatenate(self.extra))
+        annotation = np.array([k[1] in ANNOTATION_TYPES for k in self.keys], dtype=bool)[owner]
+        drawing = ~annotation
+        self.ink += float(weight[drawing].sum())
+        self.missed += float(weight[drawing & missed].sum())
+        self.annotation_ink += float(weight[annotation].sum())
+        self.annotation_missed += float(weight[annotation & missed].sum())
+        self._windows(xy[drawing], weight[drawing], missed[drawing])
+        for position in np.flatnonzero(drawing & missed):
+            key = self.keys[owner[position]]
+            self.lost[key] += float(weight[position])
+            self.where.setdefault(key, (float(xy[position, 0]), float(xy[position, 1])))
+        self.keys, self.xy, self.weight, self.extra, self.owner = [], [], [], [], []
+        self.pending = 0
+
+    def report(self, wide_polylines: int) -> FidelityReport:
+        self.flush()
+        return FidelityReport(
+            ink_m=self.ink,
+            missed_m=self.missed,
+            annotation_ink_m=self.annotation_ink,
+            annotation_missed_m=self.annotation_missed,
+            wide_polylines=wide_polylines,
+            windows=tuple(
+                WindowScore(kx * self.window, ky * self.window, ink, missed)
+                for (kx, ky), (ink, missed) in sorted(self.windows.items())
+            ),
+            misses=tuple(
+                sorted(
+                    (
+                        InkMiss(h, t, layer, round(m, 3), *self.where[h, t, layer])
+                        for (h, t, layer), m in self.lost.items()
+                    ),
+                    key=lambda miss: -miss.missed_m,
+                )
+            ),
+        )
+
+    def _covered(self, xy: NDArray[np.float64], reach: NDArray[np.float64]) -> NDArray:
+        covered = np.zeros(len(xy), dtype=bool)
+        if self.tree is None or not len(xy):
+            return covered
+        points = shapely.points(xy)
+        (found, _), distances = self.tree.query_nearest(
+            points, max_distance=float(reach.max()), return_distance=True, all_matches=False
+        )
+        covered[found] = distances <= reach[found]
+        return covered
+
+    def _windows(
+        self, xy: NDArray[np.float64], weight: NDArray[np.float64], missed: NDArray
+    ) -> None:
+        if not len(xy):
+            return
+        cells, inverse = np.unique(
+            np.floor(xy / self.window).astype(np.int64), axis=0, return_inverse=True
+        )
+        inverse = inverse.ravel()
+        ink = np.bincount(inverse, weights=weight, minlength=len(cells))
+        lost = np.bincount(inverse, weights=weight * missed, minlength=len(cells))
+        for (kx, ky), i, m in zip(cells, ink, lost, strict=True):
+            total = self.windows[int(kx), int(ky)]
+            total[0] += float(i)
+            total[1] += float(m)
 
 
 def _polylines(record: DataRecord, *, flattening: float) -> Iterator[tuple[NDArray, bool]]:
@@ -206,96 +289,20 @@ def _half_thickness(ring: NDArray[np.float64]) -> float:
     return min(area / perimeter, _MAX_HALF_WIDTH_M) if perimeter > 0 else 0.0
 
 
-def _sample(coords: NDArray, step: float, extra: float, index: int, into: _Samples) -> bool:
-    """Точки в серединах равных кусков каждого отрезка не длиннее шага; вес - длина куска."""
-    if len(coords) == 1:
-        into.xy.append(coords[:1])
-        into.weight.append(np.zeros(1))
-    else:
+def _cut(coords: NDArray, step: float) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Середины равных кусков каждого отрезка не длиннее шага; вес - длина куска."""
+    if len(coords) > 1:
         start, end = coords[:-1], coords[1:]
         lengths = np.hypot(*(end - start).T)
         keep = lengths > 0
-        if not keep.any():
-            into.xy.append(coords[:1])
-            into.weight.append(np.zeros(1))
-        else:
+        if keep.any():
             start, end, lengths = start[keep], end[keep], lengths[keep]
             counts = np.maximum(np.ceil(lengths / step).astype(np.int64), 1)
             segment = np.repeat(np.arange(len(lengths)), counts)
             offsets = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
             t = (offsets + 0.5) / counts[segment]
-            into.xy.append(start[segment] + (end - start)[segment] * t[:, None])
-            into.weight.append((lengths / counts)[segment])
-    size = len(into.xy[-1])
-    into.extra.append(np.full(size, extra))
-    into.stroke.append(np.full(size, index, dtype=np.int64))
-    return True
-
-
-def _covered(scene: Scene, xy: NDArray[np.float64], reach: NDArray[np.float64]) -> NDArray:
-    geometries = [f.geometry for f in scene.features if not f.geometry.is_empty]
-    covered = np.zeros(len(xy), dtype=bool)
-    if not geometries:
-        return covered
-    tree = STRtree(geometries)
-    limit = float(reach.max())
-    for start in range(0, len(xy), _BATCH):
-        points = shapely.points(xy[start : start + _BATCH])
-        (found, _), distances = tree.query_nearest(
-            points, max_distance=limit, return_distance=True, all_matches=False
-        )
-        near = np.zeros(len(points), dtype=bool)
-        near[found] = distances <= reach[start + found]
-        covered[start : start + len(points)] = near
-    return covered
-
-
-def _windows(
-    xy: NDArray[np.float64], weight: NDArray[np.float64], missed: NDArray, size: float
-) -> tuple[WindowScore, ...]:
-    if not len(xy):
-        return ()
-    cells = np.floor(xy / size).astype(np.int64)
-    keys, inverse = np.unique(cells, axis=0, return_inverse=True)
-    inverse = inverse.ravel()
-    ink = np.bincount(inverse, weights=weight, minlength=len(keys))
-    lost = np.bincount(inverse, weights=weight * missed, minlength=len(keys))
-    return tuple(
-        WindowScore(float(kx * size), float(ky * size), float(i), float(m))
-        for (kx, ky), i, m in zip(keys, ink, lost, strict=True)
-    )
-
-
-def _misses(  # noqa: PLR0913 - parallel sample arrays
-    strokes: list[tuple[str, str]],
-    types: list[str],
-    *,
-    xy: NDArray[np.float64],
-    weight: NDArray[np.float64],
-    stroke: NDArray[np.int64],
-    missed: NDArray,
-) -> tuple[InkMiss, ...]:
-    lost: dict[tuple[str, str, str], float] = defaultdict(float)
-    where: dict[tuple[str, str, str], tuple[float, float]] = {}
-    for position in np.flatnonzero(missed):
-        handle, layer = strokes[stroke[position]]
-        key = (handle, types[stroke[position]], layer)
-        lost[key] += float(weight[position])
-        where.setdefault(key, (float(xy[position, 0]), float(xy[position, 1])))
-    return tuple(
-        sorted(
-            (
-                InkMiss(h, t, layer, round(m, 3), *where[h, t, layer])
-                for (h, t, layer), m in lost.items()
-            ),
-            key=lambda miss: -miss.missed_m,
-        )
-    )
-
-
-def _entity_type(doc: Drawing, handle: str) -> str:
-    entity = doc.entitydb.get(handle) if handle else None
-    return entity.dxftype() if entity is not None else "?"
+            return start[segment] + (end - start)[segment] * t[:, None], (lengths / counts)[segment]
+    return coords[:1].astype(np.float64), np.zeros(min(len(coords), 1))
 
 
 def _wide_polylines(doc: Drawing) -> int:

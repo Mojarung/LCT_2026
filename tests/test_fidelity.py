@@ -93,3 +93,21 @@ def test_annotation_ink_is_kept_apart_from_drawing_ink(tmp_path: Path) -> None:
 
     assert handles["dimension"] not in {m.handle for m in report.misses}
     assert report.annotation_ink_m > 0
+
+
+def test_small_batches_give_the_same_report(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """Отрисовка не копится, а проверяется пачками: итог не зависит от размера пачки."""
+    path, handles = _drawing(tmp_path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    without = replace(
+        scene, features=tuple(f for f in scene.features if f.ref.handle != handles["line"])
+    )
+    whole = fidelity(ezdxf.readfile(path), without)
+
+    monkeypatch.setattr("green.infrastructure.cad.fidelity._BATCH", 10)
+    batched = fidelity(ezdxf.readfile(path), without)
+
+    assert batched.misses == whole.misses
+    assert batched.ink_m == pytest.approx(whole.ink_m)
+    assert batched.missed_m == pytest.approx(whole.missed_m)
+    assert [(w.x0, w.y0) for w in batched.windows] == [(w.x0, w.y0) for w in whole.windows]
