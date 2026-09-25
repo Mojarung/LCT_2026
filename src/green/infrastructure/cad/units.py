@@ -82,6 +82,9 @@ class Spread:
     # решала бы за чертёж), а для вопроса «лежат ли два файла в одном месте» нужна она:
     # рамка между процентилями у улицы из штрихов борта вырождается в линию.
     bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    # Сколько точек привязки измерено: о споре единиц с геометрией судят только по чертежу,
+    # где есть что мерить (у подосновы их тысячи; одной надписи заголовок верен).
+    anchors: int = 0
 
     @property
     def width(self) -> float:
@@ -143,7 +146,7 @@ _METRE_TEXT_UNITS = 20.0
 def _geometry_conflict(doc: Drawing, factor: float) -> str | None:
     """Чем геометрия противоречит объявленным единицам; None - не противоречит."""
     spread = measure(doc)
-    if spread is None:
+    if spread is None or spread.anchors < _MIN_ANCHORS:
         return None
     size = max(spread.width, spread.height)
     text = spread.text_height
@@ -270,6 +273,7 @@ class _Collector:
                 float(points[:, 0].max()),
                 float(points[:, 1].max()),
             ),
+            anchors=len(points),
         )
 
 
