@@ -55,3 +55,25 @@ def test_ink_check_draws_the_fitted_curve_without_the_frame(tmp_path: Path) -> N
     report = fidelity(ezdxf.readfile(path), scene)
 
     assert report.misses == ()
+
+
+def test_curve_fit_polyline_is_its_bulged_vertices(tmp_path: Path) -> None:
+    """Сглаживание дугами (PEDIT Fit) пишет дуги выпуклостями вершин, добавленные вершины -
+    флаг 1: CAD рисует ту же ломаную с дугами. Знак разметки 1.24.3 Куликовской вставлен 617
+    раз и каждый раз шёл пробелом «погрешность не ограничена»."""
+    doc = ezdxf.new("R2018")
+    polyline = doc.modelspace().add_polyline2d(
+        [(0, 0, 0.4), (10, 0, 0), (10, 10, -0.3), (0, 10, 0)], format="xyb", close=True
+    )
+    polyline.dxf.flags |= 2
+    for vertex in list(polyline.vertices)[1::2]:
+        vertex.dxf.flags |= 1
+    path = tmp_path / "curve_fit.dxf"
+    doc.saveas(path)
+
+    scene = EzdxfSceneReader().read(path, unit="m")
+
+    assert scene.read_diagnostics.geometry_gaps == ()
+    (feature,) = scene.features
+    assert feature.geometry_error_m is not None
+    assert feature.geometry_error_m <= 0.1

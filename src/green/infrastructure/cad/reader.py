@@ -600,8 +600,11 @@ class _Walker:
                     # Сглажена сплайном: на экране CAD ломаная по вершинам сглаживания.
                     return _polyline(fitted, closed=entity.is_closed), 0.0
                 points, error = polyline_vertices(entity, self.flatten)
-                if isinstance(entity, Polyline) and entity.dxf.flags & 6:
-                    error = None  # fit/spline-generated vertices need separate semantics
+                if isinstance(entity, Polyline) and entity.dxf.flags & 4:
+                    # Сглажена сплайном, но вершины сглаживания не читаются (дуги у них):
+                    # что рисует CAD, не установлено. Сглаживание дугами (флаг 2) - та же
+                    # ломаная с дугами через все вершины, её погрешность ограничена.
+                    error = None
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
                 return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
