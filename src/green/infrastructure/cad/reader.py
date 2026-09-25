@@ -41,6 +41,7 @@ from green.infrastructure.cad.hatch_geometry import (
     associated_polyline_error,
     hatch_geometry,
     hatch_outline,
+    linear_hatch_from_local_source,
     match_region_outline,
 )
 from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
@@ -163,6 +164,7 @@ class _Walker:
     gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
     matched_region_hatches: int = 0
     matched_hatch_polylines: int = 0
+    matched_local_hatches: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -452,6 +454,16 @@ class _Walker:
                         max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
                     )
                 except HatchGeometryError as error:
+                    if str(error) == "hatch-intersecting-boundaries" and block_matrix is not None:
+                        restored = linear_hatch_from_local_source(
+                            entity,  # ty: ignore[invalid-argument-type]
+                            block_matrix,
+                            self.flatten,
+                            max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
+                        )
+                        if restored is not None:
+                            self.matched_local_hatches += 1
+                            return restored
                     if str(error) == "hatch-open-boundary":
                         return self._associated_region_hatch(entity, block_matrix)
                     if str(error) == "hatch-invalid-ring" and sibling_regions:
@@ -580,6 +592,11 @@ class _Walker:
             messages.append(
                 "Кривые POLYLINE сверены с исходной границей HATCH того же блока: "
                 f"{self.matched_hatch_polylines}"
+            )
+        if self.matched_local_hatches:
+            messages.append(
+                "Прямые контуры HATCH объединены до преобразования блока: "
+                f"{self.matched_local_hatches}"
             )
         return messages
 

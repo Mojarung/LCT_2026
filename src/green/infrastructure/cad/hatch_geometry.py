@@ -11,8 +11,9 @@ import shapely
 from ezdxf.entities import LWPolyline
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
 from ezdxf.entities.polygon import DXFPolygon
-from ezdxf.math import Vec2
+from ezdxf.math import Vec2, Vec3
 from shapely import STRtree
+from shapely.affinity import affine_transform
 from shapely.errors import GEOSException
 from shapely.geometry import LineString, MultiPolygon, Polygon
 
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 
     from ezdxf.entities import Polyline
     from ezdxf.entities.boundary_paths import AbstractBoundaryPath, AbstractEdge
+    from ezdxf.math import Matrix44
 
 
 class HatchGeometryError(ValueError):
@@ -43,6 +45,7 @@ _MAX_ASSOCIATED_PATH_SIZE_FRACTION = 0.05
 _MAX_TINY_LOBE_AREA_FRACTION = 0.001
 _MAX_TINY_LOBE_DIAMETERS_PER_CLOSURE = 10
 _MAX_TINY_LOBE_BOUNDARY_SHIFT = 1e-9
+_LOCAL_TRANSFORM_ROUNDOFF_ULPS = 64
 
 
 def associated_polyline_error(  # noqa: PLR0913 - source and matched boundary need their bounds
@@ -88,6 +91,78 @@ def associated_polyline_error(  # noqa: PLR0913 - source and matched boundary ne
             if math.isfinite(shift) and shift <= tolerance:
                 matches.append(max(source_error, path_error + shift))
     return matches[0] if len(matches) == 1 else None
+
+
+def linear_hatch_from_local_source(  # noqa: PLR0911 - each failed geometric check rejects fallback
+    entity: DXFPolygon,
+    matrix: Matrix44,
+    distance: float,
+    *,
+    max_closure: float,
+) -> tuple[Polygon | MultiPolygon, float] | None:
+    """Compose straight rings before a block transform when WCS rounding breaks adjacency."""
+    source = entity.origin_of_copy
+    if (
+        not isinstance(source, DXFPolygon)
+        or source.dxf.elevation.z != 0
+        or source.dxf.hatch_style != entity.dxf.hatch_style
+    ):
+        return None
+    try:
+        local, local_error = hatch_geometry(source, distance, max_closure=max_closure)
+        if local_error != 0:
+            return None
+        local_paths = list(source.paths.rendering_paths(source.dxf.hatch_style))
+        virtual_paths = list(entity.paths.rendering_paths(entity.dxf.hatch_style))
+        if len(local_paths) != len(virtual_paths) or not local_paths:
+            return None
+        x_axis = matrix.transform_direction(Vec3(1, 0, 0))
+        y_axis = matrix.transform_direction(Vec3(0, 1, 0))
+        origin = matrix.transform(Vec3(0, 0, 0))
+        coefficients = [x_axis.x, y_axis.x, x_axis.y, y_axis.y, origin.x, origin.y]
+        transformed = affine_transform(local, coefficients)
+        if transformed.is_empty:
+            return None
+        extent = max(abs(value) for value in transformed.bounds)
+        roundoff = _LOCAL_TRANSFORM_ROUNDOFF_ULPS * math.ulp(extent)
+        transformed = _valid_transformed_area(transformed, roundoff)
+        if transformed is None:
+            return None
+        for local_path, virtual_path in zip(local_paths, virtual_paths, strict=True):
+            local_ring, local_bound, _ = _path_polygon(source, local_path, distance, max_closure)
+            virtual_ring, virtual_bound, _ = _path_polygon(
+                entity, virtual_path, distance, max_closure
+            )
+            if local_bound != 0 or virtual_bound != 0:
+                return None
+            expected = affine_transform(_checked_ring(local_ring), coefficients)
+            observed = _checked_ring(virtual_ring)
+            if not (
+                expected.is_valid
+                and expected.buffer(roundoff).covers(observed)
+                and observed.buffer(roundoff).covers(expected)
+            ):
+                return None
+        return transformed, roundoff  # noqa: TRY300 - return the fully validated geometry
+    except HatchGeometryError, GEOSException, ValueError:
+        return None
+
+
+def _valid_transformed_area(
+    area: Polygon | MultiPolygon, roundoff: float
+) -> Polygon | MultiPolygon | None:
+    if area.is_valid:
+        return area
+    repaired = shapely.make_valid(area)
+    polygons = [
+        part for part in shapely.get_parts(repaired) if isinstance(part, Polygon | MultiPolygon)
+    ]
+    if not polygons:
+        return None
+    polygonal = shapely.union_all(polygons)
+    if not polygonal.is_valid or abs(polygonal.area - area.area) > roundoff * max(area.length, 1):
+        return None
+    return polygonal
 
 
 def hatch_geometry(

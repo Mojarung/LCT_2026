@@ -9,11 +9,19 @@ import ezdxf
 import numpy as np
 import pytest
 import shapely
-from shapely.geometry import Point, box
+from ezdxf.entities.boundary_paths import PolylinePath
+from ezdxf.math import Matrix44
+from shapely.geometry import Point, Polygon, box
 
 from green.application.approximation import inner_area
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
+from green.infrastructure.cad.hatch_geometry import (
+    HatchGeometryError,
+    _valid_transformed_area,
+    hatch_geometry,
+    linear_hatch_from_local_source,
+)
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
 if TYPE_CHECKING:
@@ -138,6 +146,51 @@ def test_adjacent_rings_with_floating_point_overlap_are_unioned(tmp_path: Path) 
     require_complete_geometry(scene)
     assert scene.features[0].geometry.hausdorff_distance(box(0, 0, 20, 10)) < 1e-12
     assert scene.features[0].geometry.area == pytest.approx(200)
+
+
+def test_local_straight_hatch_repairs_only_transform_roundoff() -> None:
+    doc = ezdxf.new()
+    source = doc.modelspace().add_hatch()
+    rectangle(source, (0, 0, 1, 1))
+    rectangle(source, (1, 0, 2, 1))
+    matrix = Matrix44.translate(18_000, 15_000, 0)
+
+    def virtual_with_overlap(overlap: float) -> Hatch:
+        virtual = source.copy()
+        virtual.transform(matrix)
+        path = virtual.paths.paths[1]
+        assert isinstance(path, PolylinePath)
+        path.vertices = [
+            (x - overlap if abs(x - 18_001) < 1e-6 else x, y, bulge)
+            for x, y, bulge in path.vertices
+        ]
+        return virtual
+
+    rounded = virtual_with_overlap(1e-10)
+    with pytest.raises(HatchGeometryError, match="hatch-intersecting-boundaries"):
+        hatch_geometry(rounded, 0.1, max_closure=0.002)
+    restored = linear_hatch_from_local_source(rounded, matrix, 0.1, max_closure=0.002)
+    assert restored is not None
+    assert restored[0].area == pytest.approx(2)
+    assert restored[1] < 1e-9
+
+    changed = virtual_with_overlap(1e-10)
+    changed_path = changed.paths.paths[1]
+    assert isinstance(changed_path, PolylinePath)
+    changed_path.vertices = [
+        (x + 1e-4 if abs(x - 18_002) < 1e-6 else x, y, bulge)
+        for x, y, bulge in changed_path.vertices
+    ]
+    assert linear_hatch_from_local_source(changed, matrix, 0.1, max_closure=0.002) is None
+
+
+def test_zero_area_transform_artifact_does_not_change_filled_area() -> None:
+    with_dangling_line = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0), (1, 1), (0, 0)])
+    repaired = _valid_transformed_area(with_dangling_line, 1e-9)
+    assert repaired is not None
+    assert repaired.equals(box(0, 0, 2, 2))
+    bow_tie = Polygon([(0, 0), (1, 1), (0, 1), (1, 0)])
+    assert _valid_transformed_area(bow_tie, 1e-9) is None
 
 
 @pytest.mark.parametrize(
