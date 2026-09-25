@@ -59,8 +59,8 @@ symbols:
     {class: ignore, role: annotation, confirmed: false, source: "рисунок",
      note: "П-образный знак на линии сети: заглушка трубы? сама труба - линией слоя"}
   UKAZ:
-    {class: ignore, role: annotation, confirmed: false, source: "слой «Указатель подз коммуникаций»",
-     note: "указатель подземных коммуникаций: табличка на стене или столбике?"}
+    {class: obstacle, role: point, confirmed: true, source: "слой «Указатель подз коммуникаций», рисунок",
+     note: "столбик с табличкой-указателем подземной сети: кружок основания, стойка, флажок; сеть - линией слоя сетей"}
   EUZN:
     {class: ignore, role: annotation, confirmed: false, source: "слой «Кабель защиты»",
      note: "прямоугольник с заштрихованными треугольниками на кабеле защиты: электроузел?"}
@@ -81,15 +81,17 @@ symbols:
   AFIS: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "афишная тумба"}
   SHLAGB: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "шлагбаум"}
   ELKRL:
-    {class: obstacle, role: point, confirmed: false, source: "рисунок",
-     note: "окружность без центра: колонка, урна или колодец? нужен слой из переписи"}
+    {class: obstacle, role: point, confirmed: true, source: "слой «Навесы», перепись 19 улиц",
+     note: "окружность без центра на слое навесов: стойка навеса (460 шт. на 8 улицах)"}
+  TOCSKA:
+    {class: obstacle, role: point, confirmed: true, source: "слой «Навесы», перепись 19 улиц",
+     note: "залитый кружок на слое навесов: опорная колонна навеса (407 шт. на 8 улицах)"}
 
   # --- оформление ---
   PIKET: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "пикет съёмки"}
   KREST: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "крест координатной сетки"}
   NIV: {class: ignore, role: annotation, confirmed: true, source: "слой «Геодезические пункты»", note: "нивелирная марка"}
   GLAZNE: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок в кольце: геодезический пункт?"}
-  TOCSKA: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок: точка съёмки?"}
   TKAZ: {class: ignore, role: annotation, confirmed: false, source: "рисунок", note: "залитый кружок, как TOCSKA"}
   STRELK: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "стрелка направления"}
   STRFON: {class: ignore, role: annotation, confirmed: true, source: "слой «ЛЭП»", note: "стрелка направления ЛЭП"}
@@ -98,3 +100,165 @@ symbols:
   TRPS:
     {class: ignore, role: annotation, confirmed: true, source: "слой «Здания», УЗ 1:500",
      note: "знак трансформаторной подстанции внутри контура здания; здание - контуром слоя"}
+
+  # ===== Перепись знаков 19 улиц (25.09.2026): знаки, которых словарь не знал =====
+  # Решения - по листам рисунков out/reader-check/census/ и слою, на котором знак стоит.
+
+  # --- растительность ---
+  symbolLayer0: {class: existing_tree, role: point, confirmed: true, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемое дерево дендроплана проектировщика"}
+  symbolLayer1: {class: existing_tree, role: point, confirmed: true, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемое дерево дендроплана проектировщика"}
+  symbolLayer2: {class: existing_tree, role: point, confirmed: true, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемое дерево дендроплана проектировщика"}
+  symbolLayer3: {class: existing_shrub, role: point, confirmed: true, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемый кустарник дендроплана проектировщика"}
+  A$C760e65ca: {class: existing_tree, role: point, confirmed: true, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемое дерево дендроплана проектировщика"}
+  A$C433C16C3: {class: existing_tree, role: point, confirmed: false, source: "дендроплан, слой «Дендра_сохранить»", note: "сохраняемое растение дендроплана: дерево или кустарник? принято деревом - отступ строже"}
+  TUYA: {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, слой «Отдельно стоящее дерево»", note: "отдельно стоящее дерево: туя"}
+  LISTOD: {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, слой «Отдельно стоящее дерево»", note: "отдельно стоящее лиственное дерево"}
+  FRUCTO: {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, слой «Отдельно стоящее дерево»", note: "отдельно стоящее плодовое дерево"}
+  FRUCTS: {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "плодовое дерево"}
+  KIPAR: {class: existing_tree, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "хвойное дерево (кипарисовые)"}
+  LUG: {class: lawn, role: marker, confirmed: true, source: "УЗ 1:500, слой «Леса и газоны»", note: "луговая растительность: знак материала внутри контура"}
+  SOSNL: {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, слой «Леса и газоны»", note: "сосновый лес: знак массива"}
+  ELLES: {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, слой «Леса и газоны»", note: "еловый лес: знак массива"}
+  LISTVH: {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, слой «Леса и газоны»", note: "лиственный лес: знак массива"}
+  FRUCTZ: {class: existing_woodland, role: marker, confirmed: true, source: "УЗ 1:500, слой «Леса и газоны»", note: "плодовый сад: знак массива"}
+
+  # --- колодцы, решётки, краны ---
+  SIFON: {class: utility.access, role: point, confirmed: true, source: "слой «Фонтаны», рисунок", note: "водоразборная колонка (сифон)"}
+  POLIV: {class: utility.access, role: point, confirmed: true, source: "слой «Фонтаны», рисунок", note: "поливочный кран"}
+  RESHT2: {class: utility.access, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "дождеприёмная решётка"}
+  OGOLTR: {class: utility.access, role: point, confirmed: true, source: "слой «Водосток», рисунок", note: "оголовок трубы водостока"}
+  РСО_Люк_Водосток: {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Люк_Водосток»", note: "люк водостока"}
+  РСО_Люк_Водопровод: {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Люк_Водопровод»", note: "люк водопровода"}
+  РСО_Люк_Кабели: {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Люк_Кабели»", note: "люк кабельной канализации"}
+  РСО_Люк_Канализация: {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Люк_Канализация»", note: "люк канализации"}
+  РСО_Замена_ДР: {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Решетки_ДК»", note: "дождеприёмная решётка"}
+  "Замена ДР": {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Замена_Решетки_ДК»", note: "дождеприёмная решётка"}
+  "Установка ДР": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "дождеприёмная решётка"}
+  "Замена верха колодца": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "колодец"}
+  "АПОТ - Колодцы": {class: utility.access, role: point, confirmed: true, source: "генплан, слой «Project_utilities ДК»", note: "колодец"}
+  люкВодосток: {class: utility.access, role: point, confirmed: true, source: "генплан", note: "люк водостока"}
+  "люк Водосток": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "люк водостока"}
+  "люк теплосети": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "люк теплосети"}
+  "люк кабели": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "люк кабельной канализации"}
+  "люк газ": {class: utility.access, role: point, confirmed: true, source: "генплан", note: "люк газовой сети"}
+
+  # --- опоры, столбы, флагштоки ---
+  FONARK: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, слой «Фонари»", note: "фонарь на кронштейне"}
+  SH_FON: {class: pole, role: point, confirmed: true, source: "слой «Фонари», рисунок", note: "фонарь"}
+  STLB.M: {class: pole, role: point, confirmed: true, source: "слой «Столбы», рисунок", note: "столб металлический"}
+  STOLBD: {class: pole, role: point, confirmed: true, source: "слой «Столбы», рисунок", note: "столб деревянный"}
+  OPKS2: {class: pole, role: point, confirmed: true, source: "слой «Опоры контакной сети»", note: "опора контактной сети"}
+  OPKS3: {class: pole, role: point, confirmed: true, source: "слой «Опоры контакной сети»", note: "опора контактной сети"}
+  KONTM: {class: pole, role: point, confirmed: true, source: "слой «Опоры контакной сети»", note: "опора контактной сети"}
+  DORZN2: {class: pole, role: point, confirmed: true, source: "слой «Светофоры», рисунок", note: "дорожный знак на стойке"}
+  GROMB: {class: pole, role: point, confirmed: true, source: "слой «Громоотвод»", note: "громоотвод на мачте"}
+  RADIO: {class: pole, role: point, confirmed: true, source: "слой «Вышки»", note: "радиомачта"}
+  VOZD: {class: pole, role: point, confirmed: true, source: "слой «Возд линии телеграф»", note: "опора воздушной линии связи"}
+  OSTAN1: {class: pole, role: point, confirmed: true, source: "слой «Павильоны», рисунок", note: "стойка остановочного знака"}
+  П2: {class: pole, role: point, confirmed: true, source: "сети освещения, слой «ЭН_пролеты»", note: "опора освещения"}
+  "1 рожок": {class: pole, role: point, confirmed: true, source: "сети освещения", note: "опора освещения, светильник в один рожок"}
+  "Светильник Моссвет без кронштейна": {class: pole, role: point, confirmed: true, source: "сети освещения", note: "опора освещения"}
+  "Сущ опора 1.5м": {class: pole, role: point, confirmed: true, source: "сети освещения", note: "существующая опора"}
+  "Сущ. опора": {class: pole, role: point, confirmed: true, source: "генплан", note: "существующая опора"}
+  КО4м: {class: pole, role: point, confirmed: true, source: "сети освещения, слой «ЭН_опора_Моссвет_КО»", note: "опора освещения 4 м"}
+  КО6м: {class: pole, role: point, confirmed: true, source: "сети освещения", note: "опора освещения 6 м"}
+  Торшер: {class: pole, role: point, confirmed: true, source: "сети освещения", note: "опора-торшер"}
+  "Флаг 1.3": {class: pole, role: point, confirmed: true, source: "генплан", note: "флагшток"}
+  ФЛАГ: {class: pole, role: point, confirmed: true, source: "генплан, слой «флаг»", note: "флагшток"}
+  "флаг Остановка": {class: pole, role: point, confirmed: true, source: "генплан, слой «Флаг остановки»", note: "стойка остановочного знака"}
+
+  # --- препятствия: условные знаки съёмки (не в масштабе) - объект в точке ---
+  SCULPT: {class: obstacle, role: point, confirmed: true, source: "слой «Памятники»", note: "скульптура"}
+  PAMYT: {class: obstacle, role: point, confirmed: true, source: "слой «Памятники»", note: "памятник"}
+  MOG_K: {class: obstacle, role: point, confirmed: true, source: "слой «Памятники»", note: "могила, памятный знак"}
+  FONTAN: {class: obstacle, role: point, confirmed: true, source: "слой «Фонтаны»", note: "фонтан"}
+
+  # --- препятствия: блоки генплана в натуральную величину - контур объекта ---
+  урна__: {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "урна"}
+  МАФ_урна2: {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "урна"}
+  "Урна Город": {class: obstacle, role: geometry, confirmed: true, source: "генплан, МАФ", note: "урна"}
+  Урна: {class: obstacle, role: geometry, confirmed: true, source: "генплан, МАФ", note: "урна"}
+  урна2: {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "урна"}
+  МАФ_лавочка: {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "скамья"}
+  "Скамья Лондон со спинкой": {class: obstacle, role: geometry, confirmed: true, source: "генплан, МАФ", note: "скамья"}
+  "лавочка 1": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "скамья"}
+  мет.столбик: {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "металлический столбик ограждения"}
+  "бетонная полусфера": {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "бетонная полусфера-ограничитель"}
+  "Ограждения вентиляционных шахт": {class: obstacle, role: geometry, confirmed: true, source: "генплан, слой «МАФ»", note: "ограждение вентиляционной шахты"}
+  "контейнерная площадка на 3 конт.": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "контейнерная площадка"}
+  "контейнерная площадка на 4 конт.": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "контейнерная площадка"}
+  "контейнерная площадка на 5 конт.": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "контейнерная площадка"}
+  "Контейнерная площадка на 2 конт.": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "контейнерная площадка"}
+  "Площадка контейнеры ТБО": {class: obstacle, role: geometry, confirmed: true, source: "генплан", note: "контейнерная площадка ТБО"}
+
+  # --- сооружения ---
+  BENZIN: {class: structure, role: point, confirmed: true, source: "слой «Спец сооружения»", note: "бензоколонка"}
+  SHKAF: {class: structure, role: point, confirmed: true, source: "слой «Кабели», рисунок", note: "распределительный шкаф"}
+  Вент.шахта: {class: structure, role: geometry, confirmed: true, source: "генплан, слой «Вент. шахта»", note: "вентиляционная шахта"}
+  "сущ остан": {class: structure, role: geometry, confirmed: true, source: "генплан, слой «ОСТАНОВКА СУЩ»", note: "существующий остановочный павильон"}
+
+  # --- оформление: разметка покрытия (ограничение даёт само покрытие) ---
+  p-1: {class: ignore, role: annotation, confirmed: true, source: "генплан, слой «_Разметка»", note: "разметка"}
+  p-2: {class: ignore, role: annotation, confirmed: true, source: "генплан, слой «_Разметка»", note: "разметка"}
+  p-3: {class: ignore, role: annotation, confirmed: true, source: "генплан, слой «_Разметка»", note: "разметка"}
+  p-60: {class: ignore, role: annotation, confirmed: true, source: "генплан, слой «_Разметка»", note: "разметка"}
+  p0: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p0i: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p45: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p45i: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p60: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p60i: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p90: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p90i: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p90-3: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  p90i-3: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка стояночных мест"}
+  g: {class: ignore, role: annotation, confirmed: true, source: "слой «ПР_ОБД_РАЗМЕТКА»", note: "разметка"}
+  _П45инв: {class: ignore, role: annotation, confirmed: true, source: "слой «_Разметка_1.1_парковка»", note: "разметка парковки для инвалидов"}
+  "_П60 инв": {class: ignore, role: annotation, confirmed: true, source: "слой «_Разметка_1.1_парковка»", note: "разметка парковки для инвалидов"}
+  _П90инв: {class: ignore, role: annotation, confirmed: true, source: "слой «_Разметка_1.1_парковка»", note: "разметка парковки для инвалидов"}
+  1-14-1a: {class: ignore, role: annotation, confirmed: true, source: "слой «_Разметка_1.14.1»", note: "разметка 1.14.1, пешеходный переход"}
+  1-17k: {class: ignore, role: annotation, confirmed: true, source: "слой «_разметка сущ.»", note: "разметка 1.17"}
+  1-17s: {class: ignore, role: annotation, confirmed: true, source: "слой «_разметка сущ.»", note: "разметка 1.17"}
+  1-24-3: {class: ignore, role: annotation, confirmed: true, source: "слой «разметка парковок»", note: "разметка 1.24.3"}
+  1-24-3a: {class: ignore, role: annotation, confirmed: true, source: "слой «_Разметка_1.24.3»", note: "разметка 1.24.3"}
+  r_1.24.3: {class: ignore, role: annotation, confirmed: true, source: "слой «разметка_парковка»", note: "разметка 1.24.3"}
+  1-25a: {class: ignore, role: annotation, confirmed: true, source: "слой «РАЗМЕТКА»", note: "разметка 1.25"}
+  1-25b: {class: ignore, role: annotation, confirmed: true, source: "слой «РАЗМЕТКА»", note: "разметка 1.25"}
+
+  # --- оформление: пометки, стрелки, выноски, демонтаж ---
+  AeccTickLine: {class: ignore, role: annotation, confirmed: true, source: "ось трассы Civil 3D", note: "засечка пикета оси трассы"}
+  НачКонКруговой: {class: ignore, role: annotation, confirmed: true, source: "ось трассы", note: "метка начала и конца кривой"}
+  SW_CENTERMARKSYMBOL: {class: ignore, role: annotation, confirmed: true, source: "трасса проектируемой связи", note: "метка центра"}
+  _ArchTick: {class: ignore, role: annotation, confirmed: true, source: "слой размеров", note: "засечка размера"}
+  TerminatorOpen_0.6: {class: ignore, role: annotation, confirmed: true, source: "выноска", note: "стрелка выноски"}
+  LEG1: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "знак легенды"}
+  LEG25: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "знак легенды"}
+  _TagCircle: {class: ignore, role: annotation, confirmed: true, source: "слой «Дендра_номера_сохранить»", note: "кружок номера дерева"}
+  Из_буфера27067: {class: ignore, role: annotation, confirmed: true, source: "слой «Дендра_Аварийка_Номера_выноски»", note: "выноска номера дерева"}
+  крест: {class: ignore, role: annotation, confirmed: true, source: "сети освещения, слой «ЭН_Крест_Моссвет»", note: "крест-метка"}
+  крест1: {class: ignore, role: annotation, confirmed: true, source: "слой «ДВ_ПОР_П_Точки»", note: "крест-метка точки разбивки"}
+  заземл: {class: ignore, role: annotation, confirmed: true, source: "сети освещения", note: "знак заземления на кабеле"}
+  STRREK: {class: ignore, role: annotation, confirmed: true, source: "слой «Береговая линия»", note: "стрелка течения реки"}
+  BERG: {class: ignore, role: annotation, confirmed: true, source: "слой «Горизонтали»", note: "бергштрих горизонтали"}
+  UKAZD: {class: ignore, role: annotation, confirmed: true, source: "слой «Водопровод»", note: "указатель на линии водопровода; сеть - линией слоя"}
+  US: {class: ignore, role: annotation, confirmed: true, source: "слой «Кабель связи»", note: "знак на линии связи; кабель - линией слоя"}
+  LEPST2: {class: ignore, role: annotation, confirmed: true, source: "слой «Кабели»", note: "знак на кабельной линии; кабель - линией слоя"}
+  ARKATR: {class: ignore, role: annotation, confirmed: true, source: "слой «Фонтаны», рисунок", note: "знак на контуре сооружения"}
+  RLul-dor: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "знак оформления"}
+  о: {class: ignore, role: annotation, confirmed: true, source: "рисунок", note: "буква-пометка"}
+  KRZER: {class: ignore, role: annotation, confirmed: true, source: "слой «Здания»", note: "знак внутри контура здания; здание - контуром слоя"}
+  VOROTA: {class: ignore, role: annotation, confirmed: true, source: "слой «Внутреннее заполнение»", note: "знак ворот в ограде; ограда - линией слоя"}
+  3_ДЖКХ-24_00912_1pp: {class: ignore, role: annotation, confirmed: true, source: "вставка выгрузки сетей как блока", note: "пустая обёртка выгрузки"}
+  A$C116bb568: {class: ignore, role: annotation, confirmed: true, source: "дендроплан", note: "знак оформления дендроплана"}
+  A$C3cf89d34: {class: ignore, role: annotation, confirmed: true, source: "генплан", note: "знак оформления"}
+  АР_Кружок_1.1: {class: ignore, role: annotation, confirmed: true, source: "слой «лестницы»", note: "кружок-пометка"}
+  Демонтаж: {class: ignore, role: annotation, confirmed: true, source: "слой «_НО_демонтаж»", note: "пометка демонтажа; сам объект - на съёмке"}
+  "дем опора": {class: ignore, role: annotation, confirmed: true, source: "сети освещения", note: "пометка демонтажа опоры; опора - на съёмке"}
+  дем.светильник: {class: ignore, role: annotation, confirmed: true, source: "сети освещения", note: "пометка демонтажа светильника"}
+  "Приствольная решетка д 2м": {class: ignore, role: annotation, confirmed: true, source: "генплан, МАФ", note: "приствольная решётка проектируемого дерева: не существующий объект"}
+  A$C79F32F7F: {class: ignore, role: annotation, confirmed: false, source: "генплан, слой «_ПР_БО»", note: "проектируемое дерево проектировщика: не существующий объект - принято оформлением"}
+
+  # --- геодезические пункты: охранная зона пункта не учитывается (вопрос пользователю) ---
+  GGS: {class: ignore, role: annotation, confirmed: false, source: "слой «Геодезические пункты»", note: "пункт государственной геодезической сети"}
+  GSS: {class: ignore, role: annotation, confirmed: false, source: "слой «Геодезические пункты»", note: "пункт геодезической сети сгущения"}
+  STGRAN: {class: ignore, role: annotation, confirmed: false, source: "слой «Геодезические пункты»", note: "межевой (граничный) знак"}
