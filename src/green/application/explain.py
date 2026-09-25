@@ -157,9 +157,7 @@ def describe_value(value: PlantingValue | None) -> str:
         what = "; ".join(value.weak) or "ниже среднего по плану"
         # Отрицательный вклад - ещё не разрешение убрать посадку: оговорка проверки квот.
         scope = f" {value.scope}" if value.delta < 0 and value.scope else ""
-        return (
-            f" Слабое место ({permille(value.delta)} к индексу качества): {what}.{gives}{scope}"
-        )
+        return f" Слабое место ({permille(value.delta)} к индексу качества): {what}.{gives}{scope}"
     if value.delta < 0:
         higher = permille(-value.delta)[1:]
         return (
