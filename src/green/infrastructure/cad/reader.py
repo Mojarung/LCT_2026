@@ -11,6 +11,7 @@ import numpy as np
 import shapely
 from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
 from ezdxf.entities.boundary_paths import PolylinePath
+from ezdxf.entities.polygon import DXFPolygon
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
@@ -37,6 +38,7 @@ from green.infrastructure.cad.curve_paths import (
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.hatch_geometry import (
     HatchGeometryError,
+    associated_polyline_error,
     hatch_geometry,
     hatch_outline,
     match_region_outline,
@@ -160,6 +162,7 @@ class _Walker:
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
     gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
     matched_region_hatches: int = 0
+    matched_hatch_polylines: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -173,6 +176,7 @@ class _Walker:
         insert_chain: tuple[InsertInstance, ...] = (),
         block_matrix: Matrix44 | None = None,
         sibling_regions: tuple[Region, ...] = (),
+        sibling_hatches: tuple[DXFPolygon, ...] = (),
     ) -> None:
         layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
@@ -198,7 +202,10 @@ class _Walker:
         else:
             try:
                 geometry, error = self._geometry(
-                    entity, block_matrix=block_matrix, sibling_regions=sibling_regions
+                    entity,
+                    block_matrix=block_matrix,
+                    sibling_regions=sibling_regions,
+                    sibling_hatches=sibling_hatches,
                 )
             except (HatchGeometryError, RegionGeometryError) as exc:
                 self.skipped[kind] += 1
@@ -310,6 +317,11 @@ class _Walker:
             self.skipped["INSERT:not-explodable"] += 1
             return
         regions = tuple(child for child in children if isinstance(child, Region))
+        hatches = tuple(
+            child
+            for child in children
+            if isinstance(child, DXFPolygon) and child.dxftype() == "HATCH"
+        )
         for position, child in enumerate(children):
             self.visit(
                 child,
@@ -321,6 +333,7 @@ class _Walker:
                 insert_chain=instances,
                 block_matrix=block_matrix,
                 sibling_regions=regions,
+                sibling_hatches=hatches,
             )
 
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
@@ -385,6 +398,7 @@ class _Walker:
         *,
         block_matrix: Matrix44 | None = None,
         sibling_regions: tuple[Region, ...] = (),
+        sibling_hatches: tuple[DXFPolygon, ...] = (),
     ) -> tuple[BaseGeometry | None, float | None]:
         kind = entity.dxftype()
         try:
@@ -418,7 +432,17 @@ class _Walker:
             ):
                 points, error = polyline_vertices(entity, self.flatten)
                 if isinstance(entity, Polyline) and entity.dxf.flags & 6:
-                    error = None  # fit/spline-generated vertices need separate semantics
+                    error = associated_polyline_error(
+                        entity,
+                        points,
+                        error,
+                        sibling_hatches,
+                        self.flatten,
+                        max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
+                        max_shift=0.02 / self.unit_m,
+                    )
+                    if error is not None:
+                        self.matched_hatch_polylines += 1
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
                 try:
@@ -478,9 +502,7 @@ class _Walker:
                 )
             except RegionGeometryError:
                 continue
-        return match_region_outline(
-            outline, error, candidates, max_shift=0.02 / self.unit_m
-        )
+        return match_region_outline(outline, error, candidates, max_shift=0.02 / self.unit_m)
 
     def _associated_region_hatch(
         self, hatch: DXFGraphic, block_matrix: Matrix44 | None
@@ -553,6 +575,11 @@ class _Walker:
             messages.append(
                 "HATCH восстановлены по единственному REGION того же блока и слоя: "
                 f"{self.matched_region_hatches}"
+            )
+        if self.matched_hatch_polylines:
+            messages.append(
+                "Кривые POLYLINE сверены с исходной границей HATCH того же блока: "
+                f"{self.matched_hatch_polylines}"
             )
         return messages
 

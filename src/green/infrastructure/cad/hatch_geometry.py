@@ -10,10 +10,11 @@ import numpy as np
 import shapely
 from ezdxf.entities import LWPolyline
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
+from ezdxf.entities.polygon import DXFPolygon
 from ezdxf.math import Vec2
 from shapely import STRtree
 from shapely.errors import GEOSException
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import LineString, MultiPolygon, Polygon
 
 from green.infrastructure.cad.curve_paths import (
     MAX_VERTICES,
@@ -24,8 +25,10 @@ from green.infrastructure.cad.curve_paths import (
 from green.infrastructure.cad.polygon_repair import repair_roundoff_self_intersection
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ezdxf.entities import Polyline
     from ezdxf.entities.boundary_paths import AbstractBoundaryPath, AbstractEdge
-    from ezdxf.entities.polygon import DXFPolygon
 
 
 class HatchGeometryError(ValueError):
@@ -36,6 +39,52 @@ _MAX_CLOSURE_FRACTION = 0.02
 _MAX_MATCH_AREA_FRACTION = 0.02
 _MAX_MATCH_WIDTH_FRACTION = 0.02
 _MAX_ROUNDOFF_OVERLAP_FRACTION = 1e-12
+_MAX_ASSOCIATED_PATH_SIZE_FRACTION = 0.05
+
+
+def associated_polyline_error(  # noqa: PLR0913 - source and matched boundary need their bounds
+    polyline: Polyline,
+    points: list[tuple[float, float]],
+    source_error: float,
+    sibling_hatches: Sequence[DXFPolygon],
+    distance: float,
+    *,
+    max_closure: float,
+    max_shift: float,
+) -> float | None:
+    """Bound a fitted POLYLINE only against its explicit, matching HATCH source path."""
+    source = polyline.origin_of_copy or polyline
+    handle = source.dxf.get("handle")
+    if not handle or not polyline.is_closed or len(points) < 3:  # noqa: PLR2004
+        return None
+    rendered = LineString(points)
+    matches = []
+    for hatch in sibling_hatches:
+        original = hatch.origin_of_copy or hatch
+        if (
+            not isinstance(original, DXFPolygon)
+            or source.dxf.get("owner") != original.dxf.get("owner")
+            or polyline.dxf.get("layer", "0") != hatch.dxf.get("layer", "0")
+            or len(original.paths.paths) != len(hatch.paths.paths)
+        ):
+            continue
+        for declared, path in zip(original.paths.paths, hatch.paths.paths, strict=True):
+            if declared.source_boundary_objects != [handle]:
+                continue
+            try:
+                polygon, path_error, _ = _path_polygon(hatch, path, distance, max_closure)
+                ring = _checked_ring(polygon)
+                shift = rendered.hausdorff_distance(ring.boundary)
+            except HatchGeometryError, GEOSException, ValueError:
+                continue
+            tolerance = min(
+                max_shift,
+                source_error + path_error,
+                _MAX_ASSOCIATED_PATH_SIZE_FRACTION * math.sqrt(ring.area),
+            )
+            if math.isfinite(shift) and shift <= tolerance:
+                matches.append(max(source_error, path_error + shift))
+    return matches[0] if len(matches) == 1 else None
 
 
 def hatch_geometry(
