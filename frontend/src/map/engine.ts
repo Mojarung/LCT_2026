@@ -7,12 +7,13 @@
  * 2. Цвета берутся из CSS-переменных: тема переключается в одном месте, карта следует за ней.
  * 3. Вид разворачивается вдоль улицы: участок работ - лента. */
 
-import type { BasemapJson } from '../api/artifacts';
+import type { BasemapJson, LawnJson } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
-import { buildChunks } from './chunks';
+import { buildChunks, type Chunk } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
 import type { ExistingPlant } from './existing';
 import { type Box, boundsOfPoints, contentPoints, type Point, principalAxis } from './geometry';
+import { lawnChunks, withLawns } from './lawns';
 import { Palette } from './palette';
 import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
 import {
@@ -100,6 +101,10 @@ export class PlanEngine {
   };
   private readonly palette = new Palette();
   private readonly base = document.createElement('canvas');
+  /** Куски подосновы и газонов плана отдельно: план приходит позже подосновы и меняется после
+   *  пересборки, а в сцене они лежат одним списком в порядке отрисовки (withLawns). */
+  private baseChunks: Chunk[] = [];
+  private lawnChunks: Chunk[] = [];
   private readonly cleanup: (() => void)[] = [];
   private outline: Point[] = [];
   private mapBox: Box | null = null;
@@ -167,7 +172,8 @@ export class PlanEngine {
   /** Подоснова: чертёж становится картой, по которой можно ездить, пока считаются посадки. */
   setBasemap(basemap: BasemapJson): void {
     const existing: ExistingPlant[] = [];
-    this.scene.chunks = buildChunks(basemap.features, basemap.bbox, existing);
+    this.baseChunks = buildChunks(basemap.features, basemap.bbox, existing);
+    this.scene.chunks = withLawns(this.baseChunks, this.lawnChunks);
     this.scene.existing = existing;
     this.classIndex = new ClassIndex(basemap.features);
     this.dims = { key: '', list: [] };
@@ -201,6 +207,14 @@ export class PlanEngine {
 
   setSurface(surface: SurfaceImage | null): void {
     this.scene.surface = surface;
+    this.invalidate();
+    this.schedule();
+  }
+
+  /** Газоны плана: лежат в растровом кэше вместе с подосновой, двигать их незачем. */
+  setLawns(lawns: readonly LawnJson[]): void {
+    this.lawnChunks = lawnChunks(lawns);
+    this.scene.chunks = withLawns(this.baseChunks, this.lawnChunks);
     this.invalidate();
     this.schedule();
   }

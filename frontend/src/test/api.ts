@@ -68,6 +68,7 @@ export const strict: ProfileOut = {
   curb_hedges: true,
   understory: true,
   shrub_fill: true,
+  lawns: true,
 };
 
 export const shrubs: ProfileOut = {

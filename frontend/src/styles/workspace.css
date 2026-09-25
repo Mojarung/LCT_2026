@@ -1081,6 +1081,16 @@ body.shell-map .topbar {
     radial-gradient(var(--c-asphalt-speck) 0.7px, transparent 0.9px) 0 0 / 4px 4px,
     var(--c-asphalt);
 }
+/* Газоны плана - как на карте (palette.ts): тон и контур, устраиваемый - пунктиром. */
+.legend i.swatch-plan-lawn,
+.legend i.swatch-plan-lawn-new {
+  background: var(--c-plan-lawn);
+  border: 1.2px solid var(--c-plan-lawn-edge);
+}
+.legend i.swatch-plan-lawn-new {
+  background: var(--c-plan-lawn-new);
+  border-style: dashed;
+}
 .legend-group .key.swatch-building {
   width: 16px;
   height: 12px;

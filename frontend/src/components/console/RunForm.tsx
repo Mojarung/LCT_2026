@@ -25,6 +25,7 @@ const SWITCH_LABELS: { name: Switch | 'fill'; label: string }[] = [
   { name: 'understory', label: 'Кустарник под кроной дерева, где ряда нет' },
   { name: 'shrub_groups', label: 'Кустарник там, где квоты не пустили дерево' },
   { name: 'shrub_fill', label: 'Группы кустарника на свободном газоне' },
+  { name: 'lawns', label: 'Газоны на грунте, свободном от посадок' },
   { name: 'root_barriers', label: 'Прикорневые барьеры' },
 ];
 

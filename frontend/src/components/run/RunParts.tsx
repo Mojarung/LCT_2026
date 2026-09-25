@@ -125,6 +125,7 @@ export function RunMetrics({ run }: { run: RunOut }) {
           прикорневым барьером
         </p>
       ) : null}
+      <LawnLine summary={summary} />
       {sketch ? (
         <div className="notice">
           <p>
@@ -152,6 +153,19 @@ export function RunMetrics({ run }: { run: RunOut }) {
         </details>
       ) : null}
     </>
+  );
+}
+
+/** Газоны плана (п. 3 ТЗ): площадь в м², устраиваемый газон отдельно - это объём работ. */
+function LawnLine({ summary }: { summary: Record<string, unknown> }) {
+  const lawn = num(summary.lawn_m2);
+  const fresh = num(summary.lawn_new_m2);
+  if (!lawn) return null;
+  return (
+    <p className="metric-sub quality-line">
+      <b>{integer(lawn)}</b> м² газона
+      {fresh ? `, из них ${integer(fresh)} м² устраиваемого` : ', весь сохраняемый по чертежу'}
+    </p>
   );
 }
 

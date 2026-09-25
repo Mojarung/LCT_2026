@@ -2,7 +2,7 @@
  * переключается в одном месте, и карта обязана следовать за ней. */
 
 export interface ClassStyle {
-  group: 'surfaces' | 'buildings' | 'utilities' | 'existing';
+  group: 'surfaces' | 'buildings' | 'utilities' | 'existing' | 'lawns';
   fill?: string;
   stroke?: string;
   /** Толщина в экранных пикселях. */
@@ -48,6 +48,21 @@ export const STYLES: Record<string, ClassStyle> = {
   pole: { group: 'utilities', stroke: '--c-pole', width: 2 },
   existing_tree: { group: 'existing', stroke: '--c-existing', width: 1.2 },
   existing_shrub: { group: 'existing', stroke: '--c-existing', width: 1 },
+  // Газоны плана (lawns.ts): тон поверх травы карты покрытий и контур; устраиваемый газон -
+  // своим тоном и пунктиром, как граница работ, которых ещё нет.
+  'plan_lawn.kept': {
+    group: 'lawns',
+    fill: '--c-plan-lawn',
+    stroke: '--c-plan-lawn-edge',
+    width: 1,
+  },
+  'plan_lawn.new': {
+    group: 'lawns',
+    fill: '--c-plan-lawn-new',
+    stroke: '--c-plan-lawn-edge',
+    width: 1.2,
+    dash: [5, 3],
+  },
 };
 
 export const VERDICT_TOKEN: Record<string, string> = {

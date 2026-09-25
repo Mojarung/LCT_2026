@@ -8,7 +8,13 @@ import type { ProfileOut } from '../api/types';
 import { plain } from './format';
 
 export type Switch =
-  'root_barriers' | 'shrub_groups' | 'shrub_rows' | 'curb_hedges' | 'understory' | 'shrub_fill';
+  | 'root_barriers'
+  | 'shrub_groups'
+  | 'shrub_rows'
+  | 'curb_hedges'
+  | 'understory'
+  | 'shrub_fill'
+  | 'lawns';
 
 export const SWITCHES: readonly Switch[] = [
   'shrub_groups',
@@ -16,6 +22,7 @@ export const SWITCHES: readonly Switch[] = [
   'curb_hedges',
   'understory',
   'shrub_fill',
+  'lawns',
   'root_barriers',
 ];
 
@@ -39,6 +46,7 @@ export function formDefaults(profile: ProfileParams): RunFormValues {
       curb_hedges: profile.curb_hedges,
       understory: profile.understory,
       shrub_fill: profile.shrub_fill,
+      lawns: profile.lawns,
     },
   };
 }
@@ -87,6 +95,7 @@ const PARAM_RU: Record<string, string> = {
   curb_hedges: 'изгородь',
   understory: 'подлесок',
   shrub_fill: 'кустарник на газоне',
+  lawns: 'газоны',
   species_code: 'вид',
   planting_type: 'тип посадки',
 };

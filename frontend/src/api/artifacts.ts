@@ -96,12 +96,27 @@ export interface RejectionJson {
   blocking: RuleCheck[];
 }
 
+/** Участок газона плана (application/lawns.py): грунт, который посадки оставили свободным. */
+export interface LawnJson {
+  id: string;
+  number: number;
+  planting_type: string;
+  kind: string; // kept - сохраняемый или восстанавливаемый | new - устраиваемый
+  area_m2: number;
+  rule_ids: string[];
+  notes: string[];
+  explanation: string;
+  geometry: Geometry;
+}
+
 export interface PlanJson {
   run_id: string;
   source: { name: string; sha256: string; dxf_version: string };
   summary: Record<string, unknown>;
   placements: PlacementJson[];
   rejections: RejectionJson[];
+  /** Нет у прогонов, посчитанных до этапа газонов. */
+  lawns?: LawnJson[];
   warnings: string[];
 }
 
