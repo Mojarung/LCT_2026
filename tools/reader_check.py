@@ -3,11 +3,15 @@
 Для каждой улицы: склейка комплекта так же, как в сервисе (пути файлов в архиве, ссылки без
 файла у заказчика - названный пробел), чтение ридером и учёт: посещения по типам, исход
 каждого посещения, пробелы геометрии по причинам, неразрешённые внешние ссылки, знаки по
-блокам. Итог - out/reader-check/<улица>.json и сводная таблица в консоли.
+блокам; сверка чернил (что CAD нарисовал бы, а в сцене нет) и перепись растительности
+(знаки исходника против якорей сцены). Итог - out/reader-check/<улица>.json и сводная
+таблица в консоли. Один процесс идёт от лёгких улиц к тяжёлым: итоги по большинству улиц
+появляются раньше, чем очередь дойдёт до комплектов на 300-400 МБ.
 
     uv run python tools/reader_check.py                      все улицы каталога
     uv run python tools/reader_check.py --only 6 --only 18   выбранные
     uv run python tools/reader_check.py --catalog dataset/streets_oda --workers 2
+    uv run python tools/reader_check.py --no-fidelity          без сверки чернил
 """
 
 from __future__ import annotations
@@ -27,13 +31,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from green.application.classification import classify_scene  # noqa: E402
+from green.application.params import PlanParams  # noqa: E402
 from green.application.semantic_names import base_name, local_name  # noqa: E402
+from green.application.vegetation import CensusRecord, vegetation_census  # noqa: E402
+from green.infrastructure.cad.census import insert_census  # noqa: E402
 from green.infrastructure.cad.documents import DocumentCache  # noqa: E402
+from green.infrastructure.cad.fidelity import fidelity  # noqa: E402
 from green.infrastructure.cad.merge import EzdxfDrawingMerger  # noqa: E402
 from green.infrastructure.cad.reader import EzdxfSceneReader  # noqa: E402
+from green.infrastructure.config.repositories import YamlLayerMapSource  # noqa: E402
 from green.infrastructure.streets import JsonStreetCatalog  # noqa: E402
 
 OUT = ROOT / "out" / "reader-check"
+# Порог сборки плана: не больше 0,5% непокрытых чернил в окне 100 x 100 м.
+WINDOW_LIMIT = 0.005
 
 
 class _Tally(logging.Handler):
@@ -62,13 +74,20 @@ def _symbol_detail(scene) -> dict:  # noqa: ANN001 - Scene
         entry["strokes"][symbol.strokes] += 1
         if len(entry["examples"]) < 3:  # noqa: PLR2004
             entry["examples"].append(
-                {"block": symbol.block, "layer": symbol.layer,
-                 "x": round(symbol.x, 2), "y": round(symbol.y, 2)}
+                {
+                    "block": symbol.block,
+                    "layer": symbol.layer,
+                    "x": round(symbol.x, 2),
+                    "y": round(symbol.y, 2),
+                }
             )
     return {
-        name: {"count": e["count"], "layers": dict(e["layers"].most_common(8)),
-               "strokes": {str(k): v for k, v in e["strokes"].most_common(5)},
-               "examples": e["examples"]}
+        name: {
+            "count": e["count"],
+            "layers": dict(e["layers"].most_common(8)),
+            "strokes": {str(k): v for k, v in e["strokes"].most_common(5)},
+            "examples": e["examples"],
+        }
         for name, e in sorted(detail.items(), key=lambda kv: -kv[1]["count"])
     }
 
@@ -89,9 +108,7 @@ def _draw_symbols(doc, scene, slug: str) -> int:  # noqa: ANN001 - Drawing, Scen
 
     out = OUT / "symbols"
     out.mkdir(parents=True, exist_ok=True)
-    config = Configuration(
-        color_policy=ColorPolicy.BLACK, background_policy=BackgroundPolicy.WHITE
-    )
+    config = Configuration(color_policy=ColorPolicy.BLACK, background_policy=BackgroundPolicy.WHITE)
     first: dict[str, str] = {}
     for symbol in scene.symbols:
         first.setdefault(base_name(symbol.block), symbol.block)
@@ -128,8 +145,8 @@ def _kit_key(paths: list[Path], names: tuple[str, ...], absent: tuple) -> str:
     return digest.hexdigest()[:16]
 
 
-def check(job: tuple[str, str]) -> dict:
-    catalog_dir, slug = job
+def check(job: tuple[str, str, bool]) -> dict:
+    catalog_dir, slug, with_fidelity = job
     tally = _Tally()
     ezdxf_log = logging.getLogger("ezdxf")
     ezdxf_log.addHandler(tally)
@@ -154,8 +171,12 @@ def check(job: tuple[str, str]) -> dict:
                     absent_references=street.absent_references,
                 )
             except Exception as error:  # noqa: BLE001 - причина уходит в отчёт, улицы не падают
-                return {"slug": slug, "number": street.number, "error": f"склейка: {error}",
-                        "traceback": traceback.format_exc(limit=12)}
+                return {
+                    "slug": slug,
+                    "number": street.number,
+                    "error": f"склейка: {error}",
+                    "traceback": traceback.format_exc(limit=12),
+                }
             notes = list(result.notes)
             (cached.with_suffix(".notes.json")).write_text(
                 json.dumps(notes, ensure_ascii=False), encoding="utf-8"
@@ -168,10 +189,18 @@ def check(job: tuple[str, str]) -> dict:
     try:
         scene = EzdxfSceneReader(documents=documents).read(source)
     except Exception as error:  # noqa: BLE001
-        return {"slug": slug, "number": street.number, "error": f"чтение: {error}",
-                "traceback": traceback.format_exc(limit=12)}
+        return {
+            "slug": slug,
+            "number": street.number,
+            "error": f"чтение: {error}",
+            "traceback": traceback.format_exc(limit=12),
+        }
     read_s = time.perf_counter() - started
-    drawn = _draw_symbols(documents.load(source)[0], scene, slug)
+    doc = documents.load(source)[0]
+    drawn = _draw_symbols(doc, scene, slug)
+    ink = fidelity(doc, scene) if with_fidelity else None
+    fidelity_s = time.perf_counter() - started
+    vegetation = _vegetation(doc, scene)
     diagnostics = scene.read_diagnostics
     symbols = Counter(local_name(symbol.block) for symbol in scene.symbols)
     return {
@@ -184,6 +213,7 @@ def check(job: tuple[str, str]) -> dict:
         "seconds": {
             "merge": round(merged_s, 1),
             "read": round(read_s - merged_s, 1),
+            "fidelity": round(fidelity_s - read_s, 1),
             "total": round(time.perf_counter() - started, 1),
         },
         "symbol_drawings": drawn,
@@ -191,8 +221,14 @@ def check(job: tuple[str, str]) -> dict:
         "visited": dict(diagnostics.visited_by_type),
         "outcomes": dict(diagnostics.outcomes),
         "gaps": [
-            {"type": g.entity_type, "layer": g.layer, "block": g.block, "reason": g.reason,
-             "count": g.count, "examples": list(g.source_refs)}
+            {
+                "type": g.entity_type,
+                "layer": g.layer,
+                "block": g.block,
+                "reason": g.reason,
+                "count": g.count,
+                "examples": list(g.source_refs),
+            }
             for g in diagnostics.geometry_gaps
         ],
         "unresolved_xrefs": list(diagnostics.unresolved_xrefs),
@@ -201,9 +237,71 @@ def check(job: tuple[str, str]) -> dict:
         "symbols": len(scene.symbols),
         "symbol_blocks": dict(symbols.most_common()),
         "symbol_detail": _symbol_detail(scene),
+        "fidelity": _ink(ink) if ink is not None else None,
+        "vegetation": vegetation,
         "source": str(source),
         "ezdxf_messages": dict(tally.kinds.most_common()),
         "warnings": list(scene.warnings),
+    }
+
+
+def _ink(report) -> dict:  # noqa: ANN001 - FidelityReport
+    over = [w for w in report.windows if w.missed_share > WINDOW_LIMIT]
+    by_layer = Counter()
+    for miss in report.misses:
+        by_layer[f"{miss.entity_type} | {miss.layer}"] += miss.missed_m
+    return {
+        "ink_m": round(report.ink_m, 1),
+        "missed_m": round(report.missed_m, 2),
+        "missed_share": report.missed_m / report.ink_m if report.ink_m else 0.0,
+        "worst_window_share": report.worst_window_share,
+        "windows": len(report.windows),
+        "windows_over_limit": [
+            {"x0": w.x0, "y0": w.y0, "ink_m": round(w.ink_m, 1), "missed_m": round(w.missed_m, 2)}
+            for w in sorted(over, key=lambda w: -w.missed_share)[:30]
+        ],
+        "annotation_ink_m": round(report.annotation_ink_m, 1),
+        "annotation_missed_m": round(report.annotation_missed_m, 1),
+        "wide_polylines": report.wide_polylines,
+        "missed_by_layer": {k: round(v, 2) for k, v in by_layer.most_common(40)},
+        "misses": [
+            {
+                "handle": m.handle,
+                "type": m.entity_type,
+                "layer": m.layer,
+                "missed_m": m.missed_m,
+                "x": round(m.x, 2),
+                "y": round(m.y, 2),
+            }
+            for m in report.misses[:100]
+        ],
+    }
+
+
+def _vegetation(doc, scene) -> dict:  # noqa: ANN001 - Drawing, Scene
+    """Знаки растительности: независимая перепись вставок против якорей сцены."""
+    layer_map = YamlLayerMapSource(ROOT / "config" / "layer_map.yaml").load()
+    classified, _ = classify_scene(scene, layer_map, PlanParams())
+    records = [
+        CensusRecord(r.base, r.layer, r.x, r.y) for r in insert_census(doc, unit_m=scene.unit_m)
+    ]
+    census = vegetation_census(records, classified, layer_map.symbols)
+    return {
+        "matches": census.matches,
+        "classes": [
+            {
+                "class": c.object_class.value,
+                "source": c.source,
+                "scene": c.scene,
+                "missing": list(c.missing[:20]),
+                "extra": list(c.extra[:20]),
+            }
+            for c in census.classes
+        ],
+        "loose_trunks": census.loose_trunks,
+        "strips": census.strips,
+        "strip_points": census.strip_points,
+        "census_inserts": len(records),
     }
 
 
@@ -212,6 +310,7 @@ def main() -> None:
     parser.add_argument("--catalog", type=Path, default=ROOT / "dataset" / "streets_oda")
     parser.add_argument("--only", action="append", type=int, help="номера улиц")
     parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--no-fidelity", action="store_true", help="без сверки чернил")
     args = parser.parse_args()
     catalog_dir = args.catalog if args.catalog.is_absolute() else ROOT / args.catalog
     streets = [
@@ -219,10 +318,11 @@ def main() -> None:
         for street in JsonStreetCatalog(catalog_dir).all()
         if not args.only or street.number in args.only
     ]
-    # Тяжёлые комплекты первыми, чтобы пул не ждал в конце одну большую улицу.
-    streets.sort(key=lambda street: -street.size_mb)
+    # Пул: тяжёлые комплекты первыми, чтобы он не ждал в конце одну большую улицу. Один
+    # процесс: лёгкие первыми, итоги по большинству улиц раньше самых тяжёлых комплектов.
+    streets.sort(key=lambda street: -street.size_mb if args.workers > 1 else street.size_mb)
     OUT.mkdir(parents=True, exist_ok=True)
-    jobs = [(str(catalog_dir), street.slug) for street in streets]
+    jobs = [(str(catalog_dir), street.slug, not args.no_fidelity) for street in streets]
     with ProcessPoolExecutor(args.workers) as pool:
         for row in pool.map(check, jobs):
             (OUT / f"{row['slug']}.json").write_text(
@@ -238,9 +338,25 @@ def main() -> None:
                 f"{row['number']:>2} {row['slug'][:28]:<28} файлов {row['files']:>3}  "
                 f"посещено {visited:>8}  исходов {accounted:>8}  пробелов {gaps:>6}  "
                 f"знаков {row['symbols']:>6}  ссылок без файла {len(row['absent_references'])}  "
-                f"неразрешённых {len(row['unresolved_xrefs'])}  {row['seconds']['total']} с",
+                f"неразрешённых {len(row['unresolved_xrefs'])}  {_summary(row)}  "
+                f"{row['seconds']['total']} с",
                 flush=True,
             )
+
+
+def _summary(row: dict) -> str:
+    parts = []
+    if row.get("fidelity"):
+        ink = row["fidelity"]
+        parts.append(
+            f"чернил пропущено {ink['missed_m']} м ({ink['missed_share']:.3%}), "
+            f"худшее окно {ink['worst_window_share']:.2%}"
+        )
+    trees = next((c for c in row["vegetation"]["classes"] if c["class"] == "existing_tree"), None)
+    if trees is not None:
+        parts.append(f"деревьев {trees['source']}/{trees['scene']}")
+    parts.append("растительность сходится" if row["vegetation"]["matches"] else "РАСХОЖДЕНИЕ")
+    return ", ".join(parts)
 
 
 if __name__ == "__main__":
