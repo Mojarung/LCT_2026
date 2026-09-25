@@ -141,10 +141,9 @@ def test_associative_open_hatch_uses_only_matching_region(tmp_path: Path, deviat
     hatch_features = [
         feature for feature in scene.features if feature.source_entity_type == "HATCH"
     ]
-    assert len(hatch_features) == (1 if deviation < 0.002 else 0)
-    assert sum(gap.count for gap in scene.read_diagnostics.geometry_gaps) == (
-        0 if deviation < 0.002 else 1
-    )
+    assert len(hatch_features) == 1
+    assert hatch_features[0].uncertain_footprint == (deviation >= 0.002)
+    assert not scene.read_diagnostics.geometry_gaps
 
 
 def test_virtual_region_recovers_sat_by_sab_when_insert_drops_handle(tmp_path: Path) -> None:

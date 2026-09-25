@@ -129,6 +129,15 @@ def classify_scene(
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
     classified = []
     for feature in scene.features:
+        if feature.uncertain_footprint:
+            classified.append(
+                replace(
+                    feature,
+                    object_class=ObjectClass.UNCERTAIN_AREA,
+                    classification=ClassificationEvidence("bounded_unreadable_geometry"),
+                )
+            )
+            continue
         if feature.source_entity_type == "WIPEOUT":
             classified.append(
                 replace(

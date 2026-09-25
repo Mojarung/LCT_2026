@@ -12,6 +12,8 @@ const EVIDENCE_NAMES = {
   material_context: 'требуется уточнить материал и стадию работ', name_rule: 'совпало правило имени',
   explicit_feature: 'объект уточнён', explicit_layer: 'слой уточнён', explicit_block: 'блок уточнён',
   annotation_label: 'подпись оформления', explicit_label: 'роль подписи уточнена',
+  entity_type: 'тип чертёжной маски',
+  bounded_unreadable_geometry: 'непрочитанный HATCH ограничен безопасной областью',
 };
 const CLASS_NAMES = {
   'utility.water': 'Водопровод', 'utility.sewer': 'Канализация',
@@ -24,6 +26,8 @@ const CLASS_NAMES = {
   structure: 'Сооружение', slope: 'Откос', work_boundary: 'Граница работ',
   existing_tree: 'Существующее дерево', existing_shrub: 'Существующий кустарник',
   lawn: 'Газон / грунт для выбранной стадии', ignore: 'Оформление — исключить из расчёта',
+  drawing_mask: 'Маска чертежа — неизвестная поверхность',
+  uncertain_area: 'Непрочитанная область — посадка запрещена',
   unknown: 'Неизвестно', 'utility.unknown': 'Неуточнённая сеть',
 };
 for (const option of $('class').options) {
@@ -121,14 +125,15 @@ function refresh() {
   $('evidence').textContent = group ? `${group.layer} / ${group.block || 'без блока'} / ${group.geometry}. Основание: ${EVIDENCE_NAMES[group.evidence.method] || group.evidence.method}.` : 'Геометрических объектов нет.';
   const current = indices.length === 1 ? data.features[indices[0]] : null;
   $('detail').textContent = current
-    ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\nРезерв геометрии, м: ${current.properties.error_m}`
+    ? `${current.id}\nОбъект DXF: ${current.properties.source_entity_type || 'тип не сохранён'}\nКласс: ${CLASS_NAMES[assignments[current.id] || current.properties.class]}\nГраницы, м: ${current.properties.bounds.join(', ')}\n${current.properties.uncertain_footprint ? 'Внутри ограничивающей области материал не подтверждён; назначение класса недоступно.' : `Резерв геометрии, м: ${current.properties.error_m}`}`
     : `Выбрано объектов: ${indices.length}. Назначение применяется ко всем выбранным объектам.`;
   let unresolved = 0;
   for (const f of data.features) if (UNKNOWN.has(assignments[f.id] || f.properties.class)) unresolved++;
   $('status').textContent = `Объектов: ${data.features.length}. Не уточнено: ${unresolved}. Ваших назначений: ${Object.keys(assignments).length}.`;
   $('assign').textContent = `Назначить класс (${indices.length} объектов)`;
-  $('assign').disabled = !indices.length;
-  $('reset').disabled = !indices.length;
+  const readOnly = indices.some(i => data.features[i].properties.read_only);
+  $('assign').disabled = !indices.length || readOnly;
+  $('reset').disabled = !indices.length || readOnly;
   const label = selectedLabel();
   $('label-assign').disabled = !label;
   $('label-reset').disabled = !label;

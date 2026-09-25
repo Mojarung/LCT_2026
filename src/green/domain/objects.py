@@ -44,6 +44,7 @@ class ObjectClass(StrEnum):
     EXISTING_SHRUB = "existing_shrub"
     LAWN = "lawn"
     DRAWING_MASK = "drawing_mask"
+    UNCERTAIN_AREA = "uncertain_area"
     IGNORE = "ignore"
     UNKNOWN = "unknown"
 
@@ -143,6 +144,9 @@ class Feature:
     # Distinguish closed linework from explicit fills after semantic mapping.
     # None carries no evidence that a polygon is just a boundary.
     source_entity_type: str | None = None
+    # Geometry encloses unreadable CAD content; it is a forbidden unknown region,
+    # never positive material evidence from the feature's layer or block.
+    uncertain_footprint: bool = False
     # Raw primitives keep the full instance path. A logical symbol retains the
     # source refs of all collapsed primitives for CAD review and provenance.
     insert_chain: tuple[InsertInstance, ...] = ()
@@ -189,6 +193,7 @@ class ReadDiagnostics:
 
     visited_by_type: Mapping[str, int] = field(default_factory=dict)
     skipped_by_type: Mapping[str, int] = field(default_factory=dict)
+    bounded_uncertainty_by_type: Mapping[str, int] = field(default_factory=dict)
     unresolved_xrefs: tuple[str, ...] = ()
     geometry_gaps: tuple[GeometryGap, ...] = ()
     approximation_features: int = 0

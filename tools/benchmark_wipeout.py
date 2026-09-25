@@ -25,6 +25,7 @@ def main() -> None:
     started = time.perf_counter()
     scene = EzdxfSceneReader().read(args.source)
     masks = [feature for feature in scene.features if feature.source_entity_type == "WIPEOUT"]
+    unreadable_hatches = [feature for feature in scene.features if feature.uncertain_footprint]
     bounds = json.loads(args.scope.read_text())["boundary"]["bounds"] if args.scope else None
     window = box(*bounds) if bounds else None
     gaps_by_type: Counter[str] = Counter()
@@ -34,6 +35,15 @@ def main() -> None:
         "source_sha256": scene.source_sha256,
         "features": len(scene.features),
         "masks": len(masks),
+        "unreadable_hatches_bounded": len(unreadable_hatches),
+        "unreadable_hatches_in_work_bbox": sum(
+            feature.geometry.intersects(window) for feature in unreadable_hatches
+        )
+        if window is not None
+        else None,
+        "unreadable_hatch_bbox_area_m2": round(
+            sum(feature.geometry.area for feature in unreadable_hatches), 3
+        ),
         "masks_in_work_bbox": sum(mask.geometry.intersects(window) for mask in masks)
         if window is not None
         else None,

@@ -9,11 +9,13 @@ import hashlib
 import json
 import resource
 import time
+from collections import Counter
 from pathlib import Path
 
 import ezdxf
 import shapely
 from ezdxf import bbox
+from ezdxf.entities.boundary_paths import EdgePath, PolylinePath
 from ezdxf.entities.polygon import DXFPolygon
 from shapely.geometry import Polygon, box
 
@@ -58,6 +60,10 @@ def main() -> None:
                 "flags": path.path_type_flags,
                 "source_boundaries": len(path.source_boundary_objects),
             }
+            if isinstance(path, EdgePath):
+                entry["edge_types"] = dict(Counter(type(edge).__name__ for edge in path.edges))
+            elif isinstance(path, PolylinePath):
+                entry["nonzero_bulges"] = sum(bulge != 0 for _, _, bulge in path.vertices)
             try:
                 polygon, error, vertices = _path_polygon(entity, path, 0.1, 0.002)
             except HatchGeometryError as failure:

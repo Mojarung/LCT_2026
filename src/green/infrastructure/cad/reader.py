@@ -38,6 +38,7 @@ from green.infrastructure.cad.curve_paths import (
     polyline_vertices,
 )
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
 from green.infrastructure.cad.hatch_geometry import (
     HatchGeometryError,
     associated_polyline_error,
@@ -142,6 +143,9 @@ class EzdxfSceneReader:
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
                 skipped_by_type=dict(walker.skipped),
+                bounded_uncertainty_by_type={"HATCH": walker.bounded_unreadable_hatches}
+                if walker.bounded_unreadable_hatches
+                else {},
                 unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
                 geometry_gaps=walker.geometry_gaps(),
                 approximation_features=sum(bool(f.geometry_error_m) for f in features),
@@ -171,6 +175,7 @@ class _Walker:
     matched_hatch_polylines: int = 0
     matched_local_hatches: int = 0
     collapsed_lines: int = 0
+    bounded_unreadable_hatches: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -216,6 +221,32 @@ class _Walker:
                     sibling_hatches=sibling_hatches,
                 )
             except (HatchGeometryError, RegionGeometryError) as exc:
+                if (
+                    isinstance(entity, DXFPolygon)
+                    and kind == "HATCH"
+                    and str(exc)
+                    in {
+                        "hatch-invalid-ring",
+                        "hatch-open-boundary",
+                        "hatch-intersecting-boundaries",
+                    }
+                ):
+                    footprint = bounded_hatch_footprint(entity, self.flatten)
+                    if footprint is not None:
+                        self.features.append(
+                            Feature(
+                                ref=ref,
+                                layer=layer,
+                                geometry=footprint,
+                                block=parent_block,
+                                geometry_error_m=0.0,
+                                source_entity_type=kind,
+                                uncertain_footprint=True,
+                                insert_chain=insert_chain,
+                            )
+                        )
+                        self.bounded_unreadable_hatches += 1
+                        return
                 self.skipped[kind] += 1
                 self._gap(kind, layer, parent_block, str(exc), ref)
                 return
@@ -615,6 +646,11 @@ class _Walker:
             messages.append(
                 "LINE с совпадающими в пределах округления концами представлены точкой: "
                 f"{self.collapsed_lines}"
+            )
+        if self.bounded_unreadable_hatches:
+            messages.append(
+                "Повреждённые HATCH ограничены неопределённой областью без посадки: "
+                f"{self.bounded_unreadable_hatches}"
             )
         return messages
 

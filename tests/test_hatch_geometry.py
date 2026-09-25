@@ -132,8 +132,9 @@ def test_nested_ring_touching_outer_boundary_is_rejected(tmp_path: Path) -> None
     rectangle(hatch, (0, 0, 10, 10))
     rectangle(hatch, (0, 4, 4, 6), flags=16)
     scene = read(doc, tmp_path)
-    with pytest.raises(InputError, match="hatch-intersecting-boundaries"):
-        require_complete_geometry(scene)
+    require_complete_geometry(scene)
+    assert scene.features[0].uncertain_footprint
+    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
 
 
 def test_adjacent_rings_with_floating_point_overlap_are_unioned(tmp_path: Path) -> None:
@@ -262,8 +263,13 @@ def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
         rectangle(hatch, (0, 0, 10, 10))
         rectangle(hatch, (5, 5, 15, 15))
     scene = read(doc, tmp_path)
-    with pytest.raises(InputError):
+    if kind == "edge_gap":
+        with pytest.raises(InputError):
+            require_complete_geometry(scene)
+    else:
         require_complete_geometry(scene)
+        assert scene.features[0].uncertain_footprint
+        assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
 
 
 def test_tiny_selfcross_lobe_is_retained_with_clearance_error(tmp_path: Path) -> None:
@@ -283,7 +289,7 @@ def test_tiny_selfcross_lobe_is_retained_with_clearance_error(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize("lobe", [0.03, 0.5])
-def test_larger_selfcross_lobe_still_blocks_reading(tmp_path: Path, lobe: float) -> None:
+def test_larger_selfcross_lobe_remains_unknown(tmp_path: Path, lobe: float) -> None:
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
@@ -291,8 +297,9 @@ def test_larger_selfcross_lobe_still_blocks_reading(tmp_path: Path, lobe: float)
         [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (lobe, lobe), (-lobe, lobe)]
     )
     scene = read(doc, tmp_path)
-    with pytest.raises(InputError, match="hatch-invalid-ring"):
-        require_complete_geometry(scene)
+    require_complete_geometry(scene)
+    assert scene.features[0].uncertain_footprint
+    assert scene.features[0].geometry.covers(box(-lobe, 0, 1, 1))
 
 
 def test_open_flag_with_explicitly_closed_vertices_is_accepted(tmp_path: Path) -> None:
@@ -326,8 +333,9 @@ def test_large_curve_tolerance_does_not_close_centimetre_seam(tmp_path: Path) ->
     source = tmp_path / "open.dxf"
     doc.saveas(source)
     scene = EzdxfSceneReader(flatten_distance_m=10).read(source)
-    with pytest.raises(InputError, match="HATCH"):
-        require_complete_geometry(scene)
+    require_complete_geometry(scene)
+    assert scene.features[0].uncertain_footprint
+    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
 
 
 @pytest.mark.parametrize("start", [11.1, 40.1, -45.1, 355.9])

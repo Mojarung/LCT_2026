@@ -118,6 +118,32 @@ def test_review_keeps_all_objects_holes_small_shapes_and_ignored_layers(tmp_path
     assert not (tmp_path / "changed/.review-input.dxf.tmp").exists()
 
 
+def test_review_marks_unreadable_hatch_and_display_mask_read_only(tmp_path: Path) -> None:
+    source = tmp_path / "source.dxf"
+    drawing(source)
+    doc = ezdxf.readfile(source)
+    hatch = doc.modelspace().add_hatch(dxfattribs={"layer": "L26"})
+    hatch.paths.add_polyline_path([(2, 2), (8, 8), (2, 8), (8, 2)])
+    doc.modelspace().add_wipeout([(10, 10), (15, 10), (15, 15), (10, 15)])
+    doc.saveas(source)
+    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
+    scene, _ = classify_scene(EzdxfSceneReader().read(source), rules)
+    report = classification_report(scene, rules)
+    saved = FileArtifactSink().save_classification(
+        tmp_path / "review", report, scene=scene, source=source
+    )
+    payload = orjson.loads(saved["semantic-review.geojson"].read_bytes())
+    by_type = {
+        item["properties"]["source_entity_type"]: item["properties"] for item in payload["features"]
+    }
+    assert by_type["HATCH"]["class"] == "uncertain_area"
+    assert by_type["HATCH"]["uncertain_footprint"]
+    assert by_type["HATCH"]["read_only"]
+    assert by_type["WIPEOUT"]["class"] == "drawing_mask"
+    assert by_type["WIPEOUT"]["read_only"]
+    assert not by_type["LWPOLYLINE"]["read_only"]
+
+
 def test_direct_application_cannot_bypass_source_binding(tmp_path: Path) -> None:
     source = tmp_path / "source.dxf"
     drawing(source)

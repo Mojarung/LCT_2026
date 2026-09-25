@@ -9,7 +9,6 @@ import pytest
 from ezdxf.acis import api
 from ezdxf.render import MeshBuilder
 
-from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
@@ -25,9 +24,7 @@ def _scene(tmp_path: Path, *, regions: int = 1, shift: float = 0.0) -> Scene:
     block = doc.blocks.new("symbol")
     for _ in range(regions):
         mesh = MeshBuilder()
-        mesh.add_face(
-            [(shift, 0, 0), (shift + 1, 0, 0), (shift + 1, 1, 0), (shift, 1, 0)]
-        )
+        mesh.add_face([(shift, 0, 0), (shift + 1, 0, 0), (shift + 1, 1, 0), (shift, 1, 0)])
         region = block.add_region(dxfattribs={"layer": "ground"})
         api.export_dxf(region, [api.body_from_mesh(mesh)])
     hatch = block.add_hatch(dxfattribs={"layer": "ground"})
@@ -58,7 +55,8 @@ def test_ambiguous_or_distant_region_cannot_recover_hatch(
     tmp_path: Path, regions: int, shift: float
 ) -> None:
     scene = _scene(tmp_path, regions=regions, shift=shift)
-    with pytest.raises(InputError, match="HATCH"):
-        require_complete_geometry(scene)
-    assert sum(gap.count for gap in scene.read_diagnostics.geometry_gaps) == 1
-    assert scene.read_diagnostics.geometry_gaps[0].reason == "hatch-invalid-ring"
+    require_complete_geometry(scene)
+    hatch = next(feature for feature in scene.features if feature.source_entity_type == "HATCH")
+    assert hatch.uncertain_footprint
+    assert hatch.geometry.area > 0
+    assert not scene.read_diagnostics.geometry_gaps
