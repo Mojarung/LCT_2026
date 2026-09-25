@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 
 import { useRuns } from '../../api/queries';
 import type { RunOut } from '../../api/types';
-import { integer, stamp } from '../../lib/format';
+import { drawingName, integer, stamp } from '../../lib/format';
 
 export const RECENT_LIMIT = 12;
 
@@ -60,7 +60,7 @@ export function RunsRegistry() {
             </td>
             <td className="name">
               <Link to={`/runs/${run.id}`} title={run.source_name}>
-                {run.source_name}
+                {drawingName(run.source_name)}
               </Link>
             </td>
             <td className="mono">{run.profile}</td>

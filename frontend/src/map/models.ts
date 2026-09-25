@@ -411,6 +411,25 @@ export function modelOf(code: string | undefined, plantingType: string): PlantMo
   return isShrubType(plantingType) ? FALLBACK_SHRUB : FALLBACK_TREE;
 }
 
+/** Самый частый вид плана с моделью этой формы, или null. По нему легенда рисует образец:
+ *  сирень в легенде при 26 сиренях из 1127 кустов учила читать карту по чужому образцу
+ *  (жюри дизайна, итерация 7). При равенстве - вид, встреченный раньше. */
+export function commonest(codes: Iterable<string | undefined>, form: Form): string | null {
+  const counts = new Map<string, number>();
+  for (const code of codes) {
+    if (code && MODELS.get(code)?.form === form) counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let most = 0;
+  for (const [code, count] of counts) {
+    if (count > most) {
+      best = code;
+      most = count;
+    }
+  }
+  return best;
+}
+
 /** Ключ модели для кэша спрайтов: вид или запасная модель по типу посадки. */
 export function modelKey(code: string | undefined, plantingType: string): string {
   if (code && MODELS.has(code)) return code;

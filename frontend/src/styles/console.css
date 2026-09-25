@@ -42,6 +42,7 @@
   line-height: 1.2;
 }
 .stamp-title p {
+  max-width: 60ch;
   margin: 0;
   font-size: var(--fs-small);
   color: var(--bone-2);
@@ -362,6 +363,17 @@
   min-height: 360px;
   border: 1px dashed var(--hair-2);
   border-radius: var(--r-control);
+}
+/* Уточнять нечего: строка и дорога назад в поле листа, без формы (жюри, итерация 7). */
+.review-none {
+  padding: clamp(18px, 2.2vw, 26px);
+}
+.review-none p {
+  max-width: 60ch;
+  margin: 0;
+}
+.review-none .hint {
+  margin-top: 8px;
 }
 @media (max-width: 900px) {
   .review-body {

@@ -119,10 +119,26 @@ describe('уточнение объектов чертежа', () => {
     expect(screen.getByText(/с тем же профилем «strict»/)).toBeInTheDocument();
   });
 
-  it('без геометрии проверки страница так и говорит', async () => {
+  it('без геометрии - одна строка и дорога к прогону, формы нет', async () => {
     mockApi(routes(['classification.json']));
     renderApp('/runs/r1/review');
-    expect(await screen.findByText(/нет геометрии для уточнения/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Уточнять нечего: неизвестных объектов в этом прогоне сервис не сохранил.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'К прогону' })).toHaveAttribute('href', '/runs/r1');
+    // Тринадцать отключённых полей с нулями спорили со строкой «уточнять нечего».
+    expect(screen.queryByLabelText('Группа')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Назначить/ })).toBeNull();
+  });
+
+  it('несуществующий прогон - строка и дорога к консоли', async () => {
+    mockApi({});
+    renderApp('/runs/nope/review');
+    expect(await screen.findByText('Такого прогона нет.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'К консоли запуска' })).toHaveAttribute('href', '/');
+    expect(screen.queryByLabelText('Группа')).toBeNull();
   });
 
   it('упавший на неизвестном прогон ведёт на уточнение и отдаёт отчёт распознавания', async () => {

@@ -6,12 +6,16 @@ import { useWorkspace } from '../../state/workspace';
 import { IconClose } from '../icons';
 import { ModelSwatch } from './ModelSwatch';
 
-/** Образцы моделей для легенды: по одной на форму, которую человек встретит на плане. */
-const SAMPLES: readonly [string, string][] = [
+/** Образец кустарника, пока в плане нет ни одного лиственного куста. */
+const SHRUB_FALLBACK = 'syringa_vulgaris';
+
+/** Образцы моделей для легенды: по одной на форму, которую человек встретит на плане.
+ *  Кустарник - самый частый куст этого плана: образец обязан выглядеть как то, что на карте. */
+const samples = (shrub: string | null): readonly [string, string][] => [
   ['tilia_cordata', 'лиственное дерево'],
   ['crataegus_laevigata', 'малое дерево в цвету'],
   ['pinus_sylvestris', 'хвойное дерево'],
-  ['syringa_vulgaris', 'кустарник'],
+  [shrub ?? SHRUB_FALLBACK, 'кустарник'],
   ['juniperus_sabina', 'хвойный кустарник'],
 ];
 
@@ -61,7 +65,14 @@ const line = (token: string): CSSProperties => ({ borderColor: `var(${token})` }
 /** Условные обозначения - своя панель у нижней кромки: их читают, глядя на карту, и они
  *  убираются одним движением. Галочка стоит у заголовка группы, обозначения - под ней: что
  *  нарисовано и чем это выключается - один и тот же список. */
-export function Legend({ done }: { done: boolean }) {
+export function Legend({
+  done,
+  shrub = null,
+}: {
+  done: boolean;
+  /** Код самого частого лиственного кустарника плана (models.commonest). */
+  shrub?: string | null;
+}) {
   const open = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
   const box = useRef<HTMLElement>(null);
@@ -118,8 +129,8 @@ export function Legend({ done }: { done: boolean }) {
             {/* Цвет кроны - это вид (состав плана справа), вердикт показан кольцом: иначе
                 два смысла спорили бы за один цвет. */}
             <div className="legend legend-models">
-              {SAMPLES.map(([code, name]) => (
-                <Sample key={code} code={code}>
+              {samples(shrub).map(([code, name]) => (
+                <Sample key={name} code={code}>
                   {name}
                 </Sample>
               ))}
@@ -135,7 +146,7 @@ export function Legend({ done }: { done: boolean }) {
               <i className="key cross" /> Отклонённые места
             </LayerCheck>
             <LayerCheck layer="barrier">
-              <i className="key ring" /> Места, возможные с прикорневым барьером
+              <i className="key barrier" /> Места, возможные с прикорневым барьером
             </LayerCheck>
           </>
         ) : null}
@@ -221,9 +232,10 @@ export function Legend({ done }: { done: boolean }) {
             <b>кустарник по съёмке</b>
           </span>
         </div>
-        <details className="legend-dxf">
+        {/* Раскрытие с «+», как остальные в панелях. Фраза про нетронутые исходные слои здесь
+            повторяла штамп консоли и подсказку у «Скачать DXF» (жюри, итерация 7). */}
+        <details className="legend-dxf fold">
           <summary>Слои результата в DXF</summary>
-          <p>Исходные слои не тронуты, всё новое лежит на слоях GREEN_*.</p>
           <ul className="dxf-chips">
             {DXF_LAYERS.map((name) => (
               <li key={name}>{name}</li>

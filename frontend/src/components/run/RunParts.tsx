@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
 import { explainFailure } from '../../lib/failure';
-import { integer, plural } from '../../lib/format';
+import { drawingName, integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
@@ -57,17 +57,13 @@ export function PanelToggle({ panel, label }: { panel: 'left' | 'right'; label: 
   );
 }
 
-/** Имя чертежа без расширения: «.dxf» в заголовке каждого прогона ничего не различает.
- *  Пробел перед дефисом неразрывный: заголовок не повисает строкой, начатой с дефиса. */
-const stem = (name: string) => name.replace(/\.(dxf|dwg)$/i, '').replaceAll(' - ', '\u00a0- ');
-
 export function RunHeader({ run }: { run: RunOut }) {
   return (
     <div className="hud-head">
       <Link className="back" to="/">
         ← все прогоны
       </Link>
-      <h1 title={run.source_name}>{stem(run.source_name)}</h1>
+      <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
       <p className="run-sub">
         <span>{run.profile}</span>
         <span>{run.id.slice(0, 8)}</span>
@@ -117,7 +113,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
       <p className="metric-sub">
         <b>{integer(rejected)}</b>{' '}
         {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}. Подоснова{' '}
-        <em className={integrity ? undefined : 'bad'}>{integrity ? 'цела' : 'нарушена'}</em>
+        {/* Цела - обычным текстом: курсив выделял норму как событие (жюри, итерация 7). */}
+        {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
       </p>
       {barrierPlaces ? (
         <p className="metric-sub quality-line">

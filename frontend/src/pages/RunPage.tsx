@@ -18,6 +18,7 @@ import { useOverflowMark } from '../hooks/useOverflowMark';
 import { describeItem } from '../lib/checks';
 import type { PlanEngine } from '../map/engine';
 import { loadSurface, toMapItems } from '../map/items';
+import { commonest } from '../map/models';
 import type { EngineHooks, MapItem } from '../map/types';
 import { PlanEditor } from '../state/editor';
 import { EngineContext } from '../state/engine';
@@ -131,6 +132,15 @@ export function RunPage() {
     [items, removedIds],
   );
   const rejections = items?.rejections ?? NO_ITEMS;
+  // Образец «кустарник» в обозначениях - самый частый куст этого плана, а не один на все.
+  const shrub = useMemo(
+    () =>
+      commonest(
+        placements.map((p) => p.species_code),
+        'shrub',
+      ),
+    [placements],
+  );
 
   const engine = useRef<PlanEngine | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -274,7 +284,7 @@ export function RunPage() {
             </div>
           )}
           {withMap ? <MapHud /> : null}
-          {withMap ? <Legend done={done} /> : null}
+          {withMap ? <Legend done={done} shrub={shrub} /> : null}
           {choice ? (
             <PickChooser
               key={choice.id}

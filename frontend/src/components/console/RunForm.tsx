@@ -150,8 +150,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
               ))}
             </select>
             <p className="hint" id={`${ids}-street-hint`}>
-              Подоснова с сетями, уже сконвертированная из датасета. Чертежи крупнее полусотни
-              мегабайт считаются минутами.
+              Чертежи крупнее полусотни мегабайт считаются минутами.
             </p>
           </div>
           <p className="or">или</p>

@@ -577,7 +577,9 @@ function drawWeak(
   ctx.fill(path);
 }
 
-/** Отказ, который снял бы прикорневой барьер: пунктирное кольцо цвета «на согласование». */
+/** Отказ, который снял бы прикорневой барьер: двойное сплошное кольцо - барьер вокруг кома.
+ *  Цвет тот же, что у «на согласование», но знак другой: одинаковые пунктирные кольца
+ *  смешивали посадку на согласовании и место, которого в плане нет (жюри, итерация 7). */
 function drawBarrierPlaces(
   ctx: CanvasRenderingContext2D,
   visible: Box,
@@ -586,17 +588,18 @@ function drawBarrierPlaces(
   palette: Palette,
 ): void {
   const r = Math.max(2.2, 6 / view.scale);
+  const inner = r * 0.55;
   const path = new Path2D();
   for (const p of scene.rejections) {
     if (p.barrier_m == null || !inView(p, visible, r)) continue;
     path.moveTo(p.x + r, p.y);
     path.arc(p.x, p.y, r, 0, Math.PI * 2);
+    path.moveTo(p.x + inner, p.y);
+    path.arc(p.x, p.y, inner, 0, Math.PI * 2);
   }
-  ctx.setLineDash([3 / view.scale, 2.5 / view.scale]);
   ctx.strokeStyle = palette.get('--warn');
   ctx.lineWidth = 1.4 / view.scale;
   ctx.stroke(path);
-  ctx.setLineDash([]);
 }
 
 /** Кольцо с подложкой цвета фона и четыре засечки: на общем виде среди трёхсот одинаковых

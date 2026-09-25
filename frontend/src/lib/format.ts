@@ -37,6 +37,12 @@ export const integer = (value: number): string => WHOLE.format(value);
 /** Время прогона по часам человека, а не сервера: «23.09, 12:15». */
 export const stamp = (iso: string): string => STAMP.format(new Date(iso));
 
+/** Имя чертежа без расширения: «.dxf» у каждого прогона ничего не различает - ни в заголовке
+ *  прогона, ни в реестре консоли. Пробел перед дефисом неразрывный: строка не начинается с
+ *  дефиса при переносе. */
+export const drawingName = (name: string): string =>
+  name.replace(/\.(dxf|dwg)$/i, '').replaceAll(' - ', '\u00a0- ');
+
 /** Русское числительное: «1 место», «2 места», «5 мест». Без него подписи приходится строить
  *  так, чтобы обойти падеж, и они кривеют. */
 export function plural(count: number, one: string, few: string, many: string): string {
