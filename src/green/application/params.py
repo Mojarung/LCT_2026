@@ -75,7 +75,9 @@ class PlanParams:
     surface_cell_m: float = 0.5
     # Default: a material label can classify only a closed material face.
     # Distance propagation is an explicitly requested exploratory assumption.
-    surface_inference_mode: str = "closed_faces"
+    # hybrid (вопрос 3 пользователя, 25.09.2026): замкнутые грани решают сами, подписи вне
+    # решённых граней - по расстоянию; closed_faces - строгий режим тиммейта.
+    surface_inference_mode: str = "hybrid"
     # Limits on evidence propagation are project assumptions, not soil measurements.
     surface_max_distance_m: float = 30.0
     surface_ambiguity_m: float = 1.0

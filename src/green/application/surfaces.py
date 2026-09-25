@@ -72,6 +72,12 @@ class SurfaceMap:
     uncertainty_area: BaseGeometry | None = None
     # Грани со знаком существующего массива: грунт, но не место для новой посадки.
     woodland_area: BaseGeometry | None = None
+    # Совмещённый режим (вопрос 3 пользователя): материал вокруг подписей вне решённых
+    # граней, разлитый по расстоянию, - в растре inferred_grid; здесь его площадь и подписи.
+    hybrid_mode: bool = False
+    fallback_soil_m2: float = 0.0
+    fallback_paved_m2: float = 0.0
+    fallback_labels: int = 0
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
@@ -163,6 +169,8 @@ class SurfaceMap:
     def review_notes(self) -> tuple[str, ...]:
         if not self.closed_faces_mode:
             return ()
+        if self.hybrid_mode:
+            return self._hybrid_notes()
         notes = []
         if self.soil_area is None or self.soil_area.is_empty:
             notes.append(
@@ -184,6 +192,29 @@ class SurfaceMap:
                 f"Контуров, замкнутых без подтверждённых границ покрытия: "
                 f"{self.unsupported_boundary_faces}; забор, ось дороги или рельсы "
                 "не определяют грунт внутри. Уточните роль линий по исходнику."
+            )
+        return tuple(notes)
+
+    def _hybrid_notes(self) -> tuple[str, ...]:
+        notes = []
+        if (self.soil_area is None or self.soil_area.is_empty) and not self.fallback_soil_m2:
+            notes.append(
+                "Грунт не определён: нет ни площадей озеленения, ни подписей «ГАЗОН» с "
+                "непротиворечивым окружением."
+            )
+        if self.fallback_labels:
+            soil = f"{self.fallback_soil_m2:,.0f}".replace(",", " ")
+            paved = f"{self.fallback_paved_m2:,.0f}".replace(",", " ")
+            notes.append(
+                f"Грунт по близости подписи: {soil} м², покрытие {paved} м² от "
+                f"{self.fallback_labels} подписей вне замкнутого контура (до "
+                f"{self.max_distance_m:g} м, границы не переходит, спорные места между разными "
+                "подписями остаются неизвестными)."
+            )
+        if self.conflicting_faces:
+            notes.append(
+                f"Контуров с противоречивыми подписями покрытий: {self.conflicting_faces}; "
+                "материал в них решён по ближайшей подписи."
             )
         return tuple(notes)
 
@@ -209,12 +240,14 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
         raise ValueError("Surface distances must be finite")
     if cell_m <= 0 or max_distance_m <= 0 or ambiguity_m < 0 or tree_distance_m < 0:
         raise ValueError("Invalid surface distance or resolution")
-    if inference_mode not in {"closed_faces", "distance"}:
+    if inference_mode not in {"closed_faces", "distance", "hybrid"}:
         raise ValueError("Unknown surface inference mode")
+    faces_mode = inference_mode != "distance"
     seed_xy, seed_kind = _seeds(features, labels)
     # Деревья - затравка только для заливки по расстоянию, знаки массивов - только для граней:
-    # исключить посадку можно лишь из замкнутого контура массива.
-    keep = seed_kind != (_TREE_SEED if inference_mode == "closed_faces" else _WOODLAND_SEED)
+    # исключить посадку можно лишь из замкнутого контура массива. Совмещённый режим деревья
+    # не берёт: дерево в решётке на тротуаре не открывает тротуар под посадку.
+    keep = seed_kind != (_TREE_SEED if faces_mode else _WOODLAND_SEED)
     seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
     paved = int((seed_kind == Material.PAVED).sum())
     soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED, _WOODLAND_SEED]).sum())
@@ -245,7 +278,8 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
         free &= _inside(extent, origin, cell, shape)
     soil_area, paved_area = _exact_areas(polygons, extent)
     faces = None
-    if inference_mode == "closed_faces":
+    fallback = _Fallback()
+    if faces_mode:
         faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
         if soil_area is not None:
             # A declared material polygon is independent of label propagation:
@@ -255,7 +289,18 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
             soil_area = soil_area.difference(faces.paved_evidence)
         soil_area = _merge_material_area(soil_area, faces.soil, extent)
         paved_area = _merge_material_area(paved_area, faces.paved, extent)
-        grid = np.full(shape, int(Material.UNKNOWN), dtype=np.int8)
+        fallback = _label_fallback(
+            free,
+            faces,
+            seed_xy,
+            seed_kind,
+            uncertain,
+            origin=origin,
+            cell=cell,
+            limit=max_distance_m if inference_mode == "hybrid" else 0.0,
+            ambiguity=ambiguity_m,
+        )
+        grid = fallback.grid
     else:
         cols = np.floor((seed_xy[:, 0] - origin[0]) / cell).astype(np.int64)
         rows = np.floor((seed_xy[:, 1] - origin[1]) / cell).astype(np.int64)
@@ -284,12 +329,74 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
         paved_area=paved_area,
         uncertainty_area=uncertain,
         woodland_area=_merge_material_area(None, faces.woodland, extent) if faces else None,
-        closed_faces_mode=inference_mode == "closed_faces",
+        closed_faces_mode=faces_mode,
+        hybrid_mode=inference_mode == "hybrid",
+        fallback_soil_m2=fallback.soil_m2,
+        fallback_paved_m2=fallback.paved_m2,
+        fallback_labels=fallback.labels,
         closed_faces=faces.count if faces else 0,
         conflicting_faces=faces.conflicts if faces else 0,
         unassigned_labels=faces.unassigned_labels if faces else 0,
         open_edges=faces.open_edges if faces else 0,
         unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Fallback:
+    grid: NDArray[np.int8] = field(default_factory=lambda: np.zeros((0, 0), dtype=np.int8))
+    labels: int = 0
+    soil_m2: float = 0.0
+    paved_m2: float = 0.0
+
+
+def _label_fallback(  # noqa: PLR0913 - именованные пределы разлива
+    free: NDArray[np.bool_],
+    faces: FaceMaterials,
+    seed_xy: NDArray[np.float64],
+    seed_kind: NDArray[np.int8],
+    uncertain: BaseGeometry | None,
+    *,
+    origin: tuple[float, float],
+    cell: float,
+    limit: float,
+    ambiguity: float,
+) -> _Fallback:
+    """Подписи вне решённых граней разливают материал по расстоянию (вопрос 3 пользователя).
+
+    Решённая грань (замкнута подтверждёнными границами, подписи в ней согласны) не
+    переписывается и разливу закрыта. Разлив идёт только по свободным ячейкам (границы
+    покрытий - барьер), не дальше limit, а «ГАЗОН» и «А» конкурируют: ячейка, где разница
+    расстояний меньше ambiguity, остаётся неизвестной. Подпись в полосе погрешности границы
+    сторону не выбирает; деревья затравкой не служат.
+    """
+    unknown = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
+    decided = shapely.union_all([faces.soil, faces.paved])
+    points = shapely.points(seed_xy)
+    labels = np.isin(seed_kind, [int(Material.SOIL), int(Material.PAVED)])
+    if not decided.is_empty:
+        labels &= ~shapely.intersects(decided, points)
+    if uncertain is not None:
+        labels &= ~shapely.intersects(uncertain, points)
+    # limit 0 - строгий режим тиммейта: без разлива, растр граней пуст.
+    if limit <= 0 or not labels.any():
+        return _Fallback(grid=unknown)
+    open_cells = free.copy()
+    if not decided.is_empty:
+        open_cells &= ~_inside(decided, origin, cell, free.shape)
+    xy = seed_xy[labels]
+    seeds = _Seeds(
+        np.floor((xy[:, 1] - origin[1]) / cell).astype(np.int64),
+        np.floor((xy[:, 0] - origin[0]) / cell).astype(np.int64),
+        seed_kind[labels],
+    )
+    grid = _assign(open_cells, seeds, limit=limit / cell, ambiguity=ambiguity / cell, tree_limit=0)
+    area = cell * cell
+    return _Fallback(
+        grid=grid,
+        labels=int(labels.sum()),
+        soil_m2=float((grid == Material.SOIL).sum()) * area,
+        paved_m2=float((grid == Material.PAVED).sum()) * area,
     )
 
 

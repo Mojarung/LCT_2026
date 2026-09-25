@@ -241,12 +241,30 @@ def test_unfinished_material_contours_produce_no_confirmed_planting(tmp_path: Pa
     source = tmp_path / "open-materials.dxf"
     _street(source, material_areas=False)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
-    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    # Строгий режим тиммейта: грунт только в замкнутой подтверждённой грани.
+    params = container.profiles.load(
+        "strict", {"placement_solver": "greedy", "surface_inference_mode": "closed_faces"}
+    )
     report = container.use_case.execute(
         PlanRequest("open", source, tmp_path / "out", "strict", params)
     )
     assert not report.plan.placements
     assert any("замкнут" in warning for warning in report.warnings)
+
+
+def test_hybrid_default_plants_by_labels_of_unfinished_contours(tmp_path: Path) -> None:
+    """Вопрос 3 пользователя: незамкнутый газон с подписью - грунт по близости подписи,
+    и отчёт об этом говорит; план не пуст."""
+    source = tmp_path / "open-materials.dxf"
+    _street(source, material_areas=False)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    report = container.use_case.execute(
+        PlanRequest("open", source, tmp_path / "out", "strict", params)
+    )
+    assert report.plan.placements
+    assert any("по близости подписи" in warning for warning in report.warnings)
+    assert report.summary()["surface_inference_review_required"] is False
 
 
 def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> None:
