@@ -1,3 +1,5 @@
+import { Link } from 'react-router';
+
 import { useMeta } from '../../api/queries';
 
 /** Штамп листа: название сервиса и на чём он стоит - числа свода норм и каталога видов. Как в
@@ -26,7 +28,12 @@ export function ServiceFacts() {
           </div>
           <div>
             <dt>видов в каталоге</dt>
-            <dd>{value(meta.data?.species.length)}</dd>
+            <dd>
+              {/* Число ведёт в базу моделей: чем каждый вид нарисован на плане. */}
+              <Link to="/models" title="Модели растений на плане">
+                {value(meta.data?.species.length)}
+              </Link>
+            </dd>
           </div>
           <div>
             <dt>акты</dt>
