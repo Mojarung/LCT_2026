@@ -18,8 +18,10 @@ export type LayerKey =
 export type Layers = Record<LayerKey, boolean>;
 
 /** Что видно по умолчанию: отказы выключены - их сотни, и без вопроса «почему здесь нет»
- *  они только засоряют план. Карта покрытий включена: это газон и асфальт бумажной
- *  подосновы, по ним же видно, как сервис понял участок. */
+ *  они только засоряют план. Слабые места тоже: чёрный треугольник был самым контрастным
+ *  знаком обзора и главным, что запоминалось о плане (жюри дизайна, итерация 7); их
+ *  включают галочкой в обозначениях, когда план разбирают. Карта покрытий включена: это
+ *  газон и асфальт бумажной подосновы, по ним же видно, как сервис понял участок. */
 export const DEFAULT_LAYERS: Layers = {
   utilities: true,
   surfaces: true,
@@ -27,7 +29,7 @@ export const DEFAULT_LAYERS: Layers = {
   existing: true,
   placements: true,
   rejections: false,
-  weak: true,
+  weak: false,
   barrier: true,
   surfacemap: true,
   labels: true,
@@ -54,6 +56,13 @@ export interface MapItem {
   assortment?: Assortment | null;
   note?: string;
   barrier_m?: number | null;
+}
+
+/** Ответ живой проверки точки при переносе: вердикт и трасса правил сервиса. По трассе карта
+ *  рисует выноски у перетаскиваемой посадки, как у выбранной. */
+export interface DragProbe {
+  verdict: string;
+  checks: readonly RuleCheck[];
 }
 
 /** Карта покрытий растром, привязанная к координатам чертежа. */

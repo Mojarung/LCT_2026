@@ -4,7 +4,8 @@ import { Link } from 'react-router';
 
 import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
-import { integer, plural } from '../../lib/format';
+import { explainFailure } from '../../lib/failure';
+import { drawingName, integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
@@ -56,17 +57,13 @@ export function PanelToggle({ panel, label }: { panel: 'left' | 'right'; label: 
   );
 }
 
-/** Имя чертежа без расширения: «.dxf» в заголовке каждого прогона ничего не различает.
- *  Пробел перед дефисом неразрывный: заголовок не повисает строкой, начатой с дефиса. */
-const stem = (name: string) => name.replace(/\.(dxf|dwg)$/i, '').replaceAll(' - ', '\u00a0- ');
-
 export function RunHeader({ run }: { run: RunOut }) {
   return (
     <div className="hud-head">
       <Link className="back" to="/">
         ← все прогоны
       </Link>
-      <h1 title={run.source_name}>{stem(run.source_name)}</h1>
+      <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
       <p className="run-sub">
         <span>{run.profile}</span>
         <span>{run.id.slice(0, 8)}</span>
@@ -116,7 +113,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
       <p className="metric-sub">
         <b>{integer(rejected)}</b>{' '}
         {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}. Подоснова{' '}
-        <em className={integrity ? undefined : 'bad'}>{integrity ? 'цела' : 'нарушена'}</em>
+        {/* Цела - обычным текстом: курсив выделял норму как событие (жюри, итерация 7). */}
+        {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
       </p>
       {barrierPlaces ? (
         <p className="metric-sub quality-line">
@@ -155,7 +153,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
   );
 }
 
-/** Подложка, пока карте нечего показать: ход, причина неудачи или «загружаем». */
+/** Подложка, пока карте нечего показать: ход, причина неудачи или «загружаем». У неудачи
+ *  карты не будет: её карточка - конечное состояние страницы, а не заглушка. */
 export function RunStatus({ run }: { run: RunOut }) {
   if (run.state === 'queued' || run.state === 'running') {
     const title =
@@ -177,16 +176,24 @@ export function RunStatus({ run }: { run: RunOut }) {
     );
   }
   if (run.state === 'failed') {
+    // Причина одной строкой и что делать; текст исключения целиком - под раскрытием: двести
+    // знаков кодов без полей читались как поломка самой страницы (жюри, итерация 7).
+    const failure = explainFailure(run.error);
     return (
       <div className="status" data-state="failed">
-        <div>
-          <p className="status-title">Прогон не удался</p>
-          <p className="error-text">{run.error || 'Причина не записана.'}</p>
-          <ReviewLinks run={run} />
-          <p className="hint">
-            <Link to="/">К консоли запуска</Link>
-          </p>
-        </div>
+        <h2 className="status-title">Прогон не удался</h2>
+        <p className="status-reason">{failure.reason}</p>
+        <p className="status-action">{failure.action}</p>
+        <ReviewLinks run={run} />
+        <p className="hint">
+          <Link to="/">К консоли запуска</Link>
+        </p>
+        {failure.details ? (
+          <details className="fold status-details">
+            <summary>Подробности</summary>
+            <p className="status-raw">{failure.details}</p>
+          </details>
+        ) : null}
       </div>
     );
   }

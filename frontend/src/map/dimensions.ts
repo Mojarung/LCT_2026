@@ -1,19 +1,18 @@
-/* Размерные выноски у выбранной посадки, как на слайде «Объяснение»: от ствола до ближайшего
- * объекта каждой нормы, которая реально решала, с подписью «борт 2,00 ≥ 2,00». Число в
- * подписи - то, что намерил сервис (до наружной стенки сети, с её диаметром); линия ведёт к
- * ближайшей точке объекта на подоснове карты. Подоснова упрощена на сантиметры, поэтому
- * длина линии может разойтись с подписью на эту величину - решает подпись. */
+/* Размерные выноски у посадки, как на слайде «Объяснение»: от ствола до объекта каждой нормы
+ * из списка «Ближе всего к норме» (lib/checks.ts, splitChecks) - тот же список и тот же
+ * порядок, что в панели. Раньше у карты был свой порог и свой отбор, и эксперт видел в панели
+ * борт, а на карте - кабель (жюри дизайна, итерация 7).
+ *
+ * Число в подписи - то, что намерил сервис (до наружной стенки сети, с её диаметром); линия
+ * ведёт к ближайшей точке объекта этого класса на подоснове карты. Подоснова упрощена на
+ * сантиметры, поэтому длина линии может разойтись с подписью на эту величину - решает подпись.
+ * Если объекта класса на подоснове нет, выноска - пунктирная окружность радиусом замера:
+ * ближайший такой объект где-то на ней. */
 
 import type { BasemapFeature, Geometry, Position, RuleCheck } from '../api/artifacts';
+import { splitChecks } from '../lib/checks';
 import type { MapItem, ViewState } from './types';
 import { toScreen } from './view';
-
-/** Выносок не больше этого: на слайде их четыре, больше - и они закрывают саму крону. */
-const MAX_DIMENSIONS = 4;
-/** Норма показывается, если запас меньше этого множителя: дальние объекты проверены и молчат. */
-const TIGHT = 2.5;
-/** Дальше этого выноска не рисуется: линия через пол-улицы не объясняет, а мешает. */
-const MAX_REACH_M = 20;
 
 /** Короткие имена объектов для подписи на карте: полное родительное - в панели. */
 const SHORT: Record<string, string> = {
@@ -28,6 +27,7 @@ const SHORT: Record<string, string> = {
   slope: 'откос',
   pole: 'опора',
   fence: 'ограда',
+  obstacle: 'препятствие',
   'utility.water': 'водопровод',
   'utility.sewer': 'канализация',
   'utility.storm': 'ливнёвка',
@@ -56,8 +56,11 @@ const TONES = {
 type Tone = keyof typeof TONES;
 
 export interface Dimension {
-  /** Ближайшая точка объекта, координаты чертежа. */
-  to: [number, number];
+  /** Ближайшая точка объекта, координаты чертежа; null - объекта класса на подоснове нет,
+   *  и выноска - окружность радиусом замера. */
+  to: [number, number] | null;
+  /** Замер сервиса, метры. */
+  measured: number;
   label: string;
   tone: Tone;
 }
@@ -148,8 +151,7 @@ function collect(geometry: Geometry, out: Float64Array[]): void {
   }
 }
 
-function toneOf(cls: string, check: RuleCheck): Tone {
-  if (check.outcome === 'fail') return 'fail';
+function toneOf(cls: string): Tone {
   if (cls.startsWith('utility.') || cls === 'power_line_overhead') return 'utility';
   if (['curb', 'sidewalk', 'pavement_edge', 'road', 'tram', 'railway'].includes(cls)) {
     return 'surface';
@@ -159,47 +161,68 @@ function toneOf(cls: string, check: RuleCheck): Tone {
 
 const number = (value: number) => value.toFixed(2).replace('.', ',');
 
-/** Выноски посадки: нормы с наименьшим запасом, у которых на подоснове нашёлся объект. */
-export function dimensionsFor(item: MapItem, index: ClassIndex): Dimension[] {
-  const tight = item.checks
-    .filter(
-      (check) =>
-        check.object_class &&
-        check.measured_m != null &&
-        check.threshold_m != null &&
-        check.threshold_m > 0 &&
-        check.measured_m <= MAX_REACH_M &&
-        check.measured_m < check.threshold_m * TIGHT,
-    )
-    .sort(
-      (a, b) =>
-        (a.measured_m ?? 0) / (a.threshold_m ?? 1) - (b.measured_m ?? 0) / (b.threshold_m ?? 1),
-    );
+/** Выноски посадки в точке (x, y) по проверкам checks: у выбранной - её трасса правил, при
+ *  переносе - ответ живой проверки точки. Нормы без замера и без расстояния (порог 0)
+ *  линией не покажешь: они остаются только в панели. */
+export function dimensionsFor(
+  at: Pick<MapItem, 'x' | 'y'>,
+  checks: readonly RuleCheck[],
+  index: ClassIndex,
+): Dimension[] {
   const dimensions: Dimension[] = [];
-  const seen = new Set<string>();
-  for (const check of tight) {
+  for (const check of splitChecks(checks).lead) {
+    const measured = check.measured_m;
+    const threshold = check.threshold_m;
+    if (measured == null || threshold == null || threshold <= 0) continue;
     const cls = check.object_class ?? '';
-    if (seen.has(cls)) continue;
+    // Нарушение - всегда малиновым и со знаком «<»: цвет и знак говорят одно и то же.
+    const broken = check.outcome === 'fail' || measured < threshold;
     // Сервис мерит до стенки сети, подоснова - это ось: ищем с запасом на половину диаметра.
-    const to = index.nearest(cls, item.x, item.y, (check.measured_m ?? 0) + 2);
-    if (!to) continue;
-    seen.add(cls);
-    const measured = check.measured_m ?? 0;
-    const threshold = check.threshold_m ?? 0;
-    const sign = measured >= threshold ? '≥' : '<';
+    const to = cls ? index.nearest(cls, at.x, at.y, measured + 2) : null;
+    const sign = broken ? '<' : '≥';
     dimensions.push({
       to,
-      label: `${SHORT[cls] ?? cls} ${number(measured)} ${sign} ${number(threshold)}`,
-      tone: toneOf(cls, check),
+      measured,
+      label: `${SHORT[cls] ?? 'объект'} ${number(measured)} ${sign} ${number(threshold)}`,
+      tone: broken ? 'fail' : toneOf(cls),
     });
-    if (dimensions.length >= MAX_DIMENSIONS) break;
   }
   return dimensions;
 }
 
-/** Выноски в экранных пикселях: линия со стрелкой к объекту, засечка у ствола, плашка
- *  с подписью посередине. Плашки не налезают друг на друга: занятая полоса сдвигает
- *  следующую вниз. */
+/** Зазор между целью выноски и её плашкой, пикселей. */
+const LABEL_GAP = 8;
+const LABEL_HEIGHT = 20;
+/** Сдвиги плашки поперёк выноски, когда место занято соседкой. */
+const LABEL_SHIFTS = [0, 23, -23, 46, -46, 69, -69];
+
+/** Прямоугольник экрана: x, y левого верхнего угла, ширина, высота. */
+export type Rect = readonly [number, number, number, number];
+
+/** Плашка подписи - за целью по направлению выноски и всем телом по ту сторону: на цели она
+ *  закрывала то, к чему ведёт (жюри, итерация 7). (ux, uy) - единичный вектор от ствола к
+ *  цели в пикселях экрана; shift сдвигает плашку поперёк выноски, то есть вдоль самого
+ *  объекта, и цель остаётся открытой. */
+export function labelBox(
+  tx: number,
+  ty: number,
+  ux: number,
+  uy: number,
+  width: number,
+  shift = 0,
+): Rect {
+  const reach = LABEL_GAP + (Math.abs(ux) * width) / 2 + (Math.abs(uy) * LABEL_HEIGHT) / 2;
+  const cx = tx + ux * reach - uy * shift;
+  const cy = ty + uy * reach + ux * shift;
+  return [Math.round(cx - width / 2), Math.round(cy - LABEL_HEIGHT / 2), width, LABEL_HEIGHT];
+}
+
+const overlaps = ([x0, y0, w0, h0]: Rect, [x1, y1, w1, h1]: Rect): boolean =>
+  x0 < x1 + w1 && x0 + w0 > x1 && y0 < y1 + h1 && y0 + h0 > y1;
+
+/** Выноски в экранных пикселях: линия со стрелкой к объекту, засечки на концах, плашка за
+ *  целью. Объекта нет на подоснове - пунктирная окружность радиусом замера и радиус-выноска
+ *  к ней. Плашки не налезают друг на друга и на кольцо выбора. */
 export function drawDimensions(
   ctx: CanvasRenderingContext2D,
   view: ViewState,
@@ -216,17 +239,34 @@ export function drawDimensions(
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.lineCap = 'round';
-  const labels: { dimension: Dimension; ax: number; ay: number; right: boolean }[] = [];
-  for (const dimension of dimensions) {
+  const labels: { dimension: Dimension; tx: number; ty: number; ux: number; uy: number }[] = [];
+  dimensions.forEach((dimension, index) => {
     const tone = TONES[dimension.tone];
-    const { sx: tx, sy: ty } = toScreen(view, dimension.to[0], dimension.to[1]);
-    const length = Math.hypot(tx - sx, ty - sy);
-    if (length < 6) continue;
-    const ux = (tx - sx) / length;
-    const uy = (ty - sy) / length;
     ctx.strokeStyle = tone.fill;
     ctx.fillStyle = tone.fill;
     ctx.lineWidth = 1.6;
+    let tx: number;
+    let ty: number;
+    if (dimension.to) {
+      ({ sx: tx, sy: ty } = toScreen(view, dimension.to[0], dimension.to[1]));
+    } else {
+      const radius = dimension.measured * view.scale;
+      if (radius < 6) return;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Радиус-выноска первой окружности смотрит вверх-вправо, у следующих - с поворотом:
+      // плашки не собираются в один угол.
+      const angle = -Math.PI / 4 + index * (Math.PI / 3);
+      tx = sx + Math.cos(angle) * radius;
+      ty = sy + Math.sin(angle) * radius;
+    }
+    const length = Math.hypot(tx - sx, ty - sy);
+    if (length < 6) return;
+    const ux = (tx - sx) / length;
+    const uy = (ty - sy) / length;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(tx, ty);
@@ -245,35 +285,25 @@ export function drawDimensions(
     ctx.lineTo(tx - ux * 8 + uy * 4, ty - uy * 8 - ux * 4);
     ctx.closePath();
     ctx.fill();
-    const reach = Math.max(length * 0.6, clear);
-    labels.push({ dimension, ax: sx + ux * reach, ay: sy + uy * reach, right: ux >= -0.2 });
-  }
-  // Плашки - вторым проходом, поверх всех линий. Занятое место сдвигает следующую плашку
-  // вверх или вниз, попеременно: так они не налезают друг на друга и на кольцо выбора.
-  const height = 20;
-  const boxes: [number, number, number, number][] = [
-    [sx - clear + 6, sy - clear + 6, (clear - 6) * 2, (clear - 6) * 2],
-  ];
-  for (const { dimension, ax, ay, right } of labels) {
+    labels.push({ dimension, tx, ty, ux, uy });
+  });
+  // Плашки - вторым проходом, поверх всех линий.
+  const boxes: Rect[] = [[sx - clear + 6, sy - clear + 6, (clear - 6) * 2, (clear - 6) * 2]];
+  for (const { dimension, tx, ty, ux, uy } of labels) {
     const tone = TONES[dimension.tone];
     const width = ctx.measureText(dimension.label).width + 14;
-    const bx = Math.round(right ? ax + 6 : ax - width - 6);
-    let by = Math.round(ay - height / 2);
-    for (const shift of [0, 23, -23, 46, -46, 69, -69]) {
-      const y = Math.round(ay - height / 2 + shift);
-      const hit = boxes.some(
-        ([x0, y0, w, h]) => bx < x0 + w && bx + width > x0 && y < y0 + h && y + height > y0,
-      );
-      by = y;
-      if (!hit) break;
-    }
-    boxes.push([bx, by, width, height]);
+    const box =
+      LABEL_SHIFTS.map((shift) => labelBox(tx, ty, ux, uy, width, shift)).find(
+        (candidate) => !boxes.some((other) => overlaps(candidate, other)),
+      ) ?? labelBox(tx, ty, ux, uy, width);
+    boxes.push(box);
+    const [bx, by] = box;
     ctx.fillStyle = tone.fill;
     ctx.beginPath();
-    ctx.roundRect(bx, by, width, height, 3);
+    ctx.roundRect(bx, by, width, LABEL_HEIGHT, 3);
     ctx.fill();
     ctx.fillStyle = tone.text;
-    ctx.fillText(dimension.label, bx + 7, by + height / 2 + 0.5);
+    ctx.fillText(dimension.label, bx + 7, by + LABEL_HEIGHT / 2 + 0.5);
   }
   ctx.restore();
 }

@@ -162,6 +162,84 @@ export function contentPoints(features: readonly BasemapFeature[]): Point[] {
   return trimmed(points);
 }
 
+/** Внешние контуры границы работ: полигоны и замкнутые линии, все против часовой стрелки.
+ *  Открытые отрезки слоя границы (обрывки, выноски) контуром не считаются. Обход один на
+ *  всех: заливка по правилу ненулевого числа оборотов тогда даёт объединение контуров, а не
+ *  дыру там, где два контура с разным обходом накрывают друг друга. Дыры полигонов не
+ *  берутся: участок - всё, что внутри внешнего контура. */
+export function boundaryRings(features: readonly BasemapFeature[]): Position[][] {
+  const rings: Position[][] = [];
+  const take = (ring: Position[] | undefined) => {
+    if (!ring || ring.length < 4 || !closed(ring)) return;
+    rings.push(signedArea(ring) < 0 ? [...ring].reverse() : ring);
+  };
+  const walk = (geometry: Geometry) => {
+    switch (geometry.type) {
+      case 'Polygon':
+        take(geometry.coordinates[0]);
+        break;
+      case 'MultiPolygon':
+        for (const polygon of geometry.coordinates) take(polygon[0]);
+        break;
+      case 'LineString':
+        take(geometry.coordinates);
+        break;
+      case 'MultiLineString':
+        for (const line of geometry.coordinates) take(line);
+        break;
+      case 'GeometryCollection':
+        for (const part of geometry.geometries) walk(part);
+        break;
+      default:
+        break;
+    }
+  };
+  for (const feature of features) {
+    if (feature.properties.class === 'work_boundary') walk(feature.geometry);
+  }
+  return rings;
+}
+
+/** Замкнута ли линия: последняя точка совпадает с первой с точностью до сантиметра. */
+function closed(ring: Position[]): boolean {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  return Boolean(first && last && Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.01);
+}
+
+function signedArea(ring: Position[]): number {
+  let sum = 0;
+  for (let i = 0; i + 1 < ring.length; i += 1) {
+    const [x0, y0] = ring[i] ?? [0, 0];
+    const [x1, y1] = ring[i + 1] ?? [0, 0];
+    sum += x0 * y1 - x1 * y0;
+  }
+  return sum / 2;
+}
+
+/** Точка внутри контура (луч вправо, чётность пересечений). */
+export function insideRing(x: number, y: number, ring: Position[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const [xi, yi] = ring[i] ?? [0, 0];
+    const [xj, yj] = ring[j] ?? [0, 0];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Контуры границы - это участок плана, если внутри них почти все посадки. Слой границы
+ *  бывает сборным (рамка листа, обрывки), и бледнеть от такой «границы» стал бы сам план. */
+export function coversPlan(
+  rings: readonly Position[][],
+  points: readonly Point[],
+  share = 0.95,
+): boolean {
+  if (!rings.length || !points.length) return false;
+  const inside = points.filter((p) => rings.some((ring) => insideRing(p.x, p.y, ring))).length;
+  return inside >= points.length * share;
+}
+
 export function boundsOfPoints(items: readonly Point[], margin = 10): Box | null {
   if (!items.length) return null;
   let minX = Infinity;

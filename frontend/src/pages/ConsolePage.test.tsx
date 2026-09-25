@@ -198,14 +198,16 @@ describe('консоль запуска', () => {
     expect(within(facts).getByText('1')).toBeInTheDocument();
   });
 
-  it('последние прогоны - ссылками на их страницы', async () => {
+  it('последние прогоны - ссылками на их страницы, имя чертежа без «.dxf»', async () => {
     mockApi({
       ...consoleRoutes(),
       '/api/v1/runs?limit=12': { items: [run({ id: 'r7', source_name: 'Берзарина.dxf' })] },
     });
     renderApp('/');
 
-    const link = await screen.findByRole('link', { name: 'Берзарина.dxf' });
+    const link = await screen.findByRole('link', { name: 'Берзарина' });
     expect(link).toHaveAttribute('href', '/runs/r7');
+    // Полное имя файла остаётся в подсказке.
+    expect(link).toHaveAttribute('title', 'Берзарина.dxf');
   });
 });

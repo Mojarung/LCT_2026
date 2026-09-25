@@ -27,6 +27,7 @@ from green.infrastructure.cad.xref_package import (
     DrawingPackage,
     count_difference,
     expanded_entity_counts,
+    file_name,
 )
 
 if TYPE_CHECKING:
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ezdxf.document import Drawing
+
+    from green.application.assembly import ReferenceBinding
 
 _MIN_SOURCES = 2
 # Файл комплекта, у которого с основой общая меньше половины меньшего из двух габаритов, скорее
@@ -46,6 +49,26 @@ _NOT_OBJECTS = frozenset(
 )  # fmt: skip
 
 type Box = tuple[float, float, float, float]
+
+# Как внешняя ссылка вошла в комплект - словами для журнала чтения в интерфейсе. Коды
+# (embedded, provided_as_input ...) остаются в отчёте сборки: там их читает программа, а
+# английское слово в «Чтении чертежа» читал эксперт (жюри дизайна, итерация 7). Ссылку, файла
+# которой нет в исходных данных, журнал уже называет сам пакет - второй строкой не повторяем.
+_BINDING_NOTES = {
+    "embedded": "вставлен файл «{file}», масштаб и положение заданы исходной вставкой",
+    "provided_as_input": "ссылка на основу комплекта «{file}», основа загружена один раз",
+    "excluded_nested_overlay": "вложенная наложенная ссылка на «{file}» не загружается, как в CAD",
+}
+_NOTED_BY_PACKAGE = frozenset({"absent_in_source"})
+
+
+def _binding_note(binding: ReferenceBinding) -> str | None:
+    """Строка журнала чтения о внешней ссылке: как она вошла в комплект, имя файла без пути."""
+    if binding.action in _NOTED_BY_PACKAGE:
+        return None
+    template = _BINDING_NOTES.get(binding.action, binding.action + ": «{file}»")
+    source = file_name(binding.source or binding.reference)
+    return f"XREF {binding.block}: {template.format(file=source)}"
 
 
 def _extents(doc: Drawing) -> Box | None:
@@ -110,11 +133,7 @@ class EzdxfDrawingMerger:
         # То, что меняет смысл плана (листы не перекрываются), - отдельно от журнала склейки.
         warnings: list[str] = []
         assembly = package.report()
-        for binding in assembly.references:
-            notes.append(
-                f"XREF {binding.block}: {binding.action}, {binding.source or binding.reference}; "
-                "масштаб и положение заданы исходной вставкой"
-            )
+        notes.extend(filter(None, map(_binding_note, assembly.references)))
         counts = [len(base.modelspace())]
         base_unit = decide_units(base, unit).unit_m
         base_box = _extents(base)

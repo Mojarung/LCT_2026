@@ -8,7 +8,7 @@
 import { getJson, postJson } from '../api/client';
 import type { RuleCheck } from '../api/artifacts';
 import type { CheckOut, PlanSummaryOut, RunOut } from '../api/types';
-import type { MapItem } from '../map/types';
+import type { DragProbe, MapItem } from '../map/types';
 import { EditQueue } from './editQueue';
 import { useWorkspace } from './workspace';
 
@@ -23,18 +23,33 @@ const sleep = (ms: number) =>
   });
 
 export interface EditorHost {
-  /** Вердикт под курсором во время переноса. */
-  dragVerdict(verdict: string | null): void;
+  /** Ответ живой проверки под курсором во время переноса: вердикт и трасса правил. */
+  dragProbe(probe: DragProbe | null): void;
   /** Отметки изменились на месте: перерисовать. */
   itemsChanged(): void;
   /** Посадка удалена из плана. */
   removed(item: MapItem): void;
+  /** Перенос посадки ушёл на сервер (on) или вернулся: показать ожидание у неё на карте. */
+  pending(item: MapItem, on: boolean): void;
+}
+
+/** Трасса правил из ответа сервиса в том виде, в каком её хранит план. */
+function ruleChecks(result: CheckOut): RuleCheck[] {
+  return (result.checks ?? []).map((c) => ({
+    rule_id: c.rule_id,
+    outcome: c.outcome,
+    measured_m: c.measured_m ?? null,
+    threshold_m: c.threshold_m ?? null,
+    object_class: c.object_class ?? null,
+  }));
 }
 
 export class PlanEditor {
   private readonly queue = new EditQueue();
   private ticket = 0;
   private host: EditorHost | null = null;
+  /** Сколько переносов каждой посадки ещё в очереди: ожидание снимается с последним. */
+  private readonly moving = new Map<MapItem, number>();
 
   constructor(private readonly runId: string) {}
 
@@ -61,15 +76,30 @@ export class PlanEditor {
     const ticket = ++this.ticket;
     try {
       const result = await this.check(item, x, y);
-      if (ticket === this.ticket)
-        this.host?.dragVerdict(result.plantable ? result.verdict : 'rejected');
+      if (ticket === this.ticket) {
+        this.host?.dragProbe({
+          verdict: result.plantable ? result.verdict : 'rejected',
+          checks: ruleChecks(result),
+        });
+      }
     } catch (error) {
       if (ticket === this.ticket) useWorkspace.getState().say(reason(error), 'error');
     }
   }
 
+  private hold(item: MapItem, delta: 1 | -1): void {
+    const count = (this.moving.get(item) ?? 0) + delta;
+    if (count > 0) this.moving.set(item, count);
+    else this.moving.delete(item);
+    this.host?.pending(item, count > 0);
+  }
+
   move(item: MapItem, x: number, y: number): Promise<void> {
     this.ticket += 1; // ответы проб, пришедшие после отпускания, больше не нужны
+    // Перенос на сервере идёт секунды, а на большой улице - десятки: признак жизни нужен сразу,
+    // до запроса, а не после ответа (жюри, итерация 7).
+    this.hold(item, 1);
+    useWorkspace.getState().say(`Переносим посадку № ${String(item.number)}…`);
     return this.queue.enqueue(async () => {
       const store = useWorkspace.getState();
       try {
@@ -78,13 +108,7 @@ export class PlanEditor {
         });
         const result = await this.check(item, x, y);
         item.verdict = result.plantable ? result.verdict : 'rejected';
-        item.checks = (result.checks ?? []).map((c): RuleCheck => ({
-          rule_id: c.rule_id,
-          outcome: c.outcome,
-          measured_m: c.measured_m ?? null,
-          threshold_m: c.threshold_m ?? null,
-          object_class: c.object_class ?? null,
-        }));
+        item.checks = ruleChecks(result);
         item.explanation = '';
         // Ценность считается по плану целиком: после переноса она известна только после пересборки.
         item.value = null;
@@ -92,9 +116,11 @@ export class PlanEditor {
         this.host?.itemsChanged();
         store.setStale(summary.stale);
         store.touch();
-        store.say(`Посадка №${item.number} перенесена. Нормы пересчитаны.`);
+        store.say(`Посадка № ${String(item.number)} перенесена. Нормы пересчитаны.`);
       } catch (error) {
         store.say(reason(error), 'error');
+      } finally {
+        this.hold(item, -1);
       }
     });
   }
@@ -109,7 +135,9 @@ export class PlanEditor {
         this.host?.removed(item);
         store.select(null);
         store.setStale(summary.stale);
-        store.say(`Посадка №${item.number} удалена. В плане осталось ${summary.placements}.`);
+        store.say(
+          `Посадка № ${String(item.number)} удалена. В плане осталось ${String(summary.placements)}.`,
+        );
       } catch (error) {
         store.say(reason(error), 'error');
       }

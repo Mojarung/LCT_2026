@@ -90,8 +90,11 @@ a:hover {
 
 /* --- шапка: две пилюли поверх содержимого, а не полоса во всю ширину --- */
 
+/* На прокручиваемых страницах (консоль, /models, /review) шапка стоит в потоке и уезжает
+   вместе с листом: прилипшая пилюля ложилась на текст (жюри, итерация 7). Поверх плана она
+   висит только на рабочем месте прогона (workspace.css, body.shell-map). */
 .topbar {
-  position: sticky;
+  position: relative;
   top: 0;
   z-index: 30;
   display: flex;
@@ -118,7 +121,7 @@ a:hover {
   border: 1px solid var(--edge);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
-  backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: var(--glass-filter);
 }
 /* Значок без подписи обязан быть достаточно крупной целью: 34x34 при требовании 24x24
    (WCAG 2.5.8). Что делает кнопка, говорят title и aria-label - иначе значок молчит. */
@@ -238,12 +241,18 @@ button {
     background-color 0.12s,
     transform 0.1s;
 }
-.ghost:hover {
+.ghost:hover:not(:disabled) {
   border-color: var(--bone);
   background: var(--panel-2);
 }
-.ghost:active {
+.ghost:active:not(:disabled) {
   transform: translateY(1px);
+}
+/* Отключённая контурная кнопка выглядела активной: на /review три такие стояли рядом с
+   действующими (жюри, итерация 7). Та же приглушённость, что у залитой. */
+.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .ghost.small {
   padding: 7px 12px;

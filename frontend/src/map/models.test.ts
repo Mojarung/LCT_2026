@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import catalog from '../../../config/species.yaml?raw';
 import { plantsOf } from './existing';
-import { ALL_MODELS, MODELS, modelKey, modelOf } from './models';
+import { ALL_MODELS, commonest, MODELS, modelKey, modelOf } from './models';
 
 /** Коды видов каталога прямо из config/species.yaml: база моделей обязана идти за ним. */
 function catalogCodes(): string[] {
@@ -19,6 +19,23 @@ describe('база моделей растений', () => {
   it('в базе нет моделей видов, которых нет в каталоге', () => {
     const codes = new Set(catalogCodes());
     expect(ALL_MODELS.map((m) => m.code).filter((code) => !codes.has(code))).toEqual([]);
+  });
+
+  it('образец легенды - самый частый вид плана нужной формы', () => {
+    const plan = [
+      'syringa_vulgaris',
+      'cotoneaster_lucidus',
+      'tilia_cordata',
+      'cotoneaster_lucidus',
+      'juniperus_sabina',
+      'juniperus_sabina',
+      'juniperus_sabina',
+      undefined,
+    ];
+    // Хвойный кустарник и дерево в образец «кустарник» не годятся, даже если их больше.
+    expect(commonest(plan, 'shrub')).toBe('cotoneaster_lucidus');
+    expect(commonest(plan, 'broadleaf')).toBe('tilia_cordata');
+    expect(commonest([], 'shrub')).toBeNull();
   });
 
   it('вид вне базы рисуется моделью своего типа посадки', () => {

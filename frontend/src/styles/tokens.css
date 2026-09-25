@@ -96,6 +96,9 @@
   --r-panel: 8px;
   --r-control: 6px;
   --glass: color-mix(in srgb, var(--panel) 94%, transparent);
+  /* Размытие под карточкой: при непрозрачности 0,94 его не видно, а платит за него каждый
+     кадр карты (жюри дизайна, итерация 7). На бумаге его нет, в тёмной теме оно работает. */
+  --glass-filter: none;
   /* Залитая кнопка под курсором - на тон к фону, как контурная: прозрачность просвечивала
      чертёж под кнопкой на карте. */
   --bone-hover: color-mix(in oklab, var(--bone) 84%, var(--inverse));
@@ -163,5 +166,6 @@
   --r-panel: 16px;
   --r-control: 10px;
   --glass: color-mix(in srgb, var(--panel) 84%, transparent);
+  --glass-filter: blur(18px) saturate(140%);
   --lift: 0 1px 1px rgba(5, 7, 10, 0.34), 0 14px 34px -14px rgba(5, 7, 10, 0.62);
 }

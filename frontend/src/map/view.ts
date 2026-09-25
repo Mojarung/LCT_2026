@@ -107,71 +107,17 @@ export function extentOf(
   };
 }
 
-/** Какую долю высоты свободной области занимает лента по короткой стороне в крупном виде.
- *  Жюри дизайна (итерация 3): вписанный целиком план занимал около 11% кадра, и первым
- *  впечатлением был пустой лист с ниткой посередине. */
-export const CLOSE_SHORT_SHARE = 0.55;
-/** Крупный вид не приближает сильнее, чем в столько раз против вида «весь план»: на
- *  километровой улице иначе на экране остаётся один перекрёсток. */
-export const CLOSE_MAX_ZOOM = 3;
-
-/** Точка в координатах вида (u вдоль экрана, v поперёк). */
-export interface ViewPoint {
-  u: number;
-  v: number;
-}
-
-const median = (values: number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 ? (sorted[mid] ?? 0) : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-};
-
-/** Где посадки: медиана точек по каждой оси вида. На длинной улице центр габаритов часто
- *  приходится на узел сетей, а посадки собраны в стороне; медиана стоит там, где их поровну
- *  по обе стороны. */
-export function focusOf(view: Pick<ViewState, 'rot'>, points: readonly Point[]): ViewPoint | null {
-  if (!points.length) return null;
-  const us: number[] = [];
-  const vs: number[] = [];
-  for (const { x, y } of points) {
-    const { u, v } = toView(view, x, y);
-    us.push(u);
-    vs.push(v);
-  }
-  return { u: median(us), v: median(vs) };
-}
-
-/** Вписать план в свободную область. whole - весь план; close - лента по короткой стороне
- *  на CLOSE_SHORT_SHARE высоты, по длине она уходит под полупрозрачные панели. */
-export function fitView(
-  ext: Extent,
-  area: Area,
-  mode: 'whole' | 'close',
-  focus: ViewPoint | null = null,
-): Omit<ViewState, 'rot'> {
-  const whole = Math.min(area.width / ext.w, area.height / ext.h);
-  const scale =
-    mode === 'whole'
-      ? whole
-      : Math.max(
-          whole,
-          Math.min((CLOSE_SHORT_SHARE * area.height) / ext.h, whole * CLOSE_MAX_ZOOM),
-        );
-  const cu = centerOn(focus?.u, ext.minU, ext.maxU, area.width / scale);
-  const cv = centerOn(focus?.v, ext.minV, ext.maxV, area.height / scale);
+/** Вписать план целиком в свободную область, по её центру. Это и вид при открытии: крупный
+ *  вид, где лента по длине уходила под панели, прятал около трети улицы, а на 768 и 375
+ *  обрезал её с обоих концов (жюри дизайна, итерация 7). Приблизить - одно движение колеса
+ *  или ползунка; найти спрятанный конец улицы на незнакомом плане - нет. */
+export function fitView(ext: Extent, area: Area): Omit<ViewState, 'rot'> {
+  const scale = Math.min(area.width / ext.w, area.height / ext.h);
   return {
     scale,
-    tx: area.left + area.width / 2 - cu * scale,
-    ty: area.top + area.height / 2 - cv * scale,
+    tx: area.left + area.width / 2 - ((ext.minU + ext.maxU) / 2) * scale,
+    ty: area.top + area.height / 2 - ((ext.minV + ext.maxV) / 2) * scale,
   };
-}
-
-/** Центр окна шириной span на отрезке [lo, hi]: влезает отрезок - его середина, не влезает -
- *  точка внимания, но так, чтобы окно не вышло за концы и не показало пустое поле. */
-function centerOn(focus: number | undefined, lo: number, hi: number, span: number): number {
-  if (focus === undefined || span >= hi - lo) return (lo + hi) / 2;
-  return Math.min(Math.max(focus, lo + span / 2), hi - span / 2);
 }
 
 /** Группу посадок крупнее не вписывать: при 6 px/м крона 5 м - 30 px, и вокруг видно улицу, а
@@ -199,7 +145,7 @@ export function groupView(
   });
   if (seen) return null;
   const ext = extentOf(view, points);
-  const fitted = fitView(ext, area, 'whole');
+  const fitted = fitView(ext, area);
   if (fitted.scale <= GROUP_MAX_SCALE) return fitted;
   const scale = GROUP_MAX_SCALE;
   return {

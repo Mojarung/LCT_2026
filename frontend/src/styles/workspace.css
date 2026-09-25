@@ -58,7 +58,7 @@ body.shell-map .topbar {
   border: 1.5px solid var(--edge);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
-  backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: var(--glass-filter);
 }
 
 /* Панели начинаются под пилюлей шапки и останавливаются над полосой кнопок: иначе на
@@ -334,6 +334,10 @@ body.shell-map .topbar {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--bone-2);
+}
+.metric-bad {
+  font-weight: 500;
+  color: var(--bad);
 }
 
 /* Предупреждение, меняющее смысл плана. Тон предупреждающий, но не тревожный: прогон
@@ -620,7 +624,7 @@ body.shell-map .topbar {
   margin: 0 2px 0 0;
   flex-shrink: 0;
 }
-.legend-group .key:not(.dot):not(.cross):not(.tri):not(.ring) {
+.legend-group .key:not(.dot):not(.cross):not(.tri):not(.barrier) {
   width: 14px;
   border-top: 2px solid;
 }
@@ -657,11 +661,19 @@ body.shell-map .topbar {
   background: var(--bone);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
-.legend-group .key.ring {
-  width: 10px;
-  height: 10px;
-  border: 1.5px dashed var(--warn);
+/* Место с прикорневым барьером - двойное сплошное кольцо, как на карте (render.ts,
+   drawBarrierPlaces): пунктирное кольцо - это посадка на согласовании. */
+.legend-group .key.barrier {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--warn);
   border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side,
+    transparent 44%,
+    var(--warn) 46% 64%,
+    transparent 66%
+  );
 }
 
 /* Обозначения внутри группы отступают от её галочки, чтобы читались как её содержимое. */
@@ -966,6 +978,9 @@ body.shell-map .topbar {
   color: var(--bone-2);
   font-size: var(--fs-small);
   line-height: 1.45;
+  /* Имена слоёв и файлов без пробелов длиннее панели: переносятся где угодно, а не лезут за
+     её край (путь внешней ссылки в «Чтении чертежа», жюри, итерация 7). */
+  overflow-wrap: anywhere;
 }
 .warn-list li + li {
   margin-top: 5px;
@@ -1022,10 +1037,56 @@ body.shell-map .topbar {
   margin-top: 2px;
   max-width: none;
 }
-.error-text {
-  margin: 4px 0 0;
-  color: var(--bad);
+
+/* Неудавшийся прогон - карточка того же материала, что панели поверх плана: заголовок,
+   причина одной строкой, что делать, дорога к консоли; текст исключения - под раскрытием.
+   Без карточки текст ошибки шёл от края экрана по двести знаков в строке (жюри, итерация 7). */
+.map-loading[data-state='failed'] {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 24px 0;
+}
+.status[data-state='failed'] {
+  display: block;
+  width: 100%;
+  max-width: min(60ch, calc(100% - 48px));
+  /* Карточка выше колодца карты (раскрыты подробности) прокручивается вместе с ним, а не
+     теряет верх: автоматические поля центрируют, пока место есть. */
+  margin: auto;
+  padding: 22px 24px;
+  background: var(--glass);
+  border: 1.5px solid var(--edge);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  color: var(--bone);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.status[data-state='failed'] .status-title {
+  font-size: var(--fs-strong);
+}
+.status-reason {
+  margin: 8px 0 0;
+}
+.status-action {
+  margin: 6px 0 0;
+  color: var(--bone-2);
+}
+.status[data-state='failed'] .hint {
+  margin-top: 12px;
+}
+.status-details {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+.status-raw {
+  max-height: 40vh;
+  margin: 8px 0 0;
+  overflow-y: auto;
+  color: var(--bone-2);
   font-size: var(--fs-small);
+  overflow-wrap: anywhere;
 }
 
 .skeleton {
@@ -1106,8 +1167,8 @@ body.shell-map .topbar {
   font-weight: 500;
   color: var(--bone);
 }
-.legend-dxf p {
-  margin: 6px 0 8px;
+.legend-dxf .dxf-chips {
+  margin-top: 8px;
 }
 .dxf-chips {
   display: flex;

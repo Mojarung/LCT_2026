@@ -40,7 +40,19 @@ export interface Scene {
   existing: ExistingPlant[];
   placements: MapItem[];
   rejections: MapItem[];
+  /** Участок работ: контуры границы в координатах чертежа. Подоснова дальше CONTEXT_M от
+   *  них бледнеет; null - границы нет или она не очерчивает план, и бледнеть нечему. */
+  focus: Path2D | null;
 }
+
+/** Подоснова дальше этого от границы работ - справка, а не участок: обрывки сетей и штрихи
+ *  за границей спорили с планом на первом кадре (жюри дизайна, итерация 7), метров. */
+export const CONTEXT_M = 12;
+/** Непрозрачность подосновы за пределами участка. */
+export const CONTEXT_ALPHA = 0.3;
+/** Маска участка считается в половинном разрешении: край и так мягкий, а памяти вчетверо
+ *  меньше, чем у кэша подосновы. */
+const MASK_SCALE = 0.5;
 
 export interface Marks {
   layers: Layers;
@@ -75,6 +87,7 @@ function worldTransform(
 
 export function renderBase(
   base: HTMLCanvasElement,
+  mask: HTMLCanvasElement,
   rect: { width: number; height: number },
   dpr: number,
   view: ViewState,
@@ -160,7 +173,50 @@ export function renderBase(
   if (layers.labels && scene.labels.length && view.scale >= LABEL_MIN_SCALE) {
     drawLabels(ctx, visible, dpr, view, scene.labels, palette);
   }
+  if (scene.focus) fadeOutside(ctx, mask, view, width, height, scene.focus);
   return { ...view, dpr, width: rect.width, height: rect.height };
+}
+
+/** Всё нарисованное в кэше подосновы дальше CONTEXT_M от участка остаётся с непрозрачностью
+ *  CONTEXT_ALPHA. Маска: сплошная заливка, из которой вырезаны контуры участка и полоса
+ *  CONTEXT_M вокруг них; она же вычитается из кэша (destination-out). width и height -
+ *  размер кэша в пикселях CSS. */
+function fadeOutside(
+  ctx: CanvasRenderingContext2D,
+  mask: HTMLCanvasElement,
+  view: ViewState,
+  width: number,
+  height: number,
+  focus: Path2D,
+): void {
+  const w = Math.ceil(width * MASK_SCALE);
+  const h = Math.ceil(height * MASK_SCALE);
+  if (mask.width !== w || mask.height !== h) {
+    mask.width = w;
+    mask.height = h;
+  }
+  const m = mask.getContext('2d');
+  if (!m) return;
+  m.save();
+  m.setTransform(1, 0, 0, 1, 0, 0);
+  m.globalCompositeOperation = 'source-over';
+  m.clearRect(0, 0, w, h);
+  m.fillStyle = `rgba(0, 0, 0, ${String(1 - CONTEXT_ALPHA)})`;
+  m.fillRect(0, 0, w, h);
+  m.globalCompositeOperation = 'destination-out';
+  worldTransform(m, view, MASK_SCALE, PAD, PAD);
+  m.fillStyle = '#000';
+  m.strokeStyle = '#000';
+  m.lineJoin = 'round';
+  m.lineWidth = CONTEXT_M * 2;
+  m.fill(focus);
+  m.stroke(focus);
+  m.restore();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(mask, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
 }
 
 /** Сдвиг тени здания, экранные пиксели. */
@@ -292,6 +348,32 @@ export function drawGrid(
   ctx.restore();
 }
 
+/** Радиус плашки севера, пикселей: стрелка 15 и буква «С» за ней. */
+export const NORTH_RADIUS = 31;
+/** Отступ знаков карты от кромки свободной области и друг от друга, пикселей. */
+const CORNER_GAP = 10;
+/** Поля плашки линейки вокруг её штрихов: по 12 слева и справа, 25 над линией, 10 под ней. */
+const SCALE_PAD_X = 12;
+const SCALE_PAD_TOP = 25;
+const SCALE_PAD_BOTTOM = 10;
+
+/** Где стоят знаки в правом нижнем углу свободной области: диск севера целиком внутри неё,
+ *  линейка слева от него, её плашка по центру диска и с зазором. Раньше диск выходил за
+ *  край на 5 пикселей (обрезался на 768 и 375), а плашки касались (жюри, итерация 7). */
+export function cornerMarks(area: Area): {
+  north: { x: number; y: number };
+  scaleRight: number;
+  scaleY: number;
+} {
+  const x = area.left + area.width - NORTH_RADIUS - CORNER_GAP;
+  const y = area.top + area.height - NORTH_RADIUS - CORNER_GAP;
+  return {
+    north: { x, y },
+    scaleRight: x - NORTH_RADIUS - CORNER_GAP - SCALE_PAD_X,
+    scaleY: y + (SCALE_PAD_TOP - SCALE_PAD_BOTTOM) / 2,
+  };
+}
+
 /** Масштабная линейка. На чертеже она есть всегда, а весь спор в этом кейсе - про метры. */
 export function drawScaleBar(
   ctx: CanvasRenderingContext2D,
@@ -303,9 +385,8 @@ export function drawScaleBar(
   const meters = niceLength(150 / view.scale);
   const width = meters * view.scale;
   if (width < 30 || width > area.width / 2) return;
-  const right = area.left + area.width - 64;
+  const { scaleRight: right, scaleY: y } = cornerMarks(area);
   const left = right - width;
-  const y = area.top + area.height - 26;
   const bar = new Path2D();
   bar.moveTo(left, y);
   bar.lineTo(right, y);
@@ -323,7 +404,13 @@ export function drawScaleBar(
   ctx.textBaseline = 'bottom';
   // Плашка цвета панели: на приближении под линейкой лежат кроны, и обводки у штрихов мало.
   plate(ctx, palette, () => {
-    ctx.roundRect(left - 12, y - 25, width + 24, 35, 6);
+    ctx.roundRect(
+      left - SCALE_PAD_X,
+      y - SCALE_PAD_TOP,
+      width + SCALE_PAD_X * 2,
+      SCALE_PAD_TOP + SCALE_PAD_BOTTOM,
+      6,
+    );
   });
   // Подложка цвета фона: линейка лежит поверх чертежа и обязана читаться над любой линией.
   ctx.strokeStyle = palette.get('--accent-halo');
@@ -490,7 +577,9 @@ function drawWeak(
   ctx.fill(path);
 }
 
-/** Отказ, который снял бы прикорневой барьер: пунктирное кольцо цвета «на согласование». */
+/** Отказ, который снял бы прикорневой барьер: двойное сплошное кольцо - барьер вокруг кома.
+ *  Цвет тот же, что у «на согласование», но знак другой: одинаковые пунктирные кольца
+ *  смешивали посадку на согласовании и место, которого в плане нет (жюри, итерация 7). */
 function drawBarrierPlaces(
   ctx: CanvasRenderingContext2D,
   visible: Box,
@@ -499,17 +588,18 @@ function drawBarrierPlaces(
   palette: Palette,
 ): void {
   const r = Math.max(2.2, 6 / view.scale);
+  const inner = r * 0.55;
   const path = new Path2D();
   for (const p of scene.rejections) {
     if (p.barrier_m == null || !inView(p, visible, r)) continue;
     path.moveTo(p.x + r, p.y);
     path.arc(p.x, p.y, r, 0, Math.PI * 2);
+    path.moveTo(p.x + inner, p.y);
+    path.arc(p.x, p.y, inner, 0, Math.PI * 2);
   }
-  ctx.setLineDash([3 / view.scale, 2.5 / view.scale]);
   ctx.strokeStyle = palette.get('--warn');
   ctx.lineWidth = 1.4 / view.scale;
   ctx.stroke(path);
-  ctx.setLineDash([]);
 }
 
 /** Кольцо с подложкой цвета фона и четыре засечки: на общем виде среди трёхсот одинаковых
@@ -566,6 +656,37 @@ export function drawSelection(
   if (marks.selected) ring(ctx, marks.selected, palette.get('--accent'), 2, view, palette);
 }
 
+/** Шаг штриха кольца ожидания, пикселей: сдвиг на него - полный оборот узора. */
+export const PENDING_DASH = 11;
+
+/** Перенос ушёл на сервер и ждёт ответа: пунктирное кольцо вокруг кроны бежит по кругу.
+ *  Без него перенос шёл 27 секунд без признака жизни (жюри, итерация 7). phase - сдвиг
+ *  штриха в пикселях; при reduced-motion движок держит его нулём, и кольцо стоит. */
+export function drawPending(
+  ctx: CanvasRenderingContext2D,
+  view: ViewState,
+  items: Iterable<MapItem>,
+  palette: Palette,
+  phase: number,
+): void {
+  ctx.save();
+  ctx.setLineDash([6, PENDING_DASH - 6]);
+  ctx.lineDashOffset = -phase;
+  for (const item of items) {
+    const { sx, sy } = toScreen(view, item.x, item.y);
+    const radius = Math.max((item.radius || 1) * view.scale, 9) + 12;
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.lineWidth = 4.5;
+    ctx.strokeStyle = palette.get('--accent-halo');
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = palette.get('--bone-3');
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** Стрелка севера. Север в чертеже - это +Y, и после разворота вида он больше не наверху:
  *  без стрелки план читается как произвольно повёрнутая картинка. */
 export function drawNorth(
@@ -575,15 +696,14 @@ export function drawNorth(
   palette: Palette,
   font: string,
 ): void {
-  const x = area.left + area.width - 26;
-  const y = area.top + area.height - 44;
+  const { x, y } = cornerMarks(area).north;
   const nx = Math.sin(view.rot);
   const ny = -Math.cos(view.rot);
   const len = 15;
   ctx.save();
   ctx.translate(x, y);
   plate(ctx, palette, () => {
-    ctx.arc(0, 0, 31, 0, Math.PI * 2);
+    ctx.arc(0, 0, NORTH_RADIUS, 0, Math.PI * 2);
   });
   ctx.strokeStyle = palette.get('--bone-3');
   ctx.fillStyle = palette.get('--bone-3');
