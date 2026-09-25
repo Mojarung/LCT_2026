@@ -294,7 +294,7 @@ class ProfileModel(_Strict):
     max_rejections: int = Field(default=2000, ge=0, le=100_000)
     require_soil: bool = True
     require_work_boundary: bool = True
-    planting_radius_m: float = Field(default=1.6, ge=0, le=10)
+    planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м
     shrub_planting_radius_m: float = Field(default=0.5, ge=0, le=10)
     surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)
     surface_inference_mode: Literal["closed_faces", "distance", "hybrid"] = "hybrid"
@@ -354,9 +354,10 @@ class ProfileModel(_Strict):
     shrub_fill_tree_gap_m: float = Field(default=3.0, ge=0, le=20)
     shrub_fill_shrub_gap_m: float = Field(default=2.0, ge=0, le=20)
     shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
-    shrub_quota_species: float = Field(default=0.20, gt=0, le=1)
-    shrub_quota_genus: float = Field(default=0.35, gt=0, le=1)
-    shrub_quota_family: float = Field(default=0.50, gt=0, le=1)
+    # Практика проектов пилота (docs/notes/34): главный вид кустарника 27-61%, медиана 35-40%.
+    shrub_quota_species: float = Field(default=0.40, gt=0, le=1)
+    shrub_quota_genus: float = Field(default=0.50, gt=0, le=1)
+    shrub_quota_family: float = Field(default=0.70, gt=0, le=1)
     shrub_conifer_share: tuple[float, float] = Field(default=(0.0, 0.30))
     shrub_quotas_use_inventory: bool = False
     quota_species: float = Field(default=0.10, gt=0, le=1)

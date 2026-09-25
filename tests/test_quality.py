@@ -385,9 +385,13 @@ def test_better_removal_score_is_not_permission_to_break_quotas() -> None:
         Feature(SourceRef("f", "x", "b"), "b", boundary, object_class=ObjectClass.WORK_BOUNDARY),
         Feature(SourceRef("f", "x", "s"), "s", boundary, object_class=ObjectClass.LAWN),
     ]
+    # Сценарий стоит ровно на квотах кустарника 20-35-50: снятие одной посадки их нарушает.
     params = replace(
         PARAMS,
         require_utility_data=False,
+        shrub_quota_species=0.20,
+        shrub_quota_genus=0.35,
+        shrub_quota_family=0.50,
         quality_weights={key: float(key == "density") for key in DEFAULT_QUALITY_WEIGHTS},
     )
     rules = RuleBook(acts={}, distance_rules=(), fingerprint="counterfactual")

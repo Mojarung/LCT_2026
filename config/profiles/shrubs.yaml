@@ -16,9 +16,12 @@ salt_zone_m: 5.0
 max_height_under_lines_m: 4.0
 crown_extra_per_m: 0.5
 territory: green_fund
-quota_species: 0.20
-quota_genus: 0.35
-quota_family: 0.50
+# Кустарники в проектах пилота: главный вид 27-61% штук, медиана около 35-40% (docs/notes/34).
+# Квоты мягкие: место занимается, перебор доли - штраф quota_penalty.
+quota_species: 0.40
+quota_genus: 0.50
+quota_family: 0.70
+quota_penalty: 5.0
 conifer_share: [0.0, 0.30]
 structure_patch_size: 8
 # Вопрос 8 сессии с заказчиком 17.09.2026: охранные зоны поверх нормативных отступов не

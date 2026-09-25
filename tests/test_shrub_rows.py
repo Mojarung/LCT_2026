@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from test_pipeline_synthetic import ROOT, _street
 
+from green.application.params import PlanParams
 from green.application.shrub_rows import ROW_LABEL
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
@@ -20,6 +21,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.domain.planting import Plan
+
+
+# Ямы дерева и куста не перекрываются: радиусы посадочных мест из параметров проекта.
+PIT_GAP_M = PlanParams().planting_radius_m + PlanParams().shrub_planting_radius_m
 
 
 def _plan(work: Path, *, rows: bool) -> Plan:
@@ -57,7 +62,7 @@ def test_the_row_keeps_every_norm_and_clears_the_trunks(plans: dict[bool, Plan])
         assert shrub.verdict.value != "forbidden"
         assert all(c.outcome.value != "fail" for c in shrub.checks)
         nearest = min(math.dist((shrub.x, shrub.y), (t.x, t.y)) for t in trees)
-        assert nearest >= 2.1 - 1e-6  # ямы дерева (1,6 м) и куста (0,5 м) не перекрываются
+        assert nearest >= PIT_GAP_M - 1e-6  # ямы дерева и куста не перекрываются
 
 
 def test_a_segment_is_one_species_with_an_even_step(plans: dict[bool, Plan]) -> None:

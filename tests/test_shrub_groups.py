@@ -75,7 +75,8 @@ def _fill(site: dict[str, object], plan: Plan, **overrides: object) -> Plan:
 
 
 def test_quota_empty_place_becomes_a_group_of_shrubs(site: dict[str, object]) -> None:
-    result = _fill(site, _plan(_empty_place(60.0, 30.0)))
+    # Жёсткие квоты (quota_penalty = 0): группа занимает столько мест, сколько квоты позволяют.
+    result = _fill(site, _plan(_empty_place(60.0, 30.0)), quota_penalty=0.0)
     shrubs = result.placements
     assert 1 <= len(shrubs) <= 9
     assert all(p.planting_type is PlantingType.SHRUB for p in shrubs)
@@ -86,6 +87,19 @@ def test_quota_empty_place_becomes_a_group_of_shrubs(site: dict[str, object]) ->
     assert summary is not None
     assert not summary.quota_violations
     assert any("Группы кустарников" in w for w in result.warnings)
+
+
+def test_soft_quotas_fill_the_whole_group(site: dict[str, object]) -> None:
+    """Мягкие квоты профиля (notes/34): место, прошедшее нормы, не пустеет, перебор доли виден."""
+    hard = _fill(site, _plan(_empty_place(60.0, 30.0)), quota_penalty=0.0)
+    soft = _fill(site, _plan(_empty_place(60.0, 30.0)))
+    assert site["params"].quota_penalty > 0  # type: ignore[attr-defined]
+    assert len(soft.placements) >= len(hard.placements)
+    assert soft.rejections == ()
+    summary = soft.shrub_assortment_summary
+    assert summary is not None
+    # Одна группа 3 x 3 - один вид: доля 100% больше квоты, это перебор мягкой квоты, а не отказ.
+    assert all("доля" in violation for violation in summary.quota_violations)
 
 
 BUILDING_Y = 55.0

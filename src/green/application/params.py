@@ -71,9 +71,12 @@ class PlanParams:
     max_rejections: int = 2000
     require_soil: bool = True
     require_work_boundary: bool = True
-    # Horizontal envelope of the stock schedule: tree pit 2.2 x 2.2 m fits
-    # a radius-1.6 m disk; shrub pit diameter 1 m. Not a rootable-soil volume.
-    planting_radius_m: float = 1.6
+    # Посадочное место дерева - яма 2,2 x 2,2 м под ком 1,3 x 1,3 м (743-ПП, табл. 3.3.1; IV группа
+    # в ведомости). Яму ставят вдоль полосы: квадрат 2,2 м, повёрнутый по борту, встаёт в полосу
+    # 2,2 м. Круг той же площади (r = 1,24 м) требует 2,48 м - с запасом к повёрнутому квадрату;
+    # описанный круг (1,6 м) требовал 3,2 м и отнимал у деревьев узкие полосы и место изгороди у
+    # борта (notes/34). Яма кустарника - диаметр 1 м. Не объём корнеобитаемого слоя.
+    planting_radius_m: float = 1.24
     shrub_planting_radius_m: float = 0.5
     surface_cell_m: float = 0.5
     # Default: a material label can classify only a closed material face.
@@ -193,9 +196,10 @@ class PlanParams:
     # городских деревьев, для кустарников источника нет: это параметр проекта, квоты остаются
     # жёсткими. Существующие кустарники из перечётки в квоты по умолчанию не входят: единицы в
     # ведомостях не унифицированы (штуки, погонные метры, группы), см. docs/species.md.
-    shrub_quota_species: float = 0.20
-    shrub_quota_genus: float = 0.35
-    shrub_quota_family: float = 0.50
+    # Кустарники в проектах пилота: главный вид 27-61% штук, медиана около 35-40% (notes/34).
+    shrub_quota_species: float = 0.40
+    shrub_quota_genus: float = 0.50
+    shrub_quota_family: float = 0.70
     shrub_conifer_share: tuple[float, float] = (0.0, 0.30)
     shrub_quotas_use_inventory: bool = False
     quota_species: float = 0.10  # правило 10-20-30 (Santamour, 1990)
