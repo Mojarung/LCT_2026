@@ -67,18 +67,57 @@ SYMBOL_MAX_PRIMITIVES = 64
 SYMBOL_MAX_SIZE_M = 12.0
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
-ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
+# Размер дугой и большой радиальный - такое же оформление, как DIMENSION (Харьковский проезд:
+# 105 размеров ARC_DIMENSION раньше уходили в пробелы чтения).
+ANNOTATIONS = frozenset(
+    {
+        "ATTDEF",
+        "DIMENSION",
+        "ARC_DIMENSION",
+        "LARGE_RADIAL_DIMENSION",
+        "TOLERANCE",
+        "LEADER",
+        "MULTILEADER",
+        "VIEWPORT",
+        "ACAD_TABLE",
+    }
+)
+# Картинки под чертежом: растр (карта, спутник, скан), PDF/DWF/DGN-подложка, маска WIPEOUT,
+# OLE-вставка. Объектов съёмки в них нет: они учитываются исходом и предупреждением и прогон
+# не останавливают (решение пользователя 25.09.2026: незнакомое заменять правдоподобно).
+UNDERLAYS = frozenset(
+    {
+        "IMAGE",
+        "WIPEOUT",
+        "OLE2FRAME",
+        "PDFUNDERLAY",
+        "PDFREFERENCE",
+        "DWFUNDERLAY",
+        "DWFREFERENCE",
+        "DGNUNDERLAY",
+        "DGNREFERENCE",
+    }
+)
 _GAP_EXAMPLES = 5
+# Тип -> (пробел, если рисунок не разобрать; пробел, если рисунок пуст; исход при успехе).
+_DRAWN = {
+    "ACAD_PROXY_ENTITY": (
+        "proxy-graphic-not-readable",
+        "unsupported-spatial-entity",
+        "proxy:graphic",
+    ),
+    "MLINE": ("mline-not-readable", "geometry-not-readable", "mline:lines"),
+}
 _SKIPPED = frozenset(
     {
         "ATTDEF",
         "DIMENSION",
+        "ARC_DIMENSION",
+        "LARGE_RADIAL_DIMENSION",
+        "TOLERANCE",
         "LEADER",
         "MULTILEADER",
         "VIEWPORT",
-        "IMAGE",
-        "WIPEOUT",
-        "OLE2FRAME",
         "3DSOLID",
         "BODY",
         "SURFACE",
@@ -183,19 +222,12 @@ class _Walker:
             outcome = self._label(entity, ref, layer, parent_block, chain, owner=owner)
         elif kind == "INSERT":
             outcome = self._insert(entity, ref, layer, chain, owner)  # ty: ignore[invalid-argument-type]
-        elif kind == "ACAD_PROXY_ENTITY" and getattr(entity, "proxy_graphic", None):
-            outcome = self._proxy(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
+        elif kind == "MLINE" or (kind == "ACAD_PROXY_ENTITY" and entity.proxy_graphic):
+            outcome = self._drawn(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
         elif kind == "REGION":
             outcome = self._region(entity, ref, layer, parent_block, owner)  # ty: ignore[invalid-argument-type]
-        elif kind in _SKIPPED:
-            self.skipped[kind] += 1
-            outcome = f"skipped:{kind}:annotation"
-            if kind not in ANNOTATIONS:
-                reason = "unsupported-spatial-entity"
-                if isinstance(entity, Body) and not entity.acis_data:
-                    reason = "missing-acis-data"
-                self._gap(kind, layer, parent_block, reason, ref)
-                outcome = f"skipped:{kind}:{reason}"
+        elif kind in _SKIPPED or kind in UNDERLAYS:
+            outcome = self._not_drawn(entity, layer, parent_block, ref)
         else:
             outcome = self._linework(entity, ref, layer, parent_block, owner)
         self.outcomes[outcome] += 1
@@ -204,8 +236,13 @@ class _Walker:
         self, entity: DXFGraphic, ref: SourceRef, layer: str, block: str | None, owner: str | None
     ) -> str:
         kind = entity.dxftype()
+        # Починки контура штриховки (чёт-нечет, разрыв замкнут хордой) идут в исход объекта.
+        repairs: tuple[str, ...] = ()
         try:
-            geometry, error = self._geometry(entity)
+            if kind in _AREA_ENTITIES:
+                geometry, error, repairs = hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+            else:
+                geometry, error = self._geometry(entity)
         except HatchGeometryError as exc:
             return self._skip(kind, layer, block, str(exc), ref)
         if geometry is None or geometry.is_empty:
@@ -246,7 +283,8 @@ class _Walker:
                 symbol=owner,
             )
         )
-        return "feature"
+        # Починенный контур не молчит: исход несёт вид починки (feature:hatch-even-odd).
+        return "feature:" + "+".join(repairs) if repairs else "feature"
 
     def _visible(self, point: Point) -> bool:
         return all(region.covers(point) for region in self.clips)
@@ -261,7 +299,7 @@ class _Walker:
                 break
         return geometry
 
-    def _proxy(  # noqa: PLR0913 - как у вставки: слой, цепочка, блок и владелец-знак
+    def _drawn(  # noqa: PLR0913 - как у вставки: слой, цепочка, блок и владелец-знак
         self,
         entity: DXFGraphic,
         ref: SourceRef,
@@ -271,14 +309,17 @@ class _Walker:
         block: str | None,
         owner: str | None,
     ) -> str:
-        """Прокси-объект стороннего приложения читается по своему рисунку, как вставка:
-        примитивы рисунка на слое «0» получают слой объекта. Документ не меняется."""
+        """Объект, который CAD рисует набором примитивов, читается ими, как вставка: прокси-объект
+        стороннего приложения - по своему рисунку, мультилиния - линиями стиля на смещениях от
+        оси. Примитивы на слое «0» получают слой объекта. Документ не меняется."""
+        kind = entity.dxftype()
+        unreadable, empty, outcome = _DRAWN[kind]
         try:
             children = list(entity.virtual_entities())  # ty: ignore[unresolved-attribute]
         except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
-            return self._skip("ACAD_PROXY_ENTITY", layer, block, "proxy-graphic-not-readable", ref)
+            return self._skip(kind, layer, block, unreadable, ref)
         if not children:
-            return self._skip("ACAD_PROXY_ENTITY", layer, block, "unsupported-spatial-entity", ref)
+            return self._skip(kind, layer, block, empty, ref)
         for position, child in enumerate(children):
             self.visit(
                 child,
@@ -289,7 +330,21 @@ class _Walker:
                 parent_block=block,
                 owner=owner,
             )
-        return "proxy:graphic"
+        return outcome
+
+    def _not_drawn(self, entity: DXFGraphic, layer: str, block: str | None, ref: SourceRef) -> str:
+        """Объект без геометрии для расчёта: подложка, оформление или пробел с причиной."""
+        kind = entity.dxftype()
+        self.skipped[kind] += 1
+        if kind in UNDERLAYS:
+            return f"skipped:{kind}:underlay"
+        if kind in ANNOTATIONS:
+            return f"skipped:{kind}:annotation"
+        reason = "unsupported-spatial-entity"
+        if isinstance(entity, Body) and not entity.acis_data:
+            reason = "missing-acis-data"
+        self._gap(kind, layer, block, reason, ref)
+        return f"skipped:{kind}:{reason}"
 
     def _skip(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> str:
         self.skipped[kind] += 1
@@ -606,8 +661,6 @@ class _Walker:
                     # ломаная с дугами через все вершины, её погрешность ограничена.
                     error = None
                 return _polyline(points, closed=entity.is_closed), error
-            if kind in _AREA_ENTITIES:
-                return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
             if isinstance(entity, Spline) and (bounded := self._spline(entity)) is not None:
                 return bounded
             path = make_path(entity)

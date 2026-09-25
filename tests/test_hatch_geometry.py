@@ -9,7 +9,7 @@ import ezdxf
 import numpy as np
 import pytest
 import shapely
-from shapely.geometry import Point, box
+from shapely.geometry import Point, Polygon, box
 
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
@@ -125,10 +125,18 @@ def test_nested_islands_respect_style_and_ignore_vertex_winding(
     assert [area.covers(Point(i, 10)) for i in (1, 3, 5, 7)] == expected
 
 
-@pytest.mark.parametrize("kind", ["edge_gap", "open_polyline", "crossing_loops"])
-def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
-    tmp_path: Path, kind: str
+@pytest.mark.parametrize(
+    ("kind", "expected", "gap"),
+    [
+        ("edge_gap", box(0, 0, 10, 10), 2.0),
+        ("open_polyline", Polygon([(0, 0), (10, 0), (10, 10)]), math.hypot(10, 10)),
+    ],
+)
+def test_open_boundary_is_closed_by_a_chord_with_the_gap_as_its_error(
+    tmp_path: Path, kind: str, expected: Polygon, gap: float
 ) -> None:
+    """Разрыв контура замыкается хордой, как заливку замыкает CAD; неизвестный кусок контура не
+    молчит: длина разрыва уходит в погрешность, исход штриховки помечен починкой."""
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
@@ -138,14 +146,40 @@ def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
         path.add_line((10, 2), (10, 10))
         path.add_line((10, 10), (0, 10))
         path.add_line((0, 10), (0, 0))
-    elif kind == "open_polyline":
-        hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10)], is_closed=False)
     else:
+        hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10)], is_closed=False)
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    feature = scene.features[0]
+    assert feature.geometry.symmetric_difference(expected).area == pytest.approx(0.0, abs=1e-9)
+    assert feature.geometry_error_m >= gap - 1e-9
+    assert scene.read_diagnostics.outcomes["feature:hatch-gap-closed"] == 1
+
+
+@pytest.mark.parametrize("kind", ["crossing_loops", "bowtie"])
+def test_crossing_boundaries_are_filled_even_odd_as_cad_draws_them(
+    tmp_path: Path, kind: str
+) -> None:
+    """Пересекающиеся контуры и восьмёрка заливаются по правилу чёт-нечет: точно, без
+    погрешности, и исход штриховки помечен (решение пользователя 25.09.2026)."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    if kind == "crossing_loops":
         rectangle(hatch, (0, 0, 10, 10))
         rectangle(hatch, (5, 5, 15, 15))
+        expected = box(0, 0, 10, 10).symmetric_difference(box(5, 5, 15, 15))
+    else:
+        hatch.paths.add_polyline_path([(0, 0), (10, 10), (10, 0), (0, 10)], is_closed=True)
+        expected = Polygon([(0, 0), (5, 5), (0, 10)]).union(Polygon([(10, 0), (5, 5), (10, 10)]))
     scene = read(doc, tmp_path)
-    with pytest.raises(InputError):
-        require_complete_geometry(scene)
+    require_complete_geometry(scene)
+    feature = scene.features[0]
+    assert feature.geometry.is_valid
+    assert feature.geometry.symmetric_difference(expected).area == pytest.approx(0.0, abs=1e-9)
+    assert feature.geometry_error_m == 0
+    assert not feature.geometry.covers(Point(7.5, 7.5)) or kind == "bowtie"
+    assert scene.read_diagnostics.outcomes["feature:hatch-even-odd"] == 1
 
 
 def test_open_flag_with_explicitly_closed_vertices_is_accepted(tmp_path: Path) -> None:
@@ -209,3 +243,19 @@ def test_basic_mpolygon_keeps_its_hole(tmp_path: Path) -> None:
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     assert scene.features[0].geometry.area == 64
+
+
+def test_three_crossing_loops_count_every_crossing(tmp_path: Path) -> None:
+    """Точка в трёх контурах сразу залита (нечётно), в двух - нет (чётно)."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    for bounds in [(0, 0, 10, 10), (5, 0, 15, 10), (2.5, 5, 12.5, 15)]:
+        rectangle(hatch, bounds)
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    area = scene.features[0].geometry
+    assert area.covers(Point(7, 7))
+    assert not area.covers(Point(7, 2))
+    assert not area.covers(Point(3.5, 7))
+    assert area.covers(Point(1, 1))
