@@ -137,8 +137,19 @@ class DrawingPackage:
             loader.execute(xref_prefix=block.name)
             _clear_xref_flags(block)
             _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
-            if expanded_entity_counts(block) != expected:
-                raise InputError(f"XREF {block.name}: при внедрении потеряны/заменены сущности")
+            actual = expanded_entity_counts(block)
+            if actual != expected:
+                missing = expected - actual
+                added = actual - expected
+                details = "; ".join(
+                    f"{label}: "
+                    + ", ".join(f"{kind}×{count}" for kind, count in sorted(changes.items())[:5])
+                    for label, changes in (("недостаёт", missing), ("добавлено", added))
+                    if changes
+                )
+                raise InputError(
+                    f"XREF {block.name}: при внедрении потеряны/заменены сущности ({details})"
+                )
             self.bindings.append(
                 ReferenceBinding(
                     self.names[index],

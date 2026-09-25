@@ -179,6 +179,7 @@ def test_upload_names_survive_changed_disk_names_and_unicode_form(tmp_path: Path
         [host, asset], target, source_names=("пакет/основа.dwg", "пакет/сети/май.dwg")
     )
     assert len(EzdxfSceneReader().read(target).features) == 1
+    assert result.assembly is not None
     assert result.assembly.references[0].source == "пакет/сети/май.dwg"
 
 
@@ -290,7 +291,7 @@ def test_loss_inside_imported_block_is_detected(
     monkeypatch.setattr(xref.Loader, "execute", broken_import)
     target = tmp_path / "combined.dxf"
     target.write_bytes(b"previous successful result")
-    with pytest.raises(InputError, match="потеряны"):
+    with pytest.raises(InputError, match=r"потеряны.*недостаёт: LINE×1"):
         EzdxfDrawingMerger().merge([host, leaf], target)
     assert target.read_bytes() == b"previous successful result"
 
