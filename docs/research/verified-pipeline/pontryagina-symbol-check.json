@@ -1,0 +1,160 @@
+{
+  "scope": "Mechanical grouping of project INSERTs only. The 111 signs include trees and shrubs; the experimental existing_tree override tests grouping and provenance, not valid planting semantics. Block names do not establish species. One unrelated SPLINE gap keeps the full Genplan from passing strict geometry.",
+  "dwg_sha256": "6e5466166a1b7f6d6e733460ea2813656b0881d9c3ac69d81703814d78a7c1b4",
+  "pdf_sha256": "c2de11c7e8ec4b8872ca569d78f2bff400e5e36cd2c2bbf7734f1ecc3da6b7de",
+  "dxf_sha256": "2a7b567fa69d5d89bdc420980a80cc67244e904fbe70b53034603f76ad25b8d2",
+  "geometry_gaps": [
+    [
+      "SPLINE",
+      1
+    ]
+  ],
+  "selected_raw_parts": 777,
+  "selected_insert_instances": 111,
+  "raw_parts_per_insert": {
+    "7": 111
+  },
+  "insert_blocks": {
+    "дерево": 72,
+    "дерево_2": 13,
+    "дерево_3": 3,
+    "дерево_4": 9,
+    "дерево_5": 7,
+    "дерево_6": 5,
+    "дерево_7": 2
+  },
+  "logical_features_after_experimental_override": 111,
+  "logical_parts_per_feature": {
+    "7": 111
+  },
+  "source_parts_preserved_exactly": true,
+  "pdf_individual_plant_schedule": {
+    "Липа": 7,
+    "Яблоня декоративная": 3,
+    "Сирень венгерская": 81,
+    "Пузыреплодник": 5,
+    "Туя западная": 2,
+    "Черемуха Маака": 6,
+    "Черемуха Маака (мультиштамб)": 7
+  },
+  "pdf_individual_plant_total": 111,
+  "project_pdf_sha256": "f5d6d252a08395c4a8c03f085ecb1bfd754ee08105ae85ff676dccab95977e4d",
+  "project_pdf_schedule_page": 20,
+  "species_assignment_verified": false,
+  "cad_per_fragment": [
+    {
+      "fragment": 1,
+      "blocks": {
+        "дерево": 38,
+        "дерево_2": 6,
+        "дерево_3": 3,
+        "дерево_6": 5,
+        "дерево_7": 2
+      },
+      "total": 54,
+      "pdf_visible_individual_species": {
+        "apple": 3,
+        "lilac": 38,
+        "physocarpus": 5,
+        "thuja": 2,
+        "cherry_maak": 6
+      },
+      "pdf_total": 54
+    },
+    {
+      "fragment": 2,
+      "blocks": {
+        "дерево": 8
+      },
+      "total": 8,
+      "pdf_visible_individual_species": {
+        "lilac": 8
+      },
+      "pdf_total": 8
+    },
+    {
+      "fragment": 3,
+      "blocks": {
+        "дерево": 9,
+        "дерево_4": 3
+      },
+      "total": 12,
+      "pdf_visible_individual_species": {
+        "lilac": 12
+      },
+      "pdf_total": 12
+    },
+    {
+      "fragment": 4,
+      "blocks": {
+        "дерево": 3,
+        "дерево_5": 7
+      },
+      "total": 10,
+      "pdf_visible_individual_species": {
+        "linden": 7,
+        "lilac": 3
+      },
+      "pdf_total": 10
+    },
+    {
+      "fragment": 5,
+      "blocks": {
+        "дерево": 8
+      },
+      "total": 8,
+      "pdf_visible_individual_species": {
+        "lilac": 8
+      },
+      "pdf_total": 8
+    },
+    {
+      "fragment": 6,
+      "blocks": {
+        "дерево": 6,
+        "дерево_4": 6,
+        "дерево_2": 7
+      },
+      "total": 19,
+      "pdf_visible_individual_species": {
+        "lilac": 12,
+        "cherry_maak_multistem": 7
+      },
+      "pdf_total": 19
+    }
+  ],
+  "all_fragment_totals_match": true,
+  "pdf_fragment_sheets": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28
+  ],
+  "species_mapping_status": "Counts and symbol colors on the six visible PDF sheets support the listed species composition, but no per-INSERT species attribute was found; exact CAD-to-species identity remains an inference.",
+  "anchor_comparison": {
+    "before": {
+      "mean_offset_m": 1.93,
+      "median_offset_m": 1.768,
+      "max_offset_m": 2.828,
+      "circle_centres_over_1m": 208,
+      "circle_centres_tested": 222,
+      "classification_s_single_run": 0.2348,
+      "peak_rss_mb_single_run": 192.6
+    },
+    "after": {
+      "mean_offset_m": 0.0,
+      "median_offset_m": 0.0,
+      "max_offset_m": 0.0,
+      "circle_centres_over_1m": 0,
+      "circle_centres_tested": 222,
+      "classification_s_single_run": 0.2657,
+      "peak_rss_mb_single_run": 193.4
+    },
+    "same_dxf_sha256": "2a7b567fa69d5d89bdc420980a80cc67244e904fbe70b53034603f76ad25b8d2",
+    "logical_count_unchanged": true,
+    "symbol_parts_preserved_before_and_after": true,
+    "limitation": "Timing and peak RSS are one run each on macOS, not a stable benchmark; full Genplan still has an unrelated SPLINE geometry gap."
+  }
+}

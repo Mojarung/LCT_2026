@@ -64,6 +64,49 @@ def test_each_insert_is_one_tree_with_traced_parts(tmp_path: Path) -> None:
     } == {str(ref) for tree in trees for ref in tree.symbol_parts}
 
 
+@pytest.mark.parametrize(
+    ("rotation", "expected"),
+    [(0, (102, 203)), (90, (97, 202))],
+)
+def test_offset_insert_origin_uses_concentric_circle_center(
+    tmp_path: Path, rotation: int, expected: tuple[int, int]
+) -> None:
+    doc = ezdxf.new("R2018")
+    sign = doc.blocks.new("TREE_SIGN")
+    sign.add_circle((2, 3), 1.5)
+    sign.add_circle((2, 3), 0.25)
+    sign.add_line((1, 3), (3, 3))
+    doc.modelspace().add_blockref("TREE_SIGN", (100, 200), dxfattribs={"rotation": rotation})
+    path = tmp_path / "offset_origin.dxf"
+    doc.saveas(path)
+
+    _, classified = _classified(path)
+
+    trees = [f for f in classified.features if f.object_class is ObjectClass.EXISTING_TREE]
+    assert len(trees) == 1
+    assert next(iter(trees[0].geometry.coords)) == pytest.approx(expected)
+    assert trees[0].circle_center_m == pytest.approx(expected)
+    assert trees[0].geometry_error_m == pytest.approx(0)
+    assert len(trees[0].symbol_parts) == 3
+
+
+def test_nonconcentric_symbol_keeps_insert_origin(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    sign = doc.blocks.new("TREE_SIGN")
+    sign.add_circle((2, 3), 0.5)
+    sign.add_circle((4, 3), 0.5)
+    doc.modelspace().add_blockref("TREE_SIGN", (100, 200))
+    path = tmp_path / "ambiguous_circles.dxf"
+    doc.saveas(path)
+
+    _, classified = _classified(path)
+
+    trees = [f for f in classified.features if f.object_class is ObjectClass.EXISTING_TREE]
+    assert len(trees) == 1
+    assert next(iter(trees[0].geometry.coords)) == (100, 200)
+    assert len(trees[0].symbol_parts) == 2
+
+
 @pytest.mark.parametrize("nested", [False, True])
 def test_minsert_and_nested_blocks_keep_distinct_tree_instances(
     tmp_path: Path, *, nested: bool

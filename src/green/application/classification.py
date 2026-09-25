@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -54,6 +55,8 @@ _KIND_OF_TYPE = {
     "Polygon": GeometryKind.AREA,
     "MultiPolygon": GeometryKind.AREA,
 }
+
+_TREE_CONCENTRIC_CENTER_TOLERANCE_M = 0.02
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,20 +233,40 @@ def _collapse_tree_symbols(
     for key, parts in groups.items():
         instance = instances[key]
         first = parts[0]
+        x, y, position_error = _tree_symbol_position(parts, instance)
         collapsed[key] = replace(
             first,
             ref=instance.ref,
             block=instance.block,
-            geometry=Point(instance.x, instance.y),
+            geometry=Point(x, y),
             circle_radius_m=max((part.circle_radius_m or 0.0 for part in parts), default=0.0)
             or None,
-            circle_center_m=(instance.x, instance.y),
-            geometry_error_m=0.0,
+            circle_center_m=(x, y),
+            geometry_error_m=position_error,
             source_entity_type="INSERT",
             symbol_parts=tuple(dict.fromkeys(part.ref for part in parts)),
             symbol_layers=tuple(dict.fromkeys(part.layer for part in parts)),
         )
     return [collapsed[item] if isinstance(item, SourceRef) else item for item in output]
+
+
+def _tree_symbol_position(
+    parts: list[Feature], instance: InsertInstance
+) -> tuple[float, float, float]:
+    """Use concentric drawn rings; an INSERT base point can be offset from the trunk."""
+    centers = [
+        part.circle_center_m
+        for part in parts
+        if part.source_entity_type == "CIRCLE" and part.circle_center_m is not None
+    ]
+    if len(centers) < 2:  # noqa: PLR2004 - one decorative circle cannot establish a trunk
+        return instance.x, instance.y, 0.0
+    x = math.fsum(center[0] for center in centers) / len(centers)
+    y = math.fsum(center[1] for center in centers) / len(centers)
+    error = max(math.hypot(center[0] - x, center[1] - y) for center in centers)
+    if error > _TREE_CONCENTRIC_CENTER_TOLERANCE_M:
+        return instance.x, instance.y, 0.0
+    return x, y, error
 
 
 def _tree_symbol_instance(
