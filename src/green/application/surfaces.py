@@ -35,6 +35,8 @@ MAX_CELLS = 20_000_000
 _LINE_TYPES = frozenset({"LineString", "MultiLineString"})
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _TREE_SEED = 4
+# Знак массива (LISTVL, SM): грунт, занятый существующими деревьями - посадки внутри нет.
+_WOODLAND_SEED = 5
 
 
 class Material(IntEnum):
@@ -68,6 +70,8 @@ class SurfaceMap:
     soil_area: BaseGeometry | None = None
     paved_area: BaseGeometry | None = None
     uncertainty_area: BaseGeometry | None = None
+    # Грани со знаком существующего массива: грунт, но не место для новой посадки.
+    woodland_area: BaseGeometry | None = None
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
@@ -98,7 +102,9 @@ class SurfaceMap:
         This is deliberately conservative at raster edges; it is not a claim
         that the material inferred from labels is physically correct.
         """
-        on_soil = self.material(points) == Material.SOIL
+        on_soil = (self.material(points) == Material.SOIL) & self._clear_of_woodland(
+            points, radius_m
+        )
         if radius_m <= 0 or not len(points):
             return on_soil
         fits = np.zeros(len(points), dtype=bool)
@@ -127,6 +133,14 @@ class SurfaceMap:
         if self.uncertainty_area is not None:
             fits &= shapely.distance(points, self.uncertainty_area) >= radius_m
         return fits & on_soil
+
+    def _clear_of_woodland(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
+        if self.woodland_area is None or not len(points):
+            return np.ones(len(points), dtype=bool)
+        clear = ~shapely.intersects(self.woodland_area, points)
+        if radius_m > 0:
+            clear &= shapely.distance(points, self.woodland_area) >= radius_m
+        return clear
 
     def summary(self) -> dict[str, int | float]:
         counted = {m: int((self.grid == m).sum()) for m in Material}
@@ -179,7 +193,7 @@ class SurfaceMap:
         return rows, cols
 
 
-def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and named metric limits
+def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named metric limits
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
@@ -198,11 +212,12 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
     if inference_mode not in {"closed_faces", "distance"}:
         raise ValueError("Unknown surface inference mode")
     seed_xy, seed_kind = _seeds(features, labels)
-    if inference_mode == "closed_faces":
-        keep = seed_kind != _TREE_SEED
-        seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
+    # Деревья - затравка только для заливки по расстоянию, знаки массивов - только для граней:
+    # исключить посадку можно лишь из замкнутого контура массива.
+    keep = seed_kind != (_TREE_SEED if inference_mode == "closed_faces" else _WOODLAND_SEED)
+    seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
     paved = int((seed_kind == Material.PAVED).sum())
-    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED]).sum())
+    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED, _WOODLAND_SEED]).sum())
     polygons = [
         f
         for f in features
@@ -268,6 +283,7 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
+        woodland_area=_merge_material_area(None, faces.woodland, extent) if faces else None,
         closed_faces_mode=inference_mode == "closed_faces",
         closed_faces=faces.count if faces else 0,
         conflicting_faces=faces.conflicts if faces else 0,
@@ -334,11 +350,13 @@ def _closed_materials(
             or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
         ]
     )
+    woodland = seed_kind == _WOODLAND_SEED
     faces = closed_face_materials(
         separating_lines,
-        seed_xy[certain & (seed_kind == Material.SOIL)],
+        seed_xy[certain & ((seed_kind == Material.SOIL) | woodland)],
         seed_xy[certain & (seed_kind == Material.PAVED)],
         material_lines=material_lines,
+        woodland_xy=seed_xy[woodland],
     )
     return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
 
@@ -399,6 +417,16 @@ def _seeds(
         elif label.surface_role == "soil" or (label.surface_role == "auto" and text in SOIL_LABELS):
             xy.append((label.x, label.y))
             kind.append(int(Material.SOIL))
+    # Знак газона или массива внутри контура - признак материала, как подпись.
+    for feature in features:
+        if feature.source_entity_type != "SYMBOL_MARKER":
+            continue
+        if feature.object_class is ObjectClass.LAWN:
+            xy.append((feature.geometry.x, feature.geometry.y))
+            kind.append(int(Material.SOIL))
+        elif feature.object_class is ObjectClass.EXISTING_WOODLAND:
+            xy.append((feature.geometry.x, feature.geometry.y))
+            kind.append(_WOODLAND_SEED)
     trees = [f.geometry for f in features if f.object_class is ObjectClass.EXISTING_TREE]
     if trees:
         # Ствол и каждый кружок полосы деревьев - грунт; центр изогнутой полосы может лежать

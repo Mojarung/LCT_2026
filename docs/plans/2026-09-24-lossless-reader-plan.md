@@ -248,9 +248,14 @@ tuple[Feature, ...]` - точки `existing_tree` без владельца-зн
   `src/green/application/surface_faces.py` (`woodland_xy` -> `FaceMaterials.woodland`)
 - Тест: `tests/test_surface_woodland.py`
 
-- [ ] Тест: замкнутая грань со знаком `GAZON` без подписи - грунт.
-- [ ] Тест: грань со знаком `LISTVL` - грунт, но `fits_soil` ложно внутри неё.
-- [ ] Коммит `feat(surfaces): lawn and woodland symbols as face evidence`.
+- [x] Тест: замкнутая грань со знаком `GAZON` без подписи - грунт (раньше карта без подписей
+  не строилась вовсе, и в такой грани посадок не было).
+- [x] Тест: грань со знаком `LISTVL` - грунт, но `fits_soil` ложно внутри неё и при нулевом
+  радиусе; `SurfaceMap.woodland_area` - грани со знаком массива, в том числе неразрешённые.
+- [x] Коммит `feat(surfaces): lawn and woodland symbols as face evidence`.
+
+Ограничение: исключение массива работает в режиме замкнутых граней (по умолчанию). В режиме
+заливки по расстоянию знак массива не участвует: границы массива без контура не определить.
 
 ### Задача 9. Сборка улицы обратно (fidelity)
 

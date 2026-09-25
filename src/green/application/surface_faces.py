@@ -25,6 +25,8 @@ class FaceMaterials:
     unassigned_labels: int
     open_edges: int
     unsupported_boundaries: int
+    # Грани со знаком существующего массива, в том числе неразрешённые: сажать нельзя.
+    woodland: BaseGeometry | None = None
 
 
 def closed_face_materials(
@@ -33,6 +35,7 @@ def closed_face_materials(
     paved_xy: NDArray[np.float64],
     *,
     material_lines: NDArray[np.object_],
+    woodland_xy: NDArray[np.float64] | None = None,
 ) -> FaceMaterials:
     # Noding only splits actual intersections. No snapping or arbitrary bridge
     # may turn an unfinished contour into a positive planting region.
@@ -56,6 +59,7 @@ def closed_face_materials(
 
     soil, missed_soil = assigned(soil_xy)
     paved, missed_paved = assigned(paved_xy)
+    woodland, _ = assigned(woodland_xy if woodland_xy is not None else np.empty((0, 2)))
     # An unfinished material separator inside an otherwise closed face means
     # the outer face may contain several materials. Outside tails are harmless.
     incomplete = shapely.get_parts(shapely.union_all([cuts, dangles, invalid]))
@@ -78,4 +82,5 @@ def closed_face_materials(
         unassigned_labels=missed_soil + missed_paved,
         open_edges=sum(int(shapely.get_num_geometries(g)) for g in (cuts, dangles, invalid)),
         unsupported_boundaries=int((~supported).sum()),
+        woodland=shapely.union_all(faces[woodland]),
     )
