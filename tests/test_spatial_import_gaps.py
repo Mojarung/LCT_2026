@@ -5,14 +5,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import ezdxf
+import numpy as np
 import pytest
 from ezdxf.acis import api as acis
 from ezdxf.render import forms
+from shapely.geometry import Point, box
 from test_pipeline_synthetic import ROOT, _street
 
+from green.application.classification import classify_scene
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.application.results import SourceSnapshot
+from green.application.surfaces import Material, build_surface_map
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
@@ -20,6 +24,7 @@ from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import EzdxfIntegrityChecker, fingerprints
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
 from green.infrastructure.cad.reader import EzdxfSceneReader
+from green.infrastructure.config.repositories import YamlLayerMapSource
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,17 +73,58 @@ def test_unread_acis_is_blocking_even_if_payload_is_present(tmp_path: Path, kind
         require_complete_geometry(scene)
 
 
-def test_spatial_gap_inside_rotated_block_is_not_annotation(tmp_path: Path) -> None:
+def test_rotated_wipeout_keeps_uncertain_footprint(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
+    doc.units = 6
+    doc.layers.add("Газон")
+    doc.modelspace().add_lwpolyline(
+        [(0, 0), (300, 0), (300, 300), (0, 300)],
+        close=True,
+        dxfattribs={"layer": "Газон"},
+    )
     block = doc.blocks.new("unknown geometry")
     block.add_wipeout([(0, 0), (10, 0), (10, 10), (0, 10)])
-    doc.modelspace().add_blockref(block.name, (200, 100), dxfattribs={"rotation": 30})
+    doc.modelspace().add_blockref(
+        block.name, (200, 100), dxfattribs={"rotation": 30, "layer": "Газон"}
+    )
     path = tmp_path / "mask.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    mask = next(feature for feature in scene.features if feature.source_entity_type == "WIPEOUT")
+    assert mask.block == block.name
+    assert mask.geometry.area == pytest.approx(100)
+    assert mask.geometry.contains(Point(201.83, 106.83))
+    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
+    classified, _ = classify_scene(scene, rules)
+    mask = next(
+        feature for feature in classified.features if feature.source_entity_type == "WIPEOUT"
+    )
+    assert mask.object_class.value == "drawing_mask"
+    surface = build_surface_map(classified.features, classified.labels, box(0, 0, 300, 300), 0.5)
+    assert surface is not None
+    assert surface.material(np.array([Point(201.83, 106.83)], dtype=object))[0] == Material.UNKNOWN
+    assert not surface.fits_soil(np.array([Point(201.83, 106.83)], dtype=object), 1)[0]
+    assert surface.material(np.array([Point(50, 50)], dtype=object))[0] == Material.SOIL
+
+
+def test_invalid_wipeout_still_blocks_planning(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    doc.modelspace().add_wipeout([(0, 0), (10, 10), (0, 10), (10, 0)])
+    path = tmp_path / "invalid-mask.dxf"
+    doc.saveas(path)
     with pytest.raises(InputError, match="WIPEOUT"):
-        require_complete_geometry(scene)
-    assert scene.read_diagnostics.geometry_gaps[0].block == block.name
+        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
+
+
+def test_inverted_wipeout_clip_mode_still_blocks_planning(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    mask = doc.modelspace().add_wipeout([(0, 0), (10, 0), (10, 10), (0, 10)])
+    mask.dxf.clip_mode = 1
+    path = tmp_path / "inverted-mask.dxf"
+    doc.saveas(path)
+    with pytest.raises(InputError, match="WIPEOUT"):
+        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
 
 
 def test_image_cannot_silently_become_available_land(tmp_path: Path) -> None:

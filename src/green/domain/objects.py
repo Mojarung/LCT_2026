@@ -43,6 +43,7 @@ class ObjectClass(StrEnum):
     EXISTING_TREE = "existing_tree"
     EXISTING_SHRUB = "existing_shrub"
     LAWN = "lawn"
+    DRAWING_MASK = "drawing_mask"
     IGNORE = "ignore"
     UNKNOWN = "unknown"
 

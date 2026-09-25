@@ -129,6 +129,15 @@ def classify_scene(
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
     classified = []
     for feature in scene.features:
+        if feature.source_entity_type == "WIPEOUT":
+            classified.append(
+                replace(
+                    feature,
+                    object_class=ObjectClass.DRAWING_MASK,
+                    classification=ClassificationEvidence("entity_type"),
+                )
+            )
+            continue
         key = (
             feature.layer,
             feature.block,
@@ -223,8 +232,10 @@ def _tree_symbol_instance(
         if name_key(instance.block) in explicit_tree_blocks:
             return instance
     evidence = feature.classification
-    if evidence and evidence.method == "name_rule" and symbol_rules.intersection(
-        evidence.chosen_rules
+    if (
+        evidence
+        and evidence.method == "name_rule"
+        and symbol_rules.intersection(evidence.chosen_rules)
     ):
         # A layer-0 decorative child inherits the outer sign's semantic layer.
         # The nearest INSERT that actually declares this layer is its anchor.

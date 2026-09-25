@@ -12,6 +12,7 @@ import numpy as np
 import shapely
 from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
 from ezdxf.entities.boundary_paths import PolylinePath
+from ezdxf.entities.image import Wipeout
 from ezdxf.entities.polygon import DXFPolygon
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
@@ -67,6 +68,9 @@ _MAX_HATCH_CLOSURE_M = 0.002
 _ASSOCIATIVE_HATCH_MIN_AREA_RATIO = 0.5
 _ASSOCIATIVE_HATCH_MAX_AREA_RATIO = 1.5
 _DEGENERATE_LINE_ULPS = 64
+_WIPEOUT_MIN_VERTICES = 4
+_WIPEOUT_RECTANGLE_VERTICES = 2
+_WIPEOUT_MAX_Z_SPAN = 1e-9
 _SKIPPED = frozenset(
     {
         "ATTDEF",
@@ -75,7 +79,6 @@ _SKIPPED = frozenset(
         "MULTILEADER",
         "VIEWPORT",
         "IMAGE",
-        "WIPEOUT",
         "OLE2FRAME",
         "3DSOLID",
         "BODY",
@@ -414,6 +417,8 @@ class _Walker:
                     block_matrix=block_matrix,
                     sat_lines=self._region_sat(entity),
                 )
+            if isinstance(entity, Wipeout):
+                return _wipeout_geometry(entity)
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 extent = max(abs(start.x), abs(start.y), abs(end.x), abs(end.y))
@@ -612,6 +617,31 @@ class _Walker:
                 f"{self.collapsed_lines}"
             )
         return messages
+
+
+def _wipeout_geometry(entity: Wipeout) -> tuple[Polygon, float]:
+    """Retain the exact display mask as unknown terrain, including INSERT transforms."""
+    if entity.dxf.get("clip_mode", 0) != 0:
+        raise HatchGeometryError("wipeout-unsupported-clip-mode")
+    if (
+        entity.dxf.get("clipping", 0) == 0
+        and len(entity.boundary_path) != _WIPEOUT_RECTANGLE_VERTICES
+    ):
+        raise HatchGeometryError("wipeout-clipping-state-ambiguous")
+    if not entity.boundary_path:
+        raise HatchGeometryError("wipeout-invalid-boundary")
+    vertices = entity.boundary_path_wcs()
+    if len(vertices) < _WIPEOUT_MIN_VERTICES or not all(
+        math.isfinite(value) for vertex in vertices for value in (vertex.x, vertex.y, vertex.z)
+    ):
+        raise HatchGeometryError("wipeout-invalid-boundary")
+    z_span = max(vertex.z for vertex in vertices) - min(vertex.z for vertex in vertices)
+    if z_span > _WIPEOUT_MAX_Z_SPAN:
+        raise HatchGeometryError("wipeout-nonplanar-boundary")
+    mask = Polygon((vertex.x, vertex.y) for vertex in vertices)
+    if not mask.is_valid or mask.area <= 0:
+        raise HatchGeometryError("wipeout-invalid-boundary")
+    return mask, 0.0
 
 
 def _to_metres(
