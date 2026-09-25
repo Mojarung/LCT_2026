@@ -120,16 +120,20 @@ def _compare(
     """Пары «знак исходника - якорь сцены» в пределах допуска, каждый якорь один раз."""
     used = np.zeros(len(scene), dtype=bool)
     missing: list[Point2] = []
-    tree = STRtree(shapely.points(scene)) if scene else None
+    points = shapely.points(scene) if scene else None
+    tree = STRtree(points) if points is not None else None
     for x, y in source:
+        here = shapely.Point(x, y)
         near = (
-            tree.query(shapely.Point(x, y), predicate="dwithin", distance=tolerance_m)
-            if tree is not None
+            tree.query(here, predicate="dwithin", distance=tolerance_m)
+            if tree is not None and points is not None
             else np.empty(0, dtype=np.int64)
         )
         free = [int(i) for i in near if not used[i]]
         if free:
-            used[free[0]] = True
+            # Ближайший свободный, а не первый попавшийся: иначе соседние знаки в пределах
+            # допуска разбирались бы накрест и давали ложную пару «потерян - лишний».
+            used[min(free, key=lambda i: shapely.distance(here, points[i]))] = True
         else:
             missing.append((round(x, 3), round(y, 3)))
     extra = tuple((round(scene[i][0], 3), round(scene[i][1], 3)) for i in np.flatnonzero(~used))

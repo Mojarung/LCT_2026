@@ -106,3 +106,32 @@ def test_explicit_reclassification_is_not_a_loss(tmp_path: Path) -> None:
     )
 
     assert vegetation_census(records, scene, catalog).matches
+
+
+def test_close_neighbours_pair_with_their_nearest_anchor() -> None:
+    """Два знака ближе допуска друг к другу: пара - ближайший якорь, а не первый найденный."""
+    from green.application.symbols import SymbolCatalog, SymbolEntry, SymbolRole  # noqa: PLC0415
+    from green.domain.objects import Feature, Scene, SourceRef  # noqa: PLC0415
+    from shapely.geometry import Point  # noqa: PLC0415
+
+    catalog = SymbolCatalog({"DEREVO": SymbolEntry(ObjectClass.EXISTING_TREE, SymbolRole.POINT)})
+    anchors = [(0.0, 0.0), (0.0, 0.6)]
+    scene = Scene(
+        "s.dxf",
+        "0" * 64,
+        "AC1032",
+        tuple(
+            Feature(
+                SourceRef("0" * 8, "0" * 8, str(i)),
+                "t",
+                Point(xy),
+                block="DEREVO",
+                object_class=ObjectClass.EXISTING_TREE,
+                source_entity_type="SYMBOL",
+            )
+            for i, xy in enumerate(anchors)
+        ),
+    )
+    records = [CensusRecord("DEREVO", "t", 0.0, 0.5), CensusRecord("DEREVO", "t", 0.0, -0.3)]
+
+    assert vegetation_census(records, scene, catalog, tolerance_m=0.55).matches
