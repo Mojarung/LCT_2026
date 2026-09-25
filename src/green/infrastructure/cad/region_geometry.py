@@ -13,6 +13,8 @@ from ezdxf.acis.sat import SatEntity
 from ezdxf.math import Vec3
 from shapely.geometry import Polygon
 
+from green.infrastructure.cad.polygon_repair import repair_roundoff_self_intersection
+
 if TYPE_CHECKING:
     from ezdxf.acis.entities import Body
     from ezdxf.entities import Region
@@ -321,11 +323,11 @@ def _checked_polygon(vertices: list[Vec3]) -> Polygon:
     if not np.allclose(coordinates[:, 2], coordinates[0, 2], rtol=0, atol=1e-9):
         raise RegionGeometryError("acis-face-not-horizontal")
     polygon = Polygon(coordinates[:, :2])
-    if (
-        polygon.is_empty
-        or not polygon.is_valid
-        or not math.isfinite(polygon.area)
-        or polygon.area <= 0
-    ):
+    if polygon.is_empty or not math.isfinite(polygon.area) or polygon.area <= 0:
         raise RegionGeometryError("acis-polygon-invalid")
+    if not polygon.is_valid:
+        repaired = repair_roundoff_self_intersection(polygon)
+        if repaired is None:
+            raise RegionGeometryError("acis-polygon-invalid")
+        return repaired
     return polygon

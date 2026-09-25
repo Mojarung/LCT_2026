@@ -158,6 +158,35 @@ def test_open_flag_with_explicitly_closed_vertices_is_accepted(tmp_path: Path) -
     assert scene.features[0].geometry.area == 50
 
 
+def test_millimetre_seam_is_closed_with_reported_error(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_polyline_path(
+        [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.001)], is_closed=False
+    )
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    feature = scene.features[0]
+    assert feature.geometry.area == pytest.approx(100)
+    assert feature.geometry_error_m is not None
+    assert feature.geometry_error_m >= 0.001
+
+
+def test_large_curve_tolerance_does_not_close_centimetre_seam(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_polyline_path(
+        [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.01)], is_closed=False
+    )
+    source = tmp_path / "open.dxf"
+    doc.saveas(source)
+    scene = EzdxfSceneReader(flatten_distance_m=10).read(source)
+    with pytest.raises(InputError, match="HATCH"):
+        require_complete_geometry(scene)
+
+
 @pytest.mark.parametrize("start", [11.1, 40.1, -45.1, 355.9])
 @pytest.mark.parametrize("kind", ["HATCH", "ARC"])
 @pytest.mark.parametrize("end_shift", [-math.inf, math.inf])

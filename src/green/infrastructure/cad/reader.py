@@ -54,6 +54,7 @@ _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
 _ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
 _GAP_EXAMPLES = 5
+_MAX_HATCH_CLOSURE_M = 0.002
 _ASSOCIATIVE_HATCH_MIN_AREA_RATIO = 0.5
 _ASSOCIATIVE_HATCH_MAX_AREA_RATIO = 1.5
 _SKIPPED = frozenset(
@@ -406,7 +407,11 @@ class _Walker:
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
                 try:
-                    return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+                    return hatch_geometry(
+                        entity,  # ty: ignore[invalid-argument-type]
+                        self.flatten,
+                        max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
+                    )
                 except HatchGeometryError as error:
                     if str(error) != "hatch-open-boundary":
                         raise

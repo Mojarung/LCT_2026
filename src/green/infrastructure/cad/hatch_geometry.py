@@ -9,7 +9,7 @@ import numpy as np
 import shapely
 from ezdxf.entities import LWPolyline
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
-from ezdxf.math import Vec2
+from ezdxf.math import Vec2, Vec3
 from shapely import STRtree
 from shapely.geometry import MultiPolygon, Polygon
 
@@ -19,6 +19,7 @@ from green.infrastructure.cad.curve_paths import (
     ellipse_tool_vertices,
     polyline_vertices,
 )
+from green.infrastructure.cad.polygon_repair import repair_roundoff_self_intersection
 
 if TYPE_CHECKING:
     from ezdxf.entities.boundary_paths import AbstractBoundaryPath, AbstractEdge
@@ -29,7 +30,12 @@ class HatchGeometryError(ValueError):
     """A specific unsupported or ambiguous area, recorded in import diagnostics."""
 
 
-def hatch_geometry(entity: DXFPolygon, distance: float) -> tuple[Polygon | MultiPolygon, float]:
+_MAX_CLOSURE_FRACTION = 0.02
+
+
+def hatch_geometry(
+    entity: DXFPolygon, distance: float, *, max_closure: float
+) -> tuple[Polygon | MultiPolygon, float]:
     if entity.dxftype() == "MPOLYGON":
         if Vec2(entity.dxf.offset_vector).magnitude:
             raise HatchGeometryError("mpolygon-offset-not-supported")
@@ -42,24 +48,45 @@ def hatch_geometry(entity: DXFPolygon, distance: float) -> tuple[Polygon | Multi
     rings, errors = [], []
     vertices_used = 0
     for path in entity.paths.rendering_paths(style):
-        points, error = _ring(path, distance)
+        points, error = _ring(path, distance, max_closure)
         vertices_used += len(points)
         if vertices_used > MAX_VERTICES:
             raise HatchGeometryError("hatch-vertex-budget-exceeded")
         vertices = [ocs.to_wcs((x, y, elevation)) for x, y in points]
-        polygon = Polygon([(v.x, v.y) for v in vertices])
-        if not np.isfinite(shapely.get_coordinates(polygon)).all():
-            raise HatchGeometryError("hatch-non-finite-coordinates")
-        if polygon.is_empty or not polygon.is_valid or polygon.area == 0:
-            raise HatchGeometryError("hatch-invalid-ring")
-        rings.append(polygon)
+        rings.append(_checked_ring(vertices))
         errors.append(error)
     if not rings:
         raise HatchGeometryError("hatch-no-rendered-boundary")
+    return _compose_rings(rings, errors)
+
+
+def _checked_ring(vertices: list[Vec3]) -> Polygon:
+    polygon = Polygon([(v.x, v.y) for v in vertices])
+    if not np.isfinite(shapely.get_coordinates(polygon)).all():
+        raise HatchGeometryError("hatch-non-finite-coordinates")
+    if polygon.is_empty or polygon.area == 0:
+        raise HatchGeometryError("hatch-invalid-ring")
+    if not polygon.is_valid:
+        repaired = repair_roundoff_self_intersection(polygon)
+        if repaired is None:
+            raise HatchGeometryError("hatch-invalid-ring")
+        polygon = repaired
+    return polygon
+
+
+def _compose_rings(
+    rings: list[Polygon], errors: list[float]
+) -> tuple[Polygon | MultiPolygon, float]:
+    if len(rings) == 1:
+        return rings[0], errors[0]
+    if any(ring.interiors for ring in rings):
+        raise HatchGeometryError("hatch-repaired-ring-nesting-unsupported")
     return _nested_area(rings), max(errors)
 
 
-def _ring(path: AbstractBoundaryPath, distance: float) -> tuple[list[tuple[float, float]], float]:
+def _ring(
+    path: AbstractBoundaryPath, distance: float, max_closure: float
+) -> tuple[list[tuple[float, float]], float]:
     if isinstance(path, PolylinePath):
         line = LWPolyline.new(dxfattribs={"flags": int(path.is_closed)})
         line.set_points(path.vertices, format="xyb")
@@ -71,9 +98,10 @@ def _ring(path: AbstractBoundaryPath, distance: float) -> tuple[list[tuple[float
     if len(points) < 3:  # noqa: PLR2004 - minimum polygon vertex count
         raise HatchGeometryError("hatch-degenerate-ring")
     gap = Vec2(points[0]).distance(Vec2(points[-1]))
-    # A closed polyline includes its closing edge by definition. An open one or
-    # edge path must actually meet; do not invent a missing boundary segment.
-    if gap > distance * 1e-6:
+    # Permit a seam shorter than 2% of the curve bound and an absolute cap.
+    # Moving the final point to the first changes the boundary by at most gap;
+    # that displacement is included in the returned error bound.
+    if gap > min(distance * _MAX_CLOSURE_FRACTION, max_closure):
         raise HatchGeometryError("hatch-open-boundary")
     points[-1] = points[0]
     return points, error + gap
