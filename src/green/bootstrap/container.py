@@ -22,6 +22,7 @@ from green.infrastructure.config.repositories import (
     YamlRuleBookSource,
     YamlSpeciesCatalog,
 )
+from green.infrastructure.convert.hybrid import HybridDwgConverter
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
 from green.infrastructure.inventory import read_inventory
@@ -30,7 +31,7 @@ from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
 from green.infrastructure.storage.runs import FileSystemRunStore
 from green.infrastructure.streets import JsonStreetCatalog
 
-type Converter = LibreDwgConverter | OdaFileConverter
+type Converter = HybridDwgConverter | LibreDwgConverter | OdaFileConverter
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,12 +123,18 @@ def build_container(settings: Settings | None = None) -> Container:
 
 
 def _converters(settings: Settings) -> tuple[Converter, ...]:
+    hybrid = HybridDwgConverter(
+        libredwg_binary=settings.libredwg_binary,
+        bridge_binary=settings.acis_bridge_binary,
+        timeout_s=settings.converter_timeout_s,
+    )
     oda = OdaFileConverter(binary=settings.oda_binary, timeout_s=settings.converter_timeout_s)
     libredwg = LibreDwgConverter(
         binary=settings.libredwg_binary, timeout_s=settings.converter_timeout_s
     )
     choice: dict[str, tuple[Converter, ...]] = {
-        "auto": (oda, libredwg),
+        "auto": (hybrid, oda, libredwg),
+        "hybrid": (hybrid,),
         "oda": (oda,),
         "libredwg": (libredwg,),
         "none": (),

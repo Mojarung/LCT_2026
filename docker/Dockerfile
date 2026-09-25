@@ -11,6 +11,13 @@ ARG LIBREDWG_VERSION=0.14
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
+# The bridge is used only during DWG conversion. It runs locally without a GPU or API.
+FROM rust:bookworm AS acis_bridge
+WORKDIR /src
+COPY tools/acis_bridge/Cargo.toml tools/acis_bridge/Cargo.lock ./
+COPY tools/acis_bridge/src ./src
+RUN cargo build --locked --release
+
 # LibreDWG собирается из исходников статически: в репозиториях Ubuntu 26.04 пакета нет.
 FROM ubuntu:${UBUNTU_VERSION} AS libredwg
 ARG LIBREDWG_VERSION
@@ -61,6 +68,7 @@ RUN apt-get update \
     fi \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=libredwg /opt/libredwg/bin /usr/local/bin
+COPY --from=acis_bridge /src/target/release/green-acis-bridge /usr/local/bin/
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/venv /opt/venv
 COPY config /app/config

@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     # Датасета на стенде может не быть: тогда каталог просто пуст.
     streets_dir: Path = Path("dataset/streets_dxf")
     default_profile: str = "strict"
-    converter: Literal["auto", "libredwg", "oda", "none"] = "auto"
+    converter: Literal["auto", "hybrid", "libredwg", "oda", "none"] = "auto"
     libredwg_binary: str = "dwg2dxf"
+    acis_bridge_binary: str = "green-acis-bridge"
     oda_binary: str = "ODAFileConverter"
     converter_timeout_s: int = Field(default=600, ge=10, le=7200)
     text_font: str = "DejaVuSans.ttf"

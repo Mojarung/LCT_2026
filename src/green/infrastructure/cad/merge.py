@@ -13,12 +13,16 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import TYPE_CHECKING
 
 from ezdxf import transform, xref
+from ezdxf.entities import Region
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
+from green.infrastructure.cad.acis_sidecar import load_region_sidecar, sidecar_path
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
@@ -93,6 +97,7 @@ class EzdxfDrawingMerger:
         if target.resolve() in {source.resolve() for source in sources}:
             raise InputError("Склейка не может перезаписать один из исходных файлов")
         package = DrawingPackage.load(sources, source_names)
+        sat_by_sab = _collect_region_sidecars(sources, package.documents)
         package.resolve()
         base = package.documents[0]
         notes = package.notes
@@ -144,7 +149,64 @@ class EzdxfDrawingMerger:
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         _save_package(base, target)
+        _propagate_region_sidecars(sat_by_sab, target)
         return MergeResult(path=target, notes=tuple(notes), assembly=assembly)
+
+
+def _collect_region_sidecars(
+    sources: Sequence[Path], documents: Sequence[Drawing]
+) -> dict[str, str]:
+    sat_by_sab: dict[str, str] = {}
+    for source, doc in zip(sources, documents, strict=True):
+        path = sidecar_path(source)
+        if not path.exists():
+            continue
+        with source.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        load_region_sidecar(source, digest, doc)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for entry in payload["regions"].values():
+            sab_digest = entry["sab_sha256"]
+            sat = entry["sat"]
+            if sab_digest in sat_by_sab and sat_by_sab[sab_digest] != sat:
+                raise InputError("Склейка: одинаковый SAB получил разные SAT-контуры")
+            sat_by_sab[sab_digest] = sat
+    return sat_by_sab
+
+
+def _propagate_region_sidecars(sat_by_sab: dict[str, str], target: Path) -> None:
+    """Follow SAB content through ezdxf handle remapping when drawings are merged."""
+    if not sat_by_sab:
+        sidecar_path(target).unlink(missing_ok=True)
+        return
+    merged, _ = load_document(target)
+    regions = [entity for entity in merged.entitydb.values() if isinstance(entity, Region)]
+    mapped = {}
+    used: set[str] = set()
+    for region in regions:
+        if not region.sab:
+            continue
+        digest = hashlib.sha256(region.sab).hexdigest()
+        sat = sat_by_sab.get(digest)
+        if sat is not None:
+            mapped[region.dxf.handle] = {"sab_sha256": digest, "sat": sat}
+            used.add(digest)
+    if used != sat_by_sab.keys():
+        raise InputError("Склейка: один или несколько ACIS REGION потеряны или изменены")
+    with target.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    payload = {
+        "schema": 1,
+        "engine": "acadrust",
+        "engine_version": "0.5.5",
+        "dxf_sha256": digest,
+        "source_regions": len(regions),
+        "regions": mapped,
+    }
+    sidecar_path(target).write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
+    load_region_sidecar(target, digest, merged)
 
 
 def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> None:

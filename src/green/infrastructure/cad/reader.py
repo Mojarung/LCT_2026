@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
+from ezdxf.entities.boundary_paths import PolylinePath
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
@@ -26,6 +27,7 @@ from green.domain.objects import (
     SourceRef,
     TextLabel,
 )
+from green.infrastructure.cad.acis_sidecar import load_region_sidecar
 from green.infrastructure.cad.curve_paths import (
     circle_vertices,
     ellipse_vertices,
@@ -51,6 +53,8 @@ _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
 _ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
 _GAP_EXAMPLES = 5
+_ASSOCIATIVE_HATCH_MIN_AREA_RATIO = 0.5
+_ASSOCIATIVE_HATCH_MAX_AREA_RATIO = 1.5
 _SKIPPED = frozenset(
     {
         "ATTDEF",
@@ -83,6 +87,7 @@ class EzdxfSceneReader:
     def read(self, path: Path, *, unit: str = AUTO) -> Scene:
         digest = _sha256(path)
         doc, warnings = self._documents.load(path) if self._documents else load_document(path)
+        region_sat = load_region_sidecar(path, digest, doc)
         units = decide_units(doc, unit)
         # Обход идёт в единицах чертежа, поэтому метровые пороги делятся на размер единицы.
         walker = _Walker(
@@ -90,6 +95,7 @@ class EzdxfSceneReader:
             file_sha8=digest[:8],
             flatten=self._flatten / units.unit_m,
             unit_m=units.unit_m,
+            region_sat=region_sat,
         )
         for entity in doc.modelspace():
             walker.visit(entity, parent_layer=None, chain=(), parent_handle="", index=0)
@@ -100,7 +106,12 @@ class EzdxfSceneReader:
             dxf_version=doc.dxfversion,
             features=features,
             labels=labels,
-            warnings=(*warnings, *units.notes, *walker.warnings()),
+            warnings=(
+                *warnings,
+                *units.notes,
+                *((f"Восстановлен ACIS REGION: {len(region_sat)}",) if region_sat else ()),
+                *walker.warnings(),
+            ),
             unit_m=units.unit_m,
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
@@ -121,6 +132,7 @@ class _Walker:
     file_sha8: str
     flatten: float
     unit_m: float = 1.0
+    region_sat: dict[str, tuple[str, ...]] = field(default_factory=dict)
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
@@ -342,13 +354,18 @@ class _Walker:
             )
         )
 
-    def _geometry(  # noqa: C901, PLR0911 - one branch per entity type
+    def _geometry(  # noqa: C901, PLR0911, PLR0912 - one branch per entity type
         self, entity: DXFGraphic, *, block_matrix: Matrix44 | None = None
     ) -> tuple[BaseGeometry | None, float | None]:
         kind = entity.dxftype()
         try:
             if isinstance(entity, Region):
-                return region_polygon(entity, flatten=self.flatten, block_matrix=block_matrix)
+                return region_polygon(
+                    entity,
+                    flatten=self.flatten,
+                    block_matrix=block_matrix,
+                    sat_lines=self.region_sat.get(entity.dxf.handle),
+                )
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 return LineString([(start.x, start.y), (end.x, end.y)]), 0.0
@@ -375,14 +392,67 @@ class _Walker:
                     error = None  # fit/spline-generated vertices need separate semantics
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
-                return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+                try:
+                    return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+                except HatchGeometryError as error:
+                    if str(error) != "hatch-open-boundary":
+                        raise
+                    return self._associated_region_hatch(entity, block_matrix)
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
-        except (HatchGeometryError, RegionGeometryError):
+        except HatchGeometryError, RegionGeometryError:
             raise
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None
         return _polyline(vertices, closed=path.is_closed), None if path.has_curves else 0.0
+
+    def _associated_region_hatch(
+        self, hatch: DXFGraphic, block_matrix: Matrix44 | None
+    ) -> tuple[BaseGeometry, float]:
+        """Use a HATCH's explicit source REGION only when its vertices agree."""
+        paths = hatch.paths.paths  # ty: ignore[unresolved-attribute]
+        if not hatch.dxf.get("associative", 0) or len(paths) != 1:
+            raise HatchGeometryError("hatch-open-boundary")
+        path = paths[0]
+        handles = path.source_boundary_objects
+        if not isinstance(path, PolylinePath) or len(handles) != 1:
+            raise HatchGeometryError("hatch-open-boundary")
+        source = self.doc.entitydb.get(handles[0])
+        if (
+            not isinstance(source, Region)
+            or source.dxf.get("owner") != hatch.dxf.get("owner")
+            or source.dxf.get("layer", "0") != hatch.dxf.get("layer", "0")
+        ):
+            raise HatchGeometryError("hatch-open-boundary")
+        local, error = region_polygon(
+            source, flatten=self.flatten, sat_lines=self.region_sat.get(source.dxf.handle)
+        )
+        if not path.vertices:
+            raise HatchGeometryError("hatch-open-boundary")
+        tolerance = max(error, 0.002 / self.unit_m)
+        ocs = hatch.ocs()
+        elevation = hatch.dxf.elevation.z
+        points = [ocs.to_wcs((x, y, elevation)) for x, y, _ in path.vertices]
+        if any(local.boundary.distance(Point(point.x, point.y)) > tolerance for point in points):
+            raise HatchGeometryError("hatch-open-boundary")
+        rough = Polygon([(point.x, point.y) for point in points])
+        # A few associative paths self-intersect in their millimetre-sized
+        # closure seam after DXF rounding. The REGION is the actual geometry;
+        # this coarse area check only guards against an unrelated source link.
+        if not (
+            _ASSOCIATIVE_HATCH_MIN_AREA_RATIO
+            <= rough.area / local.area
+            <= _ASSOCIATIVE_HATCH_MAX_AREA_RATIO
+        ):
+            raise HatchGeometryError("hatch-open-boundary")
+        if block_matrix is None:
+            return local, error
+        return region_polygon(
+            source,
+            flatten=self.flatten,
+            block_matrix=block_matrix,
+            sat_lines=self.region_sat.get(source.dxf.handle),
+        )
 
     def warnings(self) -> list[str]:
         messages = []

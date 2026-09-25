@@ -366,12 +366,13 @@ def require_valid_plan(result: PlanValidation) -> None:
 def to_dxf(
     converters: Sequence[DrawingConverter], source: Path, work_dir: Path
 ) -> tuple[Path, str | None]:
-    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер."""
+    """DXF отдаётся как есть, DWG конвертирует доступный конвертер."""
     suffix = source.suffix.lower()
     if suffix == ".dxf":
         return source, None
     if suffix != ".dwg":
         raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+    failed: list[str] = []
     for converter in converters:
         if converter.available():
             # Packages often contain different drawings with the same basename.
@@ -381,5 +382,10 @@ def to_dxf(
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             converted_dir = work_dir / "converted" / digest[:20]
             converted_dir.mkdir(parents=True, exist_ok=True)
-            return converter.to_dxf(source, converted_dir), converter.name
-    raise ConversionError("Нет доступного конвертера DWG -> DXF (LibreDWG или ODA File Converter)")
+            try:
+                return converter.to_dxf(source, converted_dir), converter.name
+            except ConversionError as error:
+                failed.append(f"{converter.name}: {error}")
+    if failed:
+        raise ConversionError("DWG -> DXF: " + "; ".join(failed))
+    raise ConversionError("Нет доступного конвертера DWG -> DXF")

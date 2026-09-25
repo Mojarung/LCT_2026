@@ -15,7 +15,7 @@ flowchart LR
             api["Granian ASGI :8000<br/>FastAPI /api/v1"]
             cli["green CLI<br/>run / audit / inspect / verify"]
             core["Ядро: ezdxf, Shapely, numpy, scipy<br/>config/: rules.yaml, layer_map.yaml, species.yaml, profiles/"]
-            dwg["dwg2dxf (LibreDWG 0.14)<br/>ODA File Converter по флагу сборки"]
+            dwg["dwg2dxf + green-acis-bridge<br/>ODA File Converter по флагу сборки"]
             api --> core
             cli --> core
             core --> dwg
@@ -97,7 +97,12 @@ flowchart LR
    docker compose run --rm api green verify "/dataset/улица.dxf" /out/street/result.dxf
    ```
 
-   DWG на входе конвертируется внутри контейнера (`dwg2dxf`), конвертированный DXF остаётся рядом с результатом.
+   DWG на входе конвертируется внутри контейнера. При доступном `green-acis-bridge`
+   конвертер переносит из DWG секцию AcDs с геометрией REGION в DXF LibreDWG и
+   проверяет хеши исходного файла, DXF и каждого SAB. Конвертированный DXF и
+   `*.acis.json` остаются рядом с результатом. Если мост не сможет обработать
+   конкретный DWG, режим `auto` перейдёт к следующему конвертеру; непрочитанная
+   пространственная геометрия по-прежнему остановит строгий расчёт.
 
 6. Открыть `out/street/result.dxf` в nanoCAD или QCAD: исходные слои на месте, результат на слоях `GREEN_*` (деревья `GREEN_TREES`, кустарники `GREEN_SHRUBS`, отказы `GREEN_REJECT`, зоны `GREEN_ZONE_*`, подписи `GREEN_LABELS`). У каждой посадки атрибуты `NUM`, `SPECIES`, `NPA` и XDATA `LCT_GREEN` с id решения и списком правил; полный текст объяснения по номеру - в `interpretations.csv`.
 
@@ -109,7 +114,14 @@ uv run green run улица.dxf --profile strict
 uv run green serve --port 8000
 ```
 
-Для DWG нужен `dwg2dxf` (LibreDWG 0.14) в `PATH` или путь в `GREEN_LIBREDWG_BINARY`; без него принимаются только DXF.
+Для DWG нужен `dwg2dxf` (LibreDWG 0.14) в `PATH` или путь в
+`GREEN_LIBREDWG_BINARY`. Для восстановления REGION из AcDs дополнительно соберите
+локальный мост командой
+`cargo build --locked --release --manifest-path tools/acis_bridge/Cargo.toml`
+и задайте `GREEN_ACIS_BRIDGE_BINARY` как абсолютный
+путь к `tools/acis_bridge/target/release/green-acis-bridge`. Docker собирает и
+включает оба инструмента автоматически. Runtime не требует Rust, GPU, API или
+сети. Если мост не установлен, `auto` использует прежние конвертеры.
 
 ## Переменные окружения
 
@@ -120,8 +132,8 @@ uv run green serve --port 8000
 | `GREEN_CONFIG_DIR` | `config` (`/app/config` в образе) | нормы, классификатор слоёв, каталог видов, профили |
 | `GREEN_RUNS_DIR` | `var/runs` (`/data/runs` в образе) | прогоны API: вход, артефакты, статусы |
 | `GREEN_DEFAULT_PROFILE` | `strict` | профиль, если запрос его не задал |
-| `GREEN_CONVERTER` | `auto` | `auto`, `libredwg`, `oda`, `none` |
-| `GREEN_LIBREDWG_BINARY`, `GREEN_ODA_BINARY` | `dwg2dxf`, `ODAFileConverter` | пути к конвертерам |
+| `GREEN_CONVERTER` | `auto` | `auto`, `hybrid`, `libredwg`, `oda`, `none` |
+| `GREEN_LIBREDWG_BINARY`, `GREEN_ACIS_BRIDGE_BINARY`, `GREEN_ODA_BINARY` | `dwg2dxf`, `green-acis-bridge`, `ODAFileConverter` | пути к конвертерам |
 | `GREEN_CONVERTER_TIMEOUT_S` | `600` | предел на конвертацию одного DWG |
 | `GREEN_TEXT_FONT` | `DejaVuSans.ttf` | шрифт стиля `GREEN_TEXT` (кириллица в подписях) |
 | `GREEN_CORS_ORIGINS` | пусто | JSON-список источников для браузерного клиента |

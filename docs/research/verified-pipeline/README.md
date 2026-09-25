@@ -72,7 +72,7 @@
 ReportLab. В DIR нужны DejaVuSans.ttf, DejaVuSans-Bold.ttf и DejaVuSansMono.ttf;
 это зависимости документации, не сервиса. После правки нужно заново собрать PDF,
 отрисовать все страницы и проверить их визуально. Текущая записка соответствует
-этапу E42; будущие изменения алгоритма нужно отражать в обоих форматах.
+этапу E44; будущие изменения алгоритма нужно отражать в обоих форматах.
 
 Практический порядок уточнения незнакомых слоёв и границы исследовательского режима:
 [input-semantics.md](input-semantics.md). Последняя проверка назначений на реальных
@@ -121,3 +121,7 @@ ReportLab. В DIR нужны DejaVuSans.ttf, DejaVuSans-Bold.ttf и DejaVuSansMo
 `region_polygon_real_comparison.json`, `region_ellipse_real_comparison.json`,
 `region_ellipse_synthetic_read_comparison.json`,
 `region_ellipse_portfolio_survey.json`, `region_ellipse_semantics.json`.
+
+Восстановление AcDs REGION из оригинального DWG без переписывания прочих секций
+DXF, три независимых входа и оставшаяся семантическая неопределённость:
+[E44](findings.md#e44--восстановление-acds-region-без-переписывания-dxf-25092026).

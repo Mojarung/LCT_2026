@@ -42,4 +42,7 @@ def publish_conversion(
     except InputError as error:
         raise ConversionError(f"{name}: {error}") from error
     fresh.replace(target)
+    # A previous hybrid conversion of the same DWG may have left a SAT sidecar.
+    # Plain DXF output must never inherit metadata tied to different bytes.
+    target.with_suffix(".acis.json").unlink(missing_ok=True)
     return target

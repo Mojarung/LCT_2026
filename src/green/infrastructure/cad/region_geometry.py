@@ -37,13 +37,18 @@ class RegionGeometryError(ValueError):
 
 
 def region_polygon(
-    region: Region, *, flatten: float, block_matrix: Matrix44 | None = None
+    region: Region,
+    *,
+    flatten: float,
+    block_matrix: Matrix44 | None = None,
+    sat_lines: tuple[str, ...] | None = None,
 ) -> tuple[Polygon, float]:
     """Return a footprint and an upper bound on curve sampling error in DXF units."""
-    if not region.sat and not region.sab:
+    sat_data = sat_lines if sat_lines is not None else region.sat
+    if not sat_data and not region.sab:
         raise RegionGeometryError("missing-acis-data")
     try:
-        loader = SatLoader(region.sat) if region.sat else None
+        loader = SatLoader(sat_data) if sat_data else None
         if loader is None:
             bodies = api.load_dxf(region)
         else:
@@ -52,12 +57,18 @@ def region_polygon(
         if len(bodies) != 1:
             raise RegionGeometryError("acis-body-count-unsupported")
         body = bodies[0]
-        edges, curved, node_count = _validated_edge_count(body)
+        edges, curved, reachable = _validated_edge_count(body)
+        if loader is not None:
+            detached = [
+                record
+                for record in loader.records
+                if id(loader.entities[id(record)]) not in reachable
+            ]
+            if len(detached) > 1 or any(record.name != "asmheader" for record in detached):
+                raise RegionGeometryError("acis-detached-entities")
         if curved:
             if loader is None:
                 raise RegionGeometryError("acis-curved-sab-unsupported")
-            if len(loader.records) != node_count:
-                raise RegionGeometryError("acis-detached-entities")
             raw = {
                 id(loader.entities[id(record)]): record
                 for record in loader.records
@@ -71,7 +82,7 @@ def region_polygon(
         raise RegionGeometryError("acis-parse-error") from exc
 
 
-def _validated_edge_count(body: Body) -> tuple[int, bool, int]:
+def _validated_edge_count(body: Body) -> tuple[int, bool, set[int]]:
     nodes = tuple(api.AcisDebugger(body).walk())
     counts = Counter(node.type for node in nodes)
     if counts.keys() - _ALLOWED:
@@ -87,7 +98,7 @@ def _validated_edge_count(body: Body) -> tuple[int, bool, int]:
         raise RegionGeometryError("acis-curve-count-unsupported")
     if not _closed_loop(body, edges, curved=curved):
         raise RegionGeometryError("acis-loop-open-or-ambiguous")
-    return edges, curved, len(nodes)
+    return edges, curved, {id(node) for node in nodes}
 
 
 def _closed_loop(body: Body, edges: int, *, curved: bool) -> bool:
@@ -296,7 +307,7 @@ def _linear_scale_bound(body_matrix: Matrix44 | None, block_matrix: Matrix44 | N
         return 1.0
     basis = (Vec3(1, 0, 0), Vec3(0, 1, 0), Vec3(0, 0, 1))
     scale = math.sqrt(
-        sum(_transform_direction(axis, body_matrix, block_matrix).magnitude**2 for axis in basis)
+        sum(_transform_direction(axis, body_matrix, block_matrix).magnitude ** 2 for axis in basis)
     )
     if not math.isfinite(scale):
         raise RegionGeometryError("acis-transform-invalid")
