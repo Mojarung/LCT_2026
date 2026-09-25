@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -9,8 +10,9 @@ import numpy as np
 import shapely
 from ezdxf.entities import LWPolyline
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
-from ezdxf.math import Vec2, Vec3
+from ezdxf.math import Vec2
 from shapely import STRtree
+from shapely.errors import GEOSException
 from shapely.geometry import MultiPolygon, Polygon
 
 from green.infrastructure.cad.curve_paths import (
@@ -31,6 +33,8 @@ class HatchGeometryError(ValueError):
 
 
 _MAX_CLOSURE_FRACTION = 0.02
+_MAX_MATCH_AREA_FRACTION = 0.02
+_MAX_MATCH_WIDTH_FRACTION = 0.02
 
 
 def hatch_geometry(
@@ -44,24 +48,21 @@ def hatch_geometry(
     style = entity.dxf.hatch_style
     if style not in {0, 1, 2}:
         raise HatchGeometryError("hatch-style-not-supported")
-    ocs, elevation = entity.ocs(), entity.dxf.elevation.z
     rings, errors = [], []
     vertices_used = 0
     for path in entity.paths.rendering_paths(style):
-        points, error = _ring(path, distance, max_closure)
-        vertices_used += len(points)
+        polygon, error, count = _path_polygon(entity, path, distance, max_closure)
+        vertices_used += count
         if vertices_used > MAX_VERTICES:
             raise HatchGeometryError("hatch-vertex-budget-exceeded")
-        vertices = [ocs.to_wcs((x, y, elevation)) for x, y in points]
-        rings.append(_checked_ring(vertices))
+        rings.append(_checked_ring(polygon))
         errors.append(error)
     if not rings:
         raise HatchGeometryError("hatch-no-rendered-boundary")
     return _compose_rings(rings, errors)
 
 
-def _checked_ring(vertices: list[Vec3]) -> Polygon:
-    polygon = Polygon([(v.x, v.y) for v in vertices])
+def _checked_ring(polygon: Polygon) -> Polygon:
     if not np.isfinite(shapely.get_coordinates(polygon)).all():
         raise HatchGeometryError("hatch-non-finite-coordinates")
     if polygon.is_empty or polygon.area == 0:
@@ -72,6 +73,64 @@ def _checked_ring(vertices: list[Vec3]) -> Polygon:
             raise HatchGeometryError("hatch-invalid-ring")
         polygon = repaired
     return polygon
+
+
+def hatch_outline(
+    entity: DXFPolygon, distance: float, *, max_closure: float
+) -> tuple[Polygon, float]:
+    """Sample one HATCH ring before validating its possibly invalid topology."""
+    paths = list(entity.paths.rendering_paths(entity.dxf.hatch_style))
+    if len(paths) != 1:
+        raise HatchGeometryError("hatch-region-match-needs-one-ring")
+    polygon, error, _ = _path_polygon(entity, paths[0], distance, max_closure)
+    return polygon, error
+
+
+def match_region_outline(
+    outline: Polygon,
+    outline_error: float,
+    candidates: list[tuple[Polygon, float]],
+    *,
+    max_shift: float,
+) -> tuple[Polygon, float] | None:
+    """Choose a unique REGION agreeing with a sampled HATCH within its error bound."""
+    if outline.is_empty or not math.isfinite(outline.area) or outline.area <= 0:
+        return None
+    matches = []
+    for region, region_error in candidates:
+        if region.is_empty or not region.is_valid or region.area <= 0:
+            continue
+        tolerance = min(
+            outline_error + region_error,
+            max_shift,
+            _MAX_MATCH_WIDTH_FRACTION * math.sqrt(region.area),
+        )
+        if not math.isfinite(tolerance) or tolerance < 0:
+            continue
+        try:
+            boundary_shift = outline.boundary.hausdorff_distance(region.boundary)
+        except GEOSException:
+            continue
+        if (
+            boundary_shift <= tolerance
+            and abs(outline.area - region.area) <= _MAX_MATCH_AREA_FRACTION * region.area
+        ):
+            matches.append((region, region_error + outline_error + boundary_shift))
+    return matches[0] if len(matches) == 1 else None
+
+
+def _path_polygon(
+    entity: DXFPolygon, path: AbstractBoundaryPath, distance: float, max_closure: float
+) -> tuple[Polygon, float, int]:
+    points, error = _ring(path, distance, max_closure)
+    if len(points) > MAX_VERTICES:
+        raise HatchGeometryError("hatch-vertex-budget-exceeded")
+    ocs, elevation = entity.ocs(), entity.dxf.elevation.z
+    vertices = [ocs.to_wcs((x, y, elevation)) for x, y in points]
+    polygon = Polygon([(v.x, v.y) for v in vertices])
+    if not np.isfinite(shapely.get_coordinates(polygon)).all():
+        raise HatchGeometryError("hatch-non-finite-coordinates")
+    return polygon, error, len(points)
 
 
 def _compose_rings(

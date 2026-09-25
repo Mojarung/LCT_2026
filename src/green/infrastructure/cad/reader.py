@@ -35,7 +35,12 @@ from green.infrastructure.cad.curve_paths import (
     polyline_vertices,
 )
 from green.infrastructure.cad.documents import load_document
-from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
+from green.infrastructure.cad.hatch_geometry import (
+    HatchGeometryError,
+    hatch_geometry,
+    hatch_outline,
+    match_region_outline,
+)
 from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
 from green.infrastructure.cad.units import AUTO, decide_units
 
@@ -154,6 +159,7 @@ class _Walker:
     unresolved_xrefs: set[str] = field(default_factory=set)
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
     gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
+    matched_region_hatches: int = 0
 
     def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
         self,
@@ -166,6 +172,7 @@ class _Walker:
         parent_block: str | None = None,
         insert_chain: tuple[InsertInstance, ...] = (),
         block_matrix: Matrix44 | None = None,
+        sibling_regions: tuple[Region, ...] = (),
     ) -> None:
         layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
@@ -190,7 +197,9 @@ class _Walker:
                 self._gap(kind, layer, parent_block, reason, ref)
         else:
             try:
-                geometry, error = self._geometry(entity, block_matrix=block_matrix)
+                geometry, error = self._geometry(
+                    entity, block_matrix=block_matrix, sibling_regions=sibling_regions
+                )
             except (HatchGeometryError, RegionGeometryError) as exc:
                 self.skipped[kind] += 1
                 self._gap(kind, layer, parent_block, str(exc), ref)
@@ -300,6 +309,7 @@ class _Walker:
         except ValueError, TypeError, ArithmeticError:
             self.skipped["INSERT:not-explodable"] += 1
             return
+        regions = tuple(child for child in children if isinstance(child, Region))
         for position, child in enumerate(children):
             self.visit(
                 child,
@@ -310,6 +320,7 @@ class _Walker:
                 parent_block=name,
                 insert_chain=instances,
                 block_matrix=block_matrix,
+                sibling_regions=regions,
             )
 
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
@@ -369,7 +380,11 @@ class _Walker:
         )
 
     def _geometry(  # noqa: C901, PLR0911, PLR0912 - one branch per entity type
-        self, entity: DXFGraphic, *, block_matrix: Matrix44 | None = None
+        self,
+        entity: DXFGraphic,
+        *,
+        block_matrix: Matrix44 | None = None,
+        sibling_regions: tuple[Region, ...] = (),
     ) -> tuple[BaseGeometry | None, float | None]:
         kind = entity.dxftype()
         try:
@@ -413,9 +428,16 @@ class _Walker:
                         max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
                     )
                 except HatchGeometryError as error:
-                    if str(error) != "hatch-open-boundary":
-                        raise
-                    return self._associated_region_hatch(entity, block_matrix)
+                    if str(error) == "hatch-open-boundary":
+                        return self._associated_region_hatch(entity, block_matrix)
+                    if str(error) == "hatch-invalid-ring" and sibling_regions:
+                        matched = self._matched_sibling_region_hatch(
+                            entity, sibling_regions, block_matrix
+                        )
+                        if matched is not None:
+                            self.matched_region_hatches += 1
+                            return matched
+                    raise
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
         except HatchGeometryError, RegionGeometryError:
@@ -423,6 +445,42 @@ class _Walker:
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None
         return _polyline(vertices, closed=path.is_closed), None if path.has_curves else 0.0
+
+    def _matched_sibling_region_hatch(
+        self,
+        hatch: DXFGraphic,
+        siblings: tuple[Region, ...],
+        block_matrix: Matrix44 | None,
+    ) -> tuple[Polygon, float] | None:
+        """Infer a source only from one REGION in the same INSERT with matching boundary."""
+        try:
+            outline, error = hatch_outline(
+                hatch,  # ty: ignore[invalid-argument-type]
+                self.flatten,
+                max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
+            )
+        except HatchGeometryError:
+            return None
+        candidates = []
+        for region in siblings:
+            if decode_dxf_unicode(region.dxf.get("layer", "0")) != decode_dxf_unicode(
+                hatch.dxf.get("layer", "0")
+            ):
+                continue
+            try:
+                candidates.append(
+                    region_polygon(
+                        region,
+                        flatten=self.flatten,
+                        block_matrix=block_matrix,
+                        sat_lines=self._region_sat(region),
+                    )
+                )
+            except RegionGeometryError:
+                continue
+        return match_region_outline(
+            outline, error, candidates, max_shift=0.02 / self.unit_m
+        )
 
     def _associated_region_hatch(
         self, hatch: DXFGraphic, block_matrix: Matrix44 | None
@@ -491,6 +549,11 @@ class _Walker:
         if self.skipped:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
+        if self.matched_region_hatches:
+            messages.append(
+                "HATCH восстановлены по единственному REGION того же блока и слоя: "
+                f"{self.matched_region_hatches}"
+            )
         return messages
 
 

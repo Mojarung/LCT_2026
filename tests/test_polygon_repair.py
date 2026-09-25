@@ -32,7 +32,7 @@ def test_zero_width_overlap_keeps_its_boundary() -> None:
     assert repaired.boundary.hausdorff_distance(original.boundary) <= 1e-9
     assert abs(repaired.area - original.area) <= 1e-9
     assert _checked_polygon([Vec3(x, y, 0) for x, y in points]).equals(repaired)
-    assert _checked_ring([Vec3(x, y, 0) for x, y in points]).equals(repaired)
+    assert _checked_ring(original).equals(repaired)
 
 
 def test_crossed_contour_remains_a_geometry_gap() -> None:
@@ -42,4 +42,4 @@ def test_crossed_contour_remains_a_geometry_gap() -> None:
     with pytest.raises(RegionGeometryError, match="acis-polygon-invalid"):
         _checked_polygon([Vec3(x, y, 0) for x, y in points])
     with pytest.raises(HatchGeometryError, match="hatch-invalid-ring"):
-        _checked_ring([Vec3(x, y, 0) for x, y in points])
+        _checked_ring(polygon)
