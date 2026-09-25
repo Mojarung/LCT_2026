@@ -4,10 +4,12 @@ import { Layout } from './components/Layout';
 import { ConsolePage } from './pages/ConsolePage';
 import { ModelsPage } from './pages/ModelsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ReviewPage } from './pages/ReviewPage';
 import { RunPage } from './pages/RunPage';
 
-/** Два рабочих экрана - консоль запуска и рабочее место прогона - и справочная база моделей
- *  растений. Остальные адреса - API и /docs, их отдаёт сервер, а не приложение. */
+/** Два рабочих экрана - консоль запуска и рабочее место прогона, - уточнение объектов чертежа
+ *  для строгого прогона и справочная база моделей растений. Остальные адреса - API и /docs, их
+ *  отдаёт сервер, а не приложение. */
 export const routes: RouteObject[] = [
   {
     path: '/',
@@ -15,6 +17,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, Component: ConsolePage },
       { path: 'runs/:runId', Component: RunPage },
+      { path: 'runs/:runId/review', Component: ReviewPage },
       { path: 'models', Component: ModelsPage },
       { path: '*', Component: NotFoundPage },
     ],

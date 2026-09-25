@@ -14,7 +14,34 @@ export function shown(item: MapItem, layers: Layers, speciesOff: ReadonlySet<str
   return layers.placements && !speciesOff.has(item.species_code ?? '');
 }
 
-/** Ближайшая видимая отметка под точкой: в радиусе кроны или восьми пикселей экрана. */
+/** Радиус попадания в ствол, CSS-пиксели: уверенный клик мышью и касание пальцем. */
+export const TRUNK_PICK_PX = 10;
+/** Больше стольких посадок список выбора не показывает: ближайшие стволы идут первыми. */
+export const MAX_CANDIDATES = 8;
+
+/** Видимые отметки, чей ствол (центр) не дальше TRUNK_PICK_PX экрана от точки, ближайшие
+ *  первыми. Кроны на плане перекрываются, стволы - нет: выбор по стволу берёт ту посадку,
+ *  в которую целились, а не ту, чья крона легла сверху. */
+export function candidatesAt(
+  world: Point,
+  items: readonly MapItem[],
+  scale: number,
+  layers: Layers,
+  speciesOff: ReadonlySet<string>,
+): MapItem[] {
+  const reach = TRUNK_PICK_PX / scale;
+  const found: { item: MapItem; distance: number }[] = [];
+  for (const item of items) {
+    if (!shown(item, layers, speciesOff)) continue;
+    const distance = Math.hypot(item.x - world.x, item.y - world.y);
+    if (distance <= reach) found.push({ item, distance });
+  }
+  found.sort((a, b) => a.distance - b.distance);
+  return found.slice(0, MAX_CANDIDATES).map((entry) => entry.item);
+}
+
+/** Выбор под точкой: ближайший ствол; если стволов рядом нет - крона, накрывшая точку, чей
+ *  ствол ближе. Так на крупном плане по-прежнему можно щёлкнуть в любое место большой кроны. */
 export function pick(
   world: Point,
   items: readonly MapItem[],
@@ -22,19 +49,30 @@ export function pick(
   layers: Layers,
   speciesOff: ReadonlySet<string>,
 ): MapItem | null {
-  const tolerance = 8 / scale;
+  const [trunk] = candidatesAt(world, items, scale, layers, speciesOff);
+  if (trunk) return trunk;
   let best: MapItem | null = null;
   let bestDistance = Infinity;
   for (const item of items) {
     if (!shown(item, layers, speciesOff)) continue;
     const distance = Math.hypot(item.x - world.x, item.y - world.y);
-    const reach = Math.max(item.radius, tolerance);
-    if (distance <= reach && distance < bestDistance) {
+    if (distance <= item.radius && distance < bestDistance) {
       best = item;
       bestDistance = distance;
     }
   }
   return best;
+}
+
+/** Кого тащить в режиме правки: выбранную, если её ствол среди попавших под курсор, иначе
+ *  ближайший ствол. Посадку, выбранную из списка спорного клика, можно сразу тянуть, даже
+ *  если рядом ствол соседки чуть ближе. */
+export function preferSelected(
+  candidates: readonly MapItem[],
+  selected: MapItem | null,
+): MapItem | null {
+  if (selected && candidates.includes(selected)) return selected;
+  return candidates[0] ?? null;
 }
 
 /** Слабое место: без посадки индекс качества заметно выше. flagged - порог по размеру плана;

@@ -49,6 +49,8 @@ export interface Marks {
   selected: MapItem | null;
   dragging: MapItem | null;
   dragVerdict: string | null;
+  /** Режим правки: кроны прозрачные, стволы точками (look xray). */
+  editing: boolean;
 }
 
 export interface BaseCache extends ViewState {
@@ -382,6 +384,30 @@ function drawPlacements(
   const liftRadius = (MIN_CROWN_PX + 2.5) / view.scale;
   // Кольца вердикта: needs_approval - янтарное, запрет после переноса - красное.
   const rings = new Map<string, Path2D>();
+  // В режиме правки кроны прозрачные, стволы - точками (look xray): в перекрытых кронах видно,
+  // за что хватать. Выбранная и перетаскиваемая остаются обычными и ложатся поверх всех.
+  const top = new Set<MapItem>();
+  if (marks.editing) {
+    if (marks.selected?.kind === 'placement') top.add(marks.selected);
+    if (marks.dragging) top.add(marks.dragging);
+  }
+  const put = (p: MapItem, look: Look, lifted: boolean) => {
+    const radius = Math.max(p.radius, lifted ? liftRadius : minRadius) * view.scale;
+    const key = modelKey(p.species_code, p.planting_type);
+    const s = sprite(key, modelOf(p.species_code, p.planting_type), radius, look, dpr);
+    const { sx, sy } = toScreen(view, p.x, p.y);
+    stamp(ctx, s, sx, sy, radius);
+    if (look !== 'dim' && p.verdict !== 'allowed') {
+      const token = VERDICT_TOKEN[p.verdict] ?? '--warn';
+      let ring = rings.get(token);
+      if (!ring) {
+        ring = new Path2D();
+        rings.set(token, ring);
+      }
+      ring.moveTo(sx + radius + 3, sy);
+      ring.arc(sx, sy, radius + 3, 0, Math.PI * 2);
+    }
+  };
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   // Приглушённые рисуются первым проходом, чтобы подсвеченный вид лёг поверх. Приглушённые не
@@ -389,28 +415,18 @@ function drawPlacements(
   // получается «где остальные двести семьдесят».
   for (const pass of [true, false]) {
     for (const p of scene.placements) {
-      if (marks.speciesOff.has(p.species_code ?? '')) continue;
+      if (marks.speciesOff.has(p.species_code ?? '') || top.has(p)) continue;
       const dim = marks.highlight !== null && p.species_code !== marks.highlight;
       if (dim !== pass) continue;
       if (!inView(p, visible, p.radius + liftRadius)) continue;
       const lifted = !dim && marks.highlight !== null;
-      const radius = Math.max(p.radius, lifted ? liftRadius : minRadius) * view.scale;
-      const look: Look = dim ? 'dim' : lifted ? 'lift' : 'plan';
-      const key = modelKey(p.species_code, p.planting_type);
-      const s = sprite(key, modelOf(p.species_code, p.planting_type), radius, look, dpr);
-      const { sx, sy } = toScreen(view, p.x, p.y);
-      stamp(ctx, s, sx, sy, radius);
-      if (!dim && p.verdict !== 'allowed') {
-        const token = VERDICT_TOKEN[p.verdict] ?? '--warn';
-        let ring = rings.get(token);
-        if (!ring) {
-          ring = new Path2D();
-          rings.set(token, ring);
-        }
-        ring.moveTo(sx + radius + 3, sy);
-        ring.arc(sx, sy, radius + 3, 0, Math.PI * 2);
-      }
+      put(p, dim ? 'dim' : lifted ? 'lift' : marks.editing ? 'xray' : 'plan', lifted);
     }
+  }
+  for (const p of top) {
+    if (marks.speciesOff.has(p.species_code ?? '')) continue;
+    if (!inView(p, visible, p.radius + liftRadius)) continue;
+    put(p, 'plan', false);
   }
   ctx.setLineDash([4, 3]);
   for (const [token, ring] of rings) {

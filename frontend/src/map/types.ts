@@ -95,4 +95,7 @@ export interface EngineHooks {
   viewChanged(): void;
   /** Включён или снят режим «следующий клик по карте - новое место выбранной посадки». */
   placingChanged(on: boolean): void;
+  /** Под щелчком стволы нескольких посадок: выбор за человеком. items - ближайшие первыми,
+   *  x и y - точка щелчка в пикселях холста. */
+  ambiguous(items: MapItem[], x: number, y: number): void;
 }
