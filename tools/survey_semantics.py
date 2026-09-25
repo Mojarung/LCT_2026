@@ -14,6 +14,7 @@ from collections import Counter
 from pathlib import Path
 
 from green.application.classification import classification_report, classify_scene
+from green.application.constraints import work_boundary
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.domain.objects import ObjectClass
@@ -28,6 +29,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sources", type=Path, nargs="+")
     parser.add_argument("--output", type=Path, default=DEFAULT_TARGET)
+    parser.add_argument(
+        "--work-overlap",
+        action="store_true",
+        help="Count features intersecting the same work boundary used by placement",
+    )
     args = parser.parse_args()
     rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
     rows = []
@@ -61,6 +67,25 @@ def main() -> None:
                 classes=dict(Counter(f.object_class.value for f in scene.features)),
                 classification_seconds=round(time.perf_counter() - began, 4),
             )
+            if args.work_overlap:
+                boundary = work_boundary(scene.features)
+                if boundary is None:
+                    row["work_overlap"] = {"boundary_found": False}
+                else:
+                    overlap = Counter()
+                    unknown_layers: Counter[str] = Counter()
+                    for feature in scene.features:
+                        if boundary.intersects(feature.geometry):
+                            overlap["features"] += 1
+                            if feature.object_class in unresolved:
+                                overlap["unresolved_features"] += 1
+                                unknown_layers[feature.layer] += 1
+                    row["work_overlap"] = {
+                        "boundary_found": True,
+                        "boundary_area_m2": round(boundary.area, 3),
+                        **dict(overlap),
+                        "top_unresolved_layers": unknown_layers.most_common(15),
+                    }
         except InputError as error:
             row.update(import_complete=False, error=str(error))
         row["seconds"] = round(time.perf_counter() - started, 4)
