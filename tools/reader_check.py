@@ -340,7 +340,10 @@ def main() -> None:
     streets.sort(key=lambda street: -street.size_mb if args.workers > 1 else street.size_mb)
     OUT.mkdir(parents=True, exist_ok=True)
     jobs = [(str(catalog_dir), street.slug, not args.no_fidelity) for street in streets]
-    with ProcessPoolExecutor(args.workers) as pool:
+    # Свежий процесс на каждую улицу: после разбора комплекта на сотни мегабайт Python не
+    # отдаёт память системе, и рабочий процесс разбухал к тяжёлым улицам (прогон дважды
+    # убит системой при нехватке памяти, 25.09.2026).
+    with ProcessPoolExecutor(args.workers, max_tasks_per_child=1) as pool:
         for row in pool.map(check, jobs):
             (OUT / f"{row['slug']}.json").write_text(
                 json.dumps(row, ensure_ascii=False, indent=1), encoding="utf-8"
