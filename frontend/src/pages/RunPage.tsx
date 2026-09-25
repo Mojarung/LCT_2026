@@ -90,12 +90,18 @@ export function RunPage() {
   const state = data?.state;
   const live = state === 'queued' || state === 'running';
   const done = state === 'succeeded';
+  // Неудача - конечное состояние: карты не будет, заглушек загрузки тоже (жюри, итерация 7).
+  const broken = state === 'failed';
   const names = useMemo(
     () => new Set((data?.artifacts ?? []).map((a) => a.name)),
     [data?.artifacts],
   );
 
-  const basemap = useArtifact<BasemapJson>(runId, 'basemap.geojson', names.has('basemap.geojson'));
+  const basemap = useArtifact<BasemapJson>(
+    runId,
+    'basemap.geojson',
+    !broken && names.has('basemap.geojson'),
+  );
   const plan = useArtifact<PlanJson>(runId, 'plan.json', done && names.has('plan.json'));
   const rules = useArtifact<RulesJson>(runId, 'rules.json', done && names.has('rules.json'));
   const quality = useArtifact<QualityJson>(
@@ -244,7 +250,7 @@ export function RunPage() {
     );
   }
 
-  const mapReady = done ? Boolean(items && basemap.data) : Boolean(basemap.data);
+  const mapReady = done ? Boolean(items && basemap.data) : live && Boolean(basemap.data);
   const withMap = done || live;
 
   return (
@@ -262,7 +268,7 @@ export function RunPage() {
         <div className="canvas-holder">
           <PlanMap root={root} hooks={hooks} interactive={done} />
           {mapReady ? null : (
-            <div className="map-loading">
+            <div className="map-loading" data-state={state}>
               {data ? <RunStatus run={data} /> : <span className="spinner" aria-hidden="true" />}
             </div>
           )}
@@ -291,10 +297,10 @@ export function RunPage() {
         >
           <PanelToggle panel="left" label="панель прогона" />
           {data ? <RunHeader run={data} /> : null}
-          <div className="hud-scroll" ref={leftScroll}>
+          <div className="hud-scroll" ref={leftScroll} hidden={broken}>
             {done && data ? (
               <RunMetrics run={data} />
-            ) : (
+            ) : broken ? null : (
               <p className="metric">
                 <b>
                   <i className="skeleton" />

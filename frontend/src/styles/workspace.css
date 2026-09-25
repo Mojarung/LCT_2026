@@ -1022,10 +1022,56 @@ body.shell-map .topbar {
   margin-top: 2px;
   max-width: none;
 }
-.error-text {
-  margin: 4px 0 0;
-  color: var(--bad);
+
+/* Неудавшийся прогон - карточка того же материала, что панели поверх плана: заголовок,
+   причина одной строкой, что делать, дорога к консоли; текст исключения - под раскрытием.
+   Без карточки текст ошибки шёл от края экрана по двести знаков в строке (жюри, итерация 7). */
+.map-loading[data-state='failed'] {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 24px 0;
+}
+.status[data-state='failed'] {
+  display: block;
+  width: 100%;
+  max-width: min(60ch, calc(100% - 48px));
+  /* Карточка выше колодца карты (раскрыты подробности) прокручивается вместе с ним, а не
+     теряет верх: автоматические поля центрируют, пока место есть. */
+  margin: auto;
+  padding: 22px 24px;
+  background: var(--glass);
+  border: 1.5px solid var(--edge);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  color: var(--bone);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.status[data-state='failed'] .status-title {
+  font-size: var(--fs-strong);
+}
+.status-reason {
+  margin: 8px 0 0;
+}
+.status-action {
+  margin: 6px 0 0;
+  color: var(--bone-2);
+}
+.status[data-state='failed'] .hint {
+  margin-top: 12px;
+}
+.status-details {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+.status-raw {
+  max-height: 40vh;
+  margin: 8px 0 0;
+  overflow-y: auto;
+  color: var(--bone-2);
   font-size: var(--fs-small);
+  overflow-wrap: anywhere;
 }
 
 .skeleton {

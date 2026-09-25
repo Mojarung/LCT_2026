@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 
 import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
+import { explainFailure } from '../../lib/failure';
 import { integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
 import { keyNotices } from '../../lib/warnings';
@@ -155,7 +156,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
   );
 }
 
-/** Подложка, пока карте нечего показать: ход, причина неудачи или «загружаем». */
+/** Подложка, пока карте нечего показать: ход, причина неудачи или «загружаем». У неудачи
+ *  карты не будет: её карточка - конечное состояние страницы, а не заглушка. */
 export function RunStatus({ run }: { run: RunOut }) {
   if (run.state === 'queued' || run.state === 'running') {
     const title =
@@ -177,16 +179,24 @@ export function RunStatus({ run }: { run: RunOut }) {
     );
   }
   if (run.state === 'failed') {
+    // Причина одной строкой и что делать; текст исключения целиком - под раскрытием: двести
+    // знаков кодов без полей читались как поломка самой страницы (жюри, итерация 7).
+    const failure = explainFailure(run.error);
     return (
       <div className="status" data-state="failed">
-        <div>
-          <p className="status-title">Прогон не удался</p>
-          <p className="error-text">{run.error || 'Причина не записана.'}</p>
-          <ReviewLinks run={run} />
-          <p className="hint">
-            <Link to="/">К консоли запуска</Link>
-          </p>
-        </div>
+        <h2 className="status-title">Прогон не удался</h2>
+        <p className="status-reason">{failure.reason}</p>
+        <p className="status-action">{failure.action}</p>
+        <ReviewLinks run={run} />
+        <p className="hint">
+          <Link to="/">К консоли запуска</Link>
+        </p>
+        {failure.details ? (
+          <details className="fold status-details">
+            <summary>Подробности</summary>
+            <p className="status-raw">{failure.details}</p>
+          </details>
+        ) : null}
       </div>
     );
   }

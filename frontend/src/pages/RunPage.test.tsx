@@ -347,9 +347,41 @@ describe('RunPage: failures', () => {
     });
     renderApp('/runs/r1');
 
-    expect(await screen.findByText('Прогон не удался')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Прогон не удался' })).toBeVisible();
     expect(screen.getByText('Чертёж не читается: файл обрезан.')).toBeVisible();
     expect(screen.getByRole('link', { name: 'К консоли запуска' })).toHaveAttribute('href', '/');
+    // Причина и есть весь текст сервиса: раскрывать нечего.
+    expect(screen.queryByText('Подробности')).toBeNull();
+  });
+
+  it('turns a raw reading failure into a reason and an action, the raw text under details', async () => {
+    const raw =
+      'Неполная геометрия входного чертежа: XREF XREF_ИГДИ_Олимпийская; XREF XREF_Сети; ' +
+      "REGION, слой 'Газ', блок None: 3 (missing-acis-data), примеры h:1A, h:2B. Расчёт " +
+      'остановлен: загрузите внешние ссылки. Наличие других сетей не заменяет потерянные данные.';
+    mockApi({
+      '/api/v1/runs/r1': run({ state: 'failed', summary: undefined, error: raw }),
+    });
+    renderApp('/runs/r1');
+
+    const card = (await screen.findByRole('heading', { name: 'Прогон не удался' })).closest(
+      '.status',
+    );
+    expect(card).toHaveAttribute('data-state', 'failed');
+    expect(card).toHaveTextContent(
+      'Чертёж прочитан не полностью: не найдены 2 внешние ссылки, у части объектов нет геометрии.',
+    );
+    expect(card).toHaveTextContent(
+      'Пересохраните DXF вместе с внешними ссылками и запустите снова.',
+    );
+    // Сырой текст остаётся, но под раскрытием, а не строкой в двести знаков.
+    const details = screen.getByText('Подробности').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toHaveTextContent('missing-acis-data');
+    // Скелетон «посадок в плане» у неудачи не разрешился бы никогда: его нет.
+    const left = screen.getByRole('complementary', { name: 'Прогон' });
+    expect(left).not.toHaveTextContent('посадок в плане');
+    expect(left.querySelector('.skeleton')).toBeNull();
   });
 
   it('names a run that is not in the store', async () => {
