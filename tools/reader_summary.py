@@ -21,7 +21,7 @@ WINDOW_LIMIT = 0.005
 
 def _row(d: dict) -> str:
     if "error" in d:
-        return f"| {d.get('number', '?')} | {d['slug']} | ОШИБКА: {d['error'][:120]} |" + " |" * 7
+        return f"| {d.get('number', '?')} | {d['slug']} | ОШИБКА: {d['error'][:120]} |" + " |" * 8
     visited = sum(d["visited"].values())
     outcomes = sum(d["outcomes"].values())
     gaps = sum(g["count"] for g in d["gaps"])
@@ -35,9 +35,13 @@ def _row(d: dict) -> str:
     symbols = f"{census}/{d['symbols']}" if census is not None else str(d["symbols"])
     match = "да" if veg.get("matches") else ("НЕТ" if veg else "")
     ledger = "полон" if visited == outcomes else f"{outcomes}/{visited}"
+    meaning = d.get("semantics") or {}
+    near = sum(g.get("near_work") or 0 for g in meaning.get("assumed", []))
+    classes = f"{meaning['unresolved']} / {near}" if meaning else ""
     return (
         f"| {d['number']} | {d['title'][:28]} | {visited} | {ledger} | {gaps} | {ink_text} "
-        f"| {worst} | {symbols} | {trees_text} | {match} | {d['seconds']['total']:.0f} |"
+        f"| {worst} | {symbols} | {trees_text} | {match} | {classes} "
+        f"| {d['seconds']['total']:.0f} |"
     )
 
 
@@ -46,9 +50,12 @@ def main() -> None:
     rows = [r for r in rows if "slug" in r]
     rows.sort(key=lambda r: r.get("number", 99))
     lines = [
-        "| N | Улица | посещено | учёт | пробелов | чернил пропущено | худшее окно "
-        "| знаков (перепись/ридер) | деревьев (исходник/сцена) | растительность | с |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        (
+            "| N | Улица | посещено | учёт | пробелов | чернил пропущено | худшее окно "
+            "| знаков (перепись/ридер) | деревьев (исходник/сцена) | растительность "
+            "| неразрешённых / замен у границы работ | с |"
+        ),
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
         *(_row(r) for r in rows),
     ]
     reasons: Counter[str] = Counter()

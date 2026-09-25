@@ -19,7 +19,11 @@ src/green/
   domain/          Feature, SourceRef, DistanceRule, RuleBook, Placement, Rejection, Plan (frozen dataclass),
                    quality (PlanQuality, QualityTerm, PlantingValue)
   application/     use_case.PlanSite (сценарий), classification (знак решает раньше слоя: словарь
-                   symbols.SymbolCatalog, штрихи знака - рисунок, экземпляр - объект; tree_strips - ряд
+                   symbols.SymbolCatalog, штрихи знака - рисунок, экземпляр - объект; незнакомое не
+                   останавливает: name_semantics - вывод класса по словам имени слоя и блока из
+                   config/vocabulary.yaml с проектной грамматикой «X за счёт Y», затем осторожная замена по
+                   геометрии - класс contour, рамка листа, малый круг; infer_unknown=false - режим проверки
+                   тиммейта, задача 14 плана; tree_strips - ряд
                    кружков «Полосы деревьев» - одна полоса MultiPoint, а не стволы; vegetation - перепись
                    растительности: знаки исходника против якорей сцены по классам), diameters,
                    constraints.ConstraintIndex
@@ -50,7 +54,7 @@ src/green/
                    посадок; пока прогон идёт - чертёж на карте сразу после чтения и полоса
                    хода с процентами по GET /runs/{id}; статика в web/static, внешних запросов
                    нет, node в образе нет)
-config/            acts.yaml, rules.yaml (85 правил: 55 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 84 основание сверено, 14 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц), symbols.yaml (словарь условных знаков: код блока -> класс и роль),
+config/            acts.yaml, rules.yaml (85 правил: 55 расстояний, 21 вид и 4 порядка по группам 369-ПП, 5 видовых оснований; у 84 основание сверено, 14 из них проектные параметры), layer_map.yaml (классификатор слоёв всех 20 улиц), symbols.yaml (словарь условных знаков: 179 кодов переписи 19 улиц -> класс и роль), vocabulary.yaml (слова имён незнакомых слоёв и блоков -> класс, снос, отрицание, проектная грамматика),
                    species.yaml (v2: 55 видов с экологией, ограничениями и источниками по полям),
                    profiles/{strict,no_utilities,shrubs}.yaml
 docker/Dockerfile, compose.yaml   Ubuntu 26.04 + LibreDWG из исходников; датасет монтируется из ./dataset
@@ -58,7 +62,10 @@ docker/cadcheck/   образ проверки DXF в LibreCAD под Linux: Xvf
 tools/             dwg_scan.py, dwg_summary.py (Кирилл); extract_street.py, prepare_streets.py
                    (комплект улицы из архива по внешним ссылкам основного чертежа + catalog.json с путями в
                    архиве и ссылками без файла; ODA по умолчанию), converter_diff.py (LibreDWG против ODA по
-                   каждому объекту), xref_census.py, reader_check.py (чтение всех улиц: учёт, пробелы, знаки),
+                   каждому объекту), xref_census.py, reader_check.py (чтение всех улиц: учёт, пробелы, знаки,
+                   сверка чернил, растительность, классы через semantic_census.py - выведенное, заменённое,
+                   неразрешённое, образцы для картинок), street_runs.py (сквозной строгий прогон сервиса по
+                   улицам каталога, out/street-runs/summary.md),
                    symbol_census.py (перепись знаков и листы рисунков), make_demo_fragment.py
                    (вырезает демонстрационный фрагмент улицы), research/ — наша разведка датасета
                    и нормоконтроль эталонов (черновики); libredwg/ — win64-бинарники, в git не идут
