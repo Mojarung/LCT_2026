@@ -1,0 +1,293 @@
+{
+  "scope": "Exact HATCH material counterfactual on one DXF. Counts precede greedy spacing, species assignment and independent validation; unknown semantics and mulch soil eligibility are unresolved.",
+  "source_sha256": "75ea5d3f66d1845662b50f4db3c77934c631d03ed569399b18bd04a775ff132c",
+  "unknown_lines_as_utility": true,
+  "explicit_lawn_hatches": 278,
+  "modes": {
+    "alley": {
+      "candidates": 14694,
+      "surface_boundary_plantable": 374,
+      "norm_verdicts_before_spacing": {
+        "forbidden": 362,
+        "allowed": 12
+      },
+      "failing_rules_before_spacing": [
+        {
+          "rule": "R-CURB-TREE-001",
+          "class": "curb",
+          "count": 257
+        },
+        {
+          "rule": "R-WATER-TREE-001",
+          "class": "utility.water",
+          "count": 255
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "class": "utility.unknown",
+          "count": 118
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "class": "utility.power_cable",
+          "count": 108
+        },
+        {
+          "rule": "R-ACCESS-TREE-001",
+          "class": "utility.access",
+          "count": 42
+        },
+        {
+          "rule": "R-TELECOM-TREE-001",
+          "class": "utility.telecom",
+          "count": 23
+        },
+        {
+          "rule": "R-STORM-TREE-001",
+          "class": "utility.storm",
+          "count": 22
+        },
+        {
+          "rule": "R-SEWER-TREE-001",
+          "class": "utility.sewer",
+          "count": 10
+        },
+        {
+          "rule": "R-EXTREE-TREE-001",
+          "class": "existing_tree",
+          "count": 6
+        },
+        {
+          "rule": "R-HEAT-TREE-001",
+          "class": "utility.heat",
+          "count": 3
+        },
+        {
+          "rule": "R-HEAT-TREE-002",
+          "class": "utility.heat",
+          "count": 3
+        }
+      ],
+      "failing_nearest_layers_top20": [
+        {
+          "rule": "R-CURB-TREE-001",
+          "layer": "Новый_Борты_Ном._пера__242",
+          "count": 255
+        },
+        {
+          "rule": "R-WATER-TREE-001",
+          "layer": "Новый_Водопровод_Ном._пера__243",
+          "count": 255
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабель электрический_Ном._пера__241",
+          "count": 77
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_ЛЭП_Ном._пера__99",
+          "count": 50
+        },
+        {
+          "rule": "R-ACCESS-TREE-001",
+          "layer": "Новый_Колодцы_Ном._пера__99",
+          "count": 42
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_! Лента_Ном._пера__229",
+          "count": 29
+        },
+        {
+          "rule": "R-TELECOM-TREE-001",
+          "layer": "Новый_Кабель связи_Ном._пера__245",
+          "count": 23
+        },
+        {
+          "rule": "R-STORM-TREE-001",
+          "layer": "Новый_Водосток_Ном._пера__255",
+          "count": 22
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_Светофоры_Ном._пера__99",
+          "count": 20
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_Фонари_Ном._пера__99",
+          "count": 16
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабель защиты проектный_Ном._пера__247",
+          "count": 15
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабели_Ном._пера__241",
+          "count": 11
+        },
+        {
+          "rule": "R-SEWER-TREE-001",
+          "layer": "Новый_Канализация самотёчная_Ном._пера__246",
+          "count": 10
+        },
+        {
+          "rule": "R-EXTREE-TREE-001",
+          "layer": "Новый_Полоса деревьев_Ном._пера__99",
+          "count": 6
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабель защиты_Ном._пера__247",
+          "count": 5
+        },
+        {
+          "rule": "R-HEAT-TREE-001",
+          "layer": "Новый_Теплосеть_Ном._пера__244",
+          "count": 3
+        },
+        {
+          "rule": "R-HEAT-TREE-002",
+          "layer": "Новый_Теплосеть_Ном._пера__244",
+          "count": 3
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_Спец сооружения_Ном._пера__62",
+          "count": 2
+        },
+        {
+          "rule": "R-CURB-TREE-001",
+          "layer": "Новый_Бортовой камень-старый_Ном._пера__1",
+          "count": 2
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_Леса и газоны_Ном._пера__99",
+          "count": 1
+        }
+      ]
+    },
+    "lawn": {
+      "candidates": 253,
+      "surface_boundary_plantable": 19,
+      "norm_verdicts_before_spacing": {
+        "forbidden": 17,
+        "allowed": 2
+      },
+      "failing_rules_before_spacing": [
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "class": "utility.unknown",
+          "count": 7
+        },
+        {
+          "rule": "R-EXTREE-TREE-001",
+          "class": "existing_tree",
+          "count": 7
+        },
+        {
+          "rule": "R-TELECOM-TREE-001",
+          "class": "utility.telecom",
+          "count": 7
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "class": "utility.power_cable",
+          "count": 6
+        },
+        {
+          "rule": "R-WATER-TREE-001",
+          "class": "utility.water",
+          "count": 4
+        },
+        {
+          "rule": "R-CURB-TREE-001",
+          "class": "curb",
+          "count": 3
+        },
+        {
+          "rule": "R-SEWER-TREE-001",
+          "class": "utility.sewer",
+          "count": 2
+        },
+        {
+          "rule": "R-HEAT-TREE-001",
+          "class": "utility.heat",
+          "count": 1
+        },
+        {
+          "rule": "R-HEAT-TREE-002",
+          "class": "utility.heat",
+          "count": 1
+        }
+      ],
+      "failing_nearest_layers_top20": [
+        {
+          "rule": "R-EXTREE-TREE-001",
+          "layer": "Новый_Полоса деревьев_Ном._пера__99",
+          "count": 7
+        },
+        {
+          "rule": "R-TELECOM-TREE-001",
+          "layer": "Новый_Кабель связи_Ном._пера__245",
+          "count": 7
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабель электрический_Ном._пера__241",
+          "count": 4
+        },
+        {
+          "rule": "R-WATER-TREE-001",
+          "layer": "Новый_Водопровод_Ном._пера__243",
+          "count": 4
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_! Лента_Ном._пера__229",
+          "count": 3
+        },
+        {
+          "rule": "R-CURB-TREE-001",
+          "layer": "Новый_Борты_Ном._пера__242",
+          "count": 3
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_Полоса деревьев_Ном._пера__1",
+          "count": 2
+        },
+        {
+          "rule": "R-SEWER-TREE-001",
+          "layer": "Новый_Канализация самотёчная_Ном._пера__246",
+          "count": 2
+        },
+        {
+          "rule": "R-UTILUNK-TREE-001",
+          "layer": "Новый_ЛЭП_Ном._пера__99",
+          "count": 2
+        },
+        {
+          "rule": "R-POWER-TREE-001",
+          "layer": "Новый_Кабель электрический проектный_Ном._пера__241",
+          "count": 2
+        },
+        {
+          "rule": "R-HEAT-TREE-001",
+          "layer": "Новый_Теплосеть_Ном._пера__244",
+          "count": 1
+        },
+        {
+          "rule": "R-HEAT-TREE-002",
+          "layer": "Новый_Теплосеть_Ном._пера__244",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "greedy_before_assortment_placements": 3
+}

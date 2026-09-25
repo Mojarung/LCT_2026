@@ -13,6 +13,7 @@ import json
 import re
 import resource
 import time
+from collections import Counter
 from pathlib import Path
 
 from green.application.errors import InputError
@@ -89,6 +90,14 @@ def main() -> None:
             ),
             validation_ok=report.validation.ok if report.validation is not None else None,
             summary=report.summary(),
+            rejected_by_rule=dict(
+                Counter(
+                    check.rule_id
+                    for rejection in report.plan.rejections
+                    for check in rejection.blocking
+                )
+            ),
+            rejected_by_note=dict(Counter(rejection.note for rejection in report.plan.rejections)),
             timings_ms={stage.stage: stage.ms for stage in report.timings},
         )
         args.out.mkdir(parents=True, exist_ok=True)
