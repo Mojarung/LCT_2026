@@ -6,8 +6,11 @@ import re
 from typing import TYPE_CHECKING
 
 import ezdxf
+import pytest
+from ezdxf.audit import AuditError, Auditor, ErrorEntry
 
-from green.infrastructure.cad.documents import load_document
+from green.application.errors import InputError
+from green.infrastructure.cad.documents import _require_safe_audit, load_document
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -31,3 +34,19 @@ def test_dangling_material_handle_is_audited_before_use(tmp_path: Path) -> None:
     target = tmp_path / "target.dxf"
     doc.saveas(target)
     assert ezdxf.readfile(target).materials.get("ByLayer") is not None
+
+
+def test_only_verified_empty_annotation_table_removal_is_safe(tmp_path: Path) -> None:
+    auditor = Auditor(ezdxf.new("R2018"))
+    auditor.fixes.append(
+        ErrorEntry(
+            AuditError.REMOVED_INVALID_GRAPHIC_ENTITY,
+            "Removed invalid DXF entity ACAD_TABLE(#ABC) from BLOCK '*Model_Space'.",
+        )
+    )
+    _require_safe_audit(tmp_path / "sample.dxf", auditor, empty_tables={"ABC"})
+    with pytest.raises(InputError, match="потерю/изменение геометрии"):
+        _require_safe_audit(tmp_path / "sample.dxf", auditor)
+    auditor.fixes[0].message = "Removed invalid DXF entity HATCH(#ABC)"
+    with pytest.raises(InputError, match="потерю/изменение геометрии"):
+        _require_safe_audit(tmp_path / "sample.dxf", auditor, empty_tables={"ABC"})

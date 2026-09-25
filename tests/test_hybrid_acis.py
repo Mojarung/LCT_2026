@@ -12,9 +12,14 @@ from ezdxf.acis import api
 from ezdxf.render import MeshBuilder
 
 from green.application.errors import ConversionError, InputError
-from green.infrastructure.cad.acis_sidecar import load_region_sidecar, sidecar_path
+from green.infrastructure.cad.acis_sidecar import (
+    load_region_sidecar,
+    normalize_sab_sat,
+    sidecar_path,
+)
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
 from green.infrastructure.cad.reader import EzdxfSceneReader
+from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
 from green.infrastructure.convert.hybrid import _splice_acds
 
 if TYPE_CHECKING:
@@ -189,3 +194,36 @@ def test_virtual_region_recovers_sat_by_sab_when_insert_drops_handle(tmp_path: P
     assert len(found) == 1
     assert found[0].geometry.bounds == pytest.approx((50, 60, 52, 62))
     assert not scene.read_diagnostics.geometry_gaps
+
+
+def test_region_accepts_length_checked_sab_transform_and_named_metadata() -> None:
+    mesh = MeshBuilder()
+    mesh.add_face([(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)])
+    doc = ezdxf.new("R2010")
+    region = doc.modelspace().add_region()
+    api.export_dxf(region, [api.body_from_mesh(mesh)])
+    lines = list(region.sat)
+    next_id = sum(line.endswith("#") for line in lines)
+    lines[3] = lines[3].replace("body $-1", f"body ${next_id}", 1)
+    transform = next(line for line in lines if line.startswith("transform "))
+    tokens = transform.split()
+    payload = " ".join(tokens[3:-1]) + " "
+    lines[lines.index(transform)] = " ".join([*tokens[:3], f"@{len(payload)}", *tokens[3:-1], "#"])
+    lines.insert(
+        -1,
+        "named_int_attribute-named_attribute-st-attrib $-1 -1 $-1 $-1 $0 @9 c3d$Build @6 117957 #",
+    )
+    polygon, error = region_polygon(
+        region, flatten=0.02, sat_lines=normalize_sab_sat("\n".join(lines))
+    )
+    assert polygon.area == pytest.approx(4)
+    assert error == 0
+
+    bad_length = "\n".join(lines).replace(f"@{len(payload)}", "@1", 1)
+    with pytest.raises(InputError, match="transform"):
+        normalize_sab_sat(bad_length)
+    unknown = "\n".join(lines).replace(
+        "named_int_attribute-named_attribute-st-attrib", "foreign-attribute", 1
+    )
+    with pytest.raises(RegionGeometryError):
+        region_polygon(region, flatten=0.02, sat_lines=normalize_sab_sat(unknown))

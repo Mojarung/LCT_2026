@@ -32,6 +32,8 @@ _MAX_VERTICES = 100_000
 _ENDPOINT_TOLERANCE = 1e-6
 _MIN_AXIS = 1e-12
 _MIN_RATIO = 1e-6
+_NAMED_ATTRIBUTE_FIELDS = 7
+_NAMED_INT_ATTRIBUTE = "named_int_attribute-named_attribute-st-attrib"
 
 
 class RegionGeometryError(ValueError):
@@ -59,12 +61,13 @@ def region_polygon(
         if len(bodies) != 1:
             raise RegionGeometryError("acis-body-count-unsupported")
         body = bodies[0]
-        edges, curved, reachable = _validated_edge_count(body)
+        metadata = _named_attribute_ids(loader) if loader is not None else set()
+        edges, curved, reachable = _validated_edge_count(body, metadata)
         if loader is not None:
             detached = [
                 record
                 for record in loader.records
-                if id(loader.entities[id(record)]) not in reachable
+                if id(loader.entities[id(record)]) not in reachable | metadata
             ]
             if len(detached) > 1 or any(record.name != "asmheader" for record in detached):
                 raise RegionGeometryError("acis-detached-entities")
@@ -84,8 +87,36 @@ def region_polygon(
         raise RegionGeometryError("acis-parse-error") from exc
 
 
-def _validated_edge_count(body: Body) -> tuple[int, bool, set[int]]:
-    nodes = tuple(api.AcisDebugger(body).walk())
+def _named_attribute_ids(loader: SatLoader) -> set[int]:
+    """Recognize non-geometric, length-checked SAT named attributes only."""
+    return {
+        id(loader.entities[id(record)])
+        for record in loader.records
+        if isinstance(record, SatEntity) and _is_named_metadata(record)
+    }
+
+
+def _is_named_metadata(record: SatEntity) -> bool:
+    if record.name != _NAMED_INT_ATTRIBUTE or len(record.data) != _NAMED_ATTRIBUTE_FIELDS:
+        return False
+    previous, following, owner, name_marker, name, value_marker, value = record.data
+    if not all(isinstance(pointer, SatEntity) for pointer in (previous, following, owner)):
+        return False
+    if owner.name not in {"body", "lump", "shell", "face"} or any(
+        pointer.name not in {"null-ptr", _NAMED_INT_ATTRIBUTE} for pointer in (previous, following)
+    ):
+        return False
+    return all(isinstance(item, str) for item in (name_marker, name, value_marker, value)) and (
+        _is_length_prefixed(name_marker, name) and _is_length_prefixed(value_marker, value)
+    )
+
+
+def _is_length_prefixed(marker: str, value: str) -> bool:
+    return marker.startswith("@") and marker[1:].isdigit() and int(marker[1:]) == len(value)
+
+
+def _validated_edge_count(body: Body, metadata: set[int]) -> tuple[int, bool, set[int]]:
+    nodes = tuple(node for node in api.AcisDebugger(body).walk() if id(node) not in metadata)
     counts = Counter(node.type for node in nodes)
     if counts.keys() - _ALLOWED:
         raise RegionGeometryError("acis-entity-unsupported")

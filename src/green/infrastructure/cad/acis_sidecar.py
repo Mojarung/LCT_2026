@@ -18,6 +18,11 @@ if TYPE_CHECKING:
 _MAX_SIDECAR_BYTES = 128 * 1024 * 1024
 _MIN_COEDGE_FIELDS = 11
 _MIN_VERTEX_FIELDS = 7
+_MIN_TRANSFORM_FIELDS = 5
+
+
+def _length_prefixed_token(marker: str, value: str) -> bool:
+    return marker.startswith("@") and marker[1:].isdigit() and int(marker[1:]) == len(value)
 
 
 def sidecar_path(dxf: Path) -> Path:
@@ -25,35 +30,54 @@ def sidecar_path(dxf: Path) -> Path:
 
 
 def normalize_sab_sat(value: str) -> tuple[str, ...]:
-    """Remove two SAB-only fields that acadrust writes into its SAT text."""
+    """Normalize verified SAB-to-SAT variants without changing the geometric data."""
     lines = value.splitlines()
     if not lines or not lines[0].split()[0].isdigit():
         raise InputError("Некорректный SAT из ACIS bridge")
     output = []
     for original in lines:
-        line = original
-        if line.startswith("coedge "):
-            fields = line.split()
-            if (
-                len(fields) < _MIN_COEDGE_FIELDS
-                or fields[-3] != "0"
-                or not fields[-2].startswith("$")
-            ):
-                raise InputError("Неизвестный формат SAB coedge")
-            fields.pop(-3)
-            line = " ".join(fields)
-        elif line.startswith("vertex "):
-            fields = line.split()
-            if (
-                len(fields) < _MIN_VERTEX_FIELDS
-                or not fields[-3].isdigit()
-                or not fields[-2].startswith("$")
-            ):
-                raise InputError("Неизвестный формат SAB vertex")
-            fields.pop(-3)
-            line = " ".join(fields)
-        output.append(line)
+        if original.startswith("coedge "):
+            output.append(_normalize_coedge(original))
+        elif original.startswith("vertex "):
+            output.append(_normalize_vertex(original))
+        elif original.startswith("transform "):
+            output.append(_normalize_transform(original))
+        else:
+            output.append(original)
     return tuple(output)
+
+
+def _normalize_coedge(line: str) -> str:
+    fields = line.split()
+    if len(fields) < _MIN_COEDGE_FIELDS or fields[-1] != "#":
+        raise InputError("Неизвестный формат SAB coedge")
+    if fields[-3] == "0" and fields[-2].startswith("$"):
+        fields.pop(-3)
+    elif not (fields[-3].startswith("$") and fields[-2].startswith("$")):
+        raise InputError("Неизвестный формат SAB coedge")
+    return " ".join(fields)
+
+
+def _normalize_vertex(line: str) -> str:
+    fields = line.split()
+    if len(fields) < _MIN_VERTEX_FIELDS or fields[-1] != "#":
+        raise InputError("Неизвестный формат SAB vertex")
+    if fields[-3].lstrip("-").isdigit() and fields[-2].startswith("$"):
+        fields.pop(-3)
+    elif not (fields[-3].startswith("$") and fields[-2].startswith("$")):
+        raise InputError("Неизвестный формат SAB vertex")
+    return " ".join(fields)
+
+
+def _normalize_transform(line: str) -> str:
+    fields = line.split()
+    if len(fields) >= _MIN_TRANSFORM_FIELDS and fields[3].startswith("@"):
+        payload = " ".join(fields[4:-1]) + " "
+        if fields[-1] != "#" or not _length_prefixed_token(fields[3], payload):
+            raise InputError("Неизвестный формат SAB transform")
+        fields.pop(3)
+        return " ".join(fields)
+    return line
 
 
 def load_region_sidecar(dxf: Path, dxf_sha256: str, doc: Drawing) -> dict[str, tuple[str, ...]]:
