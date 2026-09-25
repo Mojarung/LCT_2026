@@ -110,9 +110,10 @@ def test_explicit_reclassification_is_not_a_loss(tmp_path: Path) -> None:
 
 def test_close_neighbours_pair_with_their_nearest_anchor() -> None:
     """Два знака ближе допуска друг к другу: пара - ближайший якорь, а не первый найденный."""
+    from shapely.geometry import Point  # noqa: PLC0415
+
     from green.application.symbols import SymbolCatalog, SymbolEntry, SymbolRole  # noqa: PLC0415
     from green.domain.objects import Feature, Scene, SourceRef  # noqa: PLC0415
-    from shapely.geometry import Point  # noqa: PLC0415
 
     catalog = SymbolCatalog({"DEREVO": SymbolEntry(ObjectClass.EXISTING_TREE, SymbolRole.POINT)})
     anchors = [(0.0, 0.0), (0.0, 0.6)]
