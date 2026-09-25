@@ -23,7 +23,11 @@ from green.application.ports import MergeResult
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
-from green.infrastructure.cad.xref_package import DrawingPackage, expanded_entity_counts
+from green.infrastructure.cad.xref_package import (
+    DrawingPackage,
+    count_difference,
+    expanded_entity_counts,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -171,8 +175,12 @@ def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> N
         )
     expected = expanded_entity_counts(base.modelspace()) + expanded_entity_counts(doc.modelspace())
     xref.load_modelspace(doc, base, conflict_policy=policy)
-    if expanded_entity_counts(base.modelspace()) != expected:
-        raise InputError(f"Склейка: при импорте {name} потеряны/заменены вложенные сущности")
+    actual = expanded_entity_counts(base.modelspace())
+    if actual != expected:
+        raise InputError(
+            f"Склейка: при импорте {name} потеряны/заменены вложенные сущности: "
+            f"{count_difference(expected, actual)}"
+        )
 
 
 def _save_package(doc: Drawing, target: Path) -> int:

@@ -184,8 +184,12 @@ class DrawingPackage:
         loader.execute(xref_prefix=block.name)
         _clear_xref_flags(block)
         _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
-        if expanded_entity_counts(block) != expected:
-            raise InputError(f"XREF {block.name}: при внедрении потеряны/заменены сущности")
+        actual = expanded_entity_counts(block)
+        if actual != expected:
+            raise InputError(
+                f"XREF {block.name}: при внедрении потеряны/заменены сущности: "
+                f"{count_difference(expected, actual)}"
+            )
         self.bindings.append(
             ReferenceBinding(
                 self.names[index],
@@ -342,6 +346,14 @@ def _references(layout: BaseLayout) -> tuple[BlockLayout, ...]:
             else:
                 pending.append(block)
     return tuple(found)
+
+
+def count_difference(expected: Counter[str], actual: Counter[str]) -> str:
+    """Какие типы разошлись: «ACAD_PROXY_ENTITY 4 -> 0, LINE 120 -> 118»."""
+    kinds = sorted(set(expected) | set(actual), key=lambda k: -abs(expected[k] - actual[k]))
+    changed = [f"{k} {expected[k]} -> {actual[k]}" for k in kinds if expected[k] != actual[k]]
+    more = f" и ещё {len(changed) - 8}" if len(changed) > 8 else ""  # noqa: PLR2004
+    return ", ".join(changed[:8]) + more
 
 
 def expanded_entity_counts(layout: BaseLayout) -> Counter[str]:

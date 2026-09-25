@@ -462,3 +462,17 @@ def test_dictionary_entry_left_from_the_source_file_is_dropped_before_saving(
     assert [e.dxf.owner for e in written.modelspace()] == [owner] * 3
     written_block = written.blocks.get("output[1-8]_pp")
     assert written_block.block.dxf.owner == written_block.block_record_handle
+
+
+def test_lost_entities_are_named_by_type() -> None:
+    """Сбой внедрения ссылки называет, каких сущностей не хватило, а не только сам факт."""
+    from collections import Counter  # noqa: PLC0415
+
+    from green.infrastructure.cad.xref_package import count_difference  # noqa: PLC0415
+
+    text = count_difference(
+        Counter({"LINE": 120, "ACAD_PROXY_ENTITY": 4, "TEXT": 7}),
+        Counter({"LINE": 118, "TEXT": 7}),
+    )
+
+    assert text == "ACAD_PROXY_ENTITY 4 -> 0, LINE 120 -> 118"
