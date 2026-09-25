@@ -1,14 +1,14 @@
 """Count semantic assignments on local DXFs; no recognition accuracy claim.
 
-Usage: python tools/survey_semantics.py SOURCE [SOURCE ...]
+Usage: python tools/survey_semantics.py [--output FILE] SOURCE [SOURCE ...]
 Only hashes, filenames, counts and timings are persisted. Input CAD stays local.
 """
 # ruff: noqa: INP001, T201 - standalone research driver
 
 from __future__ import annotations
 
+import argparse
 import json
-import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -21,16 +21,17 @@ from green.infrastructure.cad.reader import EzdxfSceneReader
 from green.infrastructure.config.repositories import YamlLayerMapSource
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "docs/research/verified-pipeline/semantic_survey.json"
+DEFAULT_TARGET = ROOT / "docs/research/verified-pipeline/semantic_survey.json"
 
 
 def main() -> None:
-    if not sys.argv[1:]:
-        raise SystemExit(__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("sources", type=Path, nargs="+")
+    parser.add_argument("--output", type=Path, default=DEFAULT_TARGET)
+    args = parser.parse_args()
     rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
     rows = []
-    for name in sys.argv[1:]:
-        source = Path(name)
+    for source in args.sources:
         started = time.perf_counter()
         row: dict[str, object] = {"name": source.name}
         try:
@@ -65,7 +66,8 @@ def main() -> None:
         row["seconds"] = round(time.perf_counter() - started, 4)
         rows.append(row)
         print(row, flush=True)
-    TARGET.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(
             {
                 "scope": (
