@@ -26,7 +26,21 @@ def main() -> None:
     scene = EzdxfSceneReader().read(args.source)
     masks = [feature for feature in scene.features if feature.source_entity_type == "WIPEOUT"]
     images = [feature for feature in scene.features if feature.source_entity_type == "IMAGE"]
-    unreadable_hatches = [feature for feature in scene.features if feature.uncertain_footprint]
+    unreadable_hatches = [
+        feature
+        for feature in scene.features
+        if feature.uncertain_footprint and feature.source_entity_type == "HATCH"
+    ]
+    bounded_polylines = [
+        feature
+        for feature in scene.features
+        if feature.uncertain_footprint and feature.source_entity_type in {"LWPOLYLINE", "POLYLINE"}
+    ]
+    bounded_mlines = [
+        feature
+        for feature in scene.features
+        if feature.uncertain_footprint and feature.source_entity_type == "MLINE"
+    ]
     bounds = json.loads(args.scope.read_text())["boundary"]["bounds"] if args.scope else None
     window = box(*bounds) if bounds else None
     gaps_by_type: Counter[str] = Counter()
@@ -43,6 +57,12 @@ def main() -> None:
         "image_area_m2": round(sum(image.geometry.area for image in images), 3),
         "image_layers": dict(Counter(image.layer for image in images)),
         "unreadable_hatches_bounded": len(unreadable_hatches),
+        "bounded_invalid_polylines": len(bounded_polylines),
+        "bounded_invalid_polyline_area_m2": round(
+            sum(feature.geometry.area for feature in bounded_polylines), 3
+        ),
+        "bounded_mlines": len(bounded_mlines),
+        "bounded_mline_area_m2": round(sum(feature.geometry.area for feature in bounded_mlines), 3),
         "unreadable_hatches_in_work_bbox": sum(
             feature.geometry.intersects(window) for feature in unreadable_hatches
         )
@@ -57,6 +77,7 @@ def main() -> None:
         "mask_area_m2": round(sum(mask.geometry.area for mask in masks), 3),
         "mask_layers": dict(Counter(mask.layer for mask in masks)),
         "gap_count": sum(gap.count for gap in scene.read_diagnostics.geometry_gaps),
+        "unresolved_xrefs": len(scene.read_diagnostics.unresolved_xrefs),
         "gaps_by_type": dict(gaps_by_type),
         "seconds": round(time.perf_counter() - started, 3),
         "peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,

@@ -206,7 +206,7 @@ def test_exact_tree_center_has_no_outline_approximation_error(tmp_path: Path) ->
     assert scene.features[0].geometry_error_m == 0
 
 
-def test_unbounded_spline_and_repaired_ring_are_rejected(tmp_path: Path) -> None:
+def test_unbounded_spline_still_blocks_after_invalid_ring_is_bounded(tmp_path: Path) -> None:
     doc = ezdxf.new()
     doc.modelspace().add_spline([(0, 0), (5, 8), (10, 0)])
     doc.modelspace().add_lwpolyline([(0, 0), (5, 5), (0, 5), (5, 0)], close=True)
@@ -214,6 +214,8 @@ def test_unbounded_spline_and_repaired_ring_are_rejected(tmp_path: Path) -> None
     doc.saveas(source)
     scene = EzdxfSceneReader().read(source, unit="m")
     assert len(scene.features) == 2
-    assert all(f.geometry_error_m is None for f in scene.features)
+    assert sum(f.uncertain_footprint for f in scene.features) == 1
+    assert scene.read_diagnostics.bounded_uncertainty_by_type == {"LWPOLYLINE": 1}
+    assert scene.read_diagnostics.geometry_gaps[0].entity_type == "SPLINE"
     with pytest.raises(InputError, match="approximation-error-not-bounded"):
         require_complete_geometry(scene)

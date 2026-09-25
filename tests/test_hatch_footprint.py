@@ -60,6 +60,21 @@ def test_spline_hatch_cannot_use_unproved_envelope() -> None:
     assert bounded_hatch_footprint(hatch, 0.1) is None
 
 
+def test_disconnected_hatch_edges_are_bounded_but_not_filled(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    hatch = doc.modelspace().add_hatch(dxfattribs={"layer": "Газон"})
+    path = hatch.paths.add_edge_path()
+    path.add_line((0, 0), (10, 0))
+    path.add_line((10, 10), (0, 10))
+    source = tmp_path / "disconnected.dxf"
+    doc.saveas(source)
+    scene = EzdxfSceneReader().read(source, unit="m")
+    require_complete_geometry(scene)
+    assert scene.read_diagnostics.bounded_uncertainty_by_type == {"HATCH": 1}
+    assert scene.features[0].uncertain_footprint
+    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
+
+
 def test_open_polyline_last_bulge_is_still_enclosed() -> None:
     doc = ezdxf.new()
     hatch = doc.modelspace().add_hatch()

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MText, Polyline, Region, Text
+from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MLine, MText, Polyline, Region, Text
 from ezdxf.entities.boundary_paths import PolylinePath
 from ezdxf.entities.image import Image, Wipeout
 from ezdxf.entities.polygon import DXFPolygon
@@ -48,6 +48,8 @@ from green.infrastructure.cad.hatch_geometry import (
     match_region_outline,
 )
 from green.infrastructure.cad.image_footprint import image_footprint
+from green.infrastructure.cad.mline_footprint import bounded_mline_footprint
+from green.infrastructure.cad.polyline_footprint import bounded_invalid_polyline
 from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
 from green.infrastructure.cad.units import AUTO, decide_units
 
@@ -143,9 +145,15 @@ class EzdxfSceneReader:
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
                 skipped_by_type=dict(walker.skipped),
-                bounded_uncertainty_by_type={"HATCH": walker.bounded_unreadable_hatches}
-                if walker.bounded_unreadable_hatches
-                else {},
+                bounded_uncertainty_by_type={
+                    **(
+                        {"HATCH": walker.bounded_unreadable_hatches}
+                        if walker.bounded_unreadable_hatches
+                        else {}
+                    ),
+                    **walker.bounded_invalid_polylines,
+                    **({"MLINE": walker.bounded_mlines} if walker.bounded_mlines else {}),
+                },
                 unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
                 geometry_gaps=walker.geometry_gaps(),
                 approximation_features=sum(bool(f.geometry_error_m) for f in features),
@@ -176,9 +184,11 @@ class _Walker:
     matched_local_hatches: int = 0
     collapsed_lines: int = 0
     bounded_unreadable_hatches: int = 0
+    bounded_invalid_polylines: Counter[str] = field(default_factory=Counter)
+    bounded_mlines: int = 0
     raster_footprints: int = 0
 
-    def visit(  # noqa: C901, PLR0912, PLR0913 - entity dispatch with explicit loss accounting
+    def visit(  # noqa: C901, PLR0912, PLR0913, PLR0915 - entity dispatch with loss accounting
         self,
         entity: DXFGraphic,
         *,
@@ -230,6 +240,7 @@ class _Walker:
                         "hatch-invalid-ring",
                         "hatch-open-boundary",
                         "hatch-intersecting-boundaries",
+                        "hatch-disconnected-edges",
                     }
                 ):
                     footprint = bounded_hatch_footprint(entity, self.flatten)
@@ -258,7 +269,43 @@ class _Walker:
                 self.skipped[kind] += 1
                 self._gap(kind, layer, parent_block, "non-finite-coordinates", ref)
             else:
+                if kind == "MLINE":
+                    self.features.append(
+                        Feature(
+                            ref=ref,
+                            layer=layer,
+                            geometry=geometry,
+                            block=parent_block,
+                            geometry_error_m=0.0,
+                            source_entity_type=kind,
+                            uncertain_footprint=True,
+                            insert_chain=insert_chain,
+                        )
+                    )
+                    self.bounded_mlines += 1
+                    return
                 if not geometry.is_valid:
+                    if (
+                        kind in {"LWPOLYLINE", "POLYLINE"}
+                        and isinstance(geometry, Polygon)
+                        and error is not None
+                    ):
+                        footprint = bounded_invalid_polyline(geometry, error, self.flatten)
+                        if footprint is not None:
+                            self.features.append(
+                                Feature(
+                                    ref=ref,
+                                    layer=layer,
+                                    geometry=footprint,
+                                    block=parent_block,
+                                    geometry_error_m=0.0,
+                                    source_entity_type=kind,
+                                    uncertain_footprint=True,
+                                    insert_chain=insert_chain,
+                                )
+                            )
+                            self.bounded_invalid_polylines[kind] += 1
+                            return
                     geometry = shapely.make_valid(geometry)
                     error = None
                 if error is None:
@@ -456,6 +503,9 @@ class _Walker:
                 if footprint is not None:
                     self.raster_footprints += 1
                 return footprint, 0.0 if footprint is not None else None
+            if isinstance(entity, MLine):
+                footprint = bounded_mline_footprint(entity, self.flatten)
+                return footprint, 0.0 if footprint is not None else None
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
                 extent = max(abs(start.x), abs(start.y), abs(end.x), abs(end.y))
@@ -622,7 +672,7 @@ class _Walker:
             return self.region_sat_by_sab.get(hashlib.sha256(region.sab).digest())
         return None
 
-    def warnings(self) -> list[str]:
+    def warnings(self) -> list[str]:  # noqa: C901 - one branch per import diagnostic
         messages = []
         if self.unresolved_xrefs:
             names = ", ".join(sorted(self.unresolved_xrefs)[:10])
@@ -657,6 +707,15 @@ class _Walker:
             messages.append(
                 "Повреждённые HATCH ограничены неопределённой областью без посадки: "
                 f"{self.bounded_unreadable_hatches}"
+            )
+        if self.bounded_invalid_polylines:
+            messages.append(
+                "Самопересекающиеся POLYLINE/LWPOLYLINE ограничены неопределённой "
+                f"областью без посадки: {sum(self.bounded_invalid_polylines.values())}"
+            )
+        if self.bounded_mlines:
+            messages.append(
+                f"MLINE ограничены неизвестной областью без посадки: {self.bounded_mlines}"
             )
         if self.raster_footprints:
             messages.append(

@@ -263,13 +263,9 @@ def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
         rectangle(hatch, (0, 0, 10, 10))
         rectangle(hatch, (5, 5, 15, 15))
     scene = read(doc, tmp_path)
-    if kind == "edge_gap":
-        with pytest.raises(InputError):
-            require_complete_geometry(scene)
-    else:
-        require_complete_geometry(scene)
-        assert scene.features[0].uncertain_footprint
-        assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
+    require_complete_geometry(scene)
+    assert scene.features[0].uncertain_footprint
+    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
 
 
 def test_tiny_selfcross_lobe_is_retained_with_clearance_error(tmp_path: Path) -> None:

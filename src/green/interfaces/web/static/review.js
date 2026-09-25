@@ -13,7 +13,7 @@ const EVIDENCE_NAMES = {
   explicit_feature: 'объект уточнён', explicit_layer: 'слой уточнён', explicit_block: 'блок уточнён',
   annotation_label: 'подпись оформления', explicit_label: 'роль подписи уточнена',
   entity_type: 'тип чертёжной маски',
-  bounded_unreadable_geometry: 'непрочитанный HATCH ограничен безопасной областью',
+  bounded_unreadable_geometry: 'неоднозначный объект ограничен неизвестной областью',
   raster_review_required: 'содержимое внешнего растра не прочитано',
 };
 const CLASS_NAMES = {
