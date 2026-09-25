@@ -58,7 +58,7 @@ describe('PlanEditor.move', () => {
       },
     });
     const moved = item();
-    const host = { dragVerdict: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn() };
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
     const editor = new PlanEditor('r1');
     editor.attach(host);
 
@@ -92,9 +92,61 @@ describe('PlanEditor.move', () => {
     const state = useWorkspace.getState();
     expect(state.stale).toBe(true);
     expect(state.message).toEqual({
-      text: 'Посадка №7 перенесена. Нормы пересчитаны.',
+      text: 'Посадка № 7 перенесена. Нормы пересчитаны.',
       kind: 'info',
     });
+    expect(host.pending.mock.calls).toEqual([
+      [moved, true],
+      [moved, false],
+    ]);
+  });
+
+  it('says the move has started and keeps the waiting ring until the service answers', async () => {
+    const edits = deferred<Response>();
+    mockApi({
+      'POST /api/v1/runs/r1/edits': () => edits.promise,
+      'POST /api/v1/runs/r1/check': { plantable: true, verdict: 'allowed', note: '', checks: [] },
+    });
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
+    const editor = new PlanEditor('r1');
+    editor.attach(host);
+    const moved = item();
+
+    const done = editor.move(moved, 3, 4);
+    // До ответа сервиса: сообщение о начале и кольцо ожидания, снимать его рано.
+    expect(useWorkspace.getState().message).toEqual({
+      text: 'Переносим посадку № 7…',
+      kind: 'info',
+    });
+    expect(host.pending.mock.calls).toEqual([[moved, true]]);
+
+    edits.resolve(Response.json(summary));
+    await done;
+    expect(host.pending.mock.calls).toEqual([
+      [moved, true],
+      [moved, false],
+    ]);
+    expect(useWorkspace.getState().message.text).toBe('Посадка № 7 перенесена. Нормы пересчитаны.');
+  });
+
+  it('drops the waiting ring when the service refuses the move', async () => {
+    mockApi({
+      'POST /api/v1/runs/r1/edits': () =>
+        Response.json(
+          { title: 'Conflict', status: 409, detail: 'Прогон ещё считается.' },
+          { status: 409, headers: { 'content-type': 'application/problem+json' } },
+        ),
+    });
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
+    const editor = new PlanEditor('r1');
+    editor.attach(host);
+    const moved = item();
+
+    await editor.move(moved, 1, 2);
+    expect(host.pending.mock.calls).toEqual([
+      [moved, true],
+      [moved, false],
+    ]);
   });
 
   it('marks a point the service will not plant as rejected', async () => {
@@ -133,18 +185,28 @@ describe('PlanEditor.probe', () => {
     const calls = mockApi({
       'POST /api/v1/runs/r1/check': () => answers.shift() ?? Response.error(),
     });
-    const host = { dragVerdict: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn() };
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
     const editor = new PlanEditor('r1');
     editor.attach(host);
 
     const older = editor.probe(item(), 1, 1);
     const newer = editor.probe(item(), 2, 2);
-    second.resolve(Response.json({ plantable: true, verdict: 'allowed', note: '', checks: [] }));
+    const cable = {
+      rule_id: 'R-UTIL-POWER-001',
+      outcome: 'fail',
+      measured_m: 1.2,
+      threshold_m: 2,
+      object_class: 'utility.power_cable',
+    };
+    second.resolve(
+      Response.json({ plantable: true, verdict: 'needs_approval', note: '', checks: [cable] }),
+    );
     await newer;
     first.resolve(Response.json({ plantable: false, verdict: 'allowed', note: '', checks: [] }));
     await older;
 
-    expect(host.dragVerdict.mock.calls).toEqual([['allowed']]);
+    // Вердикт красит кольцо, трасса правил даёт выноски у перетаскиваемой посадки.
+    expect(host.dragProbe.mock.calls).toEqual([[{ verdict: 'needs_approval', checks: [cable] }]]);
     // Проверяется точка под курсором, а не прежнее место посадки.
     expect(calls.map((c) => bodyOf(c))).toEqual([
       { x: 1, y: 1, species: 'tilia_cordata' },
@@ -156,7 +218,7 @@ describe('PlanEditor.probe', () => {
 describe('PlanEditor.remove', () => {
   it('drops the placement and says how many are left', async () => {
     mockApi({ 'POST /api/v1/runs/r1/edits': { ...summary, placements: 2 } });
-    const host = { dragVerdict: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn() };
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
     const editor = new PlanEditor('r1');
     editor.attach(host);
     const gone = item();
@@ -166,7 +228,7 @@ describe('PlanEditor.remove', () => {
 
     expect(host.removed).toHaveBeenCalledWith(gone);
     expect(useWorkspace.getState().selected).toBeNull();
-    expect(useWorkspace.getState().message.text).toBe('Посадка №7 удалена. В плане осталось 2.');
+    expect(useWorkspace.getState().message.text).toBe('Посадка № 7 удалена. В плане осталось 2.');
   });
 });
 

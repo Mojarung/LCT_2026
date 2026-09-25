@@ -56,6 +56,13 @@ export interface MapItem {
   barrier_m?: number | null;
 }
 
+/** Ответ живой проверки точки при переносе: вердикт и трасса правил сервиса. По трассе карта
+ *  рисует выноски у перетаскиваемой посадки, как у выбранной. */
+export interface DragProbe {
+  verdict: string;
+  checks: readonly RuleCheck[];
+}
+
 /** Карта покрытий растром, привязанная к координатам чертежа. */
 export interface SurfaceImage {
   img: CanvasImageSource;

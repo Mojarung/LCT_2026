@@ -566,6 +566,37 @@ export function drawSelection(
   if (marks.selected) ring(ctx, marks.selected, palette.get('--accent'), 2, view, palette);
 }
 
+/** Шаг штриха кольца ожидания, пикселей: сдвиг на него - полный оборот узора. */
+export const PENDING_DASH = 11;
+
+/** Перенос ушёл на сервер и ждёт ответа: пунктирное кольцо вокруг кроны бежит по кругу.
+ *  Без него перенос шёл 27 секунд без признака жизни (жюри, итерация 7). phase - сдвиг
+ *  штриха в пикселях; при reduced-motion движок держит его нулём, и кольцо стоит. */
+export function drawPending(
+  ctx: CanvasRenderingContext2D,
+  view: ViewState,
+  items: Iterable<MapItem>,
+  palette: Palette,
+  phase: number,
+): void {
+  ctx.save();
+  ctx.setLineDash([6, PENDING_DASH - 6]);
+  ctx.lineDashOffset = -phase;
+  for (const item of items) {
+    const { sx, sy } = toScreen(view, item.x, item.y);
+    const radius = Math.max((item.radius || 1) * view.scale, 9) + 12;
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.lineWidth = 4.5;
+    ctx.strokeStyle = palette.get('--accent-halo');
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = palette.get('--bone-3');
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** Стрелка севера. Север в чертеже - это +Y, и после разворота вида он больше не наверху:
  *  без стрелки план читается как произвольно повёрнутая картинка. */
 export function drawNorth(

@@ -151,7 +151,8 @@ export function RunPage() {
   useLayoutEffect(
     () =>
       editor.attach({
-        dragVerdict: (verdict) => engine.current?.setDragVerdict(verdict),
+        dragProbe: (probe) => engine.current?.setDragProbe(probe),
+        pending: (item, on) => engine.current?.setPending(item, on),
         itemsChanged: () => engine.current?.touchItems(),
         removed: (item) => {
           setRemoved((previous) => {

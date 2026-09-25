@@ -7,7 +7,7 @@
  * 2. Цвета берутся из CSS-переменных: тема переключается в одном месте, карта следует за ней.
  * 3. Вид разворачивается вдоль улицы: участок работ - лента. */
 
-import type { BasemapJson } from '../api/artifacts';
+import type { BasemapJson, RuleCheck } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { buildChunks } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
@@ -19,11 +19,13 @@ import {
   type BaseCache,
   drawGrid,
   drawNorth,
+  drawPending,
   drawPlan,
   drawScaleBar,
   drawSelection,
   type Marks,
   PAD,
+  PENDING_DASH,
   renderBase,
   type Scene,
   uncovered,
@@ -32,6 +34,7 @@ import {
 import {
   type Area,
   DEFAULT_LAYERS,
+  type DragProbe,
   type EngineHooks,
   type Layers,
   type MapItem,
@@ -122,7 +125,15 @@ export class PlanEngine {
   /** Геометрия подосновы по классам: к ней ведут размерные выноски выбранной посадки. */
   private classIndex: ClassIndex | null = null;
   /** Выноски выбранного считаются один раз на положение и набор проверок, а не на кадр. */
-  private dims: { key: string; list: Dimension[] } = { key: '', list: [] };
+  private dims: { key: string; checks: readonly RuleCheck[] | null; list: Dimension[] } = {
+    key: '',
+    checks: null,
+    list: [],
+  };
+  /** Трасса правил из последнего ответа живой проверки: выноски у перетаскиваемой посадки. */
+  private dragChecks: readonly RuleCheck[] = [];
+  /** Посадки, чей перенос ушёл на сервер и ждёт ответа: у них бежит кольцо ожидания. */
+  private readonly pending = new Set<MapItem>();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -170,7 +181,7 @@ export class PlanEngine {
     this.scene.chunks = buildChunks(basemap.features, basemap.bbox, existing);
     this.scene.existing = existing;
     this.classIndex = new ClassIndex(basemap.features);
-    this.dims = { key: '', list: [] };
+    this.dims = { key: '', checks: null, list: [] };
     this.scene.labels = basemap.labels ?? [];
     this.outline = contentPoints(basemap.features);
     this.mapBox = validBox(basemap.bbox);
@@ -266,8 +277,17 @@ export class PlanEngine {
     this.hooks.placingChanged(on);
   }
 
-  setDragVerdict(verdict: string | null): void {
-    this.marks.dragVerdict = verdict;
+  /** Ответ живой проверки под курсором: вердикт красит кольцо, трасса правил даёт выноски. */
+  setDragProbe(probe: DragProbe | null): void {
+    this.marks.dragVerdict = probe?.verdict ?? null;
+    this.dragChecks = probe?.checks ?? [];
+    this.schedule();
+  }
+
+  /** Перенос посадки ушёл на сервер (on) или вернулся: кольцо ожидания вокруг неё. */
+  setPending(item: MapItem, on: boolean): void {
+    if (on) this.pending.add(item);
+    else this.pending.delete(item);
     this.schedule();
   }
 
@@ -584,12 +604,28 @@ export class PlanEngine {
     const area = this.clearArea();
     const font = this.palette.get('--sans');
     drawSelection(ctx, this.view, this.marks, this.palette);
-    // Выноски поверх кольца выбора: подпись нормы важнее обводки.
+    if (this.pending.size) {
+      const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const phase = still ? 0 : (performance.now() / 40) % PENDING_DASH;
+      drawPending(ctx, this.view, this.pending, this.palette, phase);
+      // Кольцо бежит, пока ответа нет: следующий кадр заказывается отсюда же.
+      if (!still) this.schedule();
+    }
+    // Выноски поверх кольца выбора: подпись нормы важнее обводки. При переносе - по ответу
+    // живой проверки точки, иначе - по трассе правил выбранной посадки.
+    const mono = this.palette.get('--mono');
     const chosen = this.marks.selected;
-    if (chosen && this.classIndex && !this.marks.dragging) {
-      const key = `${chosen.id}|${String(chosen.x)}|${String(chosen.y)}|${String(chosen.checks.length)}`;
-      if (this.dims.key !== key) this.dims = { key, list: dimensionsFor(chosen, this.classIndex) };
-      drawDimensions(ctx, this.view, chosen, this.dims.list, this.palette.get('--mono'));
+    const dragged = this.marks.dragging;
+    if (dragged && this.classIndex) {
+      const list = dimensionsFor(dragged, this.dragChecks, this.classIndex);
+      drawDimensions(ctx, this.view, dragged, list, mono);
+    } else if (chosen && this.classIndex) {
+      const key = `${chosen.id}|${String(chosen.x)}|${String(chosen.y)}`;
+      if (this.dims.key !== key || this.dims.checks !== chosen.checks) {
+        const list = dimensionsFor(chosen, chosen.checks, this.classIndex);
+        this.dims = { key, checks: chosen.checks, list };
+      }
+      drawDimensions(ctx, this.view, chosen, this.dims.list, mono);
     }
     drawNorth(ctx, area, this.view, this.palette, font);
     drawScaleBar(ctx, area, this.view, this.palette, font);
@@ -678,9 +714,8 @@ export class PlanEngine {
     clearTimeout(this.nudgeTimer);
     this.nudgeTimer = window.setTimeout(() => {
       this.marks.dragging = null;
-      this.marks.dragVerdict = null;
+      this.setDragProbe(null);
       this.hooks.move(item, item.x, item.y);
-      this.schedule();
     }, NUDGE_COMMIT_MS);
     this.schedule();
     return true;
@@ -754,6 +789,8 @@ export class PlanEngine {
           ? (preferSelected(this.trunksAt(event), this.marks.selected) ?? this.pickAt(event))
           : null;
       grabbed = hit?.kind === 'placement' ? hit : null;
+      // Выноски прошлого переноса к новому не относятся: до первого ответа пробы их нет.
+      this.dragChecks = [];
       this.canvas.setPointerCapture(event.pointerId);
       this.canvas.classList.add('dragging');
     });
@@ -799,12 +836,12 @@ export class PlanEngine {
         const world = this.worldOf(event);
         item.x = world.x;
         item.y = world.y;
-        this.marks.dragVerdict = null;
+        this.setDragProbe(null);
         this.hooks.move(item, world.x, world.y);
-        this.schedule();
         return;
       }
       this.marks.dragVerdict = null;
+      this.dragChecks = [];
       const target = this.marks.selected;
       if (moved < 4 && this.placing && target?.kind === 'placement') {
         const world = this.worldOf(event);
