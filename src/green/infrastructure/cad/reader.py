@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 from ezdxf import bbox
-from ezdxf.entities import Body, Circle, Ellipse, Insert, LWPolyline, MText, Polyline, Text
+from ezdxf.entities import Body, Circle, Ellipse, Insert, LWPolyline, MText, Polyline, Spline, Text
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
@@ -33,6 +33,7 @@ from green.infrastructure.cad.curve_paths import (
     circle_vertices,
     ellipse_vertices,
     polyline_vertices,
+    spline_vertices,
 )
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
@@ -498,6 +499,8 @@ class _Walker:
                 return _polyline(points, closed=entity.is_closed), error
             if kind in _AREA_ENTITIES:
                 return hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+            if isinstance(entity, Spline) and (bounded := self._spline(entity)) is not None:
+                return bounded
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
         except HatchGeometryError:
@@ -505,6 +508,15 @@ class _Walker:
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None
         return _polyline(vertices, closed=path.is_closed), None if path.has_curves else 0.0
+
+    def _spline(self, entity: Spline) -> tuple[BaseGeometry | None, float] | None:
+        """Сплайн с контрольными точками - с доказанной погрешностью; иначе None, и он идёт
+        общим путём с неограниченной погрешностью (пробел)."""
+        try:
+            points, error = spline_vertices(entity, self.flatten)
+        except ValueError:
+            return None
+        return _polyline(points, closed=entity.closed), error
 
     def warnings(self) -> list[str]:
         messages = []

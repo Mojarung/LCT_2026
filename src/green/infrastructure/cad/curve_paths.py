@@ -10,8 +10,9 @@ from ezdxf.entities import Arc, Circle, LWPolyline
 from ezdxf.math import arc_segment_count
 
 if TYPE_CHECKING:
-    from ezdxf.entities import Ellipse, Polyline
+    from ezdxf.entities import Ellipse, Polyline, Spline
     from ezdxf.math import ConstructionArc, ConstructionEllipse, Vec2, Vec3
+    from numpy.typing import NDArray
 
 MAX_VERTICES = 100_000
 _TURN_DEG = 360
@@ -112,3 +113,67 @@ def polyline_vertices(
         if len(points) > MAX_VERTICES:
             raise ValueError("Curve vertex budget exceeded")
     return [(v.x, v.y) for v in points], error
+
+
+# Предел деления одной кривой Безье: 2**24 кусков дальше любого бюджета вершин.
+_MAX_SPLIT_DEPTH = 24
+
+
+def spline_vertices(entity: Spline, distance: float) -> tuple[list[tuple[float, float]], float]:
+    """Нерациональный сплайн - точная цепочка кривых Безье; каждая делится пополам (де Кастельжо),
+    пока её внутренние контрольные точки не окажутся ближе `distance` к хорде.
+
+    Кривая лежит в выпуклой оболочке своих контрольных точек, расстояние до хорды выпукло,
+    поэтому оценка строгая, а не проверка в середине отрезка. Проекция на план - аффинное
+    отображение, контрольные точки проецируются вместе с кривой. Рациональный или незажатый
+    сплайн так не раскладывается, а сплайн только из точек прохождения каждая CAD-программа
+    строит своей интерполяцией: ValueError, вызывающий оставляет пробел.
+    """
+    if not entity.control_point_count():
+        raise ValueError("Fit-point spline: the curve depends on the CAD interpolation")
+    try:
+        segments = list(entity.construction_tool().bezier_decomposition())
+    except TypeError as error:
+        raise ValueError(str(error)) from error
+    if not segments:
+        raise ValueError("Empty spline")
+    points = [(segments[0][0].x, segments[0][0].y)]
+    bound = 0.0
+    for control in segments:
+        pending = [(np.array([(v.x, v.y) for v in control], dtype=np.float64), 0)]
+        while pending:
+            part, depth = pending.pop()
+            deviation = _control_deviation(part)
+            if deviation <= distance or depth >= _MAX_SPLIT_DEPTH:
+                points.append((float(part[-1, 0]), float(part[-1, 1])))
+                bound = max(bound, deviation)
+                if len(points) > MAX_VERTICES:
+                    raise ValueError("Curve vertex budget exceeded")
+                continue
+            left, right = _split_half(part)
+            pending.extend(((right, depth + 1), (left, depth + 1)))
+    return points, max(bound, distance)
+
+
+def _control_deviation(control: NDArray[np.float64]) -> float:
+    """Наибольшее расстояние внутренних контрольных точек до хорды (отрезка)."""
+    start, end = control[0], control[-1]
+    inner = control[1:-1]
+    if not len(inner):
+        return 0.0
+    chord = end - start
+    length = float(chord @ chord)
+    if length == 0:
+        return float(np.hypot(*(inner - start).T).max())
+    t = np.clip(((inner - start) @ chord) / length, 0.0, 1.0)
+    return float(np.hypot(*(inner - (start + t[:, None] * chord)).T).max())
+
+
+def _split_half(control: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    left, right = [control[0]], [control[-1]]
+    level = control
+    while len(level) > 1:
+        level = (level[:-1] + level[1:]) / 2
+        left.append(level[0])
+        right.append(level[-1])
+    return np.array(left), np.array(right[::-1])
