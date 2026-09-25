@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
+import struct
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
@@ -72,6 +73,12 @@ class DrawingPackage:
         for path in sources:
             doc, warnings = load_document(path)
             require_exportable_document(doc, path.name)
+            replaced = _explode_proxies(doc)
+            if replaced:
+                notes.append(
+                    f"Комплект: в {path.name} {replaced} прокси-объектов (ACAD_PROXY_ENTITY) "
+                    "заменены своим рисунком: ezdxf не переносит их между файлами"
+                )
             documents.append(doc)
             notes.extend(warnings)
         links = tuple(
@@ -346,6 +353,27 @@ def _references(layout: BaseLayout) -> tuple[BlockLayout, ...]:
             else:
                 pending.append(block)
     return tuple(found)
+
+
+def _explode_proxies(doc: Drawing) -> int:
+    """Прокси-объект с рисунком - примитивами рисунка на своём слое, в загруженной копии
+    комплекта (файл на диске не меняется). Без рисунка или с нечитаемым рисунком объект
+    остаётся, и проверка внедрения назовёт его потерю."""
+    replaced = 0
+    for layout in (doc.modelspace(), *doc.blocks):
+        for proxy in list(layout.query("ACAD_PROXY_ENTITY")):
+            if not proxy.proxy_graphic:
+                continue
+            layer = proxy.dxf.get("layer", "0")
+            try:
+                parts = proxy.explode()  # ty: ignore[unresolved-attribute]
+            except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
+                continue
+            for part in parts:
+                if part.dxf.get("layer", "0") == "0":
+                    part.dxf.layer = layer
+            replaced += 1
+    return replaced
 
 
 def count_difference(expected: Counter[str], actual: Counter[str]) -> str:

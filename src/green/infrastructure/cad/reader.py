@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import struct
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -174,6 +175,8 @@ class _Walker:
             outcome = self._label(entity, ref, layer, parent_block, chain, owner=owner)
         elif kind == "INSERT":
             outcome = self._insert(entity, ref, layer, chain, owner)  # ty: ignore[invalid-argument-type]
+        elif kind == "ACAD_PROXY_ENTITY" and getattr(entity, "proxy_graphic", None):
+            outcome = self._proxy(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
         elif kind == "REGION":
             outcome = self._region(entity, ref, layer, parent_block, owner)  # ty: ignore[invalid-argument-type]
         elif kind in _SKIPPED:
@@ -224,6 +227,36 @@ class _Walker:
             )
         )
         return "feature"
+
+    def _proxy(  # noqa: PLR0913 - как у вставки: слой, цепочка, блок и владелец-знак
+        self,
+        entity: DXFGraphic,
+        ref: SourceRef,
+        layer: str,
+        *,
+        chain: tuple[str, ...],
+        block: str | None,
+        owner: str | None,
+    ) -> str:
+        """Прокси-объект стороннего приложения читается по своему рисунку, как вставка:
+        примитивы рисунка на слое «0» получают слой объекта. Документ не меняется."""
+        try:
+            children = list(entity.virtual_entities())  # ty: ignore[unresolved-attribute]
+        except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
+            return self._skip("ACAD_PROXY_ENTITY", layer, block, "proxy-graphic-not-readable", ref)
+        if not children:
+            return self._skip("ACAD_PROXY_ENTITY", layer, block, "unsupported-spatial-entity", ref)
+        for position, child in enumerate(children):
+            self.visit(
+                child,
+                parent_layer=layer,
+                chain=chain,
+                parent_handle=ref.handle,
+                index=position,
+                parent_block=block,
+                owner=owner,
+            )
+        return "proxy:graphic"
 
     def _skip(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> str:
         self.skipped[kind] += 1
