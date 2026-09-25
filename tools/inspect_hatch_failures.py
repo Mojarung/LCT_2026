@@ -13,8 +13,9 @@ from pathlib import Path
 
 import ezdxf
 import shapely
+from ezdxf import bbox
 from ezdxf.entities.polygon import DXFPolygon
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 
 from green.infrastructure.cad.hatch_geometry import HatchGeometryError, _path_polygon
 
@@ -23,10 +24,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("review", type=Path)
+    parser.add_argument("--scope", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     started = time.perf_counter()
     review = json.loads(args.review.read_text())
+    work_bounds = json.loads(args.scope.read_text())["boundary"]["bounds"] if args.scope else None
+    work_bbox = box(*work_bounds) if work_bounds else None
     handles = {
         ref.rsplit(":", 1)[-1].split("~", 1)[0]
         for group in review["geometry_gap_groups"]
@@ -41,6 +45,12 @@ def main() -> None:
             rows.append({"handle": handle, "error": "HATCH entity not found"})
             continue
         paths = list(entity.paths.rendering_paths(entity.dxf.hatch_style))
+        extent = bbox.extents([entity], fast=True)
+        footprint = (
+            box(extent.extmin.x, extent.extmin.y, extent.extmax.x, extent.extmax.y)
+            if extent.has_data
+            else None
+        )
         samples = []
         for path in paths:
             entry = {
@@ -80,6 +90,10 @@ def main() -> None:
                 "solid_fill": entity.dxf.solid_fill,
                 "associative": entity.dxf.associative,
                 "rendered_paths": len(paths),
+                "path_bbox_area_m2": footprint.area if footprint is not None else None,
+                "intersects_work_bbox": footprint.intersects(work_bbox)
+                if footprint is not None and work_bbox is not None
+                else None,
                 "paths": samples,
             }
         )
