@@ -316,6 +316,7 @@ class ProfileModel(_Strict):
     fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
     placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"
     portfolio_budget_s: float = Field(default=900.0, ge=0, le=86_400)
+    refine_budget_s: float = Field(default=30.0, ge=0, le=3_600)
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
     placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)

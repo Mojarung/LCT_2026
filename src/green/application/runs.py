@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from green.application.classification import ClassificationError
+from green.application.constraints import forget_drawings
 from green.application.errors import GreenError
 from green.application.progress import plan_stages
 from green.application.results import RunProgress, RunRecord, RunState
@@ -166,6 +167,9 @@ class RunService:
                 return self._transition(
                     reporter.record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )
+            finally:
+                # Индекс чертежа и память проверок нужны только внутри прогона.
+                forget_drawings()
             return self._transition(
                 reporter.record,
                 RunState.SUCCEEDED,

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import copy
-from collections import defaultdict
-from dataclasses import dataclass
+import hashlib
+import threading
+from collections import OrderedDict, defaultdict
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -44,6 +46,89 @@ class _ClassIndex:
     features: tuple[Feature, ...]
     half_diameters: NDArray[np.float64]
     geometry_errors: NDArray[np.float64]
+
+
+@dataclass(slots=True)
+class _Drawing:
+    """Часть индекса, которая зависит только от чертежа: объекты по классам, деревья поиска,
+    твёрдые покрытия и граница работ; плюс память проверок точек.
+
+    Одна на чертёж: портфель из восьми вариантов и этапы кустарника строили её 34 раза на
+    вариант (профиль Кустанайской, 26.09.2026), а варианты проверяли одни и те же станции
+    аллеи, сетку добора, зоны и ось изгороди заново.
+    """
+
+    features: Sequence[Feature]
+    by_class: dict[ObjectClass, list[Feature]]
+    indexes: dict[ObjectClass, _ClassIndex]
+    hard: STRtree | None
+    boundary: BaseGeometry | None
+    has_utility_data: bool
+    memo: OrderedDict[tuple[object, ...], object] = field(default_factory=OrderedDict)
+    memo_cells: int = 0
+
+
+# Чертежей в памяти процесса - не больше двух (сервер ведёт прогоны по одному-два); прогон в
+# конце забывает их (forget_drawings), чтобы сервис не держал подоснову после работы.
+_DRAWINGS: OrderedDict[int, _Drawing] = OrderedDict()
+_DRAWINGS_LOCK = threading.Lock()
+_DRAWINGS_KEPT = 2
+# Предел памяти проверок на чертёж: правил x точек во всех запомненных пачках (около 350 МБ).
+_MEMO_CELLS = 20_000_000
+
+
+def _drawing(features: Sequence[Feature]) -> _Drawing:
+    key = id(features)
+    with _DRAWINGS_LOCK:
+        cached = _DRAWINGS.get(key)
+        if cached is not None and cached.features is features:
+            _DRAWINGS.move_to_end(key)
+            return cached
+    drawing = _build_drawing(features)
+    with _DRAWINGS_LOCK:
+        _DRAWINGS[key] = drawing
+        _DRAWINGS.move_to_end(key)
+        while len(_DRAWINGS) > _DRAWINGS_KEPT:
+            _DRAWINGS.popitem(last=False)
+    return drawing
+
+
+def _build_drawing(features: Sequence[Feature]) -> _Drawing:
+    by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
+    for feature in features:
+        error_bound(feature)
+        by_class[feature.object_class].append(feature)
+    hard = [
+        outer_area(f)
+        for f in features
+        if f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES
+    ]
+    boundary = _boundary(by_class.get(ObjectClass.WORK_BOUNDARY, []))
+    if boundary is not None:
+        shapely.prepare(boundary)
+    return _Drawing(
+        features=features,
+        by_class=by_class,
+        indexes={},
+        hard=STRtree(hard) if hard else None,
+        boundary=boundary,
+        # Линии, предположенные «сетями неизвестного типа», не считаются данными
+        # о сетях: иначе нераспознанный слой скрывал бы отсутствие выгрузки коммуникаций.
+        has_utility_data=any(
+            cls.is_utility and cls is not ObjectClass.UTILITY_UNKNOWN for cls in by_class
+        ),
+    )
+
+
+def forget_drawings() -> None:
+    """Забыть индексы чертежей и память проверок: прогон закончен."""
+    with _DRAWINGS_LOCK:
+        _DRAWINGS.clear()
+
+
+def _points_key(points: NDArray[np.object_]) -> tuple[int, bytes]:
+    coords = shapely.get_coordinates(points)
+    return len(points), hashlib.blake2b(coords.tobytes(), digest_size=16).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,29 +207,16 @@ class ConstraintIndex:
         if not np.isfinite(planting_radius_m) or planting_radius_m < 0:
             raise ValueError("Planting radius must be finite and non-negative")
         self._planting_radius_m = planting_radius_m
-        by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
-        for feature in features:
-            error_bound(feature)
-            by_class[feature.object_class].append(feature)
-        self._by_class = by_class
-        self._indexes: dict[ObjectClass, _ClassIndex] = {}
-        self.configure(rules, barrier_distance_m)
+        drawing = _drawing(features)
+        self._drawing = drawing
+        self._by_class = drawing.by_class
+        self._indexes = drawing.indexes
         self._require_utility_data = require_utility_data
-        # Линии, предположенные «сетями неизвестного типа», не считаются данными
-        # о сетях: иначе нераспознанный слой скрывал бы отсутствие выгрузки коммуникаций.
-        self.has_utility_data = any(
-            cls.is_utility and cls is not ObjectClass.UTILITY_UNKNOWN for cls in by_class
-        )
-        hard = [
-            outer_area(f)
-            for f in features
-            if f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES
-        ]
-        self._hard = STRtree(hard) if hard else None
-        self.has_surface_polygons = bool(hard)
-        self.boundary: BaseGeometry | None = _boundary(by_class.get(ObjectClass.WORK_BOUNDARY, []))
-        if self.boundary is not None:
-            shapely.prepare(self.boundary)
+        self.configure(rules, barrier_distance_m)
+        self.has_utility_data = drawing.has_utility_data
+        self._hard = drawing.hard
+        self.has_surface_polygons = drawing.hard is not None
+        self.boundary: BaseGeometry | None = drawing.boundary
 
     def configure(
         self, rules: Sequence[DistanceRule], barrier_distance_m: float | None = None
@@ -156,6 +228,10 @@ class ConstraintIndex:
         """
         self._barrier_distance_m = barrier_distance_m
         self._rules = tuple(rules)
+        self._rules_key = tuple(
+            (r.rule_id, r.object_class, r.planting_type, r.min_distance_m, r.measure_to, r.severity)
+            for r in self._rules
+        )
         self._forbid = np.array([r.severity is Severity.FORBID for r in self._rules], dtype=bool)
         for cls in {rule.object_class for rule in self._rules} - self._indexes.keys():
             if self._by_class.get(cls):
@@ -177,6 +253,22 @@ class ConstraintIndex:
 
     def plantable(self, points: NDArray[np.object_], *, margin_m: float = 0.0) -> NDArray[np.bool_]:
         """Посадочное место целиком на грунте, вне покрытий и внутри границы работ."""
+        key = (
+            "plantable",
+            self._planting_radius_m + margin_m,
+            self._require_soil,
+            self._require_work_boundary,
+            id(self.surface),
+            *_points_key(points),
+        )
+        cached = self._recall(key)
+        if isinstance(cached, np.ndarray):
+            return cached.copy()
+        mask = self._plantable(points, margin_m)
+        self._remember(key, mask.copy(), len(points))
+        return mask
+
+    def _plantable(self, points: NDArray[np.object_], margin_m: float) -> NDArray[np.bool_]:
         mask = np.ones(len(points), dtype=bool)
         radius = self._planting_radius_m + margin_m
         if (self._require_soil and self.surface is None) or (
@@ -198,6 +290,45 @@ class ConstraintIndex:
         return mask
 
     def evaluate(self, points: NDArray[np.object_], *, margin_m: float = 0.0) -> EvaluationBatch:
+        """Все правила для пачки точек. Та же пачка при тех же правилах берётся из памяти
+        чертежа: варианты портфеля проверяют одни и те же станции, результат тот же."""
+        key = (
+            "evaluate",
+            self._rules_key,
+            self._barrier_distance_m,
+            self._require_utility_data,
+            margin_m,
+            *_points_key(points),
+        )
+        cached = self._recall(key)
+        if isinstance(cached, EvaluationBatch):
+            return cached
+        batch = self._evaluate(points, margin_m)
+        for array in (batch.outcomes, batch.clearance, batch.nearest, batch.verdict_codes):
+            array.flags.writeable = False
+        self._remember(key, batch, len(points) * max(len(self._rules), 1))
+        return batch
+
+    def _recall(self, key: tuple[object, ...]) -> object | None:
+        memo = self._drawing.memo
+        with _DRAWINGS_LOCK:
+            value = memo.get(key)
+            if value is not None:
+                memo.move_to_end(key)
+        return value
+
+    def _remember(self, key: tuple[object, ...], value: object, cells: int) -> None:
+        drawing = self._drawing
+        with _DRAWINGS_LOCK:
+            if key in drawing.memo:
+                return
+            drawing.memo[key] = value
+            drawing.memo_cells += cells
+            while drawing.memo_cells > _MEMO_CELLS and len(drawing.memo) > 1:
+                _, old = drawing.memo.popitem(last=False)
+                drawing.memo_cells -= _cells(old)
+
+    def _evaluate(self, points: NDArray[np.object_], margin_m: float) -> EvaluationBatch:
         count, rules = len(points), len(self._rules)
         outcomes = np.zeros((rules, count), dtype=np.int8)
         clearance = np.full((rules, count), np.nan)
@@ -281,6 +412,12 @@ def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
         return None
     merged = shapely.union_all(areas)
     return None if merged.is_empty else merged
+
+
+def _cells(value: object) -> int:
+    if isinstance(value, EvaluationBatch):
+        return int(value.outcomes.size) or len(value)
+    return len(value) if isinstance(value, np.ndarray) else 0
 
 
 def _index(features: tuple[Feature, ...]) -> _ClassIndex:

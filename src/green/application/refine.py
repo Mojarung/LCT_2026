@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -111,7 +112,11 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
     mover = _Mover(plan.placements, base, rulebook, params)
     current, index = plan, quality.index
     moved = 0
+    started = time.perf_counter()
     for placement in tight[:MAX_TRIES]:
+        # Бюджет времени: каждая проба - полный пересчёт индекса, на большой улице их сотни.
+        if time.perf_counter() - started > params.refine_budget_s:
+            break
         for option in mover.options(placement):
             trial = mover.plan_with(current, option)
             score = evaluate(trial, site, params, values=False).index

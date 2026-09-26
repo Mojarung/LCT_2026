@@ -127,6 +127,9 @@ class PlanParams:
     # самый долгий из посчитанных в бюджет не укладывается; исходный считается всегда. Лимит
     # стенда - 30 минут на подбор мест (docs/notes/15); 0 - без бюджета.
     portfolio_budget_s: float = 900.0
+    # Бюджет времени сдвига посадок впритык от сетей (refine), с: каждая проба - пересчёт
+    # индекса плана, на улице в тысячи посадок полсекунды и больше.
+    refine_budget_s: float = 30.0
     placement_max_candidates: int = 6000
     placement_max_conflicts: int = 200_000
     lawn_phase: tuple[float, float] = (0.0, 0.0)
