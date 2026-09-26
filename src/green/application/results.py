@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
     from green.application.validation import PlanValidation
+    from green.application.volumes import Volumes
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
 
@@ -98,6 +99,9 @@ class RunReport:
     basemap: Basemap | None = None
     # Карта покрытий прогона: грунт и твёрдое, как их понял сервис. Уходит в веб растром.
     surface: SurfaceMap | None = None
+    # Объёмы зданий для трёхмерной сцены. Считаются вместе с подосновой и от правки плана не
+    # зависят: пересборка после правки переносит их в новый отчёт как есть.
+    volumes: Volumes | None = None
     # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None

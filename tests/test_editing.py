@@ -208,6 +208,10 @@ def test_rebuild_writes_the_edited_plan_into_the_dxf(client: TestClient, run_id:
         p["species"]["code"] for p in after["placements"] if p["planting_type"] == "tree"
     )
     assert summary["counts"] == actual, "сводка видов осталась от плана до правки"
+    # Трёхмерная сцена пересобрана вместе с планом, а здания в ней остались.
+    scene = client.get(f"{API_PREFIX}/runs/{run_id}/artifacts/scene.json").json()
+    assert [p["id"] for p in scene["plants"]] == [p["id"] for p in after["placements"]]
+    assert scene["buildings"], "пересборка после правки потеряла объёмы зданий"
 
 
 def test_unknown_run_answers_409_not_a_made_up_verdict(client: TestClient) -> None:

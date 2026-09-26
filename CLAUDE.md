@@ -67,13 +67,20 @@ src/green/
 frontend/          веб-интерфейс: React 19 + TypeScript + Vite, SPA ходит только в /api/v1
                    (спека и план - docs/plans/2026-09-23-react-frontend-*.md, заметка notes/31).
                    src/pages (ConsolePage - запуск и реестр прогонов, RunPage - рабочее место,
-                   ModelsPage - /models, база моделей растений), src/components/{console,run,detail},
+                   ModelsPage - /models, база моделей растений, ScenePage - /runs/:id/3d, 3D-вид
+                   отдельным чанком), src/components/{console,run,detail,scene},
                    src/map (движок карты на canvas без React: чанки Path2D, растровый кэш, отсечение,
                    ввод; view.ts - вписывание всего плана между панелями; models.ts - база моделей: форма
                    кроны, листва и цветение всех 55 видов каталога, тест сверяет с species.yaml;
                    sprites.ts - кроны вектором в кэше спрайтов; paper.ts - бумажная подоснова: газон
                    и асфальт из карты покрытий фактурой, штриховка зданий; existing.ts - существующие
                    насаждения бледными кронами; dimensions.ts - размерные выноски выбранной посадки),
+                   src/scene3d (3D-вид на three.js без React: world - сцена из scene.json и подосновы,
+                   trees - кроны ez-tree по архетипам экземплярами, две детализации, ветер; growth -
+                   размер в возрасте; buildings - стены с фасадом по этажам; ground - маска газона,
+                   плитки и асфальта из surface.png, борта, ограды, фонари; grass - травинки на
+                   газоне; sky - небо, солнце над Москвой, тени за камерой; freecam - полёт и
+                   пешеход; collide, pick, viewHash - стены, прицел, ракурс в адресе; notes/36),
                    src/state (Zustand; editor.ts - правки по очереди, пересборка до нового
                    updated_at), src/api (клиент, RFC 9457, TanStack Query), src/lib (формат, цитаты
                    норм, переопределения профиля, альтернативы вида), src/styles (токены: основная
@@ -144,6 +151,8 @@ docs/
   notes/35-quality-index-v3.md                   индекс v3: цели из норм и практики, монотонность,
                                                  длина по оси, вместимость, подбор весов
   data/designer-plans.yaml                       состав принятых проектов по видам (наши подсчёты из описей)
+  notes/36-scene-3d.md                           3D-вид участка: сцена из артефактов, этажность по
+                                                 подписям, кроны ez-tree, свет, полёт, снимки, замеры
   design-reviews/                                вердикты жюри по интерфейсу (агент `design-jury`
                                                  в .claude/agents, вызывается после правок вёрстки)
   openapi.json                                   схема API, выгружается `green openapi --out docs/openapi.json`

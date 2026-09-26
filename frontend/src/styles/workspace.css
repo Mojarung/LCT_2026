@@ -1287,3 +1287,15 @@ body.shell-map .topbar {
       )
       center / 12px 12px no-repeat;
 }
+
+/* Вход в 3D-вид из шапки прогона: ссылка, а не кнопка, - это переход на другую страницу. */
+.hud-head .scene-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone);
+}
+.hud-head .scene-link:hover {
+  color: var(--bone-2);
+}
