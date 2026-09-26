@@ -497,18 +497,30 @@ def _runs(
     verdict_ok = np.array([batch.verdict(k) in accepted for k in range(len(points))])
     ok = soil & verdict_ok & blockers.clear(points)
     trim = math.ceil(params.shrub_row_gap_buffer_m / step)
+    # Разрыв газона - въезд или проход, если грунта нет на ширину проезда. Меньше - зубец
+    # растра карты покрытий у борта (ячейка 0,5 м), а не разрыв: от него ряд не отступает.
+    wide = math.ceil(params.shrub_row_break_min_m / step)
     segments = []
     for run in _runs_of(ok):
         first, last = run[0], run[-1]
         # Разрыв газона у борта (въезд, проход): ряд отходит от него на gap_buffer (SR-9a).
-        if first > 0 and not soil[first - 1]:
+        if first > 0 and _gap(soil, first - 1, -1) >= wide:
             first += trim
-        if last + 1 < len(ok) and not soil[last + 1]:
+        if last + 1 < len(ok) and _gap(soil, last + 1, 1) >= wide:
             last -= trim
         if last > first and (last - first) * step >= params.shrub_row_min_length_m:
             rows = tuple(range(first, last + 1))
             segments.append(_Segment(xy[first : last + 1], batch, rows, offset))
     return segments
+
+
+def _gap(soil: NDArray[np.bool_], start: int, direction: int) -> int:
+    """Сколько станций подряд без грунта от start в сторону direction."""
+    count, k = 0, start
+    while 0 <= k < len(soil) and not soil[k]:
+        count += 1
+        k += direction
+    return count
 
 
 def _plant(  # noqa: PLR0913 - участки, виды, план, нормы и подписи приёма

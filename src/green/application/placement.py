@@ -106,6 +106,8 @@ class _Candidate:
     mode: str
     x: float
     y: float
+    # Отступ от борта у места аллеи: при изгороди перед деревом отбор предпочитает дальний.
+    offset: float = 0.0
 
 
 class GreedyPlantingStrategy:
@@ -437,9 +439,16 @@ def _curb_candidates(lines: list[LineString], params: PlanParams) -> list[_Candi
             for side in (1.0, -1.0):
                 for offset in params.curb_offsets_m:
                     x, y = base[position] + normal[position] * side * offset
-                    candidates.append(_Candidate(station, MODE_ALLEY, float(x), float(y)))
+                    candidates.append(_Candidate(station, MODE_ALLEY, float(x), float(y), offset))
                 station += 1
     return candidates
+
+
+def _hedge_room(params: PlanParams) -> float:
+    """С какого отступа от борта перед деревом встаёт изгородь: её ось в ближнем отступе ряда
+    кустарника, ямы дерева и куста не перекрываются (как в shrub_rows.Blockers)."""
+    offsets = params.shrub_row_curb_offsets_m or (0.0,)
+    return min(offsets) + params.planting_radius_m + params.shrub_planting_radius_m
 
 
 def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
@@ -653,7 +662,8 @@ class _Selector:
         baseline = tuple(indices[id(candidate)] for candidate in self._chosen)
         # One extra place outweighs the sum of all secondary preferences. These are
         # project preferences, not law and not a measured ecological benefit.
-        base = 14 * len(pool) + 1
+        base = 15 * len(pool) + 1
+        hedge_room = _hedge_room(self.params)
         problem = SelectionProblem(
             xy=tuple((c.x, c.y) for c, _, _ in pool),
             stations=tuple(f"{c.mode}:{c.station}" for c, _, _ in pool),
@@ -662,6 +672,7 @@ class _Selector:
                 + 8 * (batch.verdict(row) is Verdict.ALLOWED)
                 + 4 * (not batch.needs_barrier(row))
                 + 2 * (c.mode == MODE_ALLEY)
+                + (c.mode == MODE_ALLEY and c.offset >= hedge_room)
                 for c, batch, row in pool
             ),
             min_gap_m=max(
@@ -670,8 +681,8 @@ class _Selector:
             ),
             objective_description=(
                 "First maximize eligible places; then sum preferences: allowed=8, "
-                "no root barrier=4, alley=2. Species feasibility and aesthetic quality "
-                "are not part of this objective."
+                "no root barrier=4, alley=2, alley tree leaving room for a curb hedge=1. "
+                "Species feasibility and aesthetic quality are not part of this objective."
             ),
         )
         report = select_candidates(

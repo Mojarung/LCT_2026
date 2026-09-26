@@ -131,7 +131,7 @@ def test_barriers_profile_is_shipped() -> None:
     params = YamlProfileSource(CONFIG / "profiles").load("barriers")
     assert params.root_barriers
     assert min(params.curb_offsets_m) == 1.0
-    assert params.curb_offsets_m[0] == 2.0  # сначала табличные отступы
+    assert min(params.curb_offsets_m[:3]) == 2.0  # сначала табличные отступы
 
 
 def _rejection(*checks: tuple[str, float, CheckOutcome]) -> Rejection:

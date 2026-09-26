@@ -37,7 +37,15 @@ def _plan(work: Path, *, rows: bool) -> Plan:
     params = container.profiles.load(
         "strict",
         # Подлесок выключен: второй ярус здесь должен дать именно ряд.
-        {"max_rejections": 50, "shrub_rows": rows, "spacing_m": 10.0, "understory": False},
+        # Вклад самого ряда: подлесок и добор групп до цели В.1 выключены - иначе они
+        # ставят кусты у тех же деревьев в плане без ряда.
+        {
+            "max_rejections": 50,
+            "shrub_rows": rows,
+            "spacing_m": 10.0,
+            "understory": False,
+            "shrub_fill": False,
+        },
     )
     request = PlanRequest(f"rows-{rows}", source, work / f"out-{rows}", "strict", params)
     return container.use_case.execute(request).plan

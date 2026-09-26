@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
+from scipy.spatial import KDTree
 
 from green.application.assortment import GIVEN, SINGLE, assign_species
 from green.application.constraints import ConstraintIndex, work_boundary
@@ -58,6 +59,8 @@ _TRUNK_GAP_M = 1.25  # как у ряда под аллеей: ком дерев
 _SHRUB_GAP_M = 0.5
 # Запас на округление координат до миллиметра (как у групп кустарника в placement.py).
 _PIT_RESERVE_M = 0.002
+# Центров групп - с запасом к недобору: из группы 3 x 3 обычно садится около половины.
+_CENTER_RESERVE = 2.5
 
 
 def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё, что знает о прогоне
@@ -84,7 +87,11 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
     shrubs_now = sum(1 for p in plan.placements if p.planting_type is PlantingType.SHRUB)
     goal = params.density_shrubs_per_km[0] * (site_length(boundary, params) or 0.0) / 1000
     size = params.shrub_group_size**2
-    groups = math.ceil((goal - shrubs_now) / size) if goal > shrubs_now else 0
+    # Группа из size кустов садится не целиком: ямы стволов, соседей и нормы снимают часть
+    # точек (на Кустанайской - 4 куста из 9). Центров берётся с запасом, лишние группы - самые
+    # дальние от борта - снимаются, когда цель набрана.
+    deficit = goal - shrubs_now
+    groups = math.ceil(_CENTER_RESERVE * deficit / size) if deficit > 0 else 0
     if not groups:
         return plan
     shrub_params = _group_params(params)
@@ -108,8 +115,9 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
     assigned = assign_species(
         Plan(placements=drafts, rejections=()), rulebook, catalog, shrub_params
     )
+    kept = _up_to_goal(assigned.placements, centers, math.ceil(deficit))
     start = len(plan.placements)
-    added = [replace(p, number=start + i) for i, p in enumerate(assigned.placements, 1)]
+    added = [replace(p, number=start + i) for i, p in enumerate(kept, 1)]
     if not added:
         return plan
     summary = (
@@ -124,6 +132,24 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
         placements=(*plan.placements, *added),
         warnings=(*plan.warnings, summary, *(f"Кустарники: {w}" for w in assigned.warnings)),
     )
+
+
+def _up_to_goal(
+    placements: Sequence[Placement], centers: Sequence[tuple[float, float]], deficit: int
+) -> list[Placement]:
+    """Группы по порядку центров (от борта вглубь), пока кустов не больше нужного: группа
+    берётся целиком, последняя может перебрать цель на несколько кустов."""
+    if not placements or not centers:
+        return list(placements)
+    owner = KDTree(np.asarray(centers, dtype=np.float64)).query(
+        np.array([(p.x, p.y) for p in placements], dtype=np.float64)
+    )[1]
+    kept: list[Placement] = []
+    for center in range(len(centers)):
+        if len(kept) >= deficit:
+            break
+        kept.extend(p for p, k in zip(placements, owner.tolist(), strict=True) if k == center)
+    return kept
 
 
 def _group_params(params: PlanParams) -> PlanParams:

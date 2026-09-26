@@ -287,7 +287,7 @@ class ProfileModel(_Strict):
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
     spacing_m: float = Field(default=5.0, ge=0.3, le=50)
-    curb_offsets_m: tuple[float, ...] = Field(default=(2.0, 2.5, 3.0), min_length=1, max_length=10)
+    curb_offsets_m: tuple[float, ...] = Field(default=(3.0, 2.5, 2.0), min_length=1, max_length=10)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
@@ -348,6 +348,7 @@ class ProfileModel(_Strict):
     shrub_row_tree_gap_m: float = Field(default=1.25, ge=0, le=5)
     shrub_row_access_gap_m: float = Field(default=1.0, ge=0, le=5)
     shrub_row_gap_buffer_m: float = Field(default=5.0, ge=0, le=20)
+    shrub_row_break_min_m: float = Field(default=2.5, ge=0, le=50)
     shrub_row_min_length_m: float = Field(default=3.0, ge=0, le=50)
     shrub_row_height_m: float = Field(default=1.0, gt=0, le=3)
     hedge_species_balance: bool = True
@@ -355,7 +356,7 @@ class ProfileModel(_Strict):
     curb_hedge_spacing_m: float = Field(default=1.0, ge=0.2, le=2.0)
     curb_hedge_density_cap: bool = True
     understory: bool = True
-    understory_trees: Literal["alley", "all"] = "alley"
+    understory_trees: Literal["alley", "all"] = "all"
     understory_size: int = Field(default=3, ge=1, le=7)
     understory_radii_m: tuple[float, ...] = Field(default=(2.2, 2.6, 3.0), min_length=1)
     shrub_fill: bool = True
