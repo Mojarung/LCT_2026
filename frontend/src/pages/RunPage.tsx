@@ -184,7 +184,7 @@ export function RunPage() {
         if (item) revealDetail();
       },
       probe: (item, x, y) => void editor.probe(item, x, y),
-      move: (item, x, y) => void editor.move(item, x, y),
+      move: (item, x, y, from) => void editor.move(item, x, y, from),
       remove: (item) => void editor.remove(item),
       viewChanged: () => {
         const current = engine.current;

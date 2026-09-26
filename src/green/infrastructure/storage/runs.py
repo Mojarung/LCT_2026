@@ -98,6 +98,10 @@ class FileSystemRunStore:
             self.get(run_id) for run_id in ids[:limit] if (self._root / run_id / STATUS).is_file()
         ]
 
+    def state_file(self, run_id: str, name: str) -> Path:
+        """Служебный файл прогона рядом со status.json: не артефакт, наружу не отдаётся."""
+        return self._dir(run_id) / name
+
     def artifact(self, run_id: str, name: str) -> Path:
         if not _ARTIFACT.fullmatch(name) or name not in self.get(run_id).artifacts:
             raise NotFoundError(f"Артефакт {name} не найден")

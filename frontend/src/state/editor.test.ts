@@ -175,6 +175,29 @@ describe('PlanEditor.move', () => {
       kind: 'error',
     });
   });
+  it('puts the placement back where the plan has it when the service refuses the move', async () => {
+    mockApi({
+      'POST /api/v1/runs/r1/edits': () =>
+        Response.json(
+          { title: 'Conflict', status: 409, detail: 'Прогон не открыт для правки.' },
+          { status: 409, headers: { 'content-type': 'application/problem+json' } },
+        ),
+    });
+    const host = { dragProbe: vi.fn(), itemsChanged: vi.fn(), removed: vi.fn(), pending: vi.fn() };
+    const editor = new PlanEditor('r1');
+    editor.attach(host);
+    // Карта уже сдвинула посадку под курсором: так она и осталась бы там, где плана нет.
+    const moved = { ...item(), x: 14, y: 25 };
+
+    await editor.move(moved, 14, 25, { x: 10, y: 20 });
+
+    expect([moved.x, moved.y]).toEqual([10, 20]);
+    expect(host.itemsChanged).toHaveBeenCalledOnce();
+    expect(useWorkspace.getState().message).toEqual({
+      text: 'Прогон не открыт для правки. Посадка возвращена на место.',
+      kind: 'error',
+    });
+  });
 });
 
 describe('PlanEditor.probe', () => {

@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.params import PlanParams
+    from green.application.ports import RunContextStore
     from green.application.quality import Site
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -177,23 +178,39 @@ class RunContext:
 
 
 class RunContextCache:
-    """Контексты последних прогонов. Размер маленький намеренно: сцена генплана весит сотни МБ."""
+    """Контексты последних прогонов. Размер маленький намеренно: сцена генплана весит сотни МБ.
 
-    def __init__(self, size: int = 1) -> None:
+    С хранилищем контекст прогона после записи результата лежит и на диске, и прогон,
+    вытесненный из памяти или сделанный до перезапуска сервиса, поднимается оттуда при первой
+    правке: иначе жюри, поднявшее сервис заново, не могло бы править ни один прогон.
+    """
+
+    def __init__(self, size: int = 1, store: RunContextStore | None = None) -> None:
         self._size = max(size, 1)
         self._items: OrderedDict[str, RunContext] = OrderedDict()
+        self._store = store
 
     def put(self, context: RunContext) -> None:
-        self._items[context.run_id] = context
-        self._items.move_to_end(context.run_id)
-        while len(self._items) > self._size:
-            self._items.popitem(last=False)
+        """Запомнить контекст; с хранилищем - и сохранить: прогон закончен или пересобран."""
+        self._remember(context)
+        if self._store is not None:
+            self._store.save(context)
 
     def get(self, run_id: str) -> RunContext | None:
         context = self._items.get(run_id)
         if context is not None:
             self._items.move_to_end(run_id)
+            return context
+        context = self._store.load(run_id) if self._store is not None else None
+        if context is not None:
+            self._remember(context)
         return context
+
+    def _remember(self, context: RunContext) -> None:
+        self._items[context.run_id] = context
+        self._items.move_to_end(context.run_id)
+        while len(self._items) > self._size:
+            self._items.popitem(last=False)
 
     def drop(self, run_id: str) -> None:
         self._items.pop(run_id, None)

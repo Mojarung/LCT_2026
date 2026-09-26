@@ -94,7 +94,7 @@ export class PlanEditor {
     this.host?.pending(item, count > 0);
   }
 
-  move(item: MapItem, x: number, y: number): Promise<void> {
+  move(item: MapItem, x: number, y: number, from?: { x: number; y: number }): Promise<void> {
     this.ticket += 1; // ответы проб, пришедшие после отпускания, больше не нужны
     // Перенос на сервере идёт секунды, а на большой улице - десятки: признак жизни нужен сразу,
     // до запроса, а не после ответа (жюри, итерация 7).
@@ -102,10 +102,26 @@ export class PlanEditor {
     useWorkspace.getState().say(`Переносим посадку № ${String(item.number)}…`);
     return this.queue.enqueue(async () => {
       const store = useWorkspace.getState();
+      let summary: PlanSummaryOut;
       try {
-        const summary = await postJson<PlanSummaryOut>(this.url('edits'), {
+        summary = await postJson<PlanSummaryOut>(this.url('edits'), {
           edits: [{ kind: 'move', placement_id: item.id, x, y }],
         });
+      } catch (error) {
+        // Сервис правку не принял: посадка возвращается туда, где она стоит в плане, иначе
+        // карта показывала бы перенос, которого нет ни в плане, ни в DXF.
+        if (from) {
+          item.x = from.x;
+          item.y = from.y;
+          this.host?.itemsChanged();
+          store.say(`${reason(error)} Посадка возвращена на место.`, 'error');
+        } else {
+          store.say(reason(error), 'error');
+        }
+        this.hold(item, -1);
+        return;
+      }
+      try {
         const result = await this.check(item, x, y);
         item.verdict = result.plantable ? result.verdict : 'rejected';
         item.checks = ruleChecks(result);

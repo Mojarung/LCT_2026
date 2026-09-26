@@ -112,6 +112,9 @@ export class PlanEngine {
     editing: false,
   };
   private readonly palette = new Palette();
+  /** Где посадка стояла до переноса, который ещё не принят сервисом: при отказе правки
+   *  она возвращается сюда, а не остаётся на карте там, где плана нет. */
+  private readonly moveOrigins = new WeakMap<MapItem, Point>();
   private readonly base = document.createElement('canvas');
   /** Маска участка работ для кэша подосновы (render.fadeOutside). */
   private readonly mask = document.createElement('canvas');
@@ -750,6 +753,7 @@ export class PlanEngine {
     const step = (far ? NUDGE_FAR_M : NUDGE_M) * this.view.scale;
     const at = toScreen(this.view, item.x, item.y);
     const world = toWorld(this.view, at.sx + direction[0] * step, at.sy + direction[1] * step);
+    this.holdOrigin(item);
     item.x = world.x;
     item.y = world.y;
     this.marks.dragging = item;
@@ -758,10 +762,20 @@ export class PlanEngine {
     this.nudgeTimer = window.setTimeout(() => {
       this.marks.dragging = null;
       this.setDragProbe(null);
-      this.hooks.move(item, item.x, item.y);
+      this.commitMove(item, item.x, item.y);
     }, NUDGE_COMMIT_MS);
     this.schedule();
     return true;
+  }
+
+  private holdOrigin(item: MapItem): void {
+    if (!this.moveOrigins.has(item)) this.moveOrigins.set(item, { x: item.x, y: item.y });
+  }
+
+  private commitMove(item: MapItem, x: number, y: number): void {
+    const from = this.moveOrigins.get(item) ?? { x, y };
+    this.moveOrigins.delete(item);
+    this.hooks.move(item, x, y, from);
   }
 
   private worldOf(event: PointerEvent | MouseEvent): Point {
@@ -854,6 +868,7 @@ export class PlanEngine {
       last = { x: event.clientX, y: event.clientY };
       if (grabbed) {
         const world = this.worldOf(event);
+        this.holdOrigin(grabbed);
         grabbed.x = world.x;
         grabbed.y = world.y;
         this.marks.dragging = grabbed;
@@ -880,7 +895,7 @@ export class PlanEngine {
         item.x = world.x;
         item.y = world.y;
         this.setDragProbe(null);
-        this.hooks.move(item, world.x, world.y);
+        this.commitMove(item, world.x, world.y);
         return;
       }
       this.marks.dragVerdict = null;
@@ -888,10 +903,11 @@ export class PlanEngine {
       const target = this.marks.selected;
       if (moved < 4 && this.placing && target?.kind === 'placement') {
         const world = this.worldOf(event);
+        this.holdOrigin(target);
         target.x = world.x;
         target.y = world.y;
         this.setPlacing(false);
-        this.hooks.move(target, world.x, world.y);
+        this.commitMove(target, world.x, world.y);
         this.schedule();
         return;
       }

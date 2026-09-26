@@ -27,6 +27,7 @@ from green.infrastructure.convert.oda import OdaFileConverter
 from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
+from green.infrastructure.storage.contexts import PickleRunContextStore, code_fingerprint
 from green.infrastructure.storage.runs import FileSystemRunStore
 from green.infrastructure.streets import JsonStreetCatalog
 
@@ -90,7 +91,12 @@ def build_container(settings: Settings | None = None) -> Container:
     )
     store = FileSystemRunStore(settings.runs_dir)
     streets = JsonStreetCatalog(settings.streets_dir)
-    contexts = RunContextCache(settings.edit_contexts)
+    contexts = RunContextCache(
+        settings.edit_contexts,
+        store=PickleRunContextStore(store, code_fingerprint())
+        if settings.edit_contexts_saved
+        else None,
+    )
     runs = RunService(
         store=store,
         use_case=use_case,

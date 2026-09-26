@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport, LayerMap
+    from green.application.editing import RunContext
     from green.application.params import PlanParams
     from green.application.results import (
         IntegrityReport,
@@ -204,6 +205,14 @@ class ProgressSink(Protocol):
     def stage(self, name: str) -> None: ...
 
     def basemap(self, basemap: Basemap) -> None: ...
+
+
+class RunContextStore(Protocol):
+    """Контекст правки вне памяти: правка переживает перезапуск сервиса и новый прогон."""
+
+    def save(self, context: RunContext) -> None: ...
+
+    def load(self, run_id: str) -> RunContext | None: ...
 
 
 class RunStore(Protocol):

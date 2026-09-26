@@ -28,8 +28,8 @@ export function PlanMap({
       probe: (item, x, y) => {
         hooks.current.probe(item, x, y);
       },
-      move: (item, x, y) => {
-        hooks.current.move(item, x, y);
+      move: (item, x, y, from) => {
+        hooks.current.move(item, x, y, from);
       },
       remove: (item) => {
         hooks.current.remove(item);

@@ -18,6 +18,8 @@ from test_pipeline_synthetic import PIPE_Y, ROOT, _street
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.infrastructure.config.repositories import YamlSpeciesCatalog
+from green.infrastructure.storage.contexts import PickleRunContextStore, code_fingerprint
+from green.infrastructure.storage.runs import FileSystemRunStore
 from green.interfaces.api.app import API_PREFIX, create_app
 
 if TYPE_CHECKING:
@@ -218,16 +220,44 @@ def test_unknown_run_answers_409_not_a_made_up_verdict(client: TestClient) -> No
     response = client.post(f"{API_PREFIX}/runs/нет-такого-прогона/check", json={"x": 0.0, "y": 0.0})
 
     assert response.status_code == CONFLICT
-    assert "памяти" in response.json()["detail"]
+    assert "не открыт для правки" in response.json()["detail"]
 
 
-def test_evicted_run_stops_accepting_edits(client: TestClient, work: Path, run_id: str) -> None:
-    """Кэш контекстов хранит один прогон: новый прогон вытесняет прежний, и правка ему 409.
+def test_restarted_service_reopens_the_rebuilt_plan_for_editing(work: Path, run_id: str) -> None:
+    """Сервис поднят заново над тем же каталогом прогонов: правка идёт по плану после
+    пересборки, а не по исходному и не отказом 409, как было, пока контекст жил только в
+    памяти (жюри, поднявшее контейнер заново, не могло бы править ни один прогон)."""
+    settings = Settings(config_dir=ROOT / "config", runs_dir=work / "runs")
+    with TestClient(create_app(build_container(settings))) as restarted:
+        draft = restarted.get(f"{API_PREFIX}/runs/{run_id}/draft")
+        check = restarted.post(f"{API_PREFIX}/runs/{run_id}/check", json={"x": 60.0, "y": PIPE_Y})
+        saved = _plan(restarted, run_id)
+
+    assert draft.status_code == 200
+    body = draft.json()
+    assert [p["id"] for p in body["plan"]["placements"]] == [p["id"] for p in saved["placements"]]
+    assert body["stale"] is False, "поднятый план разошёлся с записанным результатом"
+    assert check.status_code == 200
+    assert check.json()["verdict"] != "allowed"
+
+
+def test_context_saved_by_other_code_is_not_reopened(work: Path, run_id: str) -> None:
+    """Классы могли измениться: правка по такому контексту была бы проверкой по чужим правилам."""
+    runs = FileSystemRunStore(work / "runs")
+
+    assert PickleRunContextStore(runs, code_fingerprint()).load(run_id) is not None
+    assert PickleRunContextStore(runs, "другой код").load(run_id) is None
+
+
+def test_evicted_run_is_reopened_from_disk(client: TestClient, work: Path, run_id: str) -> None:
+    """Кэш в памяти хранит один прогон: новый прогон вытесняет прежний, и прежний поднимается
+    с диска при первой правке - с тем же ответом проверки точки.
 
     Тест идёт последним в модуле намеренно - он вытесняет прогон, которым пользуются
     остальные проверки.
     """
-    assert client.post(f"{API_PREFIX}/runs/{run_id}/check", json={"x": 0.0, "y": 0.0}).status_code
+    point = {"x": 60.0, "y": PIPE_Y, "species": "tilia_cordata"}
+    before = client.post(f"{API_PREFIX}/runs/{run_id}/check", json=point).json()
 
     path = work / "street3.dxf"
     _street(path)
@@ -237,6 +267,9 @@ def test_evicted_run_stops_accepting_edits(client: TestClient, work: Path, run_i
         data={"profile": "strict"},
     )
 
-    response = client.post(f"{API_PREFIX}/runs/{run_id}/check", json={"x": 0.0, "y": 0.0})
+    response = client.post(f"{API_PREFIX}/runs/{run_id}/check", json=point)
 
-    assert response.status_code == CONFLICT
+    assert response.status_code == 200
+    after = response.json()
+    assert after["verdict"] == before["verdict"]
+    assert [c["rule_id"] for c in after["checks"]] == [c["rule_id"] for c in before["checks"]]

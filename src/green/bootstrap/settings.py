@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Сколько прогонов держать в памяти для правки на карте. Сцена генплана весит сотни МБ,
     # поэтому по умолчанию один: правят тот прогон, который только что открыли.
     edit_contexts: int = Field(default=1, ge=1, le=8)
+    # Контекст правки хранится и на диске, в каталоге прогона: правка переживает перезапуск
+    # сервиса и новый прогон (десятки-сотни МБ на прогон; false - только в памяти).
+    edit_contexts_saved: bool = True
     max_parallel_runs: int = Field(default=2, ge=1, le=64)
     log_json: bool = False
     log_level: str = "INFO"

@@ -98,8 +98,8 @@ export interface EngineHooks {
   select(item: MapItem | null): void;
   /** Посадку тянут в режиме правки: живая проверка точки. */
   probe(item: MapItem, x: number, y: number): void;
-  /** Посадку отпустили на новом месте. */
-  move(item: MapItem, x: number, y: number): void;
+  /** Посадку отпустили на новом месте; from - где она стояла по плану сервиса. */
+  move(item: MapItem, x: number, y: number, from: { x: number; y: number }): void;
   /** Delete в режиме правки. */
   remove(item: MapItem): void;
   /** Вид изменился: масштаб, сдвиг или разворот (для ползунка масштаба). */

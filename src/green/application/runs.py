@@ -204,6 +204,8 @@ class RunService:
                     record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )
             context.report = report
+            # Сохранённый контекст - уже с правками: после перезапуска правят этот план.
+            self._contexts.put(context)
             return self._transition(
                 record,
                 RunState.SUCCEEDED,

@@ -90,5 +90,8 @@ def test_draft_survives_failed_export_and_becomes_saved_only_after_success(tmp_p
             final["plan"]["placements"]
             == client.get(url + "/artifacts/plan.json").json()["placements"]
         )
+        # Вытесненный из памяти прогон поднимается с диска - с планом после пересборки.
         container.contexts.drop(run_id)
-        assert client.get(url + "/draft").status_code == 409
+        reopened = client.get(url + "/draft").json()
+        assert reopened["stale"] is False
+        assert reopened["plan"]["placements"] == final["plan"]["placements"]
