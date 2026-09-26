@@ -46,10 +46,7 @@ def closed_face_materials(
     # A fence/rail/axis can cut a face or reserve an unknown hole, but cannot
     # establish a homogeneous material enclosure. Only the exterior needs
     # positive support: interior holes remain outside the assigned material.
-    missing = shapely.difference(
-        shapely.get_exterior_ring(faces), shapely.union_all(material_lines)
-    )
-    supported = shapely.is_empty(missing)
+    supported = _covered(shapely.get_exterior_ring(faces), material_lines)
 
     def assigned(xy: NDArray[np.float64]) -> tuple[NDArray[np.bool_], int]:
         matches = index.query(shapely.points(xy), predicate="within")
@@ -84,3 +81,30 @@ def closed_face_materials(
         unsupported_boundaries=int((~supported).sum()),
         woodland=shapely.union_all(faces[woodland]),
     )
+
+
+def _covered(rings: NDArray[np.object_], lines: NDArray[np.object_]) -> NDArray[np.bool_]:
+    """Кольцо целиком лежит на линиях материала: разность кольца и их объединения пуста.
+
+    Считается по соседям: из объединения всех линий материала кольцо «видит» только те, что
+    его касаются, - остальные в разность ничего не вносят. Разность каждого из 24 550 колец
+    Куликовской с объединением всего чертежа шла 544 с.
+    """
+    covered = np.zeros(len(rings), dtype=bool)
+    parts = shapely.get_parts(np.asarray(lines, dtype=object))
+    if not len(rings) or not len(parts):
+        return covered
+    ring_ids, part_ids = STRtree(parts).query(rings, predicate="intersects")
+    if not len(ring_ids):
+        return covered
+    order = np.argsort(ring_ids, kind="stable")
+    ring_ids, part_ids = ring_ids[order], part_ids[order]
+    starts = np.flatnonzero(np.r_[True, ring_ids[1:] != ring_ids[:-1]])
+    ends = np.r_[starts[1:], len(ring_ids)]
+    local = np.array(
+        [shapely.union_all(parts[part_ids[a:b]]) for a, b in zip(starts, ends, strict=True)],
+        dtype=object,
+    )
+    touched = ring_ids[starts]
+    covered[touched] = shapely.is_empty(shapely.difference(rings[touched], local))
+    return covered
