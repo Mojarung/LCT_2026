@@ -61,6 +61,12 @@
   --c-plan-lawn: rgba(74, 128, 62, 0.24);
   --c-plan-lawn-new: rgba(182, 150, 58, 0.34);
   --c-plan-lawn-edge: #4a7a3c;
+  /* Зоны допустимости: холодный тон поверх травы - где дерево проходит все нормы; на
+     согласовании - янтарь, как кольцо такой посадки. */
+  --c-zone: rgba(46, 116, 168, 0.2);
+  --c-zone-edge: #2f6f9f;
+  --c-zone-approval: rgba(196, 136, 36, 0.24);
+  --c-zone-approval-edge: #b07a1e;
   /* Карта уточнения объектов (/runs/:id/review): серый - контекст, оранжевый - выбранная
      группа, красный - выбранный объект; подписи и выбранная подпись. */
   --review-context: #8a918b;
@@ -164,6 +170,10 @@
   --c-plan-lawn: rgba(111, 174, 134, 0.2);
   --c-plan-lawn-new: rgba(207, 176, 90, 0.24);
   --c-plan-lawn-edge: #7fb48a;
+  --c-zone: rgba(104, 170, 220, 0.2);
+  --c-zone-edge: #79b4df;
+  --c-zone-approval: rgba(230, 172, 76, 0.22);
+  --c-zone-approval-edge: #e2ad55;
   --review-context: #5d646d;
   --review-group: #e3902f;
   --review-object: #f06070;

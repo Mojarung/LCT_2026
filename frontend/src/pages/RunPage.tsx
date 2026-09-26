@@ -2,7 +2,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 
-import type { BasemapJson, PlanJson, QualityJson, RulesJson, SurfaceMeta } from '../api/artifacts';
+import type {
+  BasemapJson,
+  PlanJson,
+  QualityJson,
+  RulesJson,
+  SurfaceMeta,
+  ZonesJson,
+} from '../api/artifacts';
 import { ApiError } from '../api/client';
 import { keys, useArtifact, useRun } from '../api/queries';
 import { DetailPanel } from '../components/detail/DetailPanel';
@@ -115,6 +122,7 @@ export function RunPage() {
     'surface.json',
     done && names.has('surface.json'),
   );
+  const zones = useArtifact<ZonesJson>(runId, 'zones.geojson', done && names.has('zones.geojson'));
 
   // Отметки карты - изменяемые объекты: перенос двигает их на месте. Удалённые отбрасываются
   // по id, пока не пришёл пересобранный план.
@@ -219,6 +227,10 @@ export function RunPage() {
   useEffect(() => {
     engine.current?.setLawns(plan.data?.lawns ?? []);
   }, [plan.data]);
+
+  useEffect(() => {
+    engine.current?.setZones(zones.data);
+  }, [zones.data]);
 
   useEffect(() => {
     const meta = surface.data;

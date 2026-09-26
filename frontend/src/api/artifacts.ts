@@ -161,6 +161,18 @@ export interface BasemapFeature {
 /** Подпись материала с чертежа: x, y, текст, paved | soil. */
 export type MaterialLabel = [number, number, string, string];
 
+/** Зона допустимости (zones.geojson): клетки, где дерево проходит все нормы. */
+export interface ZoneFeature {
+  type: 'Feature';
+  properties: { verdict: string; area_m2: number };
+  geometry: Geometry;
+}
+
+export interface ZonesJson {
+  type: 'FeatureCollection';
+  features: ZoneFeature[];
+}
+
 export interface BasemapJson {
   type: 'FeatureCollection';
   bbox: [number, number, number, number];

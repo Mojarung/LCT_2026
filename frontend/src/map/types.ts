@@ -14,7 +14,8 @@ export type LayerKey =
   | 'barrier'
   | 'surfacemap'
   | 'labels'
-  | 'lawns';
+  | 'lawns'
+  | 'zones';
 
 export type Layers = Record<LayerKey, boolean>;
 
@@ -35,6 +36,9 @@ export const DEFAULT_LAYERS: Layers = {
   surfacemap: true,
   labels: true,
   lawns: true,
+  // Зоны допустимости - ответ на вопрос «где вообще можно сажать», их включают, когда
+  // разбирают, почему посадки стоят именно здесь.
+  zones: false,
 };
 
 /** Посадка или отказ на карте. Объект изменяемый: при переносе движок двигает его сам, а

@@ -161,6 +161,19 @@ export function Legend({
                 <b>устраиваемый</b>
               </span>
             </div>
+            {/* Зоны допустимости - клетки, где дерево проходит все нормы (слои GREEN_ZONE_*):
+                так видно, почему посадки стоят именно здесь, а не на соседнем газоне. */}
+            <LayerCheck layer="zones">Зоны допустимости: дерево проходит все нормы</LayerCheck>
+            <div className="legend">
+              <span>
+                <i className="swatch swatch-zone" />
+                <b>допустимо</b>
+              </span>
+              <span>
+                <i className="swatch swatch-zone-approval" />
+                <b>на согласовании</b>
+              </span>
+            </div>
           </>
         ) : null}
         <LayerCheck layer="utilities">Подземные сети</LayerCheck>

@@ -7,7 +7,7 @@
  * 2. Цвета берутся из CSS-переменных: тема переключается в одном месте, карта следует за ней.
  * 3. Вид разворачивается вдоль улицы: участок работ - лента. */
 
-import type { BasemapJson, LawnJson, Position, RuleCheck } from '../api/artifacts';
+import type { BasemapJson, LawnJson, Position, RuleCheck, ZonesJson } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { buildChunks, type Chunk } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
@@ -23,6 +23,7 @@ import {
   principalAxis,
 } from './geometry';
 import { lawnChunks, withLawns } from './lawns';
+import { zoneChunks } from './zones';
 import { Palette } from './palette';
 import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
 import {
@@ -124,6 +125,7 @@ export class PlanEngine {
    *  пересборки, а в сцене они лежат одним списком в порядке отрисовки (withLawns). */
   private baseChunks: Chunk[] = [];
   private lawnChunks: Chunk[] = [];
+  private zoneChunks: Chunk[] = [];
   private readonly cleanup: (() => void)[] = [];
   private outline: Point[] = [];
   private mapBox: Box | null = null;
@@ -200,7 +202,7 @@ export class PlanEngine {
   setBasemap(basemap: BasemapJson): void {
     const existing: ExistingPlant[] = [];
     this.baseChunks = buildChunks(basemap.features, basemap.bbox, existing);
-    this.scene.chunks = withLawns(this.baseChunks, this.lawnChunks);
+    this.scene.chunks = this.planChunks();
     this.scene.existing = existing;
     this.classIndex = new ClassIndex(basemap.features);
     this.dims = { key: '', checks: null, list: [] };
@@ -256,9 +258,21 @@ export class PlanEngine {
   }
 
   /** Газоны плана: лежат в растровом кэше вместе с подосновой, двигать их незачем. */
+  /** Зоны допустимости поверх заливок подосновы, как газоны: борта и сети видны поверх. */
+  setZones(zones: ZonesJson | undefined): void {
+    this.zoneChunks = zoneChunks(zones);
+    this.scene.chunks = this.planChunks();
+    this.invalidate();
+    this.schedule();
+  }
+
+  private planChunks(): Chunk[] {
+    return withLawns(this.baseChunks, [...this.lawnChunks, ...this.zoneChunks]);
+  }
+
   setLawns(lawns: readonly LawnJson[]): void {
     this.lawnChunks = lawnChunks(lawns);
-    this.scene.chunks = withLawns(this.baseChunks, this.lawnChunks);
+    this.scene.chunks = this.planChunks();
     this.invalidate();
     this.schedule();
   }

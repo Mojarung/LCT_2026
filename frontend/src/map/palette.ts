@@ -2,7 +2,7 @@
  * переключается в одном месте, и карта обязана следовать за ней. */
 
 export interface ClassStyle {
-  group: 'surfaces' | 'buildings' | 'utilities' | 'existing' | 'lawns';
+  group: 'surfaces' | 'buildings' | 'utilities' | 'existing' | 'lawns' | 'zones';
   fill?: string;
   stroke?: string;
   /** Толщина в экранных пикселях. */
@@ -62,6 +62,14 @@ export const STYLES: Record<string, ClassStyle> = {
     stroke: '--c-plan-lawn-edge',
     width: 1.2,
     dash: [5, 3],
+  },
+  // Зоны допустимости (zones.ts): холодный тон, чтобы не спорить с травой и газонами плана.
+  'zone.allowed': { group: 'zones', fill: '--c-zone', stroke: '--c-zone-edge', width: 0.8 },
+  'zone.needs_approval': {
+    group: 'zones',
+    fill: '--c-zone-approval',
+    stroke: '--c-zone-approval-edge',
+    width: 0.8,
   },
 };
 

@@ -1152,6 +1152,14 @@ body.shell-map .topbar {
   background: var(--c-plan-lawn-new);
   border-style: dashed;
 }
+.legend i.swatch-zone {
+  background: var(--c-zone);
+  border: 1.2px solid var(--c-zone-edge);
+}
+.legend i.swatch-zone-approval {
+  background: var(--c-zone-approval);
+  border: 1.2px solid var(--c-zone-approval-edge);
+}
 .legend-group .key.swatch-building {
   width: 16px;
   height: 12px;
