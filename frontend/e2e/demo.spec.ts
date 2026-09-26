@@ -64,6 +64,9 @@ function paintedColors(page: Page): Promise<number> {
 }
 
 test('демо: от консоли до пересобранного DXF', async ({ page, baseURL }) => {
+  // Шаги сами ждут до 200 с прогона, 150 с пересборки и 120 с 3D-сцены: общий предел
+  // конфигурации (240 с) меньше их суммы, и тест падал на последнем шаге, когда всё работало.
+  test.setTimeout(480_000);
   const foreign = watchForeign(page, baseURL ?? '');
   let edits = 0;
   page.on('request', (request) => {
