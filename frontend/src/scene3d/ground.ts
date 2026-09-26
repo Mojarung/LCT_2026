@@ -32,6 +32,17 @@ export interface MaskInfo {
   texture: THREE.CanvasTexture;
   /** minX, minZ, sizeX, sizeZ в координатах сцены. */
   rect: [number, number, number, number];
+  /** Покрытие каждого пикселя (surfaceMask.ts) до размытия: по нему расставляются люди. */
+  kinds: Uint8Array;
+  width: number;
+  height: number;
+  metresPerPx: number;
+}
+
+/** Погода на земле: мокрый асфальт темнеет и блестит, снег ложится сначала на газон. */
+export interface GroundWeather {
+  uWet: { value: number };
+  uSnow: { value: number };
 }
 
 function ringPath(
@@ -52,7 +63,12 @@ function ringPath(
 }
 
 /** Покрытие каждого пикселя -> каналы маски: R - газон, G - плитка, B - асфальт. */
-function surfaceToMask(ctx: CanvasRenderingContext2D, w: number, h: number, mpp: number): void {
+function surfaceToMask(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  mpp: number,
+): Uint8Array {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const kind = classifySurface(d, w, h, mpp);
@@ -64,6 +80,7 @@ function surfaceToMask(ctx: CanvasRenderingContext2D, w: number, h: number, mpp:
     d[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
+  return kind;
 }
 
 /** Размыть растр карты покрытий на размер клетки: ступенька в метр читается сверху как
@@ -112,7 +129,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ctx.drawImage(surface.img, 0, 0);
     ctx.restore();
   }
-  surfaceToMask(ctx, w, h, mpp);
+  const kinds = surfaceToMask(ctx, w, h, mpp);
   if (surface) softenCells(c, ctx, surface.cell / mpp);
   const toPx = (p: Flat): [number, number] => [(p.x - minX) / mpp, (p.z - minZ) / mpp];
   ctx.fillStyle = '#0000ff';
@@ -129,7 +146,14 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
-  return { texture, rect: [minX, minZ, sizeX, sizeZ] };
+  return {
+    texture,
+    rect: [minX, minZ, sizeX, sizeZ],
+    kinds,
+    width: w,
+    height: h,
+    metresPerPx: mpp,
+  };
 }
 
 export interface GroundTextures {
@@ -140,7 +164,12 @@ export interface GroundTextures {
 }
 
 /** Земля: один лист на всю сцену и поле вокруг, фактура по маске в шейдере. */
-export function groundMesh(world: World, mask: MaskInfo, tex: GroundTextures): THREE.Mesh {
+export function groundMesh(
+  world: World,
+  mask: MaskInfo,
+  tex: GroundTextures,
+  weather: GroundWeather,
+): THREE.Mesh {
   const [minX, minZ, maxX, maxZ] = world.bounds;
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
@@ -160,6 +189,7 @@ export function groundMesh(world: World, mask: MaskInfo, tex: GroundTextures): T
     uAsphalt: { value: tex.asphalt },
     uPavers: { value: tex.pavers },
     uNoise: { value: tex.noise },
+    ...weather,
   };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -189,7 +219,11 @@ uniform sampler2D uGrass;
 uniform sampler2D uAsphalt;
 uniform sampler2D uPavers;
 uniform sampler2D uNoise;
+uniform float uWet;
+uniform float uSnow;
 vec3 groundWeights;
+float groundSnow;
+float groundWet;
 float groundBreakup;
 
 // Два масштаба одной фактуры со сдвигом: повтор плитки на газоне не читается глазом.
@@ -226,12 +260,22 @@ const GROUND_MAP = /* glsl */ `
   vec3 pv = texture2D(uPavers, p / 3.0).rgb * (0.9 + 0.16 * macro);
   vec3 a = antiTile(uAsphalt, p, 4.0) * (0.84 + 0.3 * macro);
   vec3 col = g * lawn + pv * paver + a * asph;
+  // Мокрое покрытие темнее, газон темнеет меньше; лужи - пятнами шума.
+  float puddle = smoothstep(0.55, 0.7, texture2D(uNoise, p / 9.0).g) * (1.0 - lawn);
+  col *= 1.0 - uWet * (0.3 * (1.0 - lawn) + 0.15 * lawn + 0.2 * puddle);
+  // Снег ложится сначала на газон, на проезды - позже и пятнами: их чистят и греют машины.
+  float cover = uSnow * (lawn * 1.25 + (1.0 - lawn) * 0.6) + (nz.b - 0.5) * 0.5 * uSnow;
+  groundSnow = clamp(cover, 0.0, 1.0);
+  col = mix(col, vec3(0.9, 0.92, 0.96), groundSnow);
+  groundWet = uWet * (1.0 - groundSnow) * (0.6 + 0.4 * puddle);
   diffuseColor.rgb *= col;
 }
 `;
 
 const GROUND_ROUGHNESS = /* glsl */ `
 float roughnessFactor = roughness * (groundWeights.x * 1.0 + groundWeights.y * 0.82 + groundWeights.z * 0.9);
+roughnessFactor = mix(roughnessFactor, 0.12, groundWet * (1.0 - groundWeights.x) * 0.9);
+roughnessFactor = mix(roughnessFactor, 0.75, groundSnow);
 `;
 
 /** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта. */

@@ -23,7 +23,9 @@ import { pick } from './pick';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
 import { asphalt, concrete, fenceBars, grass, noiseTexture, pavers } from './textures';
+import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
+import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute } from './tour';
 import { Forest } from './trees';
 import { GRASS_PRESETS, GrassField } from './grass';
@@ -38,6 +40,13 @@ export interface ViewSettings {
   clouds: number;
   quality: Quality;
   showExisting: boolean;
+  /** Погода, 0..1: сила ветра, дождя, снега и листопада. */
+  wind: number;
+  rain: number;
+  snow: number;
+  leaves: number;
+  /** Сколько людей на тротуарах: доля от расставленных. */
+  people: number;
 }
 
 export const DEFAULT_SETTINGS: ViewSettings = {
@@ -47,6 +56,11 @@ export const DEFAULT_SETTINGS: ViewSettings = {
   clouds: 0.3,
   quality: 'medium',
   showExisting: true,
+  wind: 0.3,
+  rain: 0,
+  snow: 0,
+  leaves: 0,
+  people: 0.4,
 };
 
 interface QualityPreset {
@@ -141,6 +155,10 @@ export class SceneEngine {
   private tour: { route: Route; heights: number[]; travelled: number; yaw: number } | null = null;
   private tourPlan: { route: Route; heights: number[] } | null | undefined = undefined;
   private grassField: GrassField | null = null;
+  private readonly weather = new Weather();
+  private people: People | null = null;
+  /** Погода на земле и крышах: общие uniform-ы шейдеров земли, крыш и крон. */
+  private readonly groundWeather = { uWet: { value: 0 }, uSnow: { value: 0 } };
   private grassQuality: Quality | null = null;
   private mask: MaskInfo | null = null;
   private noise: THREE.Texture | null = null;
@@ -216,9 +234,11 @@ export class SceneEngine {
     this.disposables.push(mask.texture);
     this.mask = mask;
     this.noise = noise;
-    const ground = groundMesh(this.world, mask, tex);
+    const ground = groundMesh(this.world, mask, tex, this.groundWeather);
     this.add(ground);
     this.addStreetFurniture();
+    this.people = new People(placePeople({ ...mask }, PEOPLE_MAX));
+    this.scene.add(this.people.root, this.weather.root);
     await this.step('buildings');
     this.addBuildings(noise);
     await this.forest.build((done, total) => {
@@ -292,7 +312,7 @@ export class SceneEngine {
     if (!this.world.buildings.length) return;
     const { walls, roofs } = buildingGeometry(this.world.buildings);
     const wallMesh = new THREE.Mesh(walls, facadeMaterial(this.facade));
-    const roofMesh = new THREE.Mesh(roofs, roofMaterial(noise));
+    const roofMesh = new THREE.Mesh(roofs, roofMaterial(noise, this.groundWeather.uSnow));
     for (const mesh of [wallMesh, roofMesh]) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -308,13 +328,22 @@ export class SceneEngine {
     const q = QUALITY[s.quality];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
     this.resize();
+    const weather = atmosphereOf(s, s.clouds);
     this.atmosphere.apply({
       hour: s.hour,
       season: s.season,
-      clouds: s.clouds,
+      clouds: weather.clouds,
       shadowSize: q.shadowSize,
       shadowExtent: q.shadowExtent,
+      fog: weather.fog,
+      wind: s.wind,
     });
+    this.weather.apply(s, weather);
+    this.groundWeather.uWet.value = weather.wet;
+    this.groundWeather.uSnow.value = weather.snowCover;
+    this.forest.wind.uWind.value = weather.sway;
+    this.forest.wind.uSnow.value = weather.snowCover;
+    this.people?.setDensity(s.people);
     this.facade.uNight.value = this.atmosphere.state.night;
     this.lights?.setNight(this.atmosphere.state.night);
     this.forest.apply({
@@ -327,6 +356,11 @@ export class SceneEngine {
       .copy(this.atmosphere.state.color)
       .multiplyScalar(this.atmosphere.state.intensity * 0.35);
     this.setGrass(s.quality);
+    if (this.grassField) {
+      this.grassField.uniforms.uWind.value = s.wind;
+      // Под снегом травинок не видно: газон белый, поле травы уходит вместе с ним.
+      this.grassField.uniforms.uGrow.value = 1 - weather.snowCover;
+    }
   }
 
   /** Поле травинок по качеству: на «быстро» газон - только фактура земли. */
@@ -416,6 +450,8 @@ export class SceneEngine {
     this.forest.wind.uSunView.value.copy(sunView);
     this.forest.update(this.camera, t);
     this.grassField?.update(this.camera, t);
+    this.people?.update(t);
+    this.weather.update(this.camera, t, this.particleLight);
     this.renderer.render(this.scene, this.camera);
     this.tickStats();
     this.tickHover();
@@ -482,6 +518,12 @@ export class SceneEngine {
           }
         : null,
     );
+  }
+
+  /** Свет частиц погоды: днём они светлые, ночью едва видны - иначе снег светится сам. */
+  private get particleLight(): THREE.Color {
+    const night = this.atmosphere.state.night;
+    return new THREE.Color().setScalar(1 - 0.8 * night);
   }
 
   private emitCamera(): void {
@@ -600,6 +642,8 @@ export class SceneEngine {
     this.atmosphere.dispose();
     this.lights?.dispose();
     this.grassField?.dispose();
+    this.weather.dispose();
+    this.people?.dispose();
     for (const d of this.disposables) d.dispose();
     this.renderer.dispose();
   }

@@ -54,9 +54,9 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
-    // Чанк 3D-вида - это в основном three.js (около 600 КБ без сжатия), делить его незачем:
+    // Чанк 3D-вида - это в основном three.js (около 600 КБ без сжатия из 700), делить его незачем:
     // он грузится только на странице 3D.
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 800,
   },
   test: {
     environment: 'jsdom',

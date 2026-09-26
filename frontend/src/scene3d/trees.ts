@@ -176,6 +176,8 @@ export interface WindUniforms {
   uWind: { value: number };
   uSunView: { value: THREE.Vector3 };
   uSunColor: { value: THREE.Color };
+  /** Снег на верхней стороне крон, 0..1. */
+  uSnow: { value: number };
 }
 
 /* Ветер в мировых координатах после матрицы экземпляра: качание растёт с высотой, фаза - от
@@ -246,13 +248,15 @@ export function leafMaterial(
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nuniform vec3 uSunView;\nuniform vec3 uSunColor;',
+        '#include <common>\nuniform vec3 uSunView;\nuniform vec3 uSunColor;\nuniform float uSnow;',
       )
       // Двусторонний лист с нормалью от центра кроны: изнанку не переворачиваем, иначе
       // половина кроны темнеет пятнами.
       .replace(
         '#include <normal_fragment_begin>',
-        '#include <normal_fragment_begin>\nnormal = normalize(vNormal);',
+        '#include <normal_fragment_begin>\nnormal = normalize(vNormal);\n' +
+          'float snowUp = max(dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), 0.0);\n' +
+          'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.94, 0.97), uSnow * 0.75 * smoothstep(0.15, 0.7, snowUp));',
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -306,6 +310,7 @@ export class Forest {
     uWind: { value: 0.35 },
     uSunView: { value: new THREE.Vector3(0, 1, 0) },
     uSunColor: { value: new THREE.Color(1, 1, 1) },
+    uSnow: { value: 0 },
   };
   private readonly groups = new Map<string, Group>();
   private readonly instances: Instance[] = [];

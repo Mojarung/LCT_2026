@@ -21,6 +21,9 @@ export interface SkySettings {
   clouds: number;
   shadowSize: number;
   shadowExtent: number;
+  /** Надбавка дымки от осадков и сила ветра 0..1 (гонит облака). */
+  fog: number;
+  wind: number;
 }
 
 export interface SunState {
@@ -61,6 +64,8 @@ export class Atmosphere {
     clouds: 0.35,
     shadowSize: 4096,
     shadowExtent: 150,
+    fog: 0,
+    wind: 0.3,
   };
 
   constructor(
@@ -115,6 +120,7 @@ export class Atmosphere {
     const u = this.sky.material.uniforms;
     setVector(u, 'sunPosition', dir);
     setUniform(u, 'cloudCoverage', s.clouds);
+    setUniform(u, 'cloudSpeed', 0.00001 + 0.00008 * s.wind);
     const elevation = pos.elevation;
     const day = THREE.MathUtils.smoothstep(elevation, -6, 6);
     // Ночь - по гражданским сумеркам: солнце ниже 6 градусов под горизонтом.
@@ -157,7 +163,7 @@ export class Atmosphere {
     haze.lerp(new THREE.Color(0.05, 0.07, 0.12), this.state.night);
     haze.lerp(new THREE.Color(0.78, 0.8, 0.82), s.clouds * 0.4 * day);
     this.fog.color.copy(haze);
-    this.fog.density = 0.0006 + s.clouds * 0.0005;
+    this.fog.density = 0.0006 + s.clouds * 0.0005 + s.fog;
     this.renderer.toneMappingExposure = 0.42 + 0.2 * day;
     this.environment();
   }

@@ -83,6 +83,7 @@ export interface GrassUniforms {
   uMaskRect: { value: THREE.Vector4 };
   uNoise: { value: THREE.Texture };
   uGrow: { value: number };
+  uWind: { value: number };
 }
 
 const GRASS_VERTEX_HEAD = /* glsl */ `
@@ -96,6 +97,7 @@ uniform sampler2D uMask;
 uniform vec4 uMaskRect;
 uniform sampler2D uNoise;
 uniform float uGrow;
+uniform float uWind;
 varying vec3 vGrass;
 `;
 
@@ -117,7 +119,7 @@ float s = sin(aBlade.y);
 float width = 0.018 + 0.014 * aBlade.w;
 float t = position.y;
 float gust = sin(uTime * 1.7 + dot(world, vec2(0.21, 0.13))) * 0.5 + sin(uTime * 3.1 + world.x * 0.7) * 0.2;
-float bend = (aBlade.z - 0.3) * 0.5 + gust * 0.35;
+float bend = (aBlade.z - 0.3) * 0.5 + gust * (0.1 + 0.9 * uWind);
 vec3 blade = vec3(position.x * width, t * h, bend * t * t * h);
 vec3 transformed = vec3(world.x + blade.x * c - blade.z * s, blade.y, world.y + blade.x * s + blade.z * c);
 vGrass = vec3(t, aBlade.w, patchy);
@@ -165,6 +167,7 @@ export class GrassField {
       uMaskRect: { value: new THREE.Vector4(...mask.rect) },
       uNoise: { value: noise },
       uGrow: { value: 1 },
+      uWind: { value: 0.35 },
     };
     this.mesh = new THREE.Mesh(grassGeometry(opts), grassMaterial(this.uniforms));
     this.mesh.frustumCulled = false;

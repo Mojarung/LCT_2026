@@ -33,6 +33,38 @@ const QUALITIES: { value: Quality; label: string }[] = [
   { value: 'high', label: 'красиво' },
 ];
 
+/** Ползунок силы 0..100%: погода и люди. */
+function Share({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="scene-field">
+      <label className="hud-label" htmlFor={id}>
+        {label} <span className="scene-value">{Math.round(value * 100)}%</span>
+      </label>
+      <input
+        id={id}
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={value}
+        onChange={(e) => {
+          onChange(Number(e.target.value));
+        }}
+      />
+    </div>
+  );
+}
+
 function Segmented<T extends string | number>({
   label,
   options,
@@ -161,6 +193,46 @@ export function ScenePanel({
             }}
           />
         </div>
+        <Share
+          id="scene-wind"
+          label="Ветер"
+          value={settings.wind}
+          onChange={(wind) => {
+            onChange({ wind });
+          }}
+        />
+        <Share
+          id="scene-rain"
+          label="Дождь"
+          value={settings.rain}
+          onChange={(rain) => {
+            onChange({ rain });
+          }}
+        />
+        <Share
+          id="scene-snow"
+          label="Снег"
+          value={settings.snow}
+          onChange={(snow) => {
+            onChange({ snow });
+          }}
+        />
+        <Share
+          id="scene-leaves"
+          label="Листопад"
+          value={settings.leaves}
+          onChange={(leaves) => {
+            onChange({ leaves });
+          }}
+        />
+        <Share
+          id="scene-people"
+          label="Люди на тротуарах"
+          value={settings.people}
+          onChange={(people) => {
+            onChange({ people });
+          }}
+        />
         <label className="check">
           <input
             type="checkbox"

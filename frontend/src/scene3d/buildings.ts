@@ -273,21 +273,27 @@ const FACADE_MAP = /* glsl */ `
 `;
 
 /** Крыша: битум, тёмный и шершавый. Отдельный материал проще, чем ветвление в фасаде. */
-export function roofMaterial(noise: THREE.Texture): THREE.MeshStandardMaterial {
+export function roofMaterial(
+  noise: THREE.Texture,
+  snow: { value: number },
+): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.95, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uNoise = { value: noise };
+    shader.uniforms.uSnow = snow;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vRoof;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvRoof = uv;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec2 vRoof;\nuniform sampler2D uNoise;',
+        '#include <common>\nvarying vec2 vRoof;\nuniform sampler2D uNoise;\nuniform float uSnow;',
       )
       .replace(
         '#include <map_fragment>',
-        'diffuseColor.rgb *= 0.8 + 0.35 * texture2D(uNoise, vRoof / 13.0).r;',
+        'diffuseColor.rgb *= 0.8 + 0.35 * texture2D(uNoise, vRoof / 13.0).r;\n' +
+          // Плоская крыша под снегом белая целиком, только у парапета темнее.
+          'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(2.4), clamp(uSnow * 1.2, 0.0, 1.0));',
       );
   };
   m.customProgramCacheKey = () => 'green-roof';
