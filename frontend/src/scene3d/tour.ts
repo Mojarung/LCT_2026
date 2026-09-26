@@ -212,6 +212,27 @@ export function clearance(
   return window(peaks, (xs) => xs.reduce((a, b) => a + b, 0) / xs.length);
 }
 
+/** Откуда начинать облёт: середина самого длинного участка маршрута с наименьшей высотой
+ *  полёта. Хребет улицы часто начинается у высотки, и первые секунды облёта кадр занимали её
+ *  крыша и стена; над открытым местом первый кадр показывает посадки. */
+export function tourStart(r: Route, heights: readonly number[]): number {
+  if (!heights.length) return 0;
+  const low = Math.min(...heights) + 0.5;
+  let best = { from: 0, to: 0 };
+  let from = -1;
+  for (let i = 0; i <= heights.length; i++) {
+    const open = i < heights.length && (heights[i] ?? Infinity) <= low;
+    if (open && from < 0) from = i;
+    if (!open && from >= 0) {
+      if (i - 1 - from > best.to - best.from) best = { from, to: i - 1 };
+      from = -1;
+    }
+  }
+  const start = r.along[best.from] ?? 0;
+  const end = r.along[best.to] ?? start;
+  return (start + end) / 2;
+}
+
 function heightAt(r: Route, heights: readonly number[], s: number): number {
   const t = Math.max(0, Math.min(r.length, s));
   let i = 0;

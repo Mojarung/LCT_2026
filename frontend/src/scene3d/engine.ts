@@ -26,7 +26,7 @@ import { asphalt, concrete, fenceBars, grass, noiseTexture, pavers } from './tex
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
 import { atmosphereOf, Weather } from './weather';
-import { clearance, type Route, tourPose, tourRoute } from './tour';
+import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
 import { GRASS_PRESETS, GrassField } from './grass';
 import type { Plant, World } from './types';
@@ -551,7 +551,8 @@ export class SceneEngine {
     const plan = this.tourPlan;
     if (!plan) return false;
     this.freecam.setMode('fly');
-    this.tour = { ...plan, travelled: 0, yaw: tourPose(plan.route, 0, plan.heights).yaw };
+    const travelled = tourStart(plan.route, plan.heights);
+    this.tour = { ...plan, travelled, yaw: tourPose(plan.route, travelled, plan.heights).yaw };
     this.emitCamera();
     return true;
   }
