@@ -257,14 +257,18 @@ const FACADE_MAP = /* glsl */ `
     glass = step(d.x, size.x * 0.5) * step(d.y, size.y * 0.5);
     wall = mix(wall, wall * 0.55 + vec3(0.05), frame - glass);
   }
-  float lit = step(0.62, hash12(vec2(cell, level) + tint * 17.0)) * glass * uNight;
+  // Горит примерно каждое третье окно, у каждого своя яркость и оттенок лампы; витрина
+  // первого этажа ночью не светится сплошь - магазины к ночи закрыты.
+  float roll = hash12(vec2(cell, level) + tint * 17.0);
+  float shop = style == 2 && level < 1.0 ? 0.35 : 1.0;
+  float lit = step(0.68, roll) * glass * uNight * shop * (0.35 + 0.65 * hash12(vec2(level, cell) * 1.3));
   vec3 glassColor = mix(vec3(0.06, 0.08, 0.10), vec3(0.16, 0.19, 0.22), hash12(vec2(cell * 1.7, level)));
   // Парапет: верхние 40 см стены без окон и чуть темнее, как жесть отлива.
   if (v > height - 0.4 && style != 4) wall *= 0.72;
   diffuseColor.rgb *= mix(wall, glassColor, glass);
   facadeRough = mix(0.88, 0.06, glass);
   facadeMetal = style == 3 ? 0.35 * (1.0 - glass) : 0.0;
-  facadeGlow = vec3(1.0, 0.78, 0.48) * lit * 1.6;
+  facadeGlow = mix(vec3(1.0, 0.72, 0.42), vec3(0.95, 0.9, 0.8), fract(roll * 7.0)) * lit * 0.9;
 }
 `;
 

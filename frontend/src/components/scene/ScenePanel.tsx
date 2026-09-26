@@ -2,6 +2,7 @@
  * меняет картинку, а не план: план правится на рабочем месте прогона. */
 
 import type { Quality, ViewSettings } from '../../scene3d/engine';
+import { FLY_SPEED_MAX, FLY_SPEED_MIN } from '../../scene3d/freecam';
 import { PLAN_YEAR } from '../../scene3d/growth';
 import { clock, type Season } from '../../scene3d/solar';
 
@@ -66,15 +67,32 @@ function Segmented<T extends string | number>({
   );
 }
 
+/** Ползунок скорости - в логарифмической шкале: 1-10 м/с нужны точно, 30-60 - грубо. */
+const SPEED_STEPS = 100;
+const SPEED_SPAN = Math.log(FLY_SPEED_MAX / FLY_SPEED_MIN);
+const toSlider = (speed: number) =>
+  Math.round((Math.log(speed / FLY_SPEED_MIN) / SPEED_SPAN) * SPEED_STEPS);
+const fromSlider = (value: number) => FLY_SPEED_MIN * Math.exp((value / SPEED_STEPS) * SPEED_SPAN);
+
 export interface ScenePanelProps {
   settings: ViewSettings;
   onChange: (patch: Partial<ViewSettings>) => void;
   shots: Shot[];
   onShot: (scale: number) => void;
   busy: boolean;
+  speed: number;
+  onSpeed: (speed: number) => void;
 }
 
-export function ScenePanel({ settings, onChange, shots, onShot, busy }: ScenePanelProps) {
+export function ScenePanel({
+  settings,
+  onChange,
+  shots,
+  onShot,
+  busy,
+  speed,
+  onSpeed,
+}: ScenePanelProps) {
   return (
     <aside className="hud scene-panel" aria-label="Настройки 3D-вида">
       <div className="hud-scroll">
@@ -85,12 +103,29 @@ export function ScenePanel({ settings, onChange, shots, onShot, busy }: ScenePan
           <input
             id="scene-hour"
             type="range"
-            min={5}
-            max={22}
+            min={0}
+            max={24}
             step={0.25}
             value={settings.hour}
             onChange={(e) => {
               onChange({ hour: Number(e.target.value) });
+            }}
+          />
+        </div>
+        <div className="scene-field">
+          <label className="hud-label" htmlFor="scene-speed">
+            Скорость полёта <span className="scene-value">{Math.round(speed)} м/с</span>
+          </label>
+          <input
+            id="scene-speed"
+            type="range"
+            min={0}
+            max={SPEED_STEPS}
+            step={1}
+            value={toSlider(speed)}
+            aria-valuetext={`${Math.round(speed)} метров в секунду`}
+            onChange={(e) => {
+              onSpeed(fromSlider(Number(e.target.value)));
             }}
           />
         </div>

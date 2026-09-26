@@ -16,15 +16,15 @@ import {
   CURB_W,
   fenceGeometry,
   groundMesh,
-  nearestCurbDirection,
   ribbonBox,
-  streetLightGeometry,
   type SurfaceImage,
 } from './ground';
 import { pick } from './pick';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
 import { asphalt, concrete, fenceBars, grass, noiseTexture, pavers } from './textures';
+import { StreetLights } from './streetlights';
+import { clearance, type Route, tourPose, tourRoute } from './tour';
 import { Forest } from './trees';
 import { GRASS_PRESETS, GrassField } from './grass';
 import type { Plant, World } from './types';
@@ -74,10 +74,17 @@ export interface Hover {
 export interface EngineEvents {
   progress?: (stage: Stage, done: number, total: number) => void;
   hover?: (hover: Hover | null) => void;
-  camera?: (state: { mode: Mode; speed: number; locked: boolean }) => void;
+  camera?: (state: CameraState) => void;
   frame?: (stats: FrameStats) => void;
   /** Поза камеры, не чаще двух раз в секунду: для адреса страницы. */
   pose?: (pose: Pose, mode: Mode) => void;
+}
+
+export interface CameraState {
+  mode: Mode;
+  speed: number;
+  locked: boolean;
+  touring: boolean;
 }
 
 export interface FrameStats {
@@ -129,7 +136,10 @@ export class SceneEngine {
   private fpsStart = 0;
   private lastHover: string | null = null;
   private hoverTick = 0;
-  private lamps: THREE.InstancedMesh | null = null;
+  private lights: StreetLights | null = null;
+  /** Облёт: маршрут, пройденный путь и сглаженный курс - разворот на концах идёт плавно. */
+  private tour: { route: Route; heights: number[]; travelled: number; yaw: number } | null = null;
+  private tourPlan: { route: Route; heights: number[] } | null | undefined = undefined;
   private grassField: GrassField | null = null;
   private grassQuality: Quality | null = null;
   private mask: MaskInfo | null = null;
@@ -166,6 +176,9 @@ export class SceneEngine {
       collide: (from, to) => this.walls.resolve(from, to),
       onChange: () => {
         this.emitCamera();
+      },
+      onInput: () => {
+        this.stopTour();
       },
     });
   }
@@ -271,25 +284,8 @@ export class SceneEngine {
       fences.name = 'fences';
       this.add(fences);
     }
-    if (world.poles.length) {
-      const geometry = streetLightGeometry();
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x5b6166,
-        roughness: 0.45,
-        metalness: 0.7,
-      });
-      const lamps = new THREE.InstancedMesh(geometry, material, world.poles.length);
-      const m = new THREE.Matrix4();
-      world.poles.forEach((p, i) => {
-        const angle = nearestCurbDirection(p, world.curbs) ?? 0;
-        m.makeRotationY(angle).setPosition(p.x, 0, p.z);
-        lamps.setMatrixAt(i, m);
-      });
-      lamps.castShadow = true;
-      lamps.name = 'lamps';
-      this.lamps = lamps;
-      this.add(lamps);
-    }
+    this.lights = new StreetLights(world.poles, world.curbs);
+    this.scene.add(this.lights.root);
   }
 
   private addBuildings(noise: THREE.Texture): void {
@@ -320,6 +316,7 @@ export class SceneEngine {
       shadowExtent: q.shadowExtent,
     });
     this.facade.uNight.value = this.atmosphere.state.night;
+    this.lights?.setNight(this.atmosphere.state.night);
     this.forest.apply({
       age: s.age,
       season: s.season,
@@ -404,8 +401,10 @@ export class SceneEngine {
     this.clock.update();
     const dt = this.clock.getDelta();
     const t = this.clock.getElapsed();
-    this.freecam.update(dt);
+    if (this.tour) this.stepTour(dt);
+    else this.freecam.update(dt);
     this.applyPose();
+    this.atmosphere.center(this.camera);
     const focus = new THREE.Vector3(0, 0, -Math.min(60, 20 + this.camera.position.y)).applyMatrix4(
       this.camera.matrixWorld,
     );
@@ -490,7 +489,69 @@ export class SceneEngine {
       mode: this.freecam.mode,
       speed: this.freecam.flySpeed,
       locked: this.freecam.locked,
+      touring: this.tour !== null,
     });
+  }
+
+  setSpeed(speed: number): void {
+    this.freecam.setSpeed(speed);
+  }
+
+  /** Облёт над осью улицы. Маршрут строится по посадкам плана один раз; без посадок - по
+   *  зданиям. Возвращает false, если облетать нечего. */
+  startTour(): boolean {
+    if (this.tourPlan === undefined) this.tourPlan = this.planTour();
+    const plan = this.tourPlan;
+    if (!plan) return false;
+    this.freecam.setMode('fly');
+    this.tour = { ...plan, travelled: 0, yaw: tourPose(plan.route, 0, plan.heights).yaw };
+    this.emitCamera();
+    return true;
+  }
+
+  /** Маршрут над осью улицы и высота на нём: выше крыш, мимо которых он идёт. */
+  private planTour(): { route: Route; heights: number[] } | null {
+    const planted = this.world.plants.filter((p) => !p.existing);
+    const points = planted.length
+      ? planted
+      : this.world.buildings.flatMap((b) => b.rings[0]?.slice(0, 1) ?? []);
+    const route = tourRoute(points);
+    if (!route) return null;
+    const obstacles = this.world.buildings.map((b) => {
+      const ring = b.rings[0] ?? [];
+      const xs = ring.map((p) => p.x);
+      const zs = ring.map((p) => p.z);
+      return {
+        minX: Math.min(...xs),
+        minZ: Math.min(...zs),
+        maxX: Math.max(...xs),
+        maxZ: Math.max(...zs),
+        height: b.height,
+      };
+    });
+    return { route, heights: clearance(route, obstacles) };
+  }
+
+  get touring(): boolean {
+    return this.tour !== null;
+  }
+
+  stopTour(): void {
+    if (!this.tour) return;
+    this.tour = null;
+    this.emitCamera();
+  }
+
+  private stepTour(dt: number): void {
+    const tour = this.tour;
+    if (!tour) return;
+    tour.travelled += this.freecam.flySpeed * Math.min(dt, 0.1);
+    const pose = tourPose(tour.route, tour.travelled, tour.heights);
+    // Курс догоняет направление маршрута за доли секунды: на конце разворот, а не рывок.
+    let delta = pose.yaw - tour.yaw;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    tour.yaw += delta * (1 - Math.exp(-dt / 0.9));
+    this.freecam.setPose({ ...pose, yaw: tour.yaw });
   }
 
   /** Снимок кадра в PNG. scale 2 - вдвое больше пикселей, чем на экране: для слайда. */
@@ -500,6 +561,8 @@ export class SceneEngine {
 
   async capture(scale = 1): Promise<Blob> {
     if (!this.running) throw new Error('3D-вид закрыт: снимать нечего');
+    // Скачивание снимка уводит фокус, и keyup зажатой клавиши может потеряться.
+    this.freecam.releaseKeys();
     // Цикл кадра на время снимка стоит: иначе следующий кадр перерисует холст до того, как
     // браузер его прочтёт, а экран мигнёт увеличенным разрешением.
     this.renderer.setAnimationLoop(null);
@@ -535,7 +598,7 @@ export class SceneEngine {
     this.freecam.dispose();
     this.forest.dispose();
     this.atmosphere.dispose();
-    this.lamps?.dispose();
+    this.lights?.dispose();
     this.grassField?.dispose();
     for (const d of this.disposables) d.dispose();
     this.renderer.dispose();

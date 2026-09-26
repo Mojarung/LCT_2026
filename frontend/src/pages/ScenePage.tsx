@@ -13,6 +13,7 @@ import { artifactUrl } from '../api/client';
 import { useArtifact, useRun } from '../api/queries';
 import { ScenePanel, type Shot } from '../components/scene/ScenePanel';
 import {
+  type CameraState,
   DEFAULT_SETTINGS,
   type FrameStats,
   type Hover,
@@ -21,7 +22,7 @@ import {
   type ViewSettings,
   webglAvailable,
 } from '../scene3d/engine';
-import type { Mode } from '../scene3d/freecam';
+import { FLY_SPEED_DEFAULT } from '../scene3d/freecam';
 import type { SurfaceImage } from '../scene3d/ground';
 import { clock } from '../scene3d/solar';
 import { formatView, parseView } from '../scene3d/viewHash';
@@ -175,10 +176,11 @@ export function ScenePage() {
   });
   const [failure, setFailure] = useState<string | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
-  const [cam, setCam] = useState<{ mode: Mode; speed: number; locked: boolean }>({
+  const [cam, setCam] = useState<CameraState>({
     mode: 'fly',
-    speed: 8,
+    speed: FLY_SPEED_DEFAULT,
     locked: false,
+    touring: false,
   });
   const [stats, setStats] = useState<FrameStats | null>(null);
   const [settings, setSettings] = useState<ViewSettings>(DEFAULT_SETTINGS);
@@ -307,6 +309,10 @@ export function ScenePage() {
       else if (event.code === 'KeyH') setHudHidden((v) => !v);
       else if (event.code === 'KeyG') e.setMode(e.freecam.mode === 'walk' ? 'fly' : 'walk');
       else if (event.code === 'KeyR') e.resetView();
+      else if (event.code === 'KeyT') {
+        if (e.touring) e.stopTour();
+        else e.startTour();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
@@ -385,6 +391,8 @@ export function ScenePage() {
                 void shoot(scale);
               }}
               busy={shooting}
+              speed={cam.speed}
+              onSpeed={(speed) => engine.current?.setSpeed(speed)}
             />
           ) : null}
           {readyToFly ? (
@@ -414,6 +422,19 @@ export function ScenePage() {
               </button>
               <button
                 type="button"
+                aria-pressed={cam.touring}
+                title="Облёт над улицей туда и обратно, клавиша T; мышь или WASD - взять управление"
+                onClick={() => {
+                  const e = engine.current;
+                  if (!e) return;
+                  if (cam.touring) e.stopTour();
+                  else e.startTour();
+                }}
+              >
+                облёт
+              </button>
+              <button
+                type="button"
                 title="Скрыть панели для чистого кадра, клавиша H"
                 onClick={() => {
                   setHudHidden(true);
@@ -422,7 +443,7 @@ export function ScenePage() {
                 без панелей
               </button>
               <span className="scene-speed" title="Скорость полёта: колесо мыши">
-                {cam.mode === 'fly' ? `${cam.speed} м/с` : 'шаг'}
+                {cam.mode === 'fly' ? `${Math.round(cam.speed)} м/с` : 'шаг'}
               </span>
               {stats ? (
                 <span className="scene-speed" title="Кадров в секунду и вызовов отрисовки">
@@ -445,8 +466,8 @@ export function ScenePage() {
                 <kbd>S</kbd>
                 <kbd>D</kbd> движение · <kbd>E</kbd>/<kbd>Q</kbd> вверх и вниз · <kbd>Shift</kbd>{' '}
                 быстрее · колесо - скорость · <kbd>G</kbd> пешеход · <kbd>P</kbd> снимок ·{' '}
-                <kbd>H</kbd> панели · <kbd>R</kbd> общий вид. Правой кнопкой можно осматриваться без
-                захвата мыши.
+                <kbd>H</kbd> панели · <kbd>R</kbd> общий вид · <kbd>T</kbd> облёт. Правой кнопкой
+                можно осматриваться без захвата мыши.
               </p>
             </div>
           ) : null}

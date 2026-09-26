@@ -4,11 +4,15 @@
  * и часу над Москвой (solar.ts). Рассеянный свет - не константа: небо пересчитывается в карту
  * окружения (PMREM), и тени на асфальте голубеют в полдень и теплеют к вечеру сами. Тень солнца
  * одна, прямоугольник вокруг камеры: вся улица в одной карте теней дала бы по полметра на
- * пиксель. Прямоугольник сдвигается шагами в пиксель карты, иначе край тени мерцает. */
+ * пиксель. Прямоугольник сдвигается шагами в пиксель карты, иначе край тени мерцает.
+ * Ночью направленный свет - от Луны (celestial.ts): голубоватый, по силе - по фазе, и
+ * тени в полнолуние есть, как на настоящей улице. */
 
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 
+import { moonState, sceneTime } from './celestial';
+import { Heavens } from './heavens';
 import { SEASON_DAY, type Season, sunDirection, sunPosition } from './solar';
 
 export interface SkySettings {
@@ -49,6 +53,7 @@ export class Atmosphere {
   };
   private readonly pmrem: THREE.PMREMGenerator;
   private readonly envScene = new THREE.Scene();
+  readonly heavens = new Heavens();
   private envTarget: THREE.WebGLRenderTarget | null = null;
   private settings: SkySettings = {
     hour: 11,
@@ -68,15 +73,17 @@ export class Atmosphere {
     const u = this.sky.material.uniforms;
     setUniform(u, 'turbidity', 4.5);
     setUniform(u, 'rayleigh', 1.6);
-    setUniform(u, 'mieCoefficient', 0.004);
-    setUniform(u, 'mieDirectionalG', 0.82);
+    setUniform(u, 'mieCoefficient', 0.0028);
+    // Узкий лепесток рассеяния: ореол плотнее, диск солнца на закате читается, а не тонет в
+    // белом пятне на полнеба.
+    setUniform(u, 'mieDirectionalG', 0.94);
     setUniform(u, 'cloudElevation', 0.55);
     setUniform(u, 'cloudDensity', 0.55);
     scene.add(this.sky);
     this.sun.castShadow = true;
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.035;
-    scene.add(this.sun, this.sun.target, this.hemi);
+    scene.add(this.sun, this.sun.target, this.hemi, this.heavens.root);
     scene.fog = this.fog;
   }
 
@@ -112,15 +119,36 @@ export class Atmosphere {
     const day = THREE.MathUtils.smoothstep(elevation, -6, 6);
     // Ночь - по гражданским сумеркам: солнце ниже 6 градусов под горизонтом.
     this.state.night = 1 - THREE.MathUtils.smoothstep(elevation, -8, 2);
-    this.state.direction.copy(elevation > 0 ? dir : new THREE.Vector3(0.3, 0.6, 0.2).normalize());
-    this.state.elevation = elevation;
-    this.state.color.copy(elevation > 0 ? sunColor(elevation) : new THREE.Color(0.55, 0.62, 0.85));
+    const moon = moonState(sceneTime(SEASON_DAY[s.season], s.hour));
+    const [mx, my, mz] = sunDirection(moon);
+    const moonDir = new THREE.Vector3(mx, my, mz).normalize();
     const cloudDim = 1 - s.clouds * 0.55;
-    this.state.intensity =
-      elevation > 0 ? (1.2 + 4.3 * THREE.MathUtils.smoothstep(elevation, 0, 35)) * cloudDim : 0.08;
+    this.state.elevation = elevation;
+    if (elevation > 0) {
+      this.state.direction.copy(dir);
+      this.state.color.copy(sunColor(elevation));
+      this.state.intensity = (1.2 + 4.3 * THREE.MathUtils.smoothstep(elevation, 0, 35)) * cloudDim;
+    } else {
+      // Солнце под горизонтом: светит Луна, если она над ним, иначе - слабый свет неба сверху.
+      const moonUp = THREE.MathUtils.smoothstep(moon.elevation, 0, 12);
+      this.state.direction.copy(
+        moon.elevation > 0 ? moonDir : new THREE.Vector3(0.2, 1, 0.1).normalize(),
+      );
+      this.state.color.set(0x9fb2d6);
+      this.state.intensity = (0.03 + 0.32 * moon.fraction * moonUp) * cloudDim;
+    }
+    this.heavens.update({
+      sunDirection: dir,
+      sunElevation: elevation,
+      sunColor: sunColor(Math.max(elevation, 0)),
+      moon,
+      moonDirection: moonDir,
+      night: this.state.night,
+      clouds: s.clouds,
+    });
     this.sun.color.copy(this.state.color);
     this.sun.intensity = this.state.intensity;
-    this.hemi.intensity = 0.08 + 0.22 * day;
+    this.hemi.intensity = 0.14 + 0.16 * day;
     this.hemi.color.set(day > 0.5 ? 0xc8dcff : 0x6f7fa8);
     const haze = new THREE.Color(0.74, 0.8, 0.87).lerp(
       new THREE.Color(0.95, 0.72, 0.52),
@@ -140,15 +168,25 @@ export class Atmosphere {
     // бы второй раз - сквозь стены и кроны, стирая все тени сцены.
     const u = this.sky.material.uniforms;
     setUniform(u, 'showSunDisc', 0);
+    const centre = this.sky.position.clone();
+    this.sky.position.set(0, 0, 0);
     this.envScene.add(this.sky);
     const target = this.pmrem.fromScene(this.envScene, 0, 1, 5000);
     this.scene.add(this.sky);
+    this.sky.position.copy(centre);
     setUniform(u, 'showSunDisc', 1);
     this.envTarget?.dispose();
     this.envTarget = target;
     this.scene.environment = target.texture;
     this.scene.environmentIntensity =
       0.12 + 0.16 * THREE.MathUtils.smoothstep(this.state.elevation, -4, 20);
+  }
+
+  /** Небо и светила вокруг камеры: коробка неба конечна, и в стороне от начала сцены
+   *  светила вышли бы за её стенку. */
+  center(camera: THREE.Camera): void {
+    this.sky.position.copy(camera.position);
+    this.heavens.follow(camera);
   }
 
   /** Тень вокруг точки, куда смотрит камера, с шагом в пиксель карты теней. */
@@ -181,6 +219,7 @@ export class Atmosphere {
     this.sky.geometry.dispose();
     this.sky.material.dispose();
     this.sun.shadow.map?.dispose();
+    this.heavens.dispose();
   }
 }
 
