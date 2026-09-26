@@ -33,6 +33,7 @@ from green.application.assortment.filters import species_verdict
 from green.application.assortment.scoring import percent, score_species
 from green.application.barriers import BARRIER_NOTE, NEAR_M
 from green.application.constraints import VERDICT_ORDER, ConstraintIndex
+from green.application.params import step_with_tolerance
 from green.application.placement import planting_index
 from green.application.quality import WEAK_PERMILLE, assess, evaluate
 from green.application.quality.terms import tightest
@@ -61,7 +62,6 @@ _EPS = 1e-9
 # 743-ПП, табл. 3.6.2: кустарники в группе - 0,3 м. Между кустарниками и от ствола дерева
 # держим не меньше полуметра: ближе посадка уже не читается как отдельная.
 SHRUB_GAP_M = 0.5
-_SPACING_TOLERANCE = 0.95  # как у размещения: шаг деревьев 6 м допускает 5,7 м
 _NO_SPECIES = "no_species"
 _COMPOSITION = "composition"
 
@@ -221,7 +221,11 @@ class _Mover:
             old = math.dist(self._xy[i], self._xy[j])
             new = math.dist((x, y), self._xy[j])
             both_trees = self._tree[i] and self._tree[j]
-            need = self._params.spacing_m * _SPACING_TOLERANCE if both_trees else SHRUB_GAP_M
+            need = (
+                step_with_tolerance(self._params.spacing_m, PlantingType.TREE)
+                if both_trees
+                else SHRUB_GAP_M
+            )
             if new < min(need, old) - 1e-9:
                 return False
         return True

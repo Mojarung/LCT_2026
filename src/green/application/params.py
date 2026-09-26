@@ -41,6 +41,21 @@ DEFAULT_QUALITY_WEIGHTS: Mapping[str, float] = {
 }
 
 
+# 743-ПП, п. 3.6.4, табл. 3.6.2: деревья в ряду и в группе - не ближе 5 м. Допуск разбивки 5%
+# применяется к шагу проекта, но не опускает шаг деревьев ниже этой границы: шаг 6 м допускает
+# 5,7 м, шаг 5 м - ровно 5 м. Шаг ниже нормы можно задать только самим параметром spacing_m.
+TREE_STEP_MIN_M = 5.0
+STEP_TOLERANCE = 0.95
+
+
+def step_with_tolerance(step_m: float, planting_type: PlantingType) -> float:
+    """Наименьшее допустимое расстояние между соседними посадками одного типа."""
+    relaxed = step_m * STEP_TOLERANCE
+    if planting_type is PlantingType.TREE:
+        return max(relaxed, min(step_m, TREE_STEP_MIN_M))
+    return relaxed
+
+
 @dataclass(frozen=True, slots=True)
 class PlanParams:
     planting_type: PlantingType = PlantingType.TREE

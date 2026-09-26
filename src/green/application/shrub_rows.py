@@ -194,7 +194,11 @@ def _curb_hedges(  # noqa: PLR0913 - этап получает всё, что у
         for part in shapely.get_parts(ring):
             if part.length < params.shrub_row_min_length_m:
                 continue
-            axis = shapely.LineString(shapely.get_coordinates(part))
+            # Борт в топоплане - штрихи: кольцо отступа вокруг них волнистое (провалы около
+            # сантиметра между штрихами), и станции через 1,002 м по дуге давали 0,996 м по
+            # прямой - меньше двух ям куста; проверка снимала каждый второй куст. Ось
+            # сглаживается на 5 см, дальше полосы грунта это не уводит.
+            axis = shapely.LineString(shapely.get_coordinates(part)).simplify(_AXIS_SMOOTH_M)
             segments += _runs(axis, offset, index=index, blockers=blockers, params=hedge_params)
     segments, capped = _within_budget(segments, plan, index, params)
     planted, skipped = _plant(
@@ -250,6 +254,9 @@ def _within_budget(
             budget -= len(segment.rows)
     return kept, len(segments) - len(kept)
 
+
+# Сглаживание оси изгороди у штрихового борта (см. _curb_hedges).
+_AXIS_SMOOTH_M = 0.05
 
 # Ближе этого к участку, найденному на первом отступе, второй отступ ряд не ставит.
 _PARALLEL_GAP_M = 0.8

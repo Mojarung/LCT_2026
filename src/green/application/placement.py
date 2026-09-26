@@ -23,7 +23,11 @@ from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.candidate_selection import SelectionProblem, select_candidates
 from green.application.constraints import ConstraintIndex, EvaluationBatch
 from green.application.errors import InputError
-from green.application.params import active_distance_rules, species_distance_rules
+from green.application.params import (
+    active_distance_rules,
+    species_distance_rules,
+    step_with_tolerance,
+)
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.zones import MAX_ZONE_POINTS, build_zones, zone_capacity
@@ -62,7 +66,6 @@ MODE_LABELS = {
     MODE_SHRUB_FILL: "группа кустарников на газоне",
 }
 _TANGENT_STEP_M = 0.5
-_SPACING_TOLERANCE = 0.95
 _Z_ORDER_BITS = 16
 # Two independently rounded XY points can approach by at most sqrt(2) mm.
 # Reserve 2 mm when constructing a rotated group, rather than weaken clearance.
@@ -229,7 +232,12 @@ class GreedyPlantingStrategy:
         if params.allow_needs_approval:
             accepted.add(Verdict.NEEDS_APPROVAL)
         selector = _Selector(species=species, params=params)
-        occupied = _Grid(max(params.spacing_m * _SPACING_TOLERANCE, 2 * params.footprint_radius_m))
+        occupied = _Grid(
+            max(
+                step_with_tolerance(params.spacing_m, params.planting_type),
+                2 * params.footprint_radius_m,
+            )
+        )
         for row, position in enumerate(positions.tolist()):
             candidate = candidates[position]
             if batch.verdict(row) in accepted and not occupied.near(candidate.x, candidate.y):
@@ -600,7 +608,10 @@ class _Selector:
         if not self._options or batch is None:
             return
         options, self._options = self._options, []
-        gap = max(self.params.spacing_m * _SPACING_TOLERANCE, 2 * self.params.footprint_radius_m)
+        gap = max(
+            step_with_tolerance(self.params.spacing_m, self.params.planting_type),
+            2 * self.params.footprint_radius_m,
+        )
         planted = self._planted = self._planted or _Grid(gap)
         refused = self._refused = self._refused or _Grid(gap)
         ranks = [Verdict.ALLOWED]
@@ -645,7 +656,8 @@ class _Selector:
                 for c, batch, row in pool
             ),
             min_gap_m=max(
-                self.params.spacing_m * _SPACING_TOLERANCE, 2 * self.params.footprint_radius_m
+                step_with_tolerance(self.params.spacing_m, self.params.planting_type),
+                2 * self.params.footprint_radius_m,
             ),
             objective_description=(
                 "First maximize eligible places; then sum preferences: allowed=8, "

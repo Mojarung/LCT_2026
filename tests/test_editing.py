@@ -27,6 +27,10 @@ if TYPE_CHECKING:
 CONFLICT = 409
 
 
+# Потолок доли хвойных в прогоне этого модуля: единственный жёсткий предел состава.
+CONIFER_CEILING = 0.30
+
+
 @pytest.fixture(scope="module")
 def work(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("editing")
@@ -62,6 +66,9 @@ def run_id(client: TestClient, work: Path) -> str:
                     "curb_hedges": False,
                     "understory": False,
                     "shrub_fill": False,
+                    # Квоты вида, рода и семейства мягкие (профиль, notes/34), жёсткий предел
+                    # состава - потолок хвойных; нижняя граница даёт плану хвойные.
+                    "conifer_share": [0.15, CONIFER_CEILING],
                 }
             ),
         },
@@ -154,27 +161,39 @@ def test_unknown_placement_is_rejected_with_a_readable_message(
 
 
 def test_rebuild_writes_the_edited_plan_into_the_dxf(client: TestClient, run_id: str) -> None:
-    """Правка обязана дойти до файлов, а не остаться картинкой на экране."""
+    """Правка обязана дойти до файлов, а не остаться картинкой на экране. Правка, которая
+    ломает жёсткий предел состава (потолок хвойных), до DXF не доходит: экспорт не берёт
+    старые подсчёты, проверка плана пересчитывает состав заново."""
     before = _plan(client, run_id)
+    catalog = YamlSpeciesCatalog(ROOT / "config" / "species.yaml")
+    draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
+    trees = [p for p in draft if p["planting_type"] == "tree"]
+    conifers = [p for p in trees if catalog.get(p["species"]["code"]).is_conifer]
+    broadleaves = [p for p in trees if not catalog.get(p["species"]["code"]).is_conifer]
+    assert conifers, "в плане есть хвойные - потолок есть чем перейти"
+    removed: list[str] = []
+    while broadleaves and len(conifers) <= CONIFER_CEILING * (len(trees) - len(removed)):
+        removed.append(broadleaves.pop()["id"])
+    client.post(
+        f"{API_PREFIX}/runs/{run_id}/edits",
+        json={"edits": [{"kind": "delete", "placement_id": pid} for pid in removed]},
+    )
 
     response = client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
     assert response.status_code == 202
-
-    # Removing only broadleaves can exceed the hard Pinaceae quota. The old
-    # exporter reused stale counts; final validation must refuse that export.
     status = client.get(f"{API_PREFIX}/runs/{run_id}").json()
     assert status["state"] == "failed"
     assert "quota" in status["error"]
     assert len(_plan(client, run_id)["placements"]) == len(before["placements"])
-    catalog = YamlSpeciesCatalog(ROOT / "config" / "species.yaml")
-    conifer = next(
-        p
-        for p in before["placements"][3:]
-        if catalog.get(p["species"]["code"]).family == "Pinaceae"
-    )
+
+    remaining = len(trees) - len(removed)
+    dropped: list[str] = []
+    while conifers and len(conifers) > CONIFER_CEILING * remaining:
+        dropped.append(conifers.pop()["id"])
+        remaining -= 1
     client.post(
         f"{API_PREFIX}/runs/{run_id}/edits",
-        json={"edits": [{"kind": "delete", "placement_id": conifer["id"]}]},
+        json={"edits": [{"kind": "delete", "placement_id": pid} for pid in dropped]},
     )
     client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
     assert client.get(f"{API_PREFIX}/runs/{run_id}").json()["state"] == "succeeded"

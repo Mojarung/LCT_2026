@@ -10,7 +10,7 @@ import pytest
 from shapely.geometry import LineString
 from test_pipeline_synthetic import ROOT, _street
 
-from green.application.params import PlanParams
+from green.application.params import PlanParams, step_with_tolerance
 from green.application.use_case import PlanRequest
 from green.application.validation import trim_to_quotas, validate_plan
 from green.bootstrap.container import build_container
@@ -157,6 +157,38 @@ def test_quota_is_recomputed_instead_of_trusting_a_stale_summary() -> None:
         i.code == "quota"
         for i in verify(points, params=replace(PARAMS, assortment_mode="auto")).issues
     )
+
+
+def test_soft_quotas_are_a_penalty_not_a_violation() -> None:
+    """notes/34: при мягких квотах перебор доли вида - штраф подбора и индекса, план проходит."""
+    points = [placement(i * 10, identity=str(i)) for i in range(10)]
+    soft = replace(PARAMS, assortment_mode="auto", quota_penalty=5.0)
+    assert not any(i.code == "quota" for i in verify(points, params=soft).issues)
+    assert trim_to_quotas(points, soft, (TREE,), {}, removable=lambda _: True) == tuple(points)
+
+
+def test_conifer_ceiling_stays_hard_with_soft_quotas() -> None:
+    pine = replace(TREE, code="pine", genus="pinus", family="Pinaceae", name_lat="Pinus s")
+    points = [
+        replace(placement(i * 10, identity=str(i)), species=pine if i < 8 else TREE)
+        for i in range(10)
+    ]
+    soft = replace(PARAMS, assortment_mode="auto", quota_penalty=5.0, conifer_share=(0.0, 0.5))
+    issues = [i for i in verify(points, params=soft).issues if i.code == "quota"]
+    assert issues
+    assert all("is_conifer" in issue.message for issue in issues)
+
+
+def test_tree_step_never_drops_below_the_743pp_minimum() -> None:
+    """743-ПП, табл. 3.6.2: деревья не ближе 5 м; допуск 5% не опускает шаг 5 м до 4,75 м."""
+    params = replace(PARAMS, spacing_m=5.0)
+    close = [placement(0, identity="a"), placement(4.9, identity="b")]
+    assert any(i.code == "spacing" for i in verify(close, params=params).issues)
+    exact = [placement(0, identity="a"), placement(5.0, identity="b")]
+    assert not any(i.code == "spacing" for i in verify(exact, params=params).issues)
+    assert step_with_tolerance(6.0, PlantingType.TREE) == pytest.approx(5.7)
+    assert step_with_tolerance(5.0, PlantingType.TREE) == pytest.approx(5.0)
+    assert step_with_tolerance(1.0, PlantingType.SHRUB) == pytest.approx(0.95)
 
 
 def test_trim_removes_only_stage_additions_until_quotas_hold() -> None:

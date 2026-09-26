@@ -18,7 +18,7 @@ import shapely
 
 from green.application.barriers import BARRIER_CONDITION, BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
-from green.application.params import active_distance_rules
+from green.application.params import active_distance_rules, step_with_tolerance
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
 from green.domain.norms import MeasureTo, PlantingType, Severity
@@ -352,12 +352,12 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
     )
     steps = np.array(
         [
-            (
+            step_with_tolerance(
                 params.spacing_m
                 if p.planting_type is params.planting_type
-                else params.shrub_group_spacing_m
+                else params.shrub_group_spacing_m,
+                p.planting_type,
             )
-            * 0.95
             for p in placements
         ]
     )
@@ -410,8 +410,16 @@ def composition_issues(
         issues.extend(
             ValidationIssue("quota", (), f"{attribute} {key}: {count} > {limit}")
             for attribute, key, count, limit in _quota_excess(part, grown, shares, species_by_code)
+            if _hard_quota(attribute, params)
         )
     return issues
+
+
+def _hard_quota(attribute: str, params: PlanParams) -> bool:
+    """Превышение, которое план не пропускает. При мягких квотах (quota_penalty > 0) доли вида,
+    рода и семейства - штраф в подборе и в индексе, а не нарушение: место, прошедшее нормы, не
+    пустеет (notes/34). Потолок хвойных и в мягком режиме жёсткий, как в задаче подбора."""
+    return attribute == "is_conifer" or params.quota_penalty <= 0
 
 
 def trim_to_quotas(
@@ -437,7 +445,11 @@ def trim_to_quotas(
         grown, shares = _quota_terms(trees, params, existing, species_by_code)
         while True:
             part = [p for p in kept if p.species.is_tree is trees]
-            excess = _quota_excess(part, grown, shares, species_by_code)
+            excess = [
+                item
+                for item in _quota_excess(part, grown, shares, species_by_code)
+                if _hard_quota(item[0], params)
+            ]
             if not excess:
                 break
             attribute, key, _, _ = excess[0]

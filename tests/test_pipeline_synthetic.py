@@ -172,7 +172,9 @@ def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
     assert summary is not None
     assert summary.shannon > 0
     assert sum(summary.counts.values()) == sum(p.species.is_tree for p in plan.placements)
-    assert not summary.quota_violations
+    # Квоты профиля мягкие (notes/34): перебор доли вида допустим и виден в сводке, но
+    # потолок хвойных жёсткий - его перебора нет.
+    assert all("хвойн" not in violation for violation in summary.quota_violations)
     shrubs = plan.shrub_assortment_summary
     if any(p.species.is_shrub for p in plan.placements):
         assert shrubs is not None
