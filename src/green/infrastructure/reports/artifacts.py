@@ -179,7 +179,11 @@ def classification_payload(report: ClassificationReport | None) -> dict[str, Any
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
-    """Одна строка на пару (решение, правило): эксперт фильтрует по номеру посадки или отказа."""
+    """Одна строка на пару (решение, правило): эксперт фильтрует по номеру посадки или отказа.
+
+    Текст объяснения - в первой строке решения, а не в каждой строке его проверок: на
+    Кустанайской повтор текста около 2 КБ в 24 строках посадки давал 62 из 76 МБ CSV.
+    """
     texts = {e.subject_id: e for e in plan.explanations}
     values = plan.quality.values if plan.quality is not None else {}
     rows: list[dict[str, Any]] = []
@@ -188,12 +192,18 @@ def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
         value = values.get(placement.placement_id)
         if value is not None:
             own = [{**row, "value": value.delta} for row in own]
-        rows += own
+        rows += _explained_once(own)
     for rejection in plan.rejections:
-        rows += _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
+        rows += _explained_once(
+            _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
+        )
     for lawn in plan.lawns:
-        rows += _lawn_rows(lawn, texts.get(lawn.lawn_id), rulebook)
+        rows += _explained_once(_lawn_rows(lawn, texts.get(lawn.lawn_id), rulebook))
     return rows
+
+
+def _explained_once(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row if i == 0 else {**row, "explanation": ""} for i, row in enumerate(rows)]
 
 
 def _lawn_rows(

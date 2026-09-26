@@ -9,8 +9,11 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import math
 import re
+from collections import Counter
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -206,6 +209,21 @@ def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     assert "Площадь под посадочные ямы" in schedule
     assert "Всего деревьев" in schedule
     assert not re.search(r";\d+\.\d{2}(;|$)", schedule, re.MULTILINE), "площади с запятой"
+
+
+def test_explanation_is_written_once_per_decision(run: dict[str, object]) -> None:
+    """Текст объяснения - один раз на посадку, отказ или газон, а не в каждой строке её
+    проверок: на Кустанайской повтор давал 62 из 76 МБ CSV. Фильтр по номеру показывает его."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    artifacts = run["artifacts"]
+    text = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    rows = list(csv.DictReader(io.StringIO(text), delimiter=";"))
+    explained = Counter((r["kind"], r["subject_id"]) for r in rows if r["explanation"])
+    subjects = {(r["kind"], r["subject_id"]) for r in rows}
+
+    texts = {e.subject_id for e in plan.explanations if e.text}
+    assert set(explained.values()) == {1}
+    assert all(explained[key] == 1 for key in subjects if key[1] in texts)
 
 
 def test_zones_and_integrity(run: dict[str, object]) -> None:
