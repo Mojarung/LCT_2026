@@ -176,24 +176,23 @@ export const FLY_SPEED_DEFAULT = 8;
 const WHEEL_STEP = 1.25;
 const MOUSE_RAD_PER_PX = 0.0022;
 
-/** Удерживаемая клавиша повторяет keydown каждые 30-50 мс (после задержки до секунды). Если
- *  повторов нет дольше этого, клавишу уже отпустили, а keyup потерялся: так бывает, когда
- *  в момент отпускания фокус ушёл в окно загрузки снимка или на другую раскладку. Без этой
- *  проверки камера летела бесконечно. Модификаторы не повторяются на всех системах - их
- *  держим до keyup или потери фокуса. */
-export const STALE_KEY_MS = 1500;
-const MODIFIERS: ReadonlySet<string> = new Set(['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight']);
+/** Отпускание клавиши теряется, когда в этот момент фокус уходит со страницы: окно загрузки
+ *  снимка, переключение окна. Тогда камера летела бесконечно. Поэтому клавиши сбрасываются
+ *  при уходе со вкладки, выходе из захвата мыши и снимке, а Shift и Alt сверяются с каждым
+ *  событием клавиатуры и мыши - в событии их состояние всегда верное. Сбрасывать клавишу по
+ *  отсутствию автоповтора нельзя: повторяется только последняя нажатая, и W с зажатым потом
+ *  Shift «замолкала» - полёт вставал через полторы секунды. */
+const SHIFTS = ['ShiftLeft', 'ShiftRight'];
+const ALTS = ['AltLeft', 'AltRight'];
 
-export function freshKeys(
-  pressedAt: ReadonlyMap<string, number>,
-  now: number,
-  staleMs = STALE_KEY_MS,
+export function syncModifiers(
+  down: ReadonlySet<string>,
+  state: { shiftKey: boolean; altKey: boolean },
 ): Set<string> {
-  const fresh = new Set<string>();
-  for (const [code, at] of pressedAt) {
-    if (MODIFIERS.has(code) || now - at < staleMs) fresh.add(code);
-  }
-  return fresh;
+  const next = new Set(down);
+  if (!state.shiftKey) for (const code of SHIFTS) next.delete(code);
+  if (!state.altKey) for (const code of ALTS) next.delete(code);
+  return next;
 }
 
 export function clampSpeed(speed: number): number {
@@ -214,8 +213,7 @@ export class Freecam {
   mode: Mode = 'fly';
   private speed = FLY_SPEED_DEFAULT;
   private motion: Motion = { vx: 0, vy: 0, vz: 0, grounded: false };
-  /** Код клавиши -> время последнего keydown, включая автоповтор. */
-  private readonly pressedAt = new Map<string, number>();
+  private down = new Set<string>();
   private dragging = false;
   private readonly element: HTMLElement;
   private readonly collide?: (from: Flat, to: Flat) => Flat;
@@ -247,7 +245,7 @@ export class Freecam {
 
   /** Забыть все нажатые клавиши: перед снимком и при уходе со вкладки. */
   releaseKeys(): void {
-    this.pressedAt.clear();
+    this.down = new Set();
     this.motion = { ...this.motion, vx: 0, vz: 0, vy: this.mode === 'walk' ? this.motion.vy : 0 };
   }
 
@@ -268,12 +266,10 @@ export class Freecam {
   }
 
   update(dt: number): void {
-    const down = freshKeys(this.pressedAt, performance.now());
-    for (const code of this.pressedAt.keys()) if (!down.has(code)) this.pressedAt.delete(code);
     const next = step({
       pose: this.pose,
       motion: this.motion,
-      keys: keysOf(down),
+      keys: keysOf(this.down),
       mode: this.mode,
       flySpeed: this.flySpeed,
       dt: Math.min(dt, 0.1),
@@ -325,6 +321,7 @@ export class Freecam {
       this.dragging = false;
     });
     this.listen(document, 'mousemove', (e) => {
+      this.down = syncModifiers(this.down, e);
       if (this.locked || this.dragging) this.look(e.movementX, e.movementY);
     });
     this.listen(
@@ -339,14 +336,16 @@ export class Freecam {
     this.listen(window, 'keydown', (e) => {
       if (isTyping(e.target)) return;
       if (MOVE_CODES.has(e.code)) {
-        this.pressedAt.set(e.code, performance.now());
-        if (!MODIFIERS.has(e.code)) this.onInput?.();
+        this.down = syncModifiers(this.down, e);
+        this.down.add(e.code);
+        if (![...SHIFTS, ...ALTS].includes(e.code)) this.onInput?.();
         // Пробел и стрелки иначе прокручивают страницу под сценой, Alt - открывает меню окна.
         e.preventDefault();
       }
     });
     this.listen(window, 'keyup', (e) => {
-      this.pressedAt.delete(e.code);
+      this.down = syncModifiers(this.down, e);
+      this.down.delete(e.code);
     });
     this.listen(window, 'blur', () => {
       this.releaseKeys();

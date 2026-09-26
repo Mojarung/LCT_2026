@@ -8,8 +8,8 @@ import {
   type Pose,
   clampPitch,
   clampSpeed,
-  freshKeys,
   keysOf,
+  syncModifiers,
   step,
   wishVelocity,
 } from './freecam';
@@ -163,17 +163,12 @@ describe('ракурс в адресе', () => {
 });
 
 describe('залипшие клавиши', () => {
-  it('клавиша без автоповтора дольше полутора секунд считается отпущенной', () => {
-    const pressed = new Map([
-      ['KeyW', 1000],
-      ['KeyD', 2400],
-      ['ShiftLeft', 0],
-    ]);
-    const fresh = freshKeys(pressed, 2600);
-    expect(fresh.has('KeyW')).toBe(false);
-    expect(fresh.has('KeyD')).toBe(true);
-    // Модификатор не повторяется на всех системах: держится до keyup.
-    expect(fresh.has('ShiftLeft')).toBe(true);
+  it('Shift, отпущенный вне страницы, снимается первым же событием без Shift', () => {
+    const held = new Set(['KeyW', 'ShiftLeft', 'AltRight']);
+    const next = syncModifiers(held, { shiftKey: false, altKey: true });
+    expect([...next].sort()).toEqual(['AltRight', 'KeyW']);
+    // Клавиша движения по автоповтору не снимается: зажатая W с Shift летит дальше.
+    expect(syncModifiers(held, { shiftKey: true, altKey: false }).has('KeyW')).toBe(true);
   });
 
   it('скорость полёта не выходит за пределы ползунка', () => {
