@@ -17,8 +17,8 @@
   координат - в сравнении они не участвуют;
 - коридор весов - от половины до двойного равного веса: ни один критерий не выпадает и не
   забирает индекс (OECD/JRC 2008, Handbook on Constructing Composite Indicators, с. 31-33);
-- два шага: минимум суммарного проигрыша проектов нашим вариантам, затем из таких весов -
-  ближайшие к равным (L1). Оба шага - линейные задачи (HiGHS);
+- два шага: минимум суммарного проигрыша проектов нашим вариантам (линейная задача, HiGHS),
+  затем из таких весов - ближайшие к равным по квадрату отклонения (SLSQP);
 - устойчивость: бутстреп по улицам и случайные веса Дирихле вокруг найденных (OECD/JRC,
   шаг 7), доля розыгрышей, где наш выбранный план не хуже проекта.
 """
@@ -37,7 +37,7 @@ from typing import Any
 
 import numpy as np
 import yaml
-from scipy.optimize import linprog
+from scipy.optimize import linprog, minimize
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -241,34 +241,30 @@ def solve(diffs: np.ndarray) -> tuple[np.ndarray, float]:
     if not first.success:
         raise RuntimeError(first.message)
     best = float(first.fun)
-    # Шаг 2: [w, d+, d-, xi]; min sum d; w - d+ + d- = neutral; sum xi <= best.
-    c2 = np.r_[np.zeros(n), np.ones(2 * n), np.zeros(m)]
-    a_ub2 = np.vstack(
-        [
-            np.c_[-diffs, np.zeros((m, 2 * n)), -np.eye(m)] if m else np.zeros((0, 3 * n + m)),
-            np.r_[np.zeros(3 * n), np.ones(m)].reshape(1, -1),
-        ]
+    # Шаг 2: при тех же проигрышах пар, что дал шаг 1, - веса, ближайшие к равным по квадрату
+    # отклонения: вес, который данные не требуют сдвигать, делится поровну (L1 отдавал его
+    # любому слагаемому произвольно). Невязки закреплены - в задаче только 10 весов.
+    slack = first.x[n:]
+
+    def objective(w: np.ndarray) -> float:
+        return float(((w - neutral) ** 2).sum())
+
+    constraints = [{"type": "eq", "fun": lambda w: w.sum() - 1.0, "jac": lambda _: np.ones(n)}]
+    if m:
+        constraints.append(
+            {"type": "ineq", "fun": lambda w: diffs @ w + slack + 1e-9, "jac": lambda _: diffs}
+        )
+    second = minimize(
+        objective,
+        first.x[:n],
+        jac=lambda w: 2 * (w - neutral),
+        bounds=bounds_w,
+        constraints=constraints,
+        method="SLSQP",
+        options={"maxiter": 1000, "ftol": 1e-12},
     )
-    b_ub2 = np.r_[np.zeros(m), best + 1e-9]
-    a_eq2 = np.vstack(
-        [
-            np.r_[np.ones(n), np.zeros(2 * n + m)].reshape(1, -1),
-            np.c_[np.eye(n), -np.eye(n), np.eye(n), np.zeros((n, m))],
-        ]
-    )
-    b_eq2 = np.r_[1.0, neutral]
-    second = linprog(
-        c2,
-        A_ub=a_ub2,
-        b_ub=b_ub2,
-        A_eq=a_eq2,
-        b_eq=b_eq2,
-        bounds=bounds_w + [(0, None)] * (2 * n + m),
-        method="highs",
-    )
-    if not second.success:
-        raise RuntimeError(second.message)
-    return second.x[:n], best
+    weights = second.x if second.success else first.x[:n]
+    return weights, best
 
 
 def total_loss(diffs: np.ndarray, weights: np.ndarray) -> float:
