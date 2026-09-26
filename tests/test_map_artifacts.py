@@ -69,6 +69,7 @@ def test_the_run_lists_everything_the_map_reads(client: TestClient, run_id: str)
         "rules.json",
         "quality.json",
         "basemap.geojson",
+        "scene.json",
         "surface.json",
         "surface.png",
     } <= names
@@ -125,6 +126,24 @@ def test_the_map_gets_the_surface_map_and_the_material_labels(
     assert {label[3] for label in basemap["labels"]} <= {"paved", "soil"}
 
 
+def test_the_scene_has_the_buildings_and_every_planting(client: TestClient, run_id: str) -> None:
+    """Сцена ставит каждую посадку плана и выдавливает здание, которое есть на карте."""
+    scene = _artifact(client, run_id, "scene.json")
+    plan = _artifact(client, run_id, "plan.json")
+
+    assert scene["version"] == 1
+    assert {p["id"] for p in scene["plants"]} == {p["id"] for p in plan["placements"]}
+    assert set(scene["species"]) == {p["species"]["code"] for p in plan["placements"]}
+    # Здание синтетической улицы - полоса 120 x 5 м без подписей: этажность по площади.
+    (building,) = scene["buildings"]
+    assert building["kind"] == "building"
+    assert building["floors_source"] == "assumed"
+    assert building["height_m"] > 0
+    counts = scene["counts"]
+    extruded = counts["buildings"] + counts["cropped"]
+    assert counts["faces"] == extruded + counts["voids"] + counts["slivers"]
+
+
 def test_the_built_in_site_is_a_real_street(client: TestClient) -> None:
     """Демонстрация обязана работать без единого файла на диске.
 
@@ -153,3 +172,8 @@ def test_the_built_in_site_is_a_real_street(client: TestClient) -> None:
         "existing_tree",
         "curb",
     } <= classes, f"в демонстрационном участке не хватает классов: {classes}"
+    # Этажность настоящей подосновы читается из подписей: корпус «К-, Ж, 27» у Берзарина.
+    scene = _artifact(client, run_id, "scene.json")
+    assert any(b["floors"] == 27 and b["floors_source"] == "label" for b in scene["buildings"]), (
+        "подписи этажности Мосгеотреста не дошли до сцены"
+    )

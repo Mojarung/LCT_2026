@@ -1,5 +1,5 @@
-"""Запись артефактов: plan.json, quality.json, basemap.geojson, interpretations.csv/json,
-run_manifest.json, verify.json."""
+"""Запись артефактов: plan.json, quality.json, basemap.geojson, scene.json,
+interpretations.csv/json, run_manifest.json, verify.json."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
 from green.infrastructure.reports.png import encode_rgba
+from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
@@ -104,6 +105,12 @@ class FileArtifactSink:
             ),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
             "basemap.geojson": self.save_basemap(directory, report.basemap),
+            # Сцену, как и подоснову, читает браузер, а не человек: без отступов.
+            "scene.json": _write_json(
+                directory / "scene.json",
+                scene_payload(report.plan, report.volumes),
+                indent=False,
+            ),
             "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
             "assortment.json": _write_json(
                 directory / "assortment.json",

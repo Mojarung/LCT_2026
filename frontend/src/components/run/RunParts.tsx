@@ -74,6 +74,11 @@ export function RunHeader({ run }: { run: RunOut }) {
           <span key={key}>{overrideLabel(key, value)}</span>
         ))}
       </p>
+      {run.state === 'succeeded' ? (
+        <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
+          3D-вид участка и снимки →
+        </Link>
+      ) : null}
     </div>
   );
 }
