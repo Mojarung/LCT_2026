@@ -46,6 +46,7 @@ from green.application.validation import (
     trim_to_quotas,
     validate_plan,
 )
+from green.application.volumes import build_volumes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -233,6 +234,10 @@ class PlanSite:
             basemap = build_basemap(features, scene.labels)
             if progress is not None:
                 progress.basemap(basemap)
+            # Объёмы зданий для трёхмерной сцены - из тех же объектов и подписей, что и карта.
+            # Отдельного этапа у них нет: на встроенном фрагменте Берзарина это 0,07 с, на
+            # сцене из 560 тыс. объектов (49 копий фрагмента) - 2,8 с.
+            volumes = build_volumes(features, scene.labels)
         # Карта покрытий на прогон одна: её читают ряд кустарника у борта, подлесок, группы на
         # газоне, сдвиг слабых мест, индекс качества и карта в браузере - «как сервис понял,
         # где грунт». Параметры те же, что у размещения, поэтому и грунт тот же.
@@ -408,6 +413,7 @@ class PlanSite:
             load_notes=merge_notes,
             basemap=basemap,
             surface=surface,
+            volumes=volumes,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,
             export_validation=export_validation,
