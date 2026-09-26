@@ -83,31 +83,52 @@ def closed_face_materials(
     )
 
 
+# Соседние куски линий материала для кольца и сетка округления для спорных колец, м.
+_NEAR_M = 1e-6
+_GRID_M = 1e-6
+
+
 def _covered(rings: NDArray[np.object_], lines: NDArray[np.object_]) -> NDArray[np.bool_]:
     """Кольцо целиком лежит на линиях материала: разность кольца и их объединения пуста.
 
-    Считается по соседям: из объединения всех линий материала кольцо «видит» только куски,
-    что его касаются, - остальные в разность ничего не вносят. Разность каждого из 24 550
-    колец Куликовской с объединением всего чертежа шла 544 с.
+    Ответ тот же, что у разности каждого кольца с объединением всех линий чертежа, но та
+    шла 564 с на 24 550 кольцах Куликовской. Узлы колец округлены, и отрезок, чья вершина
+    ушла с линии на 1e-12 м, для разности уже не лежит на ней: ответ зависит от шума
+    округления, поэтому считается в три шага (сверка на Куликовской и других улицах,
+    docs/notes/37):
+
+    1. точно по соседним кускам общего объединения - подтверждённое так подтверждено и
+       всем объединением;
+    2. кольцо, не подтверждённое и с округлением до 1 мкм, не подтверждено и всем
+       объединением;
+    3. остальные спорные кольца (353 на Куликовской) - разностью со всем объединением,
+       как прежде.
     """
     covered = np.zeros(len(rings), dtype=bool)
-    # Куски - из общего объединения, как прежде: у кольца и у линий те же узлы сшивки, и
-    # пустота разности та же. Объединение только соседних линий давало другие узлы, и на
-    # Кустанайской 195 граней расходились на микронных щелях.
-    parts = shapely.get_parts(shapely.union_all(np.asarray(lines, dtype=object)))
+    whole = shapely.union_all(np.asarray(lines, dtype=object))
+    parts = shapely.get_parts(whole)
     if not len(rings) or not len(parts):
         return covered
-    ring_ids, part_ids = STRtree(parts).query(rings, predicate="intersects")
+    ring_ids, part_ids = STRtree(parts).query(rings, predicate="dwithin", distance=_NEAR_M)
     if not len(ring_ids):
         return covered
     order = np.argsort(ring_ids, kind="stable")
     ring_ids, part_ids = ring_ids[order], part_ids[order]
     starts = np.flatnonzero(np.r_[True, ring_ids[1:] != ring_ids[:-1]])
     ends = np.r_[starts[1:], len(ring_ids)]
+    # Куски без нового объединения: объединение только соседей сдвигает узлы, и 11 колец
+    # Куликовской теряли подтверждение.
     local = np.array(
-        [shapely.union_all(parts[part_ids[a:b]]) for a, b in zip(starts, ends, strict=True)],
+        [shapely.multilinestrings(parts[part_ids[a:b]]) for a, b in zip(starts, ends, strict=True)],
         dtype=object,
     )
     touched = ring_ids[starts]
-    covered[touched] = shapely.is_empty(shapely.difference(rings[touched], local))
+    near = rings[touched]
+    exact = shapely.is_empty(shapely.difference(near, local))
+    disputed = ~exact
+    disputed[disputed] = shapely.is_empty(
+        shapely.difference(near[disputed], local[disputed], grid_size=_GRID_M)
+    )
+    exact[disputed] = shapely.is_empty(shapely.difference(near[disputed], whole))
+    covered[touched] = exact
     return covered
