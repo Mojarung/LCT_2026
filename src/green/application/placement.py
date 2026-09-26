@@ -30,7 +30,8 @@ from green.application.params import (
 )
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
-from green.application.zones import MAX_ZONE_POINTS, build_zones, zone_capacity
+from green.application.zones import CAPACITY_STAT, MAX_ZONE_POINTS, build_zones, pack_count
+from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
 
@@ -173,6 +174,11 @@ class GreedyPlantingStrategy:
             before = len(selector.placements)
             stats["fill_candidates"] = _fill(index, selector, params)
             stats["fill_planted"] = len(selector.placements) - before
+        if params.planting_type is PlantingType.TREE:
+            # Вместимость участка: сколько деревьев встаёт с шагом 5 м на все места, прошедшие
+            # нормы (аллея, газон, добор). По ней индекс ставит цель плотности «при условии
+            # допустимости насаждений» (МГСН 1.02-02, табл. В.1, сноска).
+            stats[CAPACITY_STAT] = pack_count(selector.admissible)
         selection = selector.optimize() if params.placement_solver == "milp" else None
         zones = _zones(index, params, stats)
         return Plan(
@@ -267,10 +273,6 @@ def _zones(
     zones = build_zones(index, params.zone_cell_m) if params.zones else ()
     for zone in zones:
         stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
-    # Вместимость зоны - свойство участка; по ней индекс меряет плотность «при условии
-    # допустимости насаждений» (МГСН 1.02-02, табл. В.1).
-    if zones:
-        stats["zone_capacity_trees"] = zone_capacity(zones)
     return zones
 
 
@@ -589,6 +591,8 @@ class _Selector:
     _refused: _Grid | None = None
     _eligible: list[tuple[_Candidate, EvaluationBatch, int]] = field(default_factory=list)
     _chosen: list[_Candidate] = field(default_factory=list)
+    # Все предложенные места с принимаемым вердиктом, по порядку: из них - вместимость участка.
+    admissible: list[tuple[float, float]] = field(default_factory=list)
 
     def offer(self, candidate: _Candidate, row: int) -> None:
         if candidate.station != self._station:
@@ -596,12 +600,17 @@ class _Selector:
             self._station = candidate.station
         self._options.append((candidate, row))
         batch = self.batch
-        if self.params.placement_solver == "milp" and batch is not None:
-            accepted = {Verdict.ALLOWED}
-            if self.params.allow_needs_approval:
-                accepted.add(Verdict.NEEDS_APPROVAL)
-            if batch.verdict(row) in accepted:
-                self._eligible.append((candidate, batch, row))
+        if batch is not None and batch.verdict(row) in self._accepted:
+            self.admissible.append((candidate.x, candidate.y))
+        milp = self.params.placement_solver == "milp"
+        if milp and batch is not None and batch.verdict(row) in self._accepted:
+            self._eligible.append((candidate, batch, row))
+
+    @property
+    def _accepted(self) -> frozenset[Verdict]:
+        if self.params.allow_needs_approval:
+            return frozenset({Verdict.ALLOWED, Verdict.NEEDS_APPROVAL})
+        return frozenset({Verdict.ALLOWED})
 
     def flush(self) -> None:
         batch = self.batch

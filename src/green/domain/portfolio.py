@@ -1,6 +1,6 @@
 """Comparison of complete, independently checked alternatives under one quality policy."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +16,8 @@ class VariantResult:
     needs_approval: int
     error: str = ""
     lawn_anchor: str = "raster"
+    # Оценки слагаемых индекса у варианта: по ним подбираются веса (tools/quality_calibration.py).
+    terms: dict[str, float | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

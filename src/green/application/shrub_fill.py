@@ -32,7 +32,7 @@ from green.application.assortment import GIVEN, SINGLE, assign_species
 from green.application.constraints import ConstraintIndex, work_boundary
 from green.application.params import active_distance_rules
 from green.application.placement import MODE_LABELS, MODE_SHRUB_FILL, curb_lines, planting_index
-from green.application.quality.site import street_length
+from green.application.quality.site import site_length
 from green.application.surfaces import Material
 from green.application.wording import counted
 from green.application.zones import MAX_ZONE_POINTS
@@ -82,7 +82,7 @@ def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё
     if boundary is None or not shrubs:
         return plan
     shrubs_now = sum(1 for p in plan.placements if p.planting_type is PlantingType.SHRUB)
-    goal = params.density_shrubs_per_km[0] * street_length(boundary) / 1000
+    goal = params.density_shrubs_per_km[0] * (site_length(boundary, params) or 0.0) / 1000
     size = params.shrub_group_size**2
     groups = math.ceil((goal - shrubs_now) / size) if goal > shrubs_now else 0
     if not groups:

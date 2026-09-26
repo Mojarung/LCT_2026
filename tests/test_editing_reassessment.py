@@ -75,9 +75,12 @@ def test_move_updates_fit_alternatives_and_structure_before_quality() -> None:
     assert sensitive.code not in {a.code for a in info.alternatives}
     assert not any(r.text == "old selection" for r in info.reasons)
     assert result.quality is not None
-    fit = next(t for t in result.quality.terms if t.key == "fit")
-    expected_fit = sum(p.assortment.percent for p in result.placements if p.assortment) / 200
-    assert fit.score == pytest.approx(expected_fit)
+    terms = {t.key: t for t in result.quality.terms}
+    # Индекс v3: пригодность - сумма оценок к цели участка по деревьям (половина слагаемого),
+    # оценка уже новая, а не устаревшие 99%.
+    total = sum(p.assortment.percent / 100 for p in result.placements if p.assortment)
+    target = terms["density"].measure["target_trees"]
+    assert terms["fit"].score == pytest.approx(0.5 * min(1.0, total / target), rel=1e-2)
     assert original.assortment == stale
 
 

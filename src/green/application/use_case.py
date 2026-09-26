@@ -336,16 +336,18 @@ class PlanSite:
                     existing=existing,
                     surface=surface,
                 )
-            # Индекс качества считается до объяснений: ценность посадки входит в её текст.
-            with watch.stage("quality"):
-                if validation.ok:
-                    # Барьер не ставится по умолчанию, но место, которое он спас бы, видно на
-                    # карте: решение за проектировщиком, а не за сервисом.
-                    plan = mark_barrier_options(plan, rulebook, applied=params.root_barriers)
-                    plan = assess(plan, site, params)
             return plan, validation
 
-        plan, validation = choose_plan(complete_variant, params, features)
+        def score_variant(plan: Plan, params: PlanParams) -> Plan:
+            # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+            # Портфель зовёт оценку, когда собраны все варианты: цель плотности у них общая.
+            with watch.stage("quality"):
+                # Барьер не ставится по умолчанию, но место, которое он спас бы, видно на
+                # карте: решение за проектировщиком, а не за сервисом.
+                plan = mark_barrier_options(plan, rulebook, applied=params.root_barriers)
+                return assess(plan, site, params)
+
+        plan, validation = choose_plan(complete_variant, params, features, score_variant)
         require_valid_plan(validation)
         # Слабые места - посадки впритык к норме - сервис сдвигает сам, если индекс от этого
         # растёт. Сдвинутый план принимается, только если его снова пропустила проверка.

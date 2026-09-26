@@ -9,7 +9,6 @@ from itertools import pairwise
 from typing import TYPE_CHECKING
 
 import pytest
-from shapely.geometry import box
 from test_assortment_assign import CATALOG, SCORES
 from test_pipeline_synthetic import CURB_Y, ROOT, _street
 
@@ -19,11 +18,11 @@ from green.application.shrub_fill import FILL_LABEL
 from green.application.shrub_rows import CURB_LABEL
 from green.application.understory import UNDER_LABEL
 from green.application.use_case import PlanRequest
-from green.application.zones import zone_capacity
+from green.application.zones import pack_count
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.domain.norms import PlantingType
-from green.domain.planting import Verdict, Zone
+from green.domain.planting import Verdict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -154,11 +153,11 @@ def test_one_of_a_kind_does_not_break_the_quota_on_a_small_site() -> None:
     assert not new.quota_violations
 
 
-def test_zone_capacity_is_length_over_step_on_a_strip() -> None:
-    strip = Zone(verdict=Verdict.ALLOWED, geometry=box(0.0, 0.0, 100.0, 1.0))
-    assert zone_capacity((strip,)) == 20  # полоса 100 м при шаге 5 м
-    square = Zone(verdict=Verdict.NEEDS_APPROVAL, geometry=box(0.0, 0.0, 20.0, 20.0))
-    assert 16 <= zone_capacity((square,)) <= 20  # 4 x 4 по сетке или чуть плотнее
+def test_capacity_is_length_over_step_on_a_strip() -> None:
+    strip = [(x * 0.5, 0.0) for x in range(201)]  # места вдоль борта через 0,5 м на 100 м
+    assert pack_count(strip) == 21  # 0, 5, ..., 100 м при шаге 5 м
+    grid = [(x * 1.0, y * 1.0) for y in range(21) for x in range(21)]  # газон 20 x 20 м
+    assert 16 <= pack_count(grid) <= 25  # 4 x 4 по сетке или чуть плотнее
 
 
 def test_lawn_shrub_groups_stay_clear_of_trunks_and_stop_at_the_norm(

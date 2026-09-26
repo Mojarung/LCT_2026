@@ -155,7 +155,10 @@ def describe_value(value: PlantingValue | None) -> str:
     why = f": {'; '.join(value.reasons)}" if value.reasons else ""
     weak = f" Слабее всего: {'; '.join(value.weak)}." if value.weak else ""
     if abs(value.delta * 1000) < PERMILLE_ZERO:
-        return f" Ценность: вклад в индекс качества около нуля{why}.{weak}"
+        return (
+            " Ценность: вклад в индекс качества около нуля - цели участка по её показателям уже "
+            f"выполнены{why}.{weak}"
+        )
     if value.flagged:
         # Не «без неё план лучше»: посадка даёт зелень, но тянет вниз средний запас или
         # пригодность. Это слабое место, которое чинится сдвигом или заменой вида.

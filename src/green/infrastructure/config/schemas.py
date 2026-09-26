@@ -386,11 +386,14 @@ class ProfileModel(_Strict):
     density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
     canopy_target: float = Field(default=0.75, gt=0, le=5)
+    canopy_crown_m: float = Field(default=8.5, gt=0, le=40)
+    street_length_m: float | None = Field(default=None, gt=0, le=100_000)
     dust_target: float = Field(default=0.50, gt=0, le=1)
     dust_strip_m: float = Field(default=2.0, ge=0, le=10)
     dust_crown_factor: float = Field(default=0.5, ge=0, le=1)
     margin_target_m: float = Field(default=0.5, gt=0, le=5)
-    diversity_target: int = Field(default=10, ge=1, le=100)
+    diversity_target: int = Field(default=5, ge=1, le=100)
+    diversity_species_share: float = Field(default=0.1, gt=0, le=1)
     density_admissible: bool = True
     dust_admissible: bool = True
 

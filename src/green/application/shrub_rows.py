@@ -53,7 +53,7 @@ from green.application.placement import (
     curb_lines,
     planting_index,
 )
-from green.application.quality.site import WIDE_STREET_M, street_length
+from green.application.quality.site import WIDE_STREET_M, site_length
 from green.application.wording import counted, decimal
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
@@ -242,7 +242,7 @@ def _within_budget(
     boundary = index.boundary
     if not params.curb_hedge_density_cap or boundary is None or not segments:
         return segments, 0
-    length = street_length(boundary)
+    length = site_length(boundary, params)
     if not length or boundary.area / length > WIDE_STREET_M:
         return segments, 0
     shrubs = sum(1 for p in plan.placements if p.planting_type is PlantingType.SHRUB)

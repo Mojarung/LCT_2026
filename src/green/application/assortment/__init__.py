@@ -150,7 +150,11 @@ def assign_species(
         rejected_by_kind=dict(rejected_kind),
         rejected_by_rule=dict(rejected_rule),
     )
-    warnings = (*plan.warnings, *_warnings(assignment, no_species), *conditions(placements))
+    warnings = (
+        *plan.warnings,
+        *_warnings(assignment, no_species, soft=params.quota_penalty > 0),
+        *conditions(placements),
+    )
     return replace(
         plan,
         placements=placements,
@@ -201,9 +205,17 @@ def _drop_unplanted(
     return renumbered, unplanted
 
 
-def _warnings(assignment: Assignment, no_species: int) -> list[str]:
+def _warnings(assignment: Assignment, no_species: int, *, soft: bool) -> list[str]:
     messages = [f"Подбор ассортимента: {note}." for note in assignment.notes]
-    if assignment.quota_violations:  # по построению пусто; если нет - это ошибка сервиса
+    if assignment.quota_violations and soft:
+        # Мягкие квоты (quota_penalty > 0): доля сверх квоты - штраф подбора, а не нарушение;
+        # место, прошедшее нормы, не пустеет (docs/notes/34: в принятых проектах главная
+        # порода - до 73%). Потолок хвойных и здесь жёсткий.
+        messages.append(
+            "Подбор ассортимента: доля вида выше квоты разнообразия (квота мягкая, перебор - "
+            "штраф подбора, место не пустеет): " + "; ".join(assignment.quota_violations)
+        )
+    elif assignment.quota_violations:  # по построению пусто; если нет - это ошибка сервиса
         messages.append(
             "Подбор ассортимента: ОШИБКА, квоты разнообразия нарушены: "
             + "; ".join(assignment.quota_violations)

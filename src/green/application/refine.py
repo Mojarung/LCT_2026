@@ -35,7 +35,7 @@ from green.application.barriers import BARRIER_NOTE, NEAR_M
 from green.application.constraints import VERDICT_ORDER, ConstraintIndex
 from green.application.params import step_with_tolerance
 from green.application.placement import planting_index
-from green.application.quality import WEAK_PERMILLE, assess, evaluate
+from green.application.quality import assess, evaluate
 from green.application.quality.terms import tightest
 from green.application.wording import index_change
 from green.domain.norms import DistanceRule, PlantingType
@@ -92,21 +92,21 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
         # Без индекса не с чем сравнить результат сдвига: план без границы работ или с
         # нарушениями остаётся как есть.
         return Refinement(plan, 0, 0, None, None)
-    weak = [
-        p for p in plan.placements if quality.values[p.placement_id].delta * 1000 <= -WEAK_PERMILLE
-    ]
-    # Ряд (аллея, изгородь) двигается только целиком: куст или дерево, сдвинутые поодиночке,
-    # ломают линию ряда. Здесь сдвигаются группы и одиночки.
+    # Индекс v3: посадка впритык к сети индекс не снижает, но добавляет меньше посадки с
+    # запасом (запас до норм засчитывается долей). Сдвиг от сети поднимает запас - кандидаты
+    # все посадки впритык, самые тесные первыми. Ряд (аллея, изгородь) двигается только
+    # целиком: куст или дерево, сдвинутые поодиночке, ломают линию ряда.
+    slack = {p.placement_id: t[0] for p in plan.placements if (t := tightest(p)) is not None}
     tight = [
         p
-        for p in weak
-        if (t := tightest(p)) is not None
-        and t[0] < params.margin_target_m
+        for p in plan.placements
+        if slack.get(p.placement_id, params.margin_target_m) < params.margin_target_m
         and (p.assortment is None or p.assortment.structure_kind != "row")
     ]
+    weak = tight
     if not tight:
-        return Refinement(plan, len(weak), 0, quality.index, quality.index)
-    tight.sort(key=lambda p: quality.values[p.placement_id].delta)
+        return Refinement(plan, 0, 0, quality.index, quality.index)
+    tight.sort(key=lambda p: slack[p.placement_id])
     base = planting_index(features, labels, (), params, surface=surface)
     mover = _Mover(plan.placements, base, rulebook, params)
     current, index = plan, quality.index
@@ -114,7 +114,7 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
     for placement in tight[:MAX_TRIES]:
         for option in mover.options(placement):
             trial = mover.plan_with(current, option)
-            score = evaluate(trial, site, params).index
+            score = evaluate(trial, site, params, values=False).index
             if score is not None and score > index + _EPS:
                 mover.commit(option)
                 current, index = trial, score
