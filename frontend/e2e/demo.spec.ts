@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /* Сквозной путь, как на защите: консоль -> встроенный участок -> карта -> норма посадки ->
- * перенос -> пересборка -> DXF. Бэкенд настоящий (green serve на своём порту, без каталога
+ * перенос -> пересборка -> DXF -> 3D-вид и снимок. Бэкенд настоящий (green serve на своём порту, без каталога
  * улиц - как на стенде жюри без датасета), и браузер не ходит никуда, кроме него: стенд
  * проверки без интернета. */
 
@@ -132,6 +132,18 @@ test('демо: от консоли до пересобранного DXF', asyn
   const dxf = await page.request.get(href ?? '');
   expect(dxf.status()).toBe(200);
   expect(await dxf.text()).toContain('GREEN_');
+
+  // 3D-вид того же прогона: сцена собирается из пересобранного плана, снимок - файл PNG.
+  await page.getByRole('link', { name: /3D-вид участка/ }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}\/3d/);
+  await expect(page.getByRole('complementary', { name: 'Настройки 3D-вида' })).toBeVisible({
+    timeout: 120_000,
+  });
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'снимок', exact: true }).click();
+  const shot = await download;
+  expect(shot.suggestedFilename()).toMatch(/^3d-.+\.png$/);
+  await expect(page.getByRole('img', { name: /Снимок \d+×\d+/ })).toBeVisible();
 
   expect(foreign).toEqual([]);
 });

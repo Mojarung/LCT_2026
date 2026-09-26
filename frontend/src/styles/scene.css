@@ -1,0 +1,295 @@
+/* --- 3D-вид: сцена во весь экран, панели рабочего места поверх --- */
+
+.page-scene {
+  background: #1b1f24;
+}
+.page-scene .canvas-holder {
+  cursor: pointer;
+}
+.scene-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+.scene-canvas:focus-visible {
+  outline: 2px solid var(--accent-halo);
+  outline-offset: -4px;
+}
+
+/* Левая панель короче, чем на плане: сведения о сцене, без правки. */
+.scene-head {
+  max-height: min(46vh, calc(100% - var(--inset) * 2 - var(--tools)));
+}
+.scene-facts p {
+  margin: 0 0 8px;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--bone-2);
+}
+.scene-facts .notice {
+  margin-top: 8px;
+}
+
+.scene-panel {
+  right: var(--inset);
+  top: calc(var(--inset) * 2 + var(--bar));
+  width: 292px;
+  max-height: calc(100% - var(--inset) * 3 - var(--bar));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scene-field {
+  margin-bottom: 14px;
+}
+.scene-field .hud-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.scene-value {
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--bone);
+}
+.scene-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--bone);
+}
+
+/* Переключатель из нескольких значений: одна полоса, выбранное залито. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+}
+.segmented button {
+  flex: 1 1 0;
+  min-height: 30px;
+  padding: 5px 6px;
+  background: transparent;
+  color: var(--bone-2);
+  border: 0;
+  border-radius: 5px;
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+}
+.segmented button:hover {
+  color: var(--bone);
+}
+.segmented button[aria-checked='true'] {
+  background: var(--bone);
+  color: var(--inverse);
+}
+.segmented button:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 1px;
+}
+
+.scene-shot-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.scene-shots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.scene-shots a {
+  display: block;
+  color: var(--bone-3);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  text-decoration: none;
+}
+.scene-shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  margin-bottom: 3px;
+  border: 1px solid var(--hair-2);
+  border-radius: 4px;
+}
+.scene-shots a:hover img {
+  border-color: var(--bone);
+}
+
+.scene-bar {
+  align-items: center;
+}
+.scene-speed {
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+  white-space: nowrap;
+}
+
+/* Подсказка по управлению - по центру снизу, пока мышь не захвачена. */
+.scene-help {
+  left: 50%;
+  bottom: calc(var(--inset) * 2 + var(--tools));
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - var(--inset) * 2));
+  padding: 11px 15px;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
+  pointer-events: none;
+}
+.scene-help p {
+  margin: 0;
+  line-height: 1.5;
+}
+.scene-help p + p {
+  margin-top: 5px;
+}
+.scene-keys {
+  color: var(--bone-3);
+}
+.scene-help kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  margin: 0 1px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  line-height: 18px;
+  text-align: center;
+  color: var(--bone);
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  border-radius: 4px;
+}
+
+/* Что под прицелом: строка вида, латынь и размер в выбранном возрасте. */
+.scene-hover {
+  left: 50%;
+  top: calc(50% + 28px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 7px 12px;
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* Без захвата мыши подпись - того, что под курсором, и висит сверху, не заслоняя его. */
+.scene-hover[data-anchor='top'] {
+  top: calc(var(--inset) * 2 + var(--bar));
+}
+.scene-hover strong {
+  font-size: var(--fs-small);
+  color: var(--bone);
+}
+.scene-crosshair {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  pointer-events: none;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 14px no-repeat,
+    linear-gradient(#fff, #fff) center / 14px 2px no-repeat;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  opacity: 0.85;
+}
+
+.scene-unhide {
+  left: var(--inset);
+  bottom: var(--inset);
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+  opacity: 0.55;
+}
+.scene-unhide:hover,
+.scene-unhide:focus-visible {
+  opacity: 1;
+}
+
+/* Вспышка снимка: короткая, чтобы было видно, что кадр взят. */
+.scene-flash {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: scene-flash 0.35s ease-out forwards;
+}
+@keyframes scene-flash {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-flash {
+    animation-duration: 0.01s;
+  }
+}
+
+.scene-loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #e9e6e0;
+  font-size: var(--fs-body);
+}
+.scene-loading p {
+  margin: 0;
+}
+.scene-loading a {
+  color: #a5a39d;
+  font-size: var(--fs-small);
+}
+.scene-progress {
+  width: min(360px, 70vw);
+  height: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.scene-progress span {
+  display: block;
+  height: 100%;
+  background: #e9e6e0;
+  transition: width 0.3s ease-out;
+}
+
+@media (max-width: 760px) {
+  .scene-panel {
+    top: auto;
+    bottom: calc(var(--inset) * 2 + var(--tools));
+    width: calc(100% - var(--inset) * 2);
+    max-height: 42vh;
+  }
+  .scene-help {
+    display: none;
+  }
+}
