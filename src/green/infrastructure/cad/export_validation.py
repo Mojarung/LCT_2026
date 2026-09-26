@@ -46,8 +46,12 @@ _XDATA_STRING = 1000
 _IDENTITY_FIELDS = 2
 
 
-def check_written_plan(result: Path, plan: Plan, *, unit_m: float) -> PlanExportReport:
-    doc, _ = load_document(result)
+def check_written_plan(
+    result: Path, plan: Plan, *, unit_m: float, doc: Drawing | None = None
+) -> PlanExportReport:
+    """Сверка записанного плана с планом; doc - уже загруженный result, если он есть."""
+    if doc is None:
+        doc, _ = load_document(result)
     expected = {p.placement_id: p for p in plan.placements}
     counts: Counter[str] = Counter()
     issues = []

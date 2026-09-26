@@ -30,13 +30,27 @@ _SURROGATE_HIGH = 0xDCFF
 
 
 class EzdxfIntegrityChecker:
+    def __init__(self) -> None:
+        # Результат, загруженный проверкой целостности: сверка плана берёт его же, а не читает
+        # файл второй раз (на улице в 200 МБ одно чтение - минуты). Ключ - путь и время записи.
+        self._loaded: tuple[Path, int, Drawing] | None = None
+
+    def _result(self, result: Path) -> Drawing:
+        stamp = result.stat().st_mtime_ns
+        loaded, self._loaded = self._loaded, None
+        if loaded is not None and loaded[0] == result and loaded[1] == stamp:
+            return loaded[2]
+        doc, _ = load_document(result)
+        self._loaded = (result, stamp, doc)
+        return doc
+
     def snapshot(self, source: Path) -> SourceSnapshot:
         digests, unexportable = fingerprints(load_document(source)[0])
         return SourceSnapshot(digests, unexportable)
 
     def check(self, before: SourceSnapshot, result: Path) -> IntegrityReport:
         """Сверяет отпечатки исходника (сняты писателем до правок) с сохранённым результатом."""
-        doc, _ = load_document(result)
+        doc = self._result(result)
         after, _ = fingerprints(doc)
         digests = before.digests
         changed = sorted(h for h, digest in digests.items() if h in after and after[h] != digest)
@@ -56,7 +70,7 @@ class EzdxfIntegrityChecker:
         return self.check(self.snapshot(source), result)
 
     def check_plan(self, result: Path, plan: Plan, *, unit_m: float) -> PlanExportReport:
-        return check_written_plan(result, plan, unit_m=unit_m)
+        return check_written_plan(result, plan, unit_m=unit_m, doc=self._result(result))
 
 
 def require_exportable_document(doc: Drawing, name: str) -> None:
