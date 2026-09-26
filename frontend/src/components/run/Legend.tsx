@@ -30,6 +30,7 @@ const DXF_LAYERS = [
   'GREEN_LABELS',
   'GREEN_ZONE_ALLOWED',
   'GREEN_ZONE_APPROVAL',
+  'GREEN_LAWN',
 ];
 
 function Sample({ code, children }: { code: string; children: ReactNode }) {
@@ -148,6 +149,18 @@ export function Legend({
             <LayerCheck layer="barrier">
               <i className="key barrier" /> Места, возможные с прикорневым барьером
             </LayerCheck>
+            {/* Газоны плана - грунт, который посадки оставили свободным (слой GREEN_LAWN). */}
+            <LayerCheck layer="lawns">Газоны плана</LayerCheck>
+            <div className="legend">
+              <span>
+                <i className="swatch swatch-plan-lawn" />
+                <b>сохраняемый или восстанавливаемый</b>
+              </span>
+              <span>
+                <i className="swatch swatch-plan-lawn-new" />
+                <b>устраиваемый</b>
+              </span>
+            </div>
           </>
         ) : null}
         <LayerCheck layer="utilities">Подземные сети</LayerCheck>

@@ -228,6 +228,49 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
     assert run["artifacts"]["zones.geojson"].exists()  # type: ignore[index]
 
 
+def test_lawns_cover_free_soil_and_reach_the_dxf(run: dict[str, object]) -> None:
+    """П. 3 ТЗ, травянистые покрытия: газон - грунт в границе работ, который посадки оставили
+    свободным, на своём слое GREEN_LAWN; исходник цел, выгрузка совпадает с планом."""
+    report = run["report"]
+    plan = report.plan  # type: ignore[attr-defined]
+    soil = report.surface.soil_area  # type: ignore[attr-defined]
+    assert plan.lawns
+    assert soil is not None
+    for lawn in plan.lawns:
+        assert lawn.kind.value == "kept"  # весь грунт улицы - контур слоя «Леса и газоны»
+        assert box(0, 0, 120, 60).covers(lawn.geometry)
+        assert lawn.geometry.difference(soil).area < 1e-6
+        for p in plan.placements:
+            pit = 1.6 if p.species.is_tree else 0.5
+            assert lawn.geometry.distance(Point(p.x, p.y)) >= pit - 1e-6
+    texts = {e.subject_id: e for e in plan.explanations}
+    for lawn in plan.lawns:
+        assert texts[lawn.lawn_id].kind == "lawn"
+        assert "R-LAWN-KEPT-001" in texts[lawn.lawn_id].text
+    summary = report.summary()  # type: ignore[attr-defined]
+    assert summary["lawn_m2"] == pytest.approx(sum(g.area_m2 for g in plan.lawns), abs=0.1)
+    assert summary["lawn_kept_m2"] == summary["lawn_m2"]
+
+    doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
+    assert "GREEN_LAWN" in doc.layers
+    hatches = doc.modelspace().query("HATCH[layer=='GREEN_LAWN']")
+    assert len(hatches) == len(plan.lawns)
+    assert {h.get_xdata("LCT_GREEN")[0].value for h in hatches} == {g.lawn_id for g in plan.lawns}
+    assert {h.dxf.pattern_name for h in hatches} == {"GRASS"}
+    assert report.integrity.ok  # type: ignore[attr-defined]
+    exported = report.export_validation  # type: ignore[attr-defined]
+    assert exported.ok
+    assert exported.expected_lawns == exported.found_lawns == len(plan.lawns)
+
+    artifacts = run["artifacts"]
+    payload = orjson.loads(artifacts["plan.json"].read_bytes())  # type: ignore[index]
+    assert [g["id"] for g in payload["lawns"]] == [g.lawn_id for g in plan.lawns]
+    assert payload["lawns"][0]["geometry"]["type"] == "Polygon"
+    assert payload["lawns"][0]["planting_type"] == "lawn"
+    rows = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    assert any(line.startswith("lawn;") for line in rows.splitlines())
+
+
 def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, object]) -> None:
     """Подобранные виды доезжают до чертежа: у каждого свой блок и свой атрибут SPECIES."""
     report = run["report"]

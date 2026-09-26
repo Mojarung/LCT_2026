@@ -491,6 +491,11 @@
             "title": "Curb Hedges",
             "type": "boolean"
           },
+          "lawns": {
+            "description": "Газоны на грунте, который посадки оставили свободным",
+            "title": "Lawns",
+            "type": "boolean"
+          },
           "modes": {
             "description": "Приёмы размещения: alley, lawn, fill",
             "items": {
@@ -545,7 +550,8 @@
           "shrub_rows",
           "curb_hedges",
           "understory",
-          "shrub_fill"
+          "shrub_fill",
+          "lawns"
         ],
         "title": "ProfileOut",
         "type": "object"

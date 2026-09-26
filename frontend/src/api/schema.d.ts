@@ -456,6 +456,11 @@ export interface components {
             /** Curb Hedges */
             curb_hedges: boolean;
             /**
+             * Lawns
+             * @description Газоны на грунте, который посадки оставили свободным
+             */
+            lawns: boolean;
+            /**
              * Modes
              * @description Приёмы размещения: alley, lawn, fill
              */

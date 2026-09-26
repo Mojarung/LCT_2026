@@ -217,6 +217,10 @@ export function RunPage() {
   }, [items, placements, rejections, location.hash]);
 
   useEffect(() => {
+    engine.current?.setLawns(plan.data?.lawns ?? []);
+  }, [plan.data]);
+
+  useEffect(() => {
     const meta = surface.data;
     if (!meta) return;
     let cancelled = false;

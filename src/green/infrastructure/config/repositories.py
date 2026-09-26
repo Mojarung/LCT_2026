@@ -21,6 +21,7 @@ from green.domain.norms import (
     DistanceRule,
     InvasiveGroupRule,
     InvasiveSpecies,
+    LawnRule,
     Reference,
     RuleBook,
     SpeciesRestriction,
@@ -175,6 +176,10 @@ class YamlRuleBookSource:
             species_restrictions=tuple(
                 SpeciesRestriction(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
                 for r in rules_file.species_restrictions
+            ),
+            lawn_rules=tuple(
+                LawnRule(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
+                for r in rules_file.lawn_rules
             ),
         )
         ids = [rule.rule_id for rule in rulebook.all_rules]

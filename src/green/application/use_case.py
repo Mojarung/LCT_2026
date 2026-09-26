@@ -24,6 +24,7 @@ from green.application.editing import RunContext
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.input_quality import require_complete_geometry
+from green.application.lawns import plan_lawns
 from green.application.placement import (
     MODE_CURB_HEDGE,
     MODE_LABELS,
@@ -371,6 +372,18 @@ class PlanSite:
                 )
                 if recheck.ok:
                     plan, validation = refined.plan, recheck
+        # Газон - грунт, который итоговый план оставил свободным: считается после сдвига слабых
+        # мест, иначе посадочное место сдвинутой посадки легло бы на газон. Нормы посадок газон
+        # не меняет, поэтому проверку плана не повторяет.
+        with watch.stage("lawns"):
+            plan = plan_lawns(
+                plan,
+                features=features,
+                labels=scene.labels,
+                surface=surface,
+                rulebook=rulebook,
+                params=params,
+            )
         with watch.stage("explain"):
             plan = explain(plan, rulebook)
         output = request.work_dir / RESULT_DXF

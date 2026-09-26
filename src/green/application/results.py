@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from green.domain.norms import LawnKind
 from green.domain.objects import ReadDiagnostics
 
 if TYPE_CHECKING:
@@ -63,6 +64,9 @@ class PlanExportReport:
     expected_placements: int
     found_placements: int
     issues: tuple[str, ...]
+    # Газоны: участков в плане и штриховок слоя GREEN_LAWN в записанном DXF.
+    expected_lawns: int = 0
+    found_lawns: int = 0
 
     @property
     def ok(self) -> bool:
@@ -104,8 +108,18 @@ class RunReport:
     classification: ClassificationReport | None = None
 
     def summary(self) -> dict[str, object]:
+        lawns = self.plan.lawns
+
+        def lawn_m2(*kinds: LawnKind) -> float:
+            return round(sum((g.area_m2 for g in lawns if g.kind in kinds), 0.0), 1)
+
         return {
             "placements": len(self.plan.placements),
+            # Газоны (п. 3 ТЗ): число участков и площади в м², всего и по видам.
+            "lawns": len(lawns),
+            "lawn_m2": lawn_m2(*LawnKind),
+            "lawn_kept_m2": lawn_m2(LawnKind.KEPT),
+            "lawn_new_m2": lawn_m2(LawnKind.NEW),
             "semantic_assignments_complete": self.classification.ready
             if self.classification
             else None,

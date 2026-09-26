@@ -13,7 +13,8 @@ export type LayerKey =
   | 'weak'
   | 'barrier'
   | 'surfacemap'
-  | 'labels';
+  | 'labels'
+  | 'lawns';
 
 export type Layers = Record<LayerKey, boolean>;
 
@@ -33,6 +34,7 @@ export const DEFAULT_LAYERS: Layers = {
   barrier: true,
   surfacemap: true,
   labels: true,
+  lawns: true,
 };
 
 /** Посадка или отказ на карте. Объект изменяемый: при переносе движок двигает его сам, а

@@ -56,6 +56,11 @@
   --utility-opacity: 0.62;
   --c-existing-crown: #d6d5bd;
   --c-existing-shrub: #d9dcc0;
+  /* Газоны плана поверх травы карты покрытий: сохраняемый - тоном зелени, устраиваемый - тоном
+     соломы (газон ещё не засеян), контур у обоих один. */
+  --c-plan-lawn: rgba(74, 128, 62, 0.24);
+  --c-plan-lawn-new: rgba(182, 150, 58, 0.34);
+  --c-plan-lawn-edge: #4a7a3c;
   /* Карта уточнения объектов (/runs/:id/review): серый - контекст, оранжевый - выбранная
      группа, красный - выбранный объект; подписи и выбранная подпись. */
   --review-context: #8a918b;
@@ -156,6 +161,9 @@
   --utility-opacity: 1;
   --c-existing-crown: #4b5347;
   --c-existing-shrub: #4f5749;
+  --c-plan-lawn: rgba(111, 174, 134, 0.2);
+  --c-plan-lawn-new: rgba(207, 176, 90, 0.24);
+  --c-plan-lawn-edge: #7fb48a;
   --review-context: #5d646d;
   --review-group: #e3902f;
   --review-object: #f06070;

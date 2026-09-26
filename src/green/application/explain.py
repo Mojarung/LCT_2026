@@ -6,13 +6,13 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from green.application.barriers import FAR_M, LOW_CROWN_M, NEAR_M, barrier_height_limit
-from green.domain.norms import DistanceRule
+from green.domain.norms import DistanceRule, LawnKind
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
     from green.domain.norms import AnyRule, RuleBook
-    from green.domain.planting import Placement, Reason, Rejection, RuleCheck
+    from green.domain.planting import Lawn, Placement, Reason, Rejection, RuleCheck
     from green.domain.quality import PlantingValue
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
@@ -67,11 +67,17 @@ VERDICT_LABELS: dict[Verdict, str] = {
     Verdict.UNKNOWN: "решение невозможно: нет данных",
 }
 
+LAWN_LABELS: dict[LawnKind, str] = {
+    LawnKind.KEPT: "сохраняемый или восстанавливаемый",
+    LawnKind.NEW: "устраиваемый",
+}
+
 
 def explain(plan: Plan, rulebook: RuleBook) -> Plan:
     values = plan.quality.values if plan.quality is not None else {}
     explanations = [_placement(p, rulebook, values.get(p.placement_id)) for p in plan.placements]
     explanations += [_rejection(r, rulebook) for r in plan.rejections]
+    explanations += [_lawn(lawn, rulebook) for lawn in plan.lawns]
     return replace(plan, explanations=tuple(explanations))
 
 
@@ -226,6 +232,25 @@ def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
     )
     text += describe_barrier(rejection)
     return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
+
+
+def _lawn(lawn: Lawn, rulebook: RuleBook) -> Explanation:
+    """Газон: вид, площадь, что вырезано и основания - только правила участка из свода."""
+    grounds = []
+    for rule_id in lawn.rule_ids:
+        rule = rulebook.rule(rule_id)
+        grounds.append(
+            f"{rule_id}: {citation_text(rule, rulebook)}"
+            if rule is not None
+            else f"{rule_id} (правило отсутствует в базе)"
+        )
+    how = "".join(f"; {note}" for note in lawn.notes)
+    area = f"{lawn.area_m2:,.1f}".replace(",", " ").replace(".", ",")
+    text = (
+        f"Газон №{lawn.number}: {LAWN_LABELS[lawn.kind]}, {area} м²{how}. "
+        f"Основания: {'; '.join(grounds)}."
+    )
+    return Explanation(lawn.lawn_id, lawn.number, "lawn", text)
 
 
 def describe_barrier(rejection: Rejection) -> str:
