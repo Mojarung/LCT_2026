@@ -94,8 +94,9 @@ def test_open_lines_with_a_gap_under_two_centimetres_close_into_one_face() -> No
 
 
 def test_a_real_gap_does_not_close_and_the_lines_are_counted() -> None:
-    first = LineString([(0, 0), (10, 0), (10, 10)])
-    second = LineString([(10.5, 10), (0, 10), (0, 0.5)])
+    # Вдали от рамок планшетов (сетка 250 м): в узле сетки разрыв закрыла бы рамка.
+    first = LineString([(100, 100), (110, 100), (110, 110)])
+    second = LineString([(110.5, 110), (100, 110), (100, 100.5)])
 
     volumes = _balanced(build_volumes([_feature(first), _feature(second)], []))
 
@@ -309,3 +310,57 @@ def test_labels_are_normalized_before_reading(raw: str, normal: str) -> None:
 def test_one_storey_is_taller_than_a_residential_storey() -> None:
     assert storey_height(1) == pytest.approx(4.0)
     assert storey_height(5) == pytest.approx(16.2)
+
+
+def test_a_house_cut_by_the_sheet_frame_closes_along_the_frame() -> None:
+    """Контур дома оборван рамкой планшета x = 16000: основание кончается на рамке."""
+    cut = LineString([(16000, -5010), (15980, -5010), (15980, -5030), (16000, -5030)])
+
+    volumes = _balanced(build_volumes([_feature(cut)], [_label(15990, -5020, "9")]))
+
+    (house,) = volumes.buildings
+    assert house.footprint.area == pytest.approx(400, abs=0.5)
+    assert house.floors == 9
+    assert volumes.closed_cuts == 1
+    assert volumes.open_lines == 0
+
+
+def test_a_house_cut_into_two_sheets_closes_on_both_sides() -> None:
+    """Куски одного дома по обе стороны рамки y = -5250 разошлись на полметра: оба замкнуты."""
+    north = LineString([(16100, -5250), (16100, -5240), (16140, -5240), (16140, -5250)])
+    south = LineString([(16100.5, -5250), (16100.5, -5262), (16140, -5262), (16140, -5250)])
+
+    volumes = _balanced(
+        build_volumes([_feature(north), _feature(south)], [_label(16120, -5245, "12")])
+    )
+
+    assert len(volumes.buildings) == 2
+    assert {b.floors for b in volumes.buildings} == {12}
+    assert {b.floors_source for b in volumes.buildings} == {"label", "neighbor"}
+
+
+def test_a_chain_around_three_sides_closes_with_a_chord_but_a_wall_does_not() -> None:
+    three_sides = LineString([(120, 100), (100, 100), (100, 115), (120, 115)])
+    wall = LineString([(200, 100), (230, 100)])
+
+    volumes = _balanced(build_volumes([_feature(three_sides), _feature(wall)], []))
+
+    (house,) = volumes.buildings
+    assert house.footprint.area == pytest.approx(300, abs=0.5)
+    assert volumes.closed_cuts == 1
+    assert volumes.open_lines == 1
+
+
+def test_dashes_of_building_parts_are_not_closed_into_canopies() -> None:
+    """Пунктир выступов (штрихи по полметра) остаётся пунктиром, а не объёмом до земли."""
+    dashes = [
+        _feature(LineString([(100 + i, 100), (100 + i + 0.5, 100)]), layer=PART) for i in range(10)
+    ]
+    dashes += [
+        _feature(LineString([(110, 100 + i), (110, 100 + i + 0.5)]), layer=PART) for i in range(10)
+    ]
+
+    volumes = _balanced(build_volumes(dashes, []))
+
+    assert volumes.buildings == ()
+    assert volumes.closed_cuts == 0

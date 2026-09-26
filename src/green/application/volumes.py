@@ -31,6 +31,7 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import KDTree
 from shapely import STRtree
+from shapely.geometry import LineString
 
 from green.application.surfaces import Material, label_material
 from green.domain.objects import ObjectClass
@@ -58,6 +59,23 @@ SHARED_EDGE_M = 2.0
 # соседних домов, чем здание: у самых крупных корпусов пилотных улиц подпись есть.
 MAX_UNPROVEN_M2 = 2500.0
 MAX_FLOORS = 60
+# Съёмка Мосгеотреста режется на планшеты 1:500 по сетке 250 x 250 м, и контур дома, который
+# не уместился на планшет улицы, обрывается на рамке: у Кустанайской концы открытых контуров
+# лежат ровно на x = 16000, y = -5000, -5250, -5500. Конец ближе FRAME_TOL_M к линии сетки -
+# это рамка, и контур замыкается её куском в пределах FRAME_REACH_M от конца: основание дома
+# в сцене кончается там же, где кончается съёмка.
+SHEET_M = 250.0
+FRAME_TOL_M = 0.05
+FRAME_REACH_M = 40.0
+# Открытая цепочка, обошедшая контур с трёх сторон, замыкается хордой: так рисуют дом, у
+# которого стена ушла на соседний лист не по рамке. Хорда не длиннее CHORD_M, а цепочка
+# минимум в CHORD_RATIO раз длиннее хорды - прямую стену или забор хорда не замкнёт.
+CHORD_M = 30.0
+CHORD_RATIO = 3.0
+# Штрих короче этого - пунктир частей здания и навесов (выступы над землёй, ридер разбирает
+# их из блоков msdElementType*): такие линии не замыкаются, иначе на тротуаре вырастут
+# козырьки и эркеры до земли.
+MIN_STROKE_M = 1.5
 
 # Высота этажа от пола до пола в московском жилье - около 3 м: 2,8 м в панельных домах,
 # 3,0-3,5 м в кирпичных. 1,2 м сверху - цоколь и парапет. Одноэтажное нежилое (магазин,
@@ -168,6 +186,9 @@ class Volumes:
     voids: int = 0
     slivers: int = 0
     open_lines: int = 0
+    # Сколько оборванных контуров замкнуто рамкой планшета или хордой (SHEET_M, CHORD_M):
+    # основание такого дома достроено до края съёмки, и это видно в scene.json.
+    closed_cuts: int = 0
 
     @property
     def bbox(self) -> tuple[float, float, float, float] | None:
@@ -218,6 +239,7 @@ class _Linework:
     holes: NDArray[np.object_]
     slivers: int = 0
     open_lines: int = 0
+    closed_cuts: int = 0
 
     @property
     def total(self) -> int:
@@ -263,6 +285,7 @@ def build_volumes(features: Sequence[Feature], labels: Sequence[TextLabel]) -> V
         voids=home_voids + yards,
         slivers=house_lines.slivers + works.slivers,
         open_lines=house_lines.open_lines + works.open_lines,
+        closed_cuts=house_lines.closed_cuts + works.closed_cuts,
     )
 
 
@@ -487,11 +510,13 @@ def _linework(features: Sequence[Feature]) -> _Linework:
     stitched = shapely.set_precision(_stitch(lines), GAP_M)
     alive = shapely.length(stitched) > 0
     stitched, loose = stitched[alive], loose[alive]
+    closers = _closers(stitched[shapely.length(stitched) >= MIN_STROKE_M])
+    edges = np.concatenate([stitched, closers]) if len(closers) else stitched
     # Разбиение, а не объединение: node в разы быстрее union_all на улице из нескольких
     # планшетов и так же сводит в одно ребро стену, нарисованную на обоих планшетах.
     noded = (
-        shapely.get_parts(shapely.node(shapely.multilinestrings(stitched)))
-        if len(stitched)
+        shapely.get_parts(shapely.node(shapely.multilinestrings(edges)))
+        if len(edges)
         else _NO_GEOMETRY
     )
     faces = shapely.get_parts(shapely.polygonize(noded)) if len(noded) else _NO_GEOMETRY
@@ -501,7 +526,68 @@ def _linework(features: Sequence[Feature]) -> _Linework:
         holes=holes,
         slivers=int((~big).sum()),
         open_lines=_open_lines(stitched[loose], faces),
+        closed_cuts=_used(closers, faces[big]),
     )
+
+
+def _closers(strokes: NDArray[np.object_]) -> NDArray[np.object_]:
+    """Куски, замыкающие оборванные контуры: рамка планшета у концов на ней и хорды цепочек."""
+    if not len(strokes):
+        return _NO_GEOMETRY
+    chains = shapely.get_parts(shapely.line_merge(shapely.multilinestrings(strokes)))
+    chords = [chord for chain in chains if (chord := _chord(chain)) is not None]
+    found = [*_frame_pieces(strokes), *chords]
+    return np.array(found, dtype=object) if found else _NO_GEOMETRY
+
+
+def _on_frame(value: float) -> bool:
+    return abs(value - round(value / SHEET_M) * SHEET_M) < FRAME_TOL_M
+
+
+def _frame_pieces(strokes: NDArray[np.object_]) -> list[LineString]:
+    """Кусок рамки планшета у каждого конца линии, лежащего на ней.
+
+    Берутся концы всех линий, а не только свободные концы цепочек: дом, перешедший с листа
+    на лист, в точке перехода делится рамкой на две грани, и половина, целиком лежащая на
+    листе, замыкается, даже если другая половина оборвана следующей рамкой. Две грани одного
+    дома получают одну этажность - по подписи или от соседа с общей стеной.
+    """
+    tips = shapely.get_coordinates(
+        np.concatenate([shapely.get_point(strokes, 0), shapely.get_point(strokes, -1)])
+    )
+    pieces: list[LineString] = []
+    for x, y in np.unique(tips, axis=0):
+        if _on_frame(x):
+            edge = round(x / SHEET_M) * SHEET_M
+            pieces.append(LineString([(edge, y - FRAME_REACH_M), (edge, y + FRAME_REACH_M)]))
+        if _on_frame(y):
+            edge = round(y / SHEET_M) * SHEET_M
+            pieces.append(LineString([(x - FRAME_REACH_M, edge), (x + FRAME_REACH_M, edge)]))
+    return pieces
+
+
+def _chord(chain: LineString) -> LineString | None:
+    """Хорда открытой цепочки, обошедшей контур: только если вместе они дают простой полигон."""
+    if chain.is_closed:
+        return None
+    coords = shapely.get_coordinates(chain)
+    gap = float(np.hypot(*(coords[0] - coords[-1])))
+    # Отрезок из двух точек отсеивает само отношение длин: у него длина равна хорде.
+    if not GAP_M < gap <= CHORD_M or chain.length < CHORD_RATIO * gap:
+        return None
+    if not shapely.is_valid(shapely.polygons(np.vstack([coords, coords[:1]]))):
+        return None
+    return LineString([coords[-1], coords[0]])
+
+
+def _used(closers: NDArray[np.object_], faces: NDArray[np.object_]) -> int:
+    """Сколько граней замкнуто хотя бы одним замыкающим куском: столько домов достроено."""
+    if not len(closers) or not len(faces):
+        return 0
+    edges = shapely.boundary(faces)
+    piece, face = STRtree(edges).query(closers, predicate="intersects")
+    shared = shapely.length(shapely.intersection(closers[piece], edges[face], grid_size=GAP_M))
+    return len(np.unique(face[shared > GAP_M]))
 
 
 def _lines(

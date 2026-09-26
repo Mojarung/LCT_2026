@@ -29,6 +29,7 @@ COUNT_KEYS = {
     "voids",
     "slivers",
     "open_lines",
+    "closed_cuts",
     "cropped",
 }
 SPECIES_KEYS = {

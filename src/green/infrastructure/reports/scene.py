@@ -83,6 +83,7 @@ def _counts(volumes: Volumes | None, kept: int, cropped: int) -> dict[str, int]:
         "voids",
         "slivers",
         "open_lines",
+        "closed_cuts",
     )
     balance = {name: getattr(volumes, name) if volumes is not None else 0 for name in fields}
     return {"buildings": kept, **balance, "cropped": cropped}
