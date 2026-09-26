@@ -63,10 +63,16 @@ export function sunDirection(sun: Sun): [number, number, number] {
   return [horizontal * Math.sin(az), Math.sin(el), -horizontal * Math.cos(az)];
 }
 
-export type Season = 'spring' | 'summer' | 'autumn';
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
-/** День года каждого сезона сцены: цветение в начале мая, середина лета, золотая осень. */
-export const SEASON_DAY: Record<Season, number> = { spring: 128, summer: 182, autumn: 275 };
+/** День года каждого сезона сцены: цветение в начале мая, середина лета, золотая осень и
+ *  середина января - низкое солнце, длинные тени, темнеет к половине пятого. */
+export const SEASON_DAY: Record<Season, number> = {
+  spring: 128,
+  summer: 182,
+  autumn: 275,
+  winter: 15,
+};
 
 /** Час сцены как на часах: 13.25 -> «13:15». */
 export function clock(hour: number): string {

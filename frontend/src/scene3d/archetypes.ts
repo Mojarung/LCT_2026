@@ -7,6 +7,7 @@
  * задаются экземпляру, модель общая. */
 
 import { modelOf } from '../map/models';
+import type { Season } from './solar';
 import type { Plant } from './types';
 
 export type Archetype =
@@ -101,7 +102,12 @@ export function archetypeOf(plant: Plant): Archetype {
 
 /** Цвет листвы в сезон. Тон базы моделей подобран под бумажную карту и светлее живой листвы:
  *  в 3D он темнеет и насыщается, иначе крона выглядит выгоревшей на солнце. */
-export type Season = 'spring' | 'summer' | 'autumn';
+export type { Season };
+
+/** Зимой лиственные деревья и кустарники стоят голыми, хвоя остаётся. */
+export function leafless(archetype: Archetype, season: Season): boolean {
+  return season === 'winter' && !CONIFERS.has(archetype);
+}
 
 /** Осенняя окраска по роду: клёны краснеют, липы и берёзы желтеют, дуб буреет. */
 const AUTUMN: Record<string, string> = {
@@ -214,6 +220,9 @@ export function foliageColor(plant: Plant, season: Season): Rgb {
   if (season === 'spring') {
     const young = mix(color, { r: 0.5, g: 0.66, b: 0.26 }, evergreen ? 0.08 : 0.3);
     color = flower ? mix(young, liveTone(flower, 0.95), 0.62) : young;
+  } else if (season === 'winter') {
+    // Зимняя хвоя темнее летней.
+    color = { r: color.r * 0.82, g: color.g * 0.86, b: color.b * 0.86 };
   } else if (season === 'autumn' && !evergreen) {
     const genus = (plant.species.genus || plant.code.split('_')[0] || '').toLowerCase();
     const fall = hexRgb(AUTUMN[genus] ?? AUTUMN_DEFAULT);

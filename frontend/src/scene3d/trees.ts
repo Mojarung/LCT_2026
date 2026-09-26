@@ -13,7 +13,14 @@
 import { Tree, TreePreset } from '@dgreenheck/ez-tree';
 import * as THREE from 'three';
 
-import { type Archetype, archetypeOf, foliageColor, type Season, SHRUBS } from './archetypes';
+import {
+  type Archetype,
+  archetypeOf,
+  foliageColor,
+  leafless,
+  type Season,
+  SHRUBS,
+} from './archetypes';
 import { existingSize, isTreeForm, sizeAt, type Size } from './growth';
 import { neutralLeaves } from './textures';
 import type { Plant } from './types';
@@ -222,6 +229,15 @@ export function barkMaterial(
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', windHead(false))
       .replace('#include <project_vertex>', WIND_VERTEX);
+    // Снег на ветвях - по их верхней стороне, после карты нормалей коры.
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uSnow;')
+      .replace(
+        '#include <normal_fragment_maps>',
+        '#include <normal_fragment_maps>\n' +
+          'float snowUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));\n' +
+          'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.94, 0.97), uSnow * 0.85 * smoothstep(0.25, 0.75, snowUp));',
+      );
   };
   m.customProgramCacheKey = () => 'green-bark';
   return m;
@@ -525,9 +541,11 @@ export class Forest {
       pair.count += 1;
     }
     for (const group of this.groups.values()) {
+      // Зимой у лиственных листвы нет: рисуются только ветви, и тень от них же.
+      const bare = leafless(group.archetype, this.settings.season);
       for (const pair of [group.hi, group.lo]) {
         pair.branches.count = pair.count;
-        pair.leaves.count = pair.count;
+        pair.leaves.count = bare ? 0 : pair.count;
         pair.branches.instanceMatrix.needsUpdate = true;
         if (pair.leaves.instanceColor) pair.leaves.instanceColor.needsUpdate = true;
       }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { archetypeOf, foliageColor, foliageOf, hexRgb, isGreen } from './archetypes';
+import { archetypeOf, foliageColor, foliageOf, hexRgb, isGreen, leafless } from './archetypes';
 import { existingSize, PLAN_YEAR, plantingStock, sizeAt } from './growth';
 import { SEASON_DAY, sunDirection, sunPosition } from './solar';
 import type { Plant, SceneSpeciesJson } from './types';
@@ -126,5 +126,21 @@ describe('архетипы и листва', () => {
     expect(fall.r).toBeGreaterThan(fall.b * 1.5);
     const spruce = plant('picea_abies', { genus: 'picea', conifer: true, evergreen: true });
     expect(foliageColor(spruce, 'autumn')).toEqual(foliageColor(spruce, 'summer'));
+  });
+});
+
+describe('зима', () => {
+  it('лиственные и кустарники голые, хвойные в хвое, летом листва у всех', () => {
+    expect(leafless('broadleaf', 'winter')).toBe(true);
+    expect(leafless('shrub', 'winter')).toBe(true);
+    expect(leafless('spruce', 'winter')).toBe(false);
+    expect(leafless('creeper', 'winter')).toBe(false);
+    expect(leafless('broadleaf', 'summer')).toBe(false);
+  });
+
+  it('в середине января солнце в полдень ниже 15 градусов и садится до пяти вечера', () => {
+    expect(sunPosition(SEASON_DAY.winter, 12.5).elevation).toBeLessThan(15);
+    expect(sunPosition(SEASON_DAY.winter, 12.5).elevation).toBeGreaterThan(5);
+    expect(sunPosition(SEASON_DAY.winter, 17).elevation).toBeLessThan(0);
   });
 });

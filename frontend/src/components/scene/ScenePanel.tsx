@@ -18,6 +18,7 @@ const SEASONS: { value: Season; label: string }[] = [
   { value: 'spring', label: 'весна' },
   { value: 'summer', label: 'лето' },
   { value: 'autumn', label: 'осень' },
+  { value: 'winter', label: 'зима' },
 ];
 
 const AGES: { value: number; label: string; title: string }[] = [

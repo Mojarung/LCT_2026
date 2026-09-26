@@ -33,6 +33,9 @@ import type { Plant, World } from './types';
 
 export type Quality = 'low' | 'medium' | 'high';
 
+/** Снежный покров зимой без снегопада: белое, но с проталинами у проезжей части. */
+const WINTER_COVER = 0.85;
+
 export interface ViewSettings {
   hour: number;
   season: Season;
@@ -340,9 +343,11 @@ export class SceneEngine {
     });
     this.weather.apply(s, weather);
     this.groundWeather.uWet.value = weather.wet;
-    this.groundWeather.uSnow.value = weather.snowCover;
+    // Зимой снег лежит и без снегопада: московский январь белый.
+    const cover = Math.max(weather.snowCover, s.season === 'winter' ? WINTER_COVER : 0);
+    this.groundWeather.uSnow.value = cover;
     this.forest.wind.uWind.value = weather.sway;
-    this.forest.wind.uSnow.value = weather.snowCover;
+    this.forest.wind.uSnow.value = cover;
     this.people?.setDensity(s.people);
     this.facade.uNight.value = this.atmosphere.state.night;
     this.lights?.setNight(this.atmosphere.state.night);
@@ -359,7 +364,7 @@ export class SceneEngine {
     if (this.grassField) {
       this.grassField.uniforms.uWind.value = s.wind;
       // Под снегом травинок не видно: газон белый, поле травы уходит вместе с ним.
-      this.grassField.uniforms.uGrow.value = 1 - weather.snowCover;
+      this.grassField.uniforms.uGrow.value = Math.max(0, 1 - cover * 1.4);
     }
   }
 
