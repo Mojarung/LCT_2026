@@ -57,7 +57,10 @@ src/green/
                    ищется в сцене с допуском 0,15 м, полоса широкой полилинии - по её ширине;
                    census - перепись вставок-знаков своим обходом; writer GREEN_*, integrity blake2b, samples/ - фрагмент настоящей
                    улицы: запасной прогон, когда каталог улиц не смонтирован), config/ (YAML-репозитории),
-                   convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/runs,
+                   convert/ (LibreDWG, ODA), inventory (перечётка .xls/.xlsx), storage/ (runs -
+                   статус прогона и блокировка lease: брошенный прогон читается как прерванный;
+                   contexts - контекст правки в pickle рядом со status.json, правка переживает
+                   перезапуск),
                    streets (каталог улиц пилота из dataset/streets_dxf/catalog.json),
                    reports/artifacts (и scene.json для 3D - reports/scene.py), logs
   bootstrap/       Settings (переменные GREEN_*), build_container

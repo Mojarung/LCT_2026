@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import re
+import threading
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 import orjson
 
 from green.application.errors import InputError, NotFoundError
 from green.application.results import RunProgress, RunRecord, RunState, StageTiming
+from green.infrastructure.storage import lease
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -22,12 +25,20 @@ _UNSAFE = re.compile(r"[^\w.\- ]", re.UNICODE)
 ALLOWED_SUFFIXES = frozenset({".dxf", ".dwg"})
 MAX_NAME = 120
 STATUS = "status.json"
+LEASE = "lease"
+_ACTIVE = frozenset({RunState.QUEUED, RunState.RUNNING})
+INTERRUPTED = (
+    "Прогон прерван: процесс сервиса остановился до конца расчёта. Запустите прогон заново."
+)
 
 
 class FileSystemRunStore:
     def __init__(self, root: Path) -> None:
         self._root = root
         self._root.mkdir(parents=True, exist_ok=True)
+        # Блокировки прогонов, которые ведёт этот экземпляр: от постановки в очередь до конца.
+        self._leases: dict[str, IO[bytes]] = {}
+        self._guard = threading.Lock()
 
     def create(self, source_name: str, profile: str, overrides: Mapping[str, object]) -> RunRecord:
         safe = _safe_name(source_name)
@@ -57,7 +68,7 @@ class FileSystemRunStore:
         if not path.is_file():
             raise NotFoundError(f"Прогон {run_id} не найден")
         data = orjson.loads(path.read_bytes())
-        return RunRecord(
+        record = RunRecord(
             run_id=data["run_id"],
             state=RunState(data["state"]),
             source_name=data["source_name"],
@@ -70,8 +81,23 @@ class FileSystemRunStore:
             artifacts=tuple(data.get("artifacts", ())),
             progress=_progress_from(data.get("progress")),
         )
+        if record.state in _ACTIVE and self._orphaned(run_id):
+            record = replace(
+                record,
+                state=RunState.FAILED,
+                error=INTERRUPTED,
+                progress=None,
+                updated_at=datetime.now(UTC),
+            )
+            self.save(record)
+        return record
 
     def save(self, record: RunRecord) -> None:
+        """Записать статус. Идущий прогон этот экземпляр держит заблокированным, пока он не
+        закончится: по блокировке другой процесс (и перезапущенный сервис) отличает живой
+        прогон от брошенного."""
+        if record.state in _ACTIVE:
+            self._hold(record.run_id)
         payload = {
             "run_id": record.run_id,
             "state": record.state.value,
@@ -89,6 +115,8 @@ class FileSystemRunStore:
         temporary = path.with_suffix(".tmp")
         temporary.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
         temporary.replace(path)
+        if record.state not in _ACTIVE:
+            self._drop(record.run_id)
 
     def recent(self, limit: int) -> list[RunRecord]:
         ids = sorted(
@@ -97,6 +125,27 @@ class FileSystemRunStore:
         return [
             self.get(run_id) for run_id in ids[:limit] if (self._root / run_id / STATUS).is_file()
         ]
+
+    def _hold(self, run_id: str) -> None:
+        with self._guard:
+            if run_id in self._leases:
+                return
+            handle = lease.acquire(self._dir(run_id) / LEASE)
+            if handle is not None:
+                self._leases[run_id] = handle
+
+    def _drop(self, run_id: str) -> None:
+        with self._guard:
+            handle = self._leases.pop(run_id, None)
+        if handle is not None:
+            lease.release(handle)
+
+    def _orphaned(self, run_id: str) -> bool:
+        """Статус «идёт», а блокировку никто не держит: процесс, который вёл прогон, умер."""
+        with self._guard:
+            if run_id in self._leases:
+                return False
+        return not lease.held(self._dir(run_id) / LEASE)
 
     def state_file(self, run_id: str, name: str) -> Path:
         """Служебный файл прогона рядом со status.json: не артефакт, наружу не отдаётся."""
