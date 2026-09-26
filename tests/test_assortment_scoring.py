@@ -141,3 +141,18 @@ def test_percent_rounds_the_total() -> None:
     score = score_species(species, _ctx(), replace(PARAMS, assortment_weights={"longevity": 1.0}))
     assert 0.66 < score.total < 0.67
     assert percent(score) == 67
+
+
+def test_a_wider_mature_crown_gives_more_shade() -> None:
+    """Заказчик ждёт тень (QA:39): при прочих равных дерево с кроной шире - выше."""
+    narrow = replace(BASE, crown_mature_m=2.0)
+    wide = replace(BASE, code="wide", crown_mature_m=12.0)
+    ctx = _ctx()
+    assert score_species(wide, ctx, PARAMS).factors["shade"] == 1.0
+    assert score_species(narrow, ctx, PARAMS).factors["shade"] < 0.5
+    assert score_species(wide, ctx, PARAMS).total > score_species(narrow, ctx, PARAMS).total
+
+
+def test_shrubs_are_not_scored_for_shade() -> None:
+    shrub = replace(BASE, life_form=LifeForm.SHRUB_MEDIUM, crown_mature_m=1.5)
+    assert "shade" not in score_species(shrub, _ctx(), PARAMS).factors
