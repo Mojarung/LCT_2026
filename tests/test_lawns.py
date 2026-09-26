@@ -42,7 +42,8 @@ FACE_B = box(20, 0, 40, 30)
 NOT_LAWN = box(40.01, 0, 80, 30)  # цветник и массив
 TREE = Species("tree", "липа", "Tilia cordata", 6.0, life_form=LifeForm.TREE_MEDIUM)
 SHRUB = Species("shrub", "сирень", "Syringa vulgaris", 2.0, life_form=LifeForm.SHRUB_MEDIUM)
-TREE_PIT_M, SHRUB_PIT_M = 1.6, 0.5
+# Радиусы посадочных мест - из параметров проекта (яма 743-ПП, табл. 3.3.1, notes/34).
+TREE_PIT_M, SHRUB_PIT_M = PlanParams().planting_radius_m, PlanParams().shrub_planting_radius_m
 
 
 def _feature(cls: ObjectClass, geometry: BaseGeometry, name: str, **extra: object) -> Feature:
@@ -166,7 +167,8 @@ def test_every_lawn_is_explained_by_rules_with_a_source() -> None:
     assert "R-LAWN-KEPT-001: параметр проекта" in kept_text.text
     assert "(цитата не сверена)" in kept_text.text
     assert "R-LAWN-DRAW-001: ГОСТ 21.508-2020, п. 10.4" in kept_text.text
-    assert "деревьев 1 (круг радиусом 1,6 м)" in kept_text.text
+    radius = f"{TREE_PIT_M:g}".replace(".", ",")
+    assert f"деревьев 1 (круг радиусом {radius} м)" in kept_text.text
     new_text = texts[new.lawn_id].text
     assert "устраиваемый" in new_text
     assert "R-LAWN-NEW-001" in new_text

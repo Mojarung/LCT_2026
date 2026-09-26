@@ -241,7 +241,8 @@ def test_lawns_cover_free_soil_and_reach_the_dxf(run: dict[str, object]) -> None
         assert box(0, 0, 120, 60).covers(lawn.geometry)
         assert lawn.geometry.difference(soil).area < 1e-6
         for p in plan.placements:
-            pit = 1.6 if p.species.is_tree else 0.5
+            params = run["report"].params  # type: ignore[attr-defined]
+            pit = params.planting_radius_m if p.species.is_tree else params.shrub_planting_radius_m
             assert lawn.geometry.distance(Point(p.x, p.y)) >= pit - 1e-6
     texts = {e.subject_id: e for e in plan.explanations}
     for lawn in plan.lawns:
