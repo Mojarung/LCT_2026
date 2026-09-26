@@ -194,15 +194,21 @@ class Quotas:
                 used[key] += 1
         return used
 
+    def _label(self, key: Key) -> str:
+        """Вид - русским именем из каталога: текст читает эксперт, а не код каталога."""
+        level, value = key
+        species = self.catalog.get(value) if level == SPECIES_LEVEL else None
+        return f"{level} {species.name_ru}" if species else f"{level} {value}".strip()
+
     def violations(self, chosen: Mapping[str, str]) -> tuple[str, ...]:
         """Проверка итогового плана той же арифметикой, что в задаче."""
         planned = len(chosen)
         found = []
         for key, count in sorted(self.counts(chosen).items()):
             share = self.share(key)
-            label = f"{key[0]} {key[1]}".strip()
+            label = self._label(key)
             if count > allowance(share, planned):
-                found.append(f"{label}: {count} из {planned} в плане, доля {share:.0%}")
+                found.append(f"{label}: {count} из {planned} в плане, квота {share:.0%}")
             if key == CONIFER_KEY or not self.existing_total:
                 continue
             if self.exhausted(key):

@@ -21,6 +21,7 @@ from green.application.assortment.scoring import Score, percent, score_species
 from green.application.assortment.structures import GROUP, ROW, build_structures
 from green.application.assortment.summary import build_summary
 from green.application.barriers import BARRIER_CONDITION
+from green.application.wording import counted, plural
 from green.domain.norms import PlantingType
 from green.domain.planting import (
     SHRUB_FORMS,
@@ -221,10 +222,12 @@ def _warnings(assignment: Assignment, no_species: int, *, soft: bool) -> list[st
             + "; ".join(assignment.quota_violations)
         )
     if no_species:
+        places = counted(no_species, "место допустимо", "места допустимы", "мест допустимы")
+        taken = plural(no_species, "не занято", "не заняты", "не заняты")
+        moved = plural(no_species, "место перенесено", "места перенесены", "места перенесены")
         messages.append(
-            f"Подбор ассортимента: {no_species} мест допустимы по нормам, но не заняты: "
-            "ни один допустимый вид не укладывается в квоты разнообразия, места перенесены "
-            "в отказы."
+            f"Подбор ассортимента: {places} по нормам, но {taken}: ни один допустимый вид не "
+            f"укладывается в квоты разнообразия, {moved} в отказы."
         )
     return messages
 

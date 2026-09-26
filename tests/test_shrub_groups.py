@@ -99,7 +99,9 @@ def test_soft_quotas_fill_the_whole_group(site: dict[str, object]) -> None:
     summary = soft.shrub_assortment_summary
     assert summary is not None
     # Одна группа 3 x 3 - один вид: доля 100% больше квоты, это перебор мягкой квоты, а не отказ.
-    assert all("доля" in violation for violation in summary.quota_violations)
+    # Вид назван по-русски, как его читает эксперт, а не кодом каталога.
+    assert all("квота" in violation for violation in summary.quota_violations)
+    assert not any("_" in violation for violation in summary.quota_violations)
 
 
 BUILDING_Y = 55.0
