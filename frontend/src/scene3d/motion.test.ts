@@ -7,6 +7,8 @@ import {
   type Keys,
   type Pose,
   clampPitch,
+  clampSpeed,
+  freshKeys,
   keysOf,
   step,
   wishVelocity,
@@ -157,5 +159,26 @@ describe('ракурс в адресе', () => {
     expect(parseView('#view=a,b')).toBeNull();
     expect(parseView('')).toBeNull();
     expect(parseView('#view=1,-5,2,0,0')?.pose.y).toBe(0.3);
+  });
+});
+
+describe('залипшие клавиши', () => {
+  it('клавиша без автоповтора дольше полутора секунд считается отпущенной', () => {
+    const pressed = new Map([
+      ['KeyW', 1000],
+      ['KeyD', 2400],
+      ['ShiftLeft', 0],
+    ]);
+    const fresh = freshKeys(pressed, 2600);
+    expect(fresh.has('KeyW')).toBe(false);
+    expect(fresh.has('KeyD')).toBe(true);
+    // Модификатор не повторяется на всех системах: держится до keyup.
+    expect(fresh.has('ShiftLeft')).toBe(true);
+  });
+
+  it('скорость полёта не выходит за пределы ползунка', () => {
+    expect(clampSpeed(0.2)).toBe(1);
+    expect(clampSpeed(500)).toBe(60);
+    expect(clampSpeed(12)).toBe(12);
   });
 });

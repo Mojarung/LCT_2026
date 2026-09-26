@@ -169,34 +169,66 @@ export function keysOf(down: ReadonlySet<string>): Keys {
   };
 }
 
-/** Базовая скорость полёта: колесо шагает по степеням, от пешего шага до облёта квартала. */
-export const FLY_SPEEDS = [1, 2, 4, 8, 15, 30, 60] as const;
+/** Скорость полёта, м/с: от пешего шага до облёта квартала. Колесо меняет её в WHEEL_STEP раз. */
+export const FLY_SPEED_MIN = 1;
+export const FLY_SPEED_MAX = 60;
+export const FLY_SPEED_DEFAULT = 8;
+const WHEEL_STEP = 1.25;
 const MOUSE_RAD_PER_PX = 0.0022;
+
+/** Удерживаемая клавиша повторяет keydown каждые 30-50 мс (после задержки до секунды). Если
+ *  повторов нет дольше этого, клавишу уже отпустили, а keyup потерялся: так бывает, когда
+ *  в момент отпускания фокус ушёл в окно загрузки снимка или на другую раскладку. Без этой
+ *  проверки камера летела бесконечно. Модификаторы не повторяются на всех системах - их
+ *  держим до keyup или потери фокуса. */
+export const STALE_KEY_MS = 1500;
+const MODIFIERS: ReadonlySet<string> = new Set(['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight']);
+
+export function freshKeys(
+  pressedAt: ReadonlyMap<string, number>,
+  now: number,
+  staleMs = STALE_KEY_MS,
+): Set<string> {
+  const fresh = new Set<string>();
+  for (const [code, at] of pressedAt) {
+    if (MODIFIERS.has(code) || now - at < staleMs) fresh.add(code);
+  }
+  return fresh;
+}
+
+export function clampSpeed(speed: number): number {
+  return Math.min(FLY_SPEED_MAX, Math.max(FLY_SPEED_MIN, speed));
+}
 
 export interface FreecamOptions {
   element: HTMLElement;
   pose: Pose;
   collide?: (from: Flat, to: Flat) => Flat;
   onChange?: () => void;
+  /** Человек взялся за управление: клавиша движения или поворот мышью. Облёт на этом стоп. */
+  onInput?: () => void;
 }
 
 export class Freecam {
   pose: Pose;
   mode: Mode = 'fly';
-  speedIndex = 3;
+  private speed = FLY_SPEED_DEFAULT;
   private motion: Motion = { vx: 0, vy: 0, vz: 0, grounded: false };
-  private readonly down = new Set<string>();
+  /** Код клавиши -> время последнего keydown, включая автоповтор. */
+  private readonly pressedAt = new Map<string, number>();
   private dragging = false;
   private readonly element: HTMLElement;
   private readonly collide?: (from: Flat, to: Flat) => Flat;
   private readonly onChange?: () => void;
+  private readonly onInput?: () => void;
   private readonly off: (() => void)[] = [];
 
-  constructor({ element, pose, collide, onChange }: FreecamOptions) {
+  constructor({ element, pose, collide, onChange, onInput }: FreecamOptions) {
     this.element = element;
     this.pose = pose;
     this.collide = collide;
     this.onChange = onChange;
+    this.onInput = onInput;
     this.bind();
   }
 
@@ -205,12 +237,18 @@ export class Freecam {
   }
 
   get flySpeed(): number {
-    return FLY_SPEEDS[this.speedIndex] ?? 8;
+    return this.speed;
   }
 
-  get moving(): boolean {
-    const m = this.motion;
-    return Math.hypot(m.vx, m.vy, m.vz) > 0.02 || keysOf(this.down).forward !== 0;
+  setSpeed(speed: number): void {
+    this.speed = clampSpeed(speed);
+    this.onChange?.();
+  }
+
+  /** Забыть все нажатые клавиши: перед снимком и при уходе со вкладки. */
+  releaseKeys(): void {
+    this.pressedAt.clear();
+    this.motion = { ...this.motion, vx: 0, vz: 0, vy: this.mode === 'walk' ? this.motion.vy : 0 };
   }
 
   setMode(mode: Mode): void {
@@ -230,10 +268,12 @@ export class Freecam {
   }
 
   update(dt: number): void {
+    const down = freshKeys(this.pressedAt, performance.now());
+    for (const code of this.pressedAt.keys()) if (!down.has(code)) this.pressedAt.delete(code);
     const next = step({
       pose: this.pose,
       motion: this.motion,
-      keys: keysOf(this.down),
+      keys: keysOf(down),
       mode: this.mode,
       flySpeed: this.flySpeed,
       dt: Math.min(dt, 0.1),
@@ -249,6 +289,7 @@ export class Freecam {
   }
 
   private look(dx: number, dy: number): void {
+    if (dx || dy) this.onInput?.();
     this.pose = {
       ...this.pose,
       yaw: this.pose.yaw - dx * MOUSE_RAD_PER_PX,
@@ -291,28 +332,30 @@ export class Freecam {
       'wheel',
       (e) => {
         e.preventDefault();
-        const shift = e.deltaY > 0 ? -1 : 1;
-        this.speedIndex = Math.max(0, Math.min(FLY_SPEEDS.length - 1, this.speedIndex + shift));
-        this.onChange?.();
+        this.setSpeed(this.speed * (e.deltaY > 0 ? 1 / WHEEL_STEP : WHEEL_STEP));
       },
       { passive: false },
     );
     this.listen(window, 'keydown', (e) => {
       if (isTyping(e.target)) return;
       if (MOVE_CODES.has(e.code)) {
-        this.down.add(e.code);
+        this.pressedAt.set(e.code, performance.now());
+        if (!MODIFIERS.has(e.code)) this.onInput?.();
         // Пробел и стрелки иначе прокручивают страницу под сценой, Alt - открывает меню окна.
         e.preventDefault();
       }
     });
     this.listen(window, 'keyup', (e) => {
-      this.down.delete(e.code);
+      this.pressedAt.delete(e.code);
     });
     this.listen(window, 'blur', () => {
-      this.down.clear();
+      this.releaseKeys();
+    });
+    this.listen(document, 'visibilitychange', () => {
+      if (document.hidden) this.releaseKeys();
     });
     this.listen(document, 'pointerlockchange', () => {
-      if (!this.locked) this.down.clear();
+      if (!this.locked) this.releaseKeys();
       this.onChange?.();
     });
   }
