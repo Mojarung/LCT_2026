@@ -29,8 +29,10 @@ import shapely
 
 from green.application.assortment.context import site_context
 from green.application.assortment.scoring import percent, score_species
+from green.application.constraints import work_boundary
 from green.application.params import active_distance_rules
 from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_UNDERSTORY, planting_index
+from green.application.quality.site import site_length
 from green.application.shrub_rows import Blockers, ranked_species
 from green.application.wording import counted
 from green.domain.norms import PlantingType
@@ -77,12 +79,18 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
         or params.assortment_mode in {_GIVEN, _SINGLE}
     ):
         return plan
-    trees = [
-        p
-        for p in plan.placements
-        if p.planting_type is PlantingType.TREE
-        and (params.understory_trees == "all" or ALLEY_LABEL in p.notes)
-    ]
+    # Деревья аллеи первыми (МГСН 1.02-02, п. 4.2.9.2 - ряды кустарника под кронами на улице),
+    # затем остальные: при потолке кустарника на улицу ярус получает сначала аллея.
+    trees = sorted(
+        (
+            p
+            for p in plan.placements
+            if p.planting_type is PlantingType.TREE
+            and (params.understory_trees == "all" or ALLEY_LABEL in p.notes)
+        ),
+        key=lambda p: ALLEY_LABEL not in p.notes,
+    )
+    budget = _shrub_budget(plan, features, params)
     species = understory_species(catalog, params.planting_category)
     if not trees or not species:
         return plan
@@ -98,6 +106,8 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
         plan, features, index=index, species=species, rulebook=rulebook, params=shrub_params
     )
     for tree in trees:
+        if budget is not None and len(planter.added) >= budget:
+            break
         planter.under(tree)
     if not planter.added:
         return plan
@@ -110,6 +120,16 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
         "нижнего яруса (МГСН 1.02-02, п. 4.2.9.2)."
     )
     return replace(plan, placements=(*plan.placements, *added), warnings=(*plan.warnings, summary))
+
+
+def _shrub_budget(plan: Plan, features: Sequence[Feature], params: PlanParams) -> int | None:
+    """Сколько кустов ещё можно до верхней границы МГСН 1.02-02, табл. В.1 (720 на 1 км) на
+    улицу вместе с уже посаженными; None - длина улицы неизвестна, потолка нет."""
+    length = site_length(work_boundary(features), params)
+    if not length:
+        return None
+    shrubs = sum(1 for p in plan.placements if p.planting_type is PlantingType.SHRUB)
+    return max(0, math.floor(params.density_shrubs_per_km[1] * length / 1000) - shrubs)
 
 
 def understory_species(catalog: Sequence[Species], category: str) -> list[Species]:

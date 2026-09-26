@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import shapely
 import yaml
 from shapely.geometry import LineString, box
 
@@ -169,6 +170,14 @@ def test_pockets_of_the_boundary_do_not_lengthen_the_street() -> None:
     strip = box(0, 0, 1000, 30)
     pockets = strip.union(box(100, 30, 110, 60)).union(box(500, 30, 510, 60))
     assert street_length(pockets) == pytest.approx(street_length(strip), rel=0.03)
+
+
+def test_boundary_faces_split_by_the_reserve_are_one_street() -> None:
+    """Грани границы сжаты на запас точности и не касаются (constraints._boundary): длина не
+    складывается по граням - у Камчатской так выходило 4,6 км вместо 1,6."""
+    faces = shapely.union_all([box(0, 0, 1000, 25), box(0, 25.2, 1000, 30), box(0, 30.2, 1000, 60)])
+    assert street_length(faces) == pytest.approx(street_length(box(0, 0, 1000, 60)), rel=0.02)
+    assert street_length(faces) < 1100
 
 
 def test_street_length_from_the_project_note_overrides_the_axis() -> None:

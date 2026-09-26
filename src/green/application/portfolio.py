@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -87,12 +88,31 @@ def _build_all(
 ) -> list[tuple[str, PlanParams, tuple[Plan, PlanValidation] | str]]:
     """Все варианты по порядку: собранный и проверенный план или причина отказа."""
     outcomes: list[tuple[str, PlanParams, tuple[Plan, PlanValidation] | str]] = []
-    for name, variant in _variants(params, features):
+    started = time.perf_counter()
+    slowest = 0.0
+    budget = params.portfolio_budget_s
+    for name, variant in _prioritized(_variants(params, features)):
+        # Бюджет времени: следующий вариант не начинается, если самый долгий из посчитанных
+        # в него уже не укладывается. Исходный вариант считается всегда (ТЗ: лимит стенда -
+        # 30 минут на подбор мест, docs/notes/15).
+        elapsed = time.perf_counter() - started
+        if budget > 0 and outcomes and elapsed + slowest > budget:
+            outcomes.append(
+                (
+                    name,
+                    variant,
+                    f"не посчитан: бюджет портфеля {budget:.0f} с, прошло {elapsed:.0f} с",
+                )
+            )
+            continue
+        clock = time.perf_counter()
         try:
             plan, validation = build(variant)
         except InputError as error:
             outcomes.append((name, variant, str(error)))
             continue
+        finally:
+            slowest = max(slowest, time.perf_counter() - clock)
         if not validation.ok:
             message = "; ".join(issue.message for issue in validation.issues[:8])
             outcomes.append((name, variant, message))
@@ -131,6 +151,26 @@ def _failed(name: str, params: PlanParams, error: str) -> VariantResult:
         needs_approval=0,
         error=error,
     )
+
+
+# Порядок счёта: исходный вариант, затем объединённый отбор MILP (он чаще выигрывает: больше
+# мест при тех же нормах), затем сдвиги и повороты сетки газона. При бюджете времени первыми
+# идут самые ценные; при равном индексе выигрывает посчитанный раньше.
+_PRIORITY = (
+    "baseline",
+    "joint",
+    "soil_frame_joint",
+    "aligned_joint",
+    "soil_frame",
+    "aligned",
+    "phase_x",
+    "phase_xy",
+)
+
+
+def _prioritized(variants: list[tuple[str, PlanParams]]) -> list[tuple[str, PlanParams]]:
+    rank = {name: position for position, name in enumerate(_PRIORITY)}
+    return sorted(variants, key=lambda item: rank.get(item[0], len(rank)))
 
 
 def _variants(params: PlanParams, features: Sequence[Feature]) -> list[tuple[str, PlanParams]]:

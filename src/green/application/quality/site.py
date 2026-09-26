@@ -52,6 +52,9 @@ CURB_CLIP_MARGIN_M = 1e-6
 AXIS_SPACING_M = 2.0
 _AXIS_MAX_POINTS = 20_000
 _MIN_AXIS_PART_M2 = 1.0
+# Слияние граней границы для оси: щели до 2 м закрываются; полоски уже 2 м - линии, не участок.
+_AXIS_CLOSE_M = 1.0
+_AXIS_MIN_WIDTH_M = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,10 +146,23 @@ def site_length(boundary: BaseGeometry | None, params: PlanParams) -> float | No
 
 @lru_cache(maxsize=16)
 def _axis_length(wkb: bytes) -> float:
+    # Грани границы работ сжаты на запас точности геометрии (constraints._boundary) и уже не
+    # касаются: без слияния участок распадается на части, и длина суммируется по каждой -
+    # у Камчатской 4,6 км вместо 1,6. Щели закрываются буфером туда и обратно, дыры
+    # заполняются (ось они не меняют), полоски уже _AXIS_MIN_WIDTH_M - линии границы, а не
+    # участок.
+    geometry = shapely.from_wkb(wkb)
+    merged = shapely.buffer(
+        shapely.buffer(geometry, _AXIS_CLOSE_M, quad_segs=2), -_AXIS_CLOSE_M, quad_segs=2
+    )
     total = 0.0
-    for part in shapely.get_parts(shapely.from_wkb(wkb)):
-        if part.geom_type == "Polygon" and part.area > _MIN_AXIS_PART_M2:
-            total += _skeleton_diameter(part)
+    for part in shapely.get_parts(merged):
+        if part.geom_type != "Polygon" or part.area <= _MIN_AXIS_PART_M2:
+            continue
+        filled = shapely.Polygon(part.exterior)
+        if 2 * filled.area / filled.exterior.length < _AXIS_MIN_WIDTH_M:
+            continue
+        total += _skeleton_diameter(filled)
     return total
 
 

@@ -94,7 +94,8 @@ def test_configured_phases_are_preserved_in_baseline() -> None:
     params = PlanParams(placement_solver="portfolio", lawn_phase=(0.7, 0.3), lawn_rotation_deg=30)
     plan, _ = choose_plan(build, params, ())
     assert visited[0] == ((0.7, 0.3), 30)
-    assert visited[3][0] == pytest.approx((0.2, 0.8))
+    # Сдвиг фаз на полшага от заданных профилем: вариант phase_xy (порядок - по ценности).
+    assert any(phase == pytest.approx((0.2, 0.8)) for phase, _ in visited)
     assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
 
@@ -106,12 +107,36 @@ def test_soil_frame_is_additional_and_cannot_replace_a_better_baseline() -> None
     plan, _ = choose_plan(build, PlanParams(placement_solver="portfolio"), ())
     assert plan.portfolio is not None
     assert plan.portfolio.chosen == "baseline"
+    # Порядок счёта - по ценности: исходный, объединённый отбор, затем сдвиги сетки.
     assert [v.name for v in plan.portfolio.variants] == [
         "baseline",
         "joint",
+        "soil_frame_joint",
+        "soil_frame",
         "phase_x",
         "phase_xy",
-        "soil_frame",
-        "soil_frame_joint",
     ]
-    assert all(v.lawn_anchor == "soil" for v in plan.portfolio.variants[-2:])
+    soil = [v for v in plan.portfolio.variants if v.name.startswith("soil_frame")]
+    assert all(v.lawn_anchor == "soil" for v in soil)
+
+
+def test_budget_keeps_the_baseline_and_skips_what_would_not_fit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Лимит стенда - 30 минут на подбор мест (docs/notes/15): варианты сверх бюджета не
+    начинаются, исходный считается всегда, пропуск назван в отчёте портфеля."""
+    clock = [0.0]
+    monkeypatch.setattr("green.application.portfolio.time.perf_counter", lambda: clock[0])
+
+    def build(params: PlanParams) -> tuple[Plan, PlanValidation]:
+        clock[0] += 6.0  # каждый вариант - 6 секунд
+        return _plan(0.9 if params.placement_solver == "milp" else 0.5), PlanValidation(0, ())
+
+    params = PlanParams(modes=("alley",), placement_solver="portfolio", portfolio_budget_s=10.0)
+    plan, validation = choose_plan(build, params, ())
+    assert validation.ok
+    assert plan.portfolio is not None
+    assert plan.portfolio.chosen == "baseline"
+    joint = next(v for v in plan.portfolio.variants if v.name == "joint")
+    assert not joint.valid
+    assert "бюджет портфеля" in joint.error
