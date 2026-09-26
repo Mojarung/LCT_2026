@@ -129,7 +129,7 @@ export class Atmosphere {
     haze.lerp(new THREE.Color(0.05, 0.07, 0.12), this.state.night);
     haze.lerp(new THREE.Color(0.78, 0.8, 0.82), s.clouds * 0.4 * day);
     this.fog.color.copy(haze);
-    this.fog.density = 0.0015 + s.clouds * 0.0008;
+    this.fog.density = 0.0006 + s.clouds * 0.0005;
     this.renderer.toneMappingExposure = 0.42 + 0.2 * day;
     this.environment();
   }

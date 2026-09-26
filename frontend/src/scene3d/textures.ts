@@ -142,9 +142,9 @@ export function grass(): THREE.CanvasTexture {
     const f = fine[y * size + x] ?? 0;
     const b = blade[y * size + x] ?? 0;
     const dirt = Math.max(0, n - 0.72) * 3.5;
-    const r = 58 + n * 12 + b * 18 + dirt * 45;
-    const g = 76 + n * 14 + f * 18 + b * 22 + dirt * 12;
-    const bl = 36 + n * 6 + b * 8 + dirt * 12;
+    const r = 56 + n * 12 + b * 16 + dirt * 45;
+    const g = 68 + n * 12 + f * 16 + b * 18 + dirt * 10;
+    const bl = 38 + n * 6 + b * 8 + dirt * 12;
     return [r, g, bl];
   });
   return texture(c, true);

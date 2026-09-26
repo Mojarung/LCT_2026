@@ -3,11 +3,14 @@
  *
  * Где грунт, а где покрытие, решает не 3D-вид: он берёт карту покрытий прогона (surface.png,
  * та же, по которой считались посадки) и поверх неё - полигоны газонов, тротуаров и проезжей
- * части с подосновы. Всё это рисуется в маску: R - газон, G - плитка, B - асфальт. Шейдер
- * земли смешивает по маске три фактуры, а шум сбивает ступеньку растра на границе газона. */
+ * части с подосновы. Всё это рисуется в маску: R - газон, G - плитка, B - асфальт. Что
+ * сервис не разметил, и всё за краем съёмки - газон, покрытие делится на тротуар и проезд
+ * по ширине полосы (surfaceMask.ts). Шейдер земли смешивает по маске три фактуры, а шум
+ * сбивает ступеньку растра на границе газона. */
 
 import * as THREE from 'three';
 
+import { ASPHALT, classifySurface, GRASS, PAVERS } from './surfaceMask';
 import type { Flat, Line, Ring, World } from './types';
 
 /** Метров на пиксель маски: борт шириной 15 см маска не рисует, его ставит геометрия. */
@@ -48,20 +51,17 @@ function ringPath(
   ctx.fill('evenodd');
 }
 
-/** Грунт карты покрытий -> красный канал, остальное известное -> асфальт. */
-function surfaceToMask(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+/** Покрытие каждого пикселя -> каналы маски: R - газон, G - плитка, B - асфальт. */
+function surfaceToMask(ctx: CanvasRenderingContext2D, w: number, h: number, mpp: number): void {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i] ?? 0;
-    const g = d[i + 1] ?? 0;
-    const a = d[i + 3] ?? 0;
-    // Грунт на карте покрытий зеленее, чем красен (как в map/paper.ts), покрытие - серое.
-    const soil = a > 0 && g > r + 24;
-    d[i] = soil ? 255 : 0;
-    d[i + 1] = 0;
-    d[i + 2] = soil ? 0 : 255;
-    d[i + 3] = 255;
+  const kind = classifySurface(d, w, h, mpp);
+  for (let i = 0; i < kind.length; i++) {
+    const k = kind[i];
+    d[i * 4] = k === GRASS ? 255 : 0;
+    d[i * 4 + 1] = k === PAVERS ? 255 : 0;
+    d[i * 4 + 2] = k === ASPHALT ? 255 : 0;
+    d[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -94,7 +94,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   const ctx = c.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Canvas 2D недоступен');
   // Карта покрытий полупрозрачная: рисуется на прозрачный холст, иначе её цвет смешается с
-  // фоном и грунт перестанет отличаться от покрытия. Фон асфальта - после разбора пикселей.
+  // фоном и грунт перестанет отличаться от покрытия. Пустое после разбора - газон.
   ctx.clearRect(0, 0, w, h);
   if (surface) {
     // Строка 0 растра - минимальный Y чертежа, то есть наибольший z сцены: рисуем с
@@ -112,7 +112,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ctx.drawImage(surface.img, 0, 0);
     ctx.restore();
   }
-  surfaceToMask(ctx, w, h);
+  surfaceToMask(ctx, w, h, mpp);
   if (surface) softenCells(c, ctx, surface.cell / mpp);
   const toPx = (p: Flat): [number, number] => [(p.x - minX) / mpp, (p.z - minZ) / mpp];
   ctx.fillStyle = '#0000ff';
@@ -206,13 +206,13 @@ const GROUND_MAP = /* glsl */ `
   vec2 p = vGroundPos.xz;
   vec2 muv = (p - uMaskRect.xy) / uMaskRect.zw;
   vec3 m = texture2D(uMask, clamp(muv, 0.0, 1.0)).rgb;
-  // За границей сцены данных нет: ровный асфальт квартала, край уходит в дымку.
+  // За границей сцены данных нет: газон квартала, край уходит в дымку.
   float outside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
   vec4 nz = texture2D(uNoise, p / 23.0);
   float edge = (nz.g - 0.5) * 0.5 + (texture2D(uNoise, p / 3.1).b - 0.5) * 0.35;
   float lawn = smoothstep(0.42, 0.58, m.r + edge);
   float paver = smoothstep(0.45, 0.55, m.g + edge * 0.3) * (1.0 - lawn);
-  lawn *= outside;
+  lawn = mix(1.0, lawn, outside);
   paver *= outside;
   float asph = clamp(1.0 - lawn - paver, 0.0, 1.0);
   groundWeights = vec3(lawn, paver, asph);
@@ -220,7 +220,9 @@ const GROUND_MAP = /* glsl */ `
   // читается рядами, пятна шума - нет.
   float macro = texture2D(uNoise, p / 173.0).r * 0.6 + texture2D(uNoise, p / 47.0).g * 0.4;
   vec3 g = antiTile(uGrass, p, 6.0);
-  g *= mix(vec3(1.08, 0.98, 0.8), vec3(0.86, 1.02, 0.95), macro) * (0.85 + 0.25 * macro);
+  g *= mix(vec3(1.12, 1.0, 0.72), vec3(0.84, 0.97, 0.9), macro) * (0.8 + 0.26 * macro);
+  // Дальнее поле за краем съёмки глуше: оно фон, а не газон участка.
+  g = mix(g * vec3(0.86, 0.84, 0.8), g, outside);
   vec3 pv = texture2D(uPavers, p / 3.0).rgb * (0.9 + 0.16 * macro);
   vec3 a = antiTile(uAsphalt, p, 4.0) * (0.84 + 0.3 * macro);
   vec3 col = g * lawn + pv * paver + a * asph;
