@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import ezdxf
 from ezdxf import recover
 from ezdxf.audit import AuditError, ErrorEntry
+from ezdxf.entities import DXFTagStorage
 
 from green.application.errors import InputError
 from green.infrastructure.cad.structure import require_complete_container
@@ -146,20 +147,30 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
 def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[str]]:
     # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
     # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
-    # A broken annotation table with no owner and no proxy graphic has no
-    # spatial content. ezdxf removes it before the reader can skip annotations.
+    # LibreDWG can emit a bare ACAD_TABLE tag with no content or owner.
+    # A table with block references, cells or other payload must still block:
+    # absence of a proxy graphic alone does not prove that it is empty.
     empty_tables = {
         entity.dxf.handle.upper()
         for entity in doc.entitydb.values()
         if entity.dxftype() == "ACAD_TABLE"
+        and isinstance(entity, DXFTagStorage)
         and entity.dxf.get("owner") is None
         and not entity.proxy_graphic
+        and all(tag.code in {0, 5} for tag in entity.xtags)
     }
     auditor = doc.audit()
     _require_safe_audit(path, auditor, empty_tables=empty_tables)
     fixes = len(auditor.fixes)
     if fixes or auditor.errors:
         notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
+    removed_tables = empty_tables - set(doc.entitydb)
+    if removed_tables:
+        notes.append(
+            f"{path.name}: удалены пустые записи ACAD_TABLE без содержимого: "
+            f"{len(removed_tables)}. "
+            "Таблицы с данными или геометрией этим исключением не покрываются."
+        )
     return doc, notes
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -24,6 +24,13 @@ class PlantingType(StrEnum):
     SHRUB = "shrub"
     HEDGE = "hedge"
     LAWN = "lawn"
+
+
+class LawnKind(StrEnum):
+    """Газон плана по отношению к чертежу."""
+
+    KEPT = "kept"  # газон есть по чертежу: сохраняется или восстанавливается после посадки
+    NEW = "new"  # грунт без газона по чертежу: газон устраивается
 
 
 class Severity(StrEnum):
@@ -131,6 +138,9 @@ class DistanceRule:
     genera: frozenset[str] = field(default_factory=frozenset)
     min_crown_m: float | None = None
     traits: frozenset[str] = field(default_factory=frozenset)
+    # Редакция СП 42.13330, в которой действует правило: None - в любой. Нужна строкам, у
+    # которых значения разошлись (табл. 9.1 ред. 2016 против табл. 6.3 ред. 2026).
+    sp42_edition: str | None = None
 
     @property
     def is_species_specific(self) -> bool:
@@ -202,7 +212,23 @@ class SpeciesRestriction:
     citation: Citation
 
 
-type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction
+@dataclass(frozen=True, slots=True)
+class LawnRule:
+    """Основание газона плана (п. 3 ТЗ: травянистые покрытия).
+
+    kind ограничивает правило сохраняемым или устраиваемым газоном; None - основание любого
+    участка газона, например его обозначение на плане.
+    """
+
+    rule_id: str
+    citation: Citation
+    kind: LawnKind | None = None
+
+    def applies_to(self, kind: LawnKind) -> bool:
+        return self.kind is None or self.kind is kind
+
+
+type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction | LawnRule
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +241,16 @@ class RuleBook:
     invasive_species: tuple[InvasiveSpecies, ...] = ()
     invasive_groups: tuple[InvasiveGroupRule, ...] = ()
     species_restrictions: tuple[SpeciesRestriction, ...] = ()
+    lawn_rules: tuple[LawnRule, ...] = ()
+
+    def for_sp42_edition(self, edition: str) -> RuleBook:
+        """Свод для прогона в выбранной редакции СП 42.13330: правила другой редакции уходят."""
+        return replace(
+            self,
+            distance_rules=tuple(
+                r for r in self.distance_rules if r.sp42_edition in (None, edition)
+            ),
+        )
 
     @property
     def all_rules(self) -> tuple[AnyRule, ...]:
@@ -223,6 +259,7 @@ class RuleBook:
             *self.invasive_species,
             *self.invasive_groups,
             *self.species_restrictions,
+            *self.lawn_rules,
         )
 
     def distance_rules_for(
@@ -259,6 +296,9 @@ class RuleBook:
 
     def restriction(self, kind: RestrictionKind) -> SpeciesRestriction | None:
         return next((r for r in self.species_restrictions if r.kind is kind), None)
+
+    def lawn_rules_for(self, kind: LawnKind) -> tuple[LawnRule, ...]:
+        return tuple(r for r in self.lawn_rules if r.applies_to(kind))
 
 
 def genus_of(species_lat: str) -> str:

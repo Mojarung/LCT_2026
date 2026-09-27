@@ -11,16 +11,17 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment.assign import Assignment, Candidate, assign
 from green.application.assortment.context import site_context
 from green.application.assortment.filters import COMPOSITION, SpeciesVerdict, species_verdict
 from green.application.assortment.scoring import Score, percent, score_species
-from green.application.assortment.structures import build_structures
+from green.application.assortment.structures import GROUP, ROW, build_structures
 from green.application.assortment.summary import build_summary
 from green.application.barriers import BARRIER_CONDITION
+from green.application.wording import counted, plural
 from green.domain.norms import PlantingType
 from green.domain.planting import (
     SHRUB_FORMS,
@@ -47,8 +48,8 @@ NO_SPECIES = "no_species"
 _ALTERNATIVES = 3
 _SPLIT_REASON = Reason(
     COMPOSITION,
-    "структура содержит несколько видов: при выборе учтены совместимость, оценка видов "
-    "и квоты разнообразия",
+    "структура одним видом в квоты разнообразия не влезла: вид назначен этой посадке отдельно "
+    "из оставшегося допуска",
 )
 _FORMS = {
     PlantingType.TREE: TREE_FORMS,
@@ -118,7 +119,7 @@ def assign_species(
                     structure_id=structure.structure_id if structure else placement.placement_id,
                     structure_kind=structure.kind if structure else SINGLE,
                     species=species,
-                    score=score.total,
+                    score=score.total - _obligation(verdict, species, params),
                 )
             )
         verdicts[placement.placement_id] = allowed
@@ -135,6 +136,7 @@ def assign_species(
             index=index,
             status=status,
             split=assignment.split_placements,
+            used_up=assignment.used_up,
         )
         for placement in plan.placements
     )
@@ -149,7 +151,11 @@ def assign_species(
         rejected_by_kind=dict(rejected_kind),
         rejected_by_rule=dict(rejected_rule),
     )
-    warnings = (*plan.warnings, *_warnings(assignment, no_species), *conditions(placements))
+    warnings = (
+        *plan.warnings,
+        *_warnings(assignment, no_species, soft=params.quota_penalty > 0),
+        *conditions(placements),
+    )
     return replace(
         plan,
         placements=placements,
@@ -157,6 +163,21 @@ def assign_species(
         assortment_summary=summary,
         warnings=tuple(warnings),
     )
+
+
+def _obligation(verdict: SpeciesVerdict, species: Species, params: PlanParams) -> float:
+    """Поправка к оценке за вид с условием посадки или слабый аллерген.
+
+    Индекс качества вычитает штраф за каждую такую посадку (quality.PENALTIES): условие -
+    обязательство на годы (барьер, мужские клоны, контроль вида группы III), слабый аллерген
+    743-ПП не запрещает, но заказчику он не нужен. Подбор узнаёт об этом той же поправкой:
+    при равных квотах берётся вид без условия.
+    """
+    penalty = params.condition_penalty
+    if penalty <= 0:
+        return 0.0
+    conditional = any(reason.condition for reason in verdict.reasons)
+    return penalty * (int(conditional) + int(species.allergen == 1))
 
 
 def _drop_unplanted(
@@ -185,18 +206,28 @@ def _drop_unplanted(
     return renumbered, unplanted
 
 
-def _warnings(assignment: Assignment, no_species: int) -> list[str]:
+def _warnings(assignment: Assignment, no_species: int, *, soft: bool) -> list[str]:
     messages = [f"Подбор ассортимента: {note}." for note in assignment.notes]
-    if assignment.quota_violations:  # по построению пусто; если нет - это ошибка сервиса
+    if assignment.quota_violations and soft:
+        # Мягкие квоты (quota_penalty > 0): доля сверх квоты - штраф подбора, а не нарушение;
+        # место, прошедшее нормы, не пустеет (docs/notes/34: в принятых проектах главная
+        # порода - до 73%). Потолок хвойных и здесь жёсткий.
+        messages.append(
+            "Подбор ассортимента: доля вида выше квоты разнообразия (квота мягкая, перебор - "
+            "штраф подбора, место не пустеет): " + "; ".join(assignment.quota_violations)
+        )
+    elif assignment.quota_violations:  # по построению пусто; если нет - это ошибка сервиса
         messages.append(
             "Подбор ассортимента: ОШИБКА, квоты разнообразия нарушены: "
             + "; ".join(assignment.quota_violations)
         )
     if no_species:
+        places = counted(no_species, "место допустимо", "места допустимы", "мест допустимы")
+        taken = plural(no_species, "не занято", "не заняты", "не заняты")
+        moved = plural(no_species, "место перенесено", "места перенесены", "места перенесены")
         messages.append(
-            f"Подбор ассортимента: {no_species} мест допустимы по нормам, но не заняты: "
-            "ни один допустимый вид не укладывается в квоты разнообразия, места перенесены "
-            "в отказы."
+            f"Подбор ассортимента: {places} по нормам, но {taken}: ни один допустимый вид не "
+            f"укладывается в квоты разнообразия, {moved} в отказы."
         )
     return messages
 
@@ -239,8 +270,10 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     index: Mapping[str, Species],
     status: str,
     split: frozenset[str] = frozenset(),
+    used_up: Mapping[str, str] | None = None,
 ) -> Placement:
     ctx = contexts[placement.placement_id]
+    lost = _Lost(used_up or {}, ctx.structure_kind)
     allowed = verdicts.get(placement.placement_id, [])
     code = chosen.get(placement.placement_id)
     if code is None or code not in index:
@@ -253,7 +286,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 structure_id=ctx.structure_id,
                 structure_kind=ctx.structure_kind,
                 reasons=(_no_species_reason(allowed, given=status == GIVEN),),
-                alternatives=_alternatives(placement.placement_id, allowed, scores, None, None),
+                alternatives=_alternatives(placement.placement_id, allowed, scores, None, lost),
             ),
         )
     score = scores[(placement.placement_id, code)]
@@ -272,7 +305,9 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 if placement.placement_id in split
                 else verdict.reasons
             ),
-            alternatives=_alternatives(placement.placement_id, allowed, scores, code, score.total),
+            alternatives=_alternatives(
+                placement.placement_id, allowed, scores, (code, score.total), lost
+            ),
         ),
     )
 
@@ -289,14 +324,32 @@ def _no_species_reason(allowed: Sequence[SpeciesVerdict], *, given: bool) -> Rea
     return Reason(COMPOSITION, "ни один вид каталога не прошёл ограничения этой точки")
 
 
+@dataclass(frozen=True, slots=True)
+class _Lost:
+    """Чему уступил вид с оценкой выше выбранного: квоте (какой) или однородности структуры."""
+
+    used_up: Mapping[str, str]
+    structure_kind: str | None
+
+    def why(self, code: str) -> str:
+        if code in self.used_up:
+            return self.used_up[code]
+        if self.structure_kind == ROW:
+            return "ряд сажается одним видом"
+        if self.structure_kind == GROUP:
+            return "группа сажается одним видом"
+        return "квоты разнообразия по улице"
+
+
 def _alternatives(
     placement_id: str,
     allowed: Sequence[SpeciesVerdict],
     scores: Mapping[tuple[str, str], Score],
-    chosen_code: str | None,
-    chosen_score: float | None,
+    chosen: tuple[str, float] | None,
+    lost: _Lost,
 ) -> tuple[Alternative, ...]:
     """Три лучших вида, кроме выбранного: данные для ручной правки в будущем редакторе."""
+    chosen_code, chosen_score = chosen or (None, None)
     ranked = sorted(
         (
             (scores[(placement_id, v.species.code)].total, v.species)
@@ -313,7 +366,7 @@ def _alternatives(
             why_not=(
                 "оценка ниже"
                 if chosen_score is None or total <= chosen_score
-                else "уступил однородности структуры или квоте разнообразия"
+                else lost.why(species.code)
             ),
         )
         for total, species in ranked[:_ALTERNATIVES]

@@ -5,31 +5,22 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import ezdxf
-import numpy as np
 import pytest
 from ezdxf.acis import api as acis
 from ezdxf.render import forms
-from shapely.geometry import Point, box
 from test_pipeline_synthetic import ROOT, _street
 
-from green.application.classification import (
-    classification_report,
-    classify_scene,
-    require_classified,
-)
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
-from green.application.params import PlanParams
 from green.application.results import SourceSnapshot
-from green.application.surfaces import Material, build_surface_map
 from green.application.use_case import PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
+from green.domain.objects import GeometryGap, ReadDiagnostics, Scene
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import EzdxfIntegrityChecker, fingerprints
 from green.infrastructure.cad.merge import EzdxfDrawingMerger
 from green.infrastructure.cad.reader import EzdxfSceneReader
-from green.infrastructure.config.repositories import YamlLayerMapSource
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,14 +28,15 @@ if TYPE_CHECKING:
 
 def _inject_empty_region(path: Path, *, layer: str = "Газопровод") -> None:
     # ezdxf refuses to export empty ACIS; reproduce the converter's actual tags.
-    data = path.read_text()
+    # DXF 2007+ всегда в UTF-8: кодировка ОС по умолчанию (cp1251 на Windows) портит имя слоя.
+    data = path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
     marker = "  2\nENTITIES\n"
     assert marker in data
     tags = (
         "  0\nREGION\n  5\nAFF123\n100\nAcDbEntity\n"
         f"  8\n{layer}\n100\nAcDbModelerGeometry\n 70\n1\n100\nAcDbRegion\n"
     )
-    path.write_text(data.replace(marker, marker + tags, 1))
+    path.write_bytes(data.replace(marker, marker + tags, 1).encode("utf-8"))
 
 
 @pytest.mark.parametrize("layer", ["Газопровод", "0", "arbitrary", "Грунты"])
@@ -66,6 +58,27 @@ def test_empty_region_is_an_actionable_gap_regardless_of_layer(tmp_path: Path, l
     assert gaps[0].source_refs[0].endswith(":AFF123")
 
 
+def test_error_headline_names_what_is_missing_in_plain_words() -> None:
+    """Первую фразу страница неудавшегося прогона ставит заголовком (жюри, итерация 7): в ней
+    число ссылок и объектов словами, без кодов причин, ссылок на объекты и длинного тире."""
+    gap = GeometryGap("REGION", "Газопровод", None, "missing-acis-data", 3, ("h:A1", "h:A2"))
+    diagnostics = ReadDiagnostics(unresolved_xrefs=("XREF_Сети",), geometry_gaps=(gap,))
+    scene = Scene("s.dxf", "sha", "AC1032", (), read_diagnostics=diagnostics)
+    with pytest.raises(InputError) as caught:
+        require_complete_geometry(scene)
+    message = str(caught.value)
+    headline, _, details = message.partition(" Подробности: ")
+    assert headline.startswith(
+        "Чертёж прочитан не полностью: не найдена 1 внешняя ссылка, у 3 объектов нет геометрии. "
+        "Расчёт остановлен: сохраните DXF вместе с внешними ссылками"
+    )
+    assert "missing-acis-data" not in headline
+    assert "h:A1" not in headline
+    assert "XREF XREF_Сети" in details
+    assert "missing-acis-data" in details
+    assert "\N{EM DASH}" not in message
+
+
 @pytest.mark.parametrize("kind", ["region", "3dsolid", "body"])
 def test_unread_acis_is_blocking_even_if_payload_is_present(tmp_path: Path, kind: str) -> None:
     doc = ezdxf.new("R2018")
@@ -78,134 +91,48 @@ def test_unread_acis_is_blocking_even_if_payload_is_present(tmp_path: Path, kind
         require_complete_geometry(scene)
 
 
-def test_rotated_wipeout_keeps_uncertain_footprint(tmp_path: Path) -> None:
+def test_spatial_gap_inside_rotated_block_is_not_annotation(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
-    doc.units = 6
-    doc.layers.add("Газон")
-    doc.modelspace().add_lwpolyline(
-        [(0, 0), (300, 0), (300, 300), (0, 300)],
-        close=True,
-        dxfattribs={"layer": "Газон"},
-    )
+    block = doc.blocks.new("unknown geometry")
+    mesh = block.add_mesh()
+    with mesh.edit_data() as data:
+        data.vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        data.faces = [(0, 1, 2, 3)]
+    doc.modelspace().add_blockref(block.name, (200, 100), dxfattribs={"rotation": 30})
+    path = tmp_path / "mesh.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    with pytest.raises(InputError, match="MESH"):
+        require_complete_geometry(scene)
+    assert scene.read_diagnostics.geometry_gaps[0].block == block.name
+
+
+def test_mask_inside_rotated_block_is_an_accounted_underlay(tmp_path: Path) -> None:
+    """Маска WIPEOUT - картинка поверх чертежа, не объект: учёт её называет, прогон идёт."""
+    doc = ezdxf.new("R2018")
     block = doc.blocks.new("unknown geometry")
     block.add_wipeout([(0, 0), (10, 0), (10, 10), (0, 10)])
-    doc.modelspace().add_blockref(
-        block.name, (200, 100), dxfattribs={"rotation": 30, "layer": "Газон"}
-    )
+    doc.modelspace().add_blockref(block.name, (200, 100), dxfattribs={"rotation": 30})
     path = tmp_path / "mask.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
     require_complete_geometry(scene)
-    mask = next(feature for feature in scene.features if feature.source_entity_type == "WIPEOUT")
-    assert mask.block == block.name
-    assert mask.geometry.area == pytest.approx(100)
-    assert mask.geometry.contains(Point(201.83, 106.83))
-    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
-    classified, _ = classify_scene(scene, rules)
-    mask = next(
-        feature for feature in classified.features if feature.source_entity_type == "WIPEOUT"
-    )
-    assert mask.object_class.value == "drawing_mask"
-    surface = build_surface_map(classified.features, classified.labels, box(0, 0, 300, 300), 0.5)
-    assert surface is not None
-    assert surface.material(np.array([Point(201.83, 106.83)], dtype=object))[0] == Material.UNKNOWN
-    assert not surface.fits_soil(np.array([Point(201.83, 106.83)], dtype=object), 1)[0]
-    assert surface.material(np.array([Point(50, 50)], dtype=object))[0] == Material.SOIL
-
-
-def test_invalid_wipeout_still_blocks_planning(tmp_path: Path) -> None:
-    doc = ezdxf.new("R2018")
-    doc.modelspace().add_wipeout([(0, 0), (10, 10), (0, 10), (10, 0)])
-    path = tmp_path / "invalid-mask.dxf"
-    doc.saveas(path)
-    with pytest.raises(InputError, match="WIPEOUT"):
-        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
-
-
-def test_inverted_wipeout_clip_mode_still_blocks_planning(tmp_path: Path) -> None:
-    doc = ezdxf.new("R2018")
-    mask = doc.modelspace().add_wipeout([(0, 0), (10, 0), (10, 10), (0, 10)])
-    mask.dxf.clip_mode = 1
-    path = tmp_path / "inverted-mask.dxf"
-    doc.saveas(path)
-    with pytest.raises(InputError, match="WIPEOUT"):
-        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
+    assert scene.read_diagnostics.outcomes["skipped:WIPEOUT:underlay"] == 1
 
 
 def test_image_cannot_silently_become_available_land(tmp_path: Path) -> None:
+    """Растр - подложка (решение 25.09.2026): прогон не останавливает, но и земли не даёт:
+    объектов из картинки нет, а учёт и предупреждение называют её."""
     doc = ezdxf.new("R2018")
-    doc.units = 6
-    doc.layers.add("Газон")
-    doc.modelspace().add_lwpolyline(
-        [(0, 0), (40, 0), (40, 40), (0, 40)],
-        close=True,
-        dxfattribs={"layer": "Газон"},
-    )
     image = doc.add_image_def(filename="missing-survey.png", size_in_pixel=(100, 100))
-    doc.modelspace().add_image(
-        image, insert=(0, 0), size_in_units=(20, 20), dxfattribs={"layer": "Газон"}
-    )
+    doc.modelspace().add_image(image, insert=(0, 0), size_in_units=(20, 20))
     path = tmp_path / "raster.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
     require_complete_geometry(scene)
-    raster = next(feature for feature in scene.features if feature.source_entity_type == "IMAGE")
-    assert raster.geometry.area == pytest.approx(400)
-    rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
-    classified, _ = classify_scene(scene, rules)
-    raster = next(
-        feature for feature in classified.features if feature.source_entity_type == "IMAGE"
-    )
-    assert raster.object_class.value == "unknown"
-    params = PlanParams()
-    with pytest.raises(InputError, match="Требуется уточнить классы"):
-        require_classified(classification_report(classified, rules, params), params)
-    surface = build_surface_map(classified.features, [], box(0, 0, 40, 40), 0.5)
-    assert surface is not None
-    assert surface.material(np.array([Point(10, 10)], dtype=object))[0] == Material.UNKNOWN
-    assert surface.material(np.array([Point(30, 30)], dtype=object))[0] == Material.SOIL
-    ignored, _ = classify_scene(
-        scene, rules, PlanParams(feature_classes={str(raster.ref): "ignore"})
-    )
-    ignored_raster = next(
-        feature for feature in ignored.features if feature.source_entity_type == "IMAGE"
-    )
-    assert ignored_raster.object_class.value == "ignore"
-    reviewed = build_surface_map(ignored.features, [], box(0, 0, 40, 40), 0.5)
-    assert reviewed is not None
-    assert reviewed.material(np.array([Point(10, 10)], dtype=object))[0] == Material.SOIL
-    with pytest.raises(InputError, match="IMAGE"):
-        classify_scene(scene, rules, PlanParams(feature_classes={str(raster.ref): "lawn"}))
-
-
-def test_nested_image_footprint_keeps_transform_and_units(tmp_path: Path) -> None:
-    doc = ezdxf.new("R2018")
-    doc.units = 4
-    definition = doc.add_image_def(filename="survey.png", size_in_pixel=(100, 100))
-    block = doc.blocks.new("unfamiliar")
-    block.add_image(definition, insert=(0, 0), size_in_units=(1000, 1000))
-    doc.modelspace().add_blockref(
-        block.name, (100_000, 200_000), dxfattribs={"rotation": 37, "xscale": 2, "yscale": 2}
-    )
-    path = tmp_path / "nested-image.dxf"
-    doc.saveas(path)
-    scene = EzdxfSceneReader().read(path)
-    require_complete_geometry(scene)
-    assert len(scene.features) == 1
-    assert scene.features[0].source_entity_type == "IMAGE"
-    assert scene.features[0].block == block.name
-    assert scene.features[0].geometry.area == pytest.approx(4)
-
-
-def test_invalid_image_frame_remains_a_geometry_gap(tmp_path: Path) -> None:
-    doc = ezdxf.new("R2018")
-    definition = doc.add_image_def(filename="survey.png", size_in_pixel=(100, 100))
-    image = doc.modelspace().add_image(definition, insert=(0, 0), size_in_units=(20, 20))
-    image.dxf.image_size = (0, 100)
-    path = tmp_path / "broken-image.dxf"
-    doc.saveas(path)
-    with pytest.raises(InputError, match="IMAGE"):
-        require_complete_geometry(EzdxfSceneReader().read(path, unit="m"))
+    assert scene.features == ()
+    assert scene.read_diagnostics.outcomes["skipped:IMAGE:underlay"] == 1
+    assert any("IMAGE" in warning for warning in scene.warnings)
 
 
 def test_failure_to_interpret_a_spatial_curve_is_reported(tmp_path: Path) -> None:

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport, LayerMap
+    from green.application.editing import RunContext
     from green.application.params import PlanParams
     from green.application.results import (
         IntegrityReport,
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
         SourceSnapshot,
     )
     from green.domain.norms import RuleBook
-    from green.domain.objects import Scene
+    from green.domain.objects import Feature, Scene
     from green.domain.planting import Plan, Species
 
 
@@ -41,11 +42,17 @@ class DrawingConverter(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class MergeResult:
-    """Объединённый чертёж комплекта и заметки о склейке для предупреждений прогона."""
+    """Объединённый чертёж комплекта: журнал склейки и то, что меняет смысл плана.
+
+    notes - журнал (что прочитано, сколько сущностей, переименованные блоки); warnings -
+    листы не совпали, часть сущностей потеряна, разные единицы: об этом нужно сказать рядом
+    с числом посадок.
+    """
 
     path: Path
     notes: tuple[str, ...] = ()
     assembly: PackageAssembly | None = None
+    warnings: tuple[str, ...] = ()
 
 
 class DrawingMerger(Protocol):
@@ -56,6 +63,7 @@ class DrawingMerger(Protocol):
         *,
         unit: str = "auto",
         source_names: Sequence[str] = (),
+        absent_references: Sequence[tuple[str, str]] = (),
     ) -> MergeResult: ...
 
 
@@ -86,6 +94,7 @@ class InventoryCounts:
     approximate: Mapping[str, str] = field(default_factory=dict)  # название -> код по роду
     rows_read: int = 0
     rows_removed: int = 0  # заключение «вырубить»: этих деревьев после работ не будет
+    removed: int = 0  # сколько растений в строках «вырубить» (по графе количества)
     rows_matched: int = 0
     rows_unmatched: int = 0
     rows_without_count: int = 0  # количество не указано, принято за одно дерево
@@ -124,6 +133,14 @@ class StreetSource:
     main: Path
     extra: tuple[Path, ...] = ()
     size_mb: float = 0.0
+    # Пути файлов в архиве заказчика для (main, *extra): по ним сборка находит файл внешней
+    # ссылки так же, как AutoCAD. Пусто - имена файлов каталога.
+    sources: tuple[str, ...] = ()
+    # Ссылки (файл комплекта, путь), файлов которых нет во всём архиве заказчика.
+    absent_references: tuple[tuple[str, str], ...] = ()
+    # Единицы улицы, когда заголовок основы с геометрией спорит (Песчаный: «миллиметры»
+    # от шаблона при метровой топооснове). None - единицы решает заголовок.
+    drawing_unit: str | None = None
 
 
 class StreetCatalog(Protocol):
@@ -189,6 +206,29 @@ class ProgressSink(Protocol):
     def stage(self, name: str) -> None: ...
 
     def basemap(self, basemap: Basemap) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class GisLayers:
+    """Объекты дополнительных слоёв ГИС в координатах чертежа и журнал их приёма."""
+
+    features: tuple[Feature, ...] = ()
+    notes: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
+class GisLayerSource(Protocol):
+    """GeoJSON и SHP: класс объекта по конфигу, координаты - в систему чертежа."""
+
+    def read(self, paths: Sequence[Path]) -> GisLayers: ...
+
+
+class RunContextStore(Protocol):
+    """Контекст правки вне памяти: правка переживает перезапуск сервиса и новый прогон."""
+
+    def save(self, context: RunContext) -> None: ...
+
+    def load(self, run_id: str) -> RunContext | None: ...
 
 
 class RunStore(Protocol):

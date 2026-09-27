@@ -12,6 +12,7 @@ import pytest
 from shapely.geometry import LineString, Polygon, box
 
 from green.application.params import PlanParams
+from green.application.quality.coverage import fixed_crowns, measure_crowns
 from green.application.quality.site import site_of
 from green.application.quality.terms import Layout, dust
 from green.domain.norms import PlantingType
@@ -53,7 +54,10 @@ def _result(
                 object_class=ObjectClass.WORK_BOUNDARY,
             )
         )
-    return dust(Layout.of(trees), site_of(features), PlanParams(dust_target=1.0))
+    # Геометрия меры: крона над бортом засчитывается целиком (индекс v2 по умолчанию берёт
+    # её с коэффициентом dust_crown_factor, здесь проверяется сама длина покрытия).
+    params = PlanParams(dust_target=1.0, dust_crown_factor=1.0)
+    return dust(Layout.of(trees), site_of(features), params)
 
 
 @pytest.mark.parametrize(("x", "y", "expected"), [(5, 2, 3.0), (0, 2, 1.5), (5, 2.5, 0.0)])
@@ -176,3 +180,30 @@ def test_quality_clip_tolerance_does_not_include_a_curb_one_mm_outside() -> None
         [_tree(1, 0, 5, 2.5)], [LineString([(-0.001, 0), (-0.001, 10)])], box(0, 0, 10, 10)
     )
     assert result.score is None
+
+
+def test_fixed_crowns_give_the_same_coverage_as_the_full_sum() -> None:
+    """Существующие кроны считаются по бортам один раз; итог тот же, что у полного счёта."""
+    rng = np.random.default_rng(7)
+    starts = rng.uniform(0, 200, size=(300, 2))
+    segments = np.stack([starts, starts + rng.uniform(-3, 3, size=(300, 2))], axis=1)
+    new_xy, new_r = rng.uniform(0, 200, size=(40, 2)), rng.uniform(0.5, 4, 40)
+    new_w = rng.uniform(0.1, 1, 40)
+    old_xy, old_r = rng.uniform(0, 200, size=(200, 2)), np.full(200, 4.25)
+    old_w = np.full(200, 0.25)
+    full = measure_crowns(
+        segments,
+        np.vstack([new_xy, old_xy]),
+        np.concatenate([new_r, old_r]),
+        np.concatenate([new_w, old_w]),
+    )
+    fixed = fixed_crowns(segments, old_xy, old_r, old_w)
+    fast = measure_crowns(segments, new_xy, new_r, new_w, fixed=fixed)
+    assert fast.length_m == pytest.approx(full.length_m)
+    assert fast.covered_m == pytest.approx(full.covered_m)
+    assert fast.weighted_m == pytest.approx(full.weighted_m)
+    assert fast.loss_m == pytest.approx(full.loss_m[:40])
+    assert fast.reach_m == pytest.approx(full.reach_m[:40])
+    assert fixed.covered_m == pytest.approx(
+        measure_crowns(segments, old_xy, old_r, old_w).covered_m
+    )

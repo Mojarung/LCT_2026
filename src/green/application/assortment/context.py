@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from green.application.places import category_of
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome
 
@@ -30,6 +31,9 @@ class SiteContext:
     under_overhead_line: bool
     structure_id: str | None = None
     structure_kind: str | None = None  # row | group | single
+    # Категория В.6 места посадки (application/places); None - место не определено,
+    # берётся категория профиля.
+    category: str | None = None
 
 
 def site_context(
@@ -57,6 +61,7 @@ def site_context(
         under_overhead_line=under_line,
         structure_id=structure_id,
         structure_kind=structure_kind,
+        category=category_of(placement.place, "") or None,
     )
 
 

@@ -10,8 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from green.application.classification import GeometryKind, MatchTarget
 from green.application.params import DEFAULT_QUALITY_WEIGHTS, DEFAULT_WEIGHTS
+from green.application.symbols import SymbolRole
 from green.domain.norms import (
     CitationStatus,
+    LawnKind,
     MeasureTo,
     PlantingType,
     RestrictionKind,
@@ -64,6 +66,7 @@ class DistanceRuleModel(_Strict):
     genera: list[str] = Field(default_factory=list)
     min_crown_m: float | None = Field(default=None, gt=0, le=40)
     traits: list[Literal["thorny", "toxic"]] = Field(default_factory=list)
+    sp42_edition: Literal["2016", "2026"] | None = None
     citation: CitationModel
 
 
@@ -98,12 +101,19 @@ class SpeciesRestrictionModel(_Strict):
     citation: CitationModel
 
 
+class LawnRuleModel(_Strict):
+    rule_id: str = Field(pattern=_RULE_ID)
+    kind: LawnKind | None = None
+    citation: CitationModel
+
+
 class RulesFile(_Strict):
     version: int = 1
     distance_rules: list[DistanceRuleModel]
     invasive_species: list[InvasiveSpeciesModel] = Field(default_factory=list)
     invasive_groups: list[InvasiveGroupModel] = Field(default_factory=list)
     species_restrictions: list[SpeciesRestrictionModel] = Field(default_factory=list)
+    lawn_rules: list[LawnRuleModel] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _every_listed_group_has_a_rule(self) -> RulesFile:
@@ -121,8 +131,9 @@ class LayerRuleModel(_Strict):
     object_class: ObjectClass
     confirmed: bool = False
     note: str = ""
+    # Почему слой не участвует в расчёте: обязательна для ignore, попадает в отчёт.
+    reason: str = ""
     priority: int = 0
-    symbol_instance: bool = False
 
     @field_validator("pattern")
     @classmethod
@@ -130,10 +141,72 @@ class LayerRuleModel(_Strict):
         re.compile(value)
         return value
 
+    @model_validator(mode="after")
+    def _ignore_is_explained(self) -> LayerRuleModel:
+        if self.object_class is ObjectClass.IGNORE and not self.reason.strip():
+            raise ValueError(f"правило {self.pattern!r} с классом ignore без reason")
+        return self
+
 
 class LayerMapFile(_Strict):
     version: int = 1
     rules: list[LayerRuleModel]
+
+
+class SymbolModel(_Strict):
+    object_class: ObjectClass = Field(alias="class")
+    role: SymbolRole
+    confirmed: bool = False
+    note: str = ""
+    source: str = ""
+
+
+class VocabularyClassModel(_Strict):
+    rank: Literal["point", "line", "object", "surface", "boundary"]
+    words: list[str] = Field(default_factory=list)
+    phrases: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("patterns")
+    @classmethod
+    def _compiles(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            re.compile(pattern)
+        return value
+
+
+class VocabularyAnnotationModel(_Strict):
+    words: list[str] = Field(default_factory=list)
+    phrases: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("patterns")
+    @classmethod
+    def _compiles(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            re.compile(pattern)
+        return value
+
+
+class VocabularyFile(_Strict):
+    """config/vocabulary.yaml: слова имён слоёв и блоков -> класс незнакомого объекта."""
+
+    version: int = 1
+    separators: list[str] = Field(default_factory=list)
+    negations: list[str] = Field(default_factory=list)
+    removal: list[str] = Field(default_factory=list)
+    proposed: list[str] = Field(default_factory=list)
+    existing: list[str] = Field(default_factory=list)
+    annotation: VocabularyAnnotationModel = Field(default_factory=VocabularyAnnotationModel)
+    weak: dict[str, ObjectClass] = Field(default_factory=dict)
+    classes: dict[ObjectClass, VocabularyClassModel]
+
+
+class SymbolsFile(_Strict):
+    """config/symbols.yaml: код условного знака -> класс объекта и роль знака."""
+
+    version: int = 1
+    symbols: dict[str, SymbolModel]
 
 
 class SpeciesModel(_Strict):
@@ -222,11 +295,13 @@ class ProfileModel(_Strict):
     description: str = ""
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
-    spacing_m: float = Field(default=6.0, ge=0.3, le=50)
-    curb_offsets_m: tuple[float, ...] = Field(default=(2.0, 2.5, 3.0), min_length=1, max_length=10)
+    spacing_m: float = Field(default=5.0, ge=0.3, le=50)
+    curb_offsets_m: tuple[float, ...] = Field(default=(3.0, 2.5, 2.0), min_length=1, max_length=10)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
+    infer_unknown: bool = True
+    assume_unknown_geometry: bool = True
     semantic_source_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     layer_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     block_classes: dict[str, ObjectClass] = Field(default_factory=dict)
@@ -237,16 +312,21 @@ class ProfileModel(_Strict):
     max_rejections: int = Field(default=2000, ge=0, le=100_000)
     require_soil: bool = True
     require_work_boundary: bool = True
-    planting_radius_m: float = Field(default=1.6, ge=0, le=10)
+    planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м
     shrub_planting_radius_m: float = Field(default=0.5, ge=0, le=10)
     surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)
-    surface_inference_mode: Literal["closed_faces", "distance"] = "closed_faces"
+    surface_inference_mode: Literal["closed_faces", "distance", "hybrid"] = "hybrid"
     surface_max_distance_m: float = Field(default=30.0, gt=0, le=500)
     surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
-    modes: tuple[Literal["alley", "lawn"], ...] = Field(default=("alley", "lawn"), min_length=1)
+    modes: tuple[Literal["alley", "lawn", "fill"], ...] = Field(
+        default=("alley", "lawn", "fill"), min_length=1
+    )
+    fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
     placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"
+    portfolio_budget_s: float = Field(default=900.0, ge=0, le=86_400)
+    refine_budget_s: float = Field(default=30.0, ge=0, le=3_600)
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
     placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)
@@ -268,14 +348,42 @@ class ProfileModel(_Strict):
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
+    allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
+    sp42_edition: Literal["2016", "2026"] = "2016"
     root_barriers: bool = False
     shrub_groups: bool = True
     shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
     shrub_group_size: int = Field(default=3, ge=1, le=5)
-    shrub_quota_species: float = Field(default=0.20, gt=0, le=1)
-    shrub_quota_genus: float = Field(default=0.35, gt=0, le=1)
-    shrub_quota_family: float = Field(default=0.50, gt=0, le=1)
+    shrub_rows: bool = True
+    shrub_row_curb_offsets_m: tuple[float, ...] = Field(default=(1.3, 1.0), min_length=1)
+    shrub_row_spacing_m: float = Field(default=0.4, ge=0.2, le=2.0)
+    shrub_row_tree_gap_m: float = Field(default=1.25, ge=0, le=5)
+    shrub_row_access_gap_m: float = Field(default=1.0, ge=0, le=5)
+    shrub_row_gap_buffer_m: float = Field(default=5.0, ge=0, le=20)
+    shrub_row_break_min_m: float = Field(default=2.5, ge=0, le=50)
+    shrub_row_min_length_m: float = Field(default=3.0, ge=0, le=50)
+    shrub_row_height_m: float = Field(default=1.0, gt=0, le=3)
+    hedge_species_balance: bool = True
+    curb_hedges: bool = True
+    curb_hedge_spacing_m: float = Field(default=1.0, ge=0.2, le=2.0)
+    curb_hedge_density_cap: bool = True
+    understory: bool = True
+    understory_trees: Literal["alley", "all"] = "all"
+    understory_size: int = Field(default=3, ge=1, le=7)
+    understory_radii_m: tuple[float, ...] = Field(default=(2.2, 2.6, 3.0), min_length=1)
+    understory_existing: bool = True
+    understory_existing_gap_m: float = Field(default=3.0, ge=1, le=10)
+    shrub_fill: bool = True
+    shrub_fill_tree_gap_m: float = Field(default=3.0, ge=0, le=20)
+    shrub_fill_shrub_gap_m: float = Field(default=2.0, ge=0, le=20)
+    shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
+    lawns: bool = True
+    lawn_min_area_m2: float = Field(default=5.0, ge=0, le=10_000)
+    # Практика проектов пилота (docs/notes/34): главный вид кустарника 27-61%, медиана 35-40%.
+    shrub_quota_species: float = Field(default=0.40, gt=0, le=1)
+    shrub_quota_genus: float = Field(default=0.50, gt=0, le=1)
+    shrub_quota_family: float = Field(default=0.70, gt=0, le=1)
     shrub_conifer_share: tuple[float, float] = Field(default=(0.0, 0.30))
     shrub_quotas_use_inventory: bool = False
     quota_species: float = Field(default=0.10, gt=0, le=1)
@@ -283,15 +391,28 @@ class ProfileModel(_Strict):
     quota_family: float = Field(default=0.30, gt=0, le=1)
     conifer_share: tuple[float, float] = Field(default=(0.15, 0.40))
     structure_patch_size: int = Field(default=10, ge=1, le=200)
+    alley_priority: float = Field(default=2.0, ge=0, le=100)
+    quota_penalty: float = Field(default=0.0, ge=0, le=100)
+    quota_adaptive: bool = False
+    quota_single_places: float = Field(default=30.0, ge=1, le=10_000)
+    condition_penalty: float = Field(default=0.2, ge=0, le=1)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     quality_weights: dict[str, float] = Field(default_factory=dict)
     density_trees_per_km: tuple[float, float] = Field(default=(150.0, 180.0))
     density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
-    canopy_target: float = Field(default=1.0, gt=0, le=5)
+    canopy_target: float = Field(default=0.75, gt=0, le=5)
+    canopy_crown_m: float = Field(default=8.5, gt=0, le=40)
+    existing_crown_m: float = Field(default=8.5, gt=0, le=40)
+    street_length_m: float | None = Field(default=None, gt=0, le=100_000)
     dust_target: float = Field(default=0.50, gt=0, le=1)
-    margin_target: float = Field(default=0.20, gt=0, le=5)
-    diversity_target: int = Field(default=10, ge=1, le=100)
+    dust_strip_m: float = Field(default=2.0, ge=0, le=10)
+    dust_crown_factor: float = Field(default=0.5, ge=0, le=1)
+    margin_target_m: float = Field(default=0.5, gt=0, le=5)
+    diversity_target: int = Field(default=5, ge=1, le=100)
+    diversity_species_share: float = Field(default=0.1, gt=0, le=1)
+    density_admissible: bool = True
+    dust_admissible: bool = True
 
     @field_validator("density_trees_per_km", "density_shrubs_per_km", "row_spacing_m")
     @classmethod
@@ -310,6 +431,12 @@ class ProfileModel(_Strict):
         if any(weight < 0 for weight in value.values()):
             raise ValueError("quality_weights: вес не может быть отрицательным")
         return value
+
+    @field_validator("sp42_edition", mode="before")
+    @classmethod
+    def _edition(cls, value: object) -> object:
+        """Год редакции числом (--set sp42_edition=2026 разбирается как YAML) - та же редакция."""
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
     @field_validator("disabled_rules")
     @classmethod

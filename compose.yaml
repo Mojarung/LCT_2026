@@ -11,7 +11,10 @@ services:
       GREEN_CORS_ORIGINS: '["http://localhost:5173"]'
       # Каталог улиц пилотного проекта внутри смонтированного датасета. Датасета может не
       # быть - тогда список улиц пуст, а форма принимает свой чертёж, как и раньше.
-      GREEN_STREETS_DIR: /dataset/streets_dxf
+      GREEN_STREETS_DIR: /dataset/streets_oda
+      # Стенд по ТЗ - 10-20 ГБ SSD, прогон тяжёлой улицы - до нескольких ГБ: перед новым
+      # прогоном самые старые законченные удаляются, пока том прогонов больше предела.
+      GREEN_RUNS_MAX_GB: "8"
     volumes:
       - runs:/data/runs
       - ./dataset:/dataset:ro

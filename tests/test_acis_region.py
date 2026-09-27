@@ -1,0 +1,247 @@
+"""REGION - замкнутая область, форма которой хранится в данных ACIS, а не в DXF-геометрии.
+
+В выгрузках Мосгеотреста так записаны газоны, ограды, лестницы и участки сетей. Без разбора
+ACIS эти области терялись целиком: на Старом Гае 12 180, на Академика Понтрягина 33 339
+(перепись 24.09.2026, docs/plans/2026-09-24-lossless-reader-plan.md).
+"""
+
+from __future__ import annotations
+
+import math
+import struct
+from typing import TYPE_CHECKING
+
+import ezdxf
+import pytest
+from ezdxf.acis import api as acis
+from ezdxf.acis import entities as acis_entities
+from ezdxf.acis import sab
+from ezdxf.acis.const import Tags
+from ezdxf.math import Matrix44
+from ezdxf.render.mesh import MeshBuilder
+
+from green.infrastructure.cad.acis_region import RegionGeometryError, region_polygon
+from green.infrastructure.cad.reader import EzdxfSceneReader
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ezdxf.layouts import BaseLayout
+
+SIDE = 10.0
+ARC_SAT = (
+    "400 0 1 0",
+    "9 test tool 8 ACIS 4.0 24 Thu Sep 24 12:00:00 2026",
+    "25.4 9.9999999999999995e-07 1e-10",
+    "body $-1 $1 $-1 $-1 #",
+    "lump $-1 $-1 $2 $0 #",
+    "shell $-1 $-1 $-1 $3 $-1 $1 #",
+    "face $-1 $-1 $4 $2 $-1 $5 forward single #",
+    "loop $-1 $-1 $6 $3 #",
+    "plane-surface $-1 0 0 0 0 0 1 1 0 0 forward_v I I I I #",
+    "coedge $-1 $7 $7 $-1 $8 forward $4 $-1 #",
+    "coedge $-1 $6 $6 $-1 $9 forward $4 $-1 #",
+    "edge $-1 $10 $11 $6 $12 forward #",
+    "edge $-1 $11 $10 $7 $13 forward #",
+    "vertex $-1 $8 $14 #",
+    "vertex $-1 $9 $15 #",
+    "ellipse-curve $-1 0 0 0 0 0 1 5 0 0 1 I I #",
+    "straight-curve $-1 -5 0 0 1 0 0 I I #",
+    "point $-1 5 0 0 #",
+    "point $-1 -5 0 0 #",
+)
+
+
+def _square_region(layout: BaseLayout) -> None:
+    mesh = MeshBuilder()
+    mesh.add_face([(0, 0, 0), (SIDE, 0, 0), (SIDE, SIDE, 0), (0, SIDE, 0)])
+    region = layout.add_region(dxfattribs={"layer": "Леса и газоны"})
+    acis.export_dxf(region, [acis.body_from_mesh(mesh)])
+
+
+def test_square_region_becomes_its_polygon() -> None:
+    doc = ezdxf.new("R2000")
+    _square_region(doc.modelspace())
+    region = doc.modelspace().query("REGION").first
+
+    polygon, error = region_polygon(region, None, 0.1)
+
+    assert polygon.area == pytest.approx(SIDE * SIDE)
+    assert polygon.bounds == pytest.approx((0, 0, SIDE, SIDE))
+    assert error == 0.0
+
+
+def test_region_inside_a_rotated_insert_lands_in_world_coordinates(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2000")
+    block = doc.blocks.new("LAWN_PATCH")
+    _square_region(block)
+    doc.modelspace().add_blockref("LAWN_PATCH", (100, 50), dxfattribs={"rotation": 90})
+    path = tmp_path / "rotated.dxf"
+    doc.saveas(path)
+
+    scene = EzdxfSceneReader().read(path)
+
+    regions = [f for f in scene.features if f.source_entity_type == "REGION"]
+    assert len(regions) == 1
+    assert regions[0].geometry.area == pytest.approx(SIDE * SIDE)
+    assert regions[0].geometry.centroid.x == pytest.approx(100 - SIDE / 2)
+    assert regions[0].geometry.centroid.y == pytest.approx(50 + SIDE / 2)
+    assert not scene.read_diagnostics.geometry_gaps
+
+
+def test_region_without_acis_data_stays_a_named_gap(tmp_path: Path) -> None:
+    """Так её оставляет LibreDWG для DWG 2018: теги есть, данных ACIS нет. ezdxf такую не пишет."""
+    doc = ezdxf.new("R2018")
+    doc.layers.add("Газопровод")
+    path = tmp_path / "empty.dxf"
+    doc.saveas(path)
+    data = path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+    marker = "  2\nENTITIES\n"
+    region = (
+        "  0\nREGION\n  5\nAFF123\n100\nAcDbEntity\n  8\nГазопровод\n"
+        "100\nAcDbModelerGeometry\n 70\n1\n100\nAcDbRegion\n"
+    )
+    path.write_bytes(data.replace(marker, marker + region, 1).encode("utf-8"))
+
+    scene = EzdxfSceneReader().read(path)
+
+    gaps = scene.read_diagnostics.geometry_gaps
+    assert [(g.entity_type, g.reason, g.count) for g in gaps] == [
+        ("REGION", "missing-acis-data", 1)
+    ]
+    assert not scene.features
+
+
+def test_arc_edges_are_flattened_within_tolerance() -> None:
+    """Полукруг радиусом 5: дуга ellipse-curve и хорда straight-curve по диаметру."""
+    doc = ezdxf.new("R2000")
+    region = doc.modelspace().add_region()
+    region.sat = list(ARC_SAT)
+    tolerance = 0.01
+
+    polygon, error = region_polygon(region, None, tolerance)
+
+    half_disc = math.pi * 25 / 2
+    assert polygon.area == pytest.approx(half_disc, rel=0.01)
+    assert polygon.area <= half_disc
+    assert polygon.bounds == pytest.approx((-5, 0, 5, 5), abs=tolerance)
+    assert error == pytest.approx(tolerance)
+
+
+def test_asm_sat_with_pointer_ids_is_read() -> None:
+    """ASM AutoCAD (SAT 21200, DXF 2007): второе поле записи - «$-1» вместо «-1».
+
+    Так записаны сети Песчаного переулка; ezdxf ждёт число и падал на первой записи.
+    """
+    doc = ezdxf.new("R2000")
+    _square_region(doc.modelspace())
+    region = doc.modelspace().query("REGION").first
+    lines = list(region.sat)
+    asm = [lines[0].replace("700", "21200", 1), *lines[1:3]]
+    for line in lines[3:]:
+        tokens = line.split(" ")
+        if len(tokens) > 2 and tokens[2] == "-1":
+            tokens[2] = "$-1"
+        asm.append(" ".join(tokens))
+    region.sat = asm
+
+    polygon, _ = region_polygon(region, None, 0.1)
+
+    assert polygon.area == pytest.approx(SIDE * SIDE)
+
+
+def _sab_square(transform: bytes | None = None) -> bytes:
+    """SAB квадрата со стороной 10 и центром (100, 50): сдвиг задан его матрицей transform.
+
+    ezdxf пишет transform одной строкой, как AutoCAD и ODA 27.1; transform - байты записи
+    ACIS 223 из ODA 27.7 и nanoCAD вместо этой строки: векторы строк матрицы, перенос,
+    масштаб, флаги. Указатели SAB - номера записей, замена токена внутри записи их не сдвигает.
+    """
+    half = SIDE / 2  # квадрат с центром в нуле: body_from_mesh не добавит своего сдвига
+    mesh = MeshBuilder()
+    mesh.add_face([(-half, -half, 0), (half, -half, 0), (half, half, 0), (-half, half, 0)])
+    body = acis.body_from_mesh(mesh)
+    matrix = acis_entities.Transform()
+    matrix.matrix = Matrix44.translate(100, 50, 0)
+    body.transform = matrix
+    data = acis.export_sab([body])
+    if transform is None:
+        return data
+    record = next(e for e in sab.parse_sab(data).entities if e.name == "transform")
+    text = record.data[0].value.encode()
+    literal = struct.pack("<Bi", Tags.LITERAL_STR, len(text)) + text
+    assert data.count(literal) == 1
+    return data.replace(literal, transform)
+
+
+def _vector_transform(rows: list[tuple[float, float, float]], scale: float) -> bytes:
+    vectors = b"".join(
+        struct.pack("<Bddd", Tags.DIRECTION_VEC, *row) for row in [*rows, (100.0, 50.0, 0.0)]
+    )
+    return vectors + struct.pack("<Bd", Tags.DOUBLE, scale) + bytes([Tags.BOOL_FALSE] * 3)
+
+
+def _sab_region(data: bytes):  # noqa: ANN202 - Body из ezdxf, тип не экспортируется
+    doc = ezdxf.new("R2018")
+    region = doc.modelspace().add_region()
+    region.sab = data
+    return region
+
+
+def test_sab_transform_written_as_a_string_moves_the_region() -> None:
+    polygon, _ = region_polygon(_sab_region(_sab_square()), None, 0.1)
+
+    assert polygon.bounds == pytest.approx((95, 45, 105, 55))
+
+
+def test_sab_transform_written_as_vectors_moves_the_region() -> None:
+    """Так пишет ODA 27.7: у ezdxf на такой записи ParsingError, области Камчатской терялись."""
+    identity = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    region = _sab_region(_sab_square(_vector_transform(identity, 1.0)))
+
+    polygon, _ = region_polygon(region, None, 0.1)
+
+    assert polygon.bounds == pytest.approx((95, 45, 105, 55))
+
+
+def test_transform_scale_multiplies_the_unit_rotation() -> None:
+    """ACIS хранит масштаб отдельно от матрицы поворота: строки матрицы единичной длины."""
+    quarter_turn = [(0.0, 1.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    region = _sab_region(_sab_square(_vector_transform(quarter_turn, 2.0)))
+
+    polygon, _ = region_polygon(region, None, 0.1)
+
+    assert polygon.area == pytest.approx(4 * SIDE * SIDE)
+    assert polygon.bounds == pytest.approx((90, 40, 110, 60))
+
+
+def test_scale_on_top_of_scaled_rows_is_a_reasoned_error() -> None:
+    """Строки не единичные и масштаб не 1: чем умножать - неизвестно, форму не угадываем."""
+    stretched = [(2.0, 0.0, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 2.0)]
+    region = _sab_region(_sab_square(_vector_transform(stretched, 2.0)))
+
+    with pytest.raises(RegionGeometryError) as caught:
+        region_polygon(region, None, 0.1)
+
+    assert caught.value.reason == "acis-transform-scale"
+
+
+def test_unparseable_acis_is_a_reasoned_error() -> None:
+    doc = ezdxf.new("R2000")
+    region = doc.modelspace().add_region()
+    region.sat = ["700 0 1 0", "@4 test @4 ACIS @4 date", "1 1e-06 1e-10", "body broken #"]
+
+    with pytest.raises(RegionGeometryError) as caught:
+        region_polygon(region, None, 0.1)
+
+    assert caught.value.reason.startswith("acis-not-parsed")
+
+
+def test_region_without_data_raises_a_reasoned_error() -> None:
+    doc = ezdxf.new("R2000")
+    region = doc.modelspace().add_region()
+
+    with pytest.raises(RegionGeometryError) as caught:
+        region_polygon(region, None, 0.1)
+
+    assert caught.value.reason == "missing-acis-data"

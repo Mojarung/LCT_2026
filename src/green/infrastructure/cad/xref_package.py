@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
+import struct
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
@@ -12,14 +13,16 @@ from typing import TYPE_CHECKING
 from ezdxf import xref
 from ezdxf.entities import Insert
 from ezdxf.lldxf import const
+from ezdxf.math import Vec3
 
 from green.application.assembly import PackageAssembly, PackageInput, ReferenceBinding
 from green.application.errors import InputError
+from green.application.semantic_names import slug_key
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
     from pathlib import Path
 
     from ezdxf.document import Drawing
@@ -27,6 +30,16 @@ if TYPE_CHECKING:
     from ezdxf.layouts import BaseLayout, BlockLayout
 
 MAX_REFERENCE_DEPTH = 8
+
+
+def file_name(reference: str) -> str:
+    """Имя файла из пути внешней ссылки или имени файла комплекта.
+
+    Путь с диска проектировщика («..\\..\\Исходные данные\\сети.dwg») в журнале чтения ничего
+    не говорит и не помещается в панель интерфейса; различает ссылки имя файла. Разделители
+    Windows и POSIX - оба: пути в DWG пишут и так, и так.
+    """
+    return reference.replace("\\", "/").rsplit("/", 1)[-1] or reference
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +60,20 @@ class DrawingPackage:
     notes: list[str]
     bindings: list[ReferenceBinding] = field(default_factory=list)
     resolved: set[int] = field(default_factory=set)
+    absent: frozenset[tuple[str, str]] = frozenset()
 
     @classmethod
-    def load(cls, sources: Sequence[Path], names: Sequence[str] = ()) -> DrawingPackage:
+    def load(
+        cls,
+        sources: Sequence[Path],
+        names: Sequence[str] = (),
+        absent: Collection[tuple[str, str]] = (),
+    ) -> DrawingPackage:
+        """absent - пары (файл комплекта, путь ссылки), которых нет в исходных данных заказчика.
+
+        Их составляет каталог улиц, проверив весь архив. Такая ссылка не останавливает сборку,
+        а становится названным пробелом входных данных; любая другая ненайденная - ошибка.
+        """
         labels = tuple(names) if names else tuple(str(path) for path in sources)
         if len(labels) != len(sources):
             raise InputError("Комплект: число исходных имён не совпадает с числом файлов")
@@ -59,6 +83,12 @@ class DrawingPackage:
         for path in sources:
             doc, warnings = load_document(path)
             require_exportable_document(doc, path.name)
+            replaced = _explode_proxies(doc)
+            if replaced:
+                notes.append(
+                    f"Комплект: в {path.name} {replaced} прокси-объектов (ACAD_PROXY_ENTITY) "
+                    "заменены своим рисунком: ezdxf не переносит их между файлами"
+                )
             documents.append(doc)
             notes.extend(warnings)
         links = tuple(
@@ -73,11 +103,8 @@ class DrawingPackage:
             )
             for index, doc in enumerate(documents)
         )
-        referenced = {link.target for group in links for link in group if link.target is not None}
-        if 0 in referenced:
-            raise InputError(
-                "Комплект: основа сама указана во внешней ссылке; проверьте цикл/выбор основы"
-            )
+        # Ссылка на основу не делает её «ссылаемой»: основа уже во входе (_provide_base).
+        referenced = {link.target for group in links for link in group if link.target}
         roots = (0, *(index for index in range(1, len(sources)) if index not in referenced))
         # A closed component of extra files must not silently disappear from a package.
         reached = set(roots)
@@ -89,7 +116,8 @@ class DrawingPackage:
                     pending.append(link.target)
         if len(reached) != len(sources):
             raise InputError("Комплект: замкнутый цикл внешних ссылок среди дополнительных файлов")
-        return cls(sources, labels, tuple(documents), roots, links, notes)
+        declared = frozenset((_nfc(host), _nfc(reference)) for host, reference in absent)
+        return cls(sources, labels, tuple(documents), roots, links, notes, absent=declared)
 
     def resolve(self) -> None:
         for index in self.roots:
@@ -100,67 +128,125 @@ class DrawingPackage:
             raise InputError(f"XREF: цикл или слишком глубокая вложенность: {self.names[index]}")
         if index in self.resolved:
             return
-        doc = self.documents[index]
         for link in self.links[index]:
-            block = link.block
             if chain and link.overlay:
-                if len(block):
-                    raise InputError(f"XREF {block.name}: вложенный overlay содержит кэш геометрии")
-                _clear_xref_flags(block)
-                self.bindings.append(
-                    ReferenceBinding(
-                        self.names[index],
-                        block.name,
-                        link.reference,
-                        self.names[link.target] if link.target is not None else None,
-                        "excluded_nested_overlay",
-                        0,
-                    )
-                )
+                self._exclude_nested_overlay(index, link)
                 continue
-            if link.target is None:
-                raise InputError(
-                    f"XREF {block.name}: файл {link.reference!r} не предоставлен в комплекте "
-                    f"для {self.names[index]}. Автоматический поиск вне комплекта запрещён."
-                )
-            if len(block):
-                raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
-            self._resolve(link.target, chain=(*chain, index))
-            source = self.documents[link.target]
-            if source.dxfversion > doc.dxfversion:
-                raise InputError(
-                    f"XREF {block.name}: версия DXF новее основы; приведите версии к общей"
-                )
-            expected = expanded_entity_counts(source.modelspace())
-            loader = xref.Loader(source, doc, conflict_policy=xref.ConflictPolicy.XREF_PREFIX)
-            loader.load_modelspace(block)
-            loader.execute(xref_prefix=block.name)
-            _clear_xref_flags(block)
-            _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
-            actual = expanded_entity_counts(block)
-            if actual != expected:
-                missing = expected - actual
-                added = actual - expected
-                details = "; ".join(
-                    f"{label}: "
-                    + ", ".join(f"{kind}×{count}" for kind, count in sorted(changes.items())[:5])
-                    for label, changes in (("недостаёт", missing), ("добавлено", added))
-                    if changes
-                )
-                raise InputError(
-                    f"XREF {block.name}: при внедрении потеряны/заменены сущности ({details})"
-                )
-            self.bindings.append(
-                ReferenceBinding(
-                    self.names[index],
-                    block.name,
-                    link.reference,
-                    self.names[link.target],
-                    "embedded",
-                    len(source.modelspace()),
-                )
-            )
+            if (
+                link.target is None
+                and (_nfc(self.names[index]), _nfc(link.reference)) in self.absent
+            ):
+                self._skip_absent(index, link)
+                continue
+            target = self._supplied_target(index, link)
+            if target == 0:
+                self._provide_base(index, link, nested=bool(chain))
+            else:
+                self._resolve(target, chain=(*chain, index))
+                self._embed(index, link, target)
         self.resolved.add(index)
+
+    def _exclude_nested_overlay(self, index: int, link: _Link) -> None:
+        block = link.block
+        if len(block):
+            raise InputError(f"XREF {block.name}: вложенный overlay содержит кэш геометрии")
+        _clear_xref_flags(block)
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index],
+                block.name,
+                link.reference,
+                self.names[link.target] if link.target is not None else None,
+                "excluded_nested_overlay",
+                0,
+            )
+        )
+
+    def _skip_absent(self, index: int, link: _Link) -> None:
+        """Файла ссылки нет в исходных данных: объектов из него на плане нет, и это видно."""
+        block = link.block
+        if len(block):
+            raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
+        _clear_xref_flags(block)
+        self.notes.append(
+            f"XREF {block.name}: файла «{file_name(link.reference)}» нет в исходных данных "
+            f"заказчика, его объектов на плане нет ({file_name(self.names[index])})"
+        )
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index], block.name, link.reference, None, "absent_in_source", 0
+            )
+        )
+
+    def _supplied_target(self, index: int, link: _Link) -> int:
+        block = link.block
+        if link.target is None:
+            raise InputError(
+                f"XREF {block.name}: файл {link.reference!r} не предоставлен в комплекте "
+                f"для {self.names[index]}. Автоматический поиск вне комплекта запрещён."
+            )
+        if len(block):
+            raise InputError(f"XREF {block.name}: непустой кэш нельзя незаметно заменить")
+        return link.target
+
+    def _embed(self, index: int, link: _Link, target: int) -> None:
+        block, doc, source = link.block, self.documents[index], self.documents[target]
+        if source.dxfversion > doc.dxfversion:
+            raise InputError(
+                f"XREF {block.name}: версия DXF новее основы; приведите версии к общей"
+            )
+        expected = expanded_entity_counts(source.modelspace())
+        loader = xref.Loader(source, doc, conflict_policy=xref.ConflictPolicy.XREF_PREFIX)
+        loader.load_modelspace(block)
+        loader.execute(xref_prefix=block.name)
+        _clear_xref_flags(block)
+        _definition(block).dxf.base_point = source.header.get("$INSBASE", (0, 0, 0))
+        actual = expanded_entity_counts(block)
+        if actual != expected:
+            raise InputError(
+                f"XREF {block.name}: при внедрении потеряны/заменены сущности: "
+                f"{count_difference(expected, actual)}"
+            )
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index],
+                block.name,
+                link.reference,
+                self.names[target],
+                "embedded",
+                len(source.modelspace()),
+            )
+        )
+
+    def _provide_base(self, index: int, link: _Link, *, nested: bool) -> None:
+        """Ссылка на основу комплекта: основа уже во входе, второй раз её не внедряем.
+
+        Так устроены комплекты каталога: файл границ работ ссылается на топографию, которая
+        сама загружена основой. Это верно, только если ссылка ставит основу туда, где она
+        и лежит: вставка в пространстве модели в (0, 0, 0), масштаб 1, без поворота, точка
+        вставки основы (0, 0, 0). Иначе ссылка означает второе положение основы - ошибка.
+        """
+        block = link.block
+        if nested:
+            raise InputError(
+                f"XREF {block.name}: цикл ссылок через основу {self.names[0]}: "
+                f"{self.names[index]} вложен в комплект и снова ссылается на основу"
+            )
+        inserts = _inserts_of(self.documents[index], block.name)
+        placed_as_is = Vec3(self.documents[0].header.get("$INSBASE", (0, 0, 0))).is_null and all(
+            owner == "*model_space" and _identity(insert) for owner, insert in inserts
+        )
+        if not placed_as_is:
+            raise InputError(
+                f"XREF {block.name}: ссылка на основу {self.names[0]} ставит её не на своё "
+                f"место (сдвиг, поворот, масштаб или вставка внутри блока) в {self.names[index]}"
+            )
+        _clear_xref_flags(block)
+        self.bindings.append(
+            ReferenceBinding(
+                self.names[index], block.name, link.reference, self.names[0], "provided_as_input", 0
+            )
+        )
 
     def report(self) -> PackageAssembly:
         inputs = []
@@ -206,7 +292,49 @@ def _match(names: tuple[str, ...], host: int, reference: str) -> int | None:
             return _unambiguous(exact, reference)
     base = posixpath.basename(_path_key(reference))
     matches = [index for index, key in enumerate(keys) if posixpath.basename(key) == base]
-    return _unambiguous(matches, reference) if matches else None
+    if matches:
+        return _unambiguous(matches, reference)
+    # Каталог улиц хранит файлы транслитом («00-1-10004141-topografiya.dxf»), а ссылка помнит
+    # исходное имя («00.1_10004141_Топография.dwg»): последняя попытка - ключ имени.
+    stem = _stem_key(reference)
+    slugged = [index for index, name in enumerate(names) if _stem_key(name) == stem]
+    return _unambiguous(slugged, reference) if stem and slugged else None
+
+
+def _nfc(value: str) -> str:
+    return unicodedata.normalize("NFC", value)
+
+
+def _stem_key(name: str) -> str:
+    return slug_key(posixpath.splitext(posixpath.basename(name.replace("\\", "/")))[0])
+
+
+def _inserts_of(doc: Drawing, name: str) -> list[tuple[str, Insert]]:
+    """Все вставки блока в документе с именем владельца (пространство модели или блок)."""
+    key = name.casefold()
+    found = []
+    for layout in doc.blocks:
+        owner = layout.name.casefold()
+        if owner.startswith("*paper_space"):
+            continue
+        found.extend(
+            (owner, entity)
+            for entity in layout.query("INSERT")
+            if isinstance(entity, Insert) and entity.dxf.name.casefold() == key
+        )
+    return found
+
+
+def _identity(insert: Insert) -> bool:
+    dxf = insert.dxf
+    scales = (dxf.get("xscale", 1), dxf.get("yscale", 1), dxf.get("zscale", 1))
+    return (
+        Vec3(dxf.insert).is_null
+        and all(abs(scale - 1) < 1e-9 for scale in scales)  # noqa: PLR2004 - точность double
+        and abs(dxf.get("rotation", 0) % 360) < 1e-9  # noqa: PLR2004
+        and Vec3(dxf.get("extrusion", (0, 0, 1))).isclose((0, 0, 1))
+        and insert.mcount == 1
+    )
 
 
 def _unambiguous(matches: list[int], reference: str) -> int:
@@ -235,6 +363,35 @@ def _references(layout: BaseLayout) -> tuple[BlockLayout, ...]:
             else:
                 pending.append(block)
     return tuple(found)
+
+
+def _explode_proxies(doc: Drawing) -> int:
+    """Прокси-объект с рисунком - примитивами рисунка на своём слое, в загруженной копии
+    комплекта (файл на диске не меняется). Без рисунка или с нечитаемым рисунком объект
+    остаётся, и проверка внедрения назовёт его потерю."""
+    replaced = 0
+    for layout in (doc.modelspace(), *doc.blocks):
+        for proxy in list(layout.query("ACAD_PROXY_ENTITY")):
+            if not proxy.proxy_graphic:
+                continue
+            layer = proxy.dxf.get("layer", "0")
+            try:
+                parts = proxy.explode()  # ty: ignore[unresolved-attribute]
+            except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
+                continue
+            for part in parts:
+                if part.dxf.get("layer", "0") == "0":
+                    part.dxf.layer = layer
+            replaced += 1
+    return replaced
+
+
+def count_difference(expected: Counter[str], actual: Counter[str]) -> str:
+    """Какие типы разошлись: «ACAD_PROXY_ENTITY 4 -> 0, LINE 120 -> 118»."""
+    kinds = sorted(set(expected) | set(actual), key=lambda k: -abs(expected[k] - actual[k]))
+    changed = [f"{k} {expected[k]} -> {actual[k]}" for k in kinds if expected[k] != actual[k]]
+    more = f" и ещё {len(changed) - 8}" if len(changed) > 8 else ""  # noqa: PLR2004
+    return ", ".join(changed[:8]) + more
 
 
 def expanded_entity_counts(layout: BaseLayout) -> Counter[str]:

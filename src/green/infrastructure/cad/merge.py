@@ -13,20 +13,22 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import TYPE_CHECKING
 
 from ezdxf import transform, xref
-from ezdxf.entities import Region
+from ezdxf.entities import Dictionary, DXFEntity, is_graphic_entity
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
-from green.infrastructure.cad.acis_sidecar import load_region_sidecar, sidecar_path
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
-from green.infrastructure.cad.xref_package import DrawingPackage, expanded_entity_counts
+from green.infrastructure.cad.xref_package import (
+    DrawingPackage,
+    count_difference,
+    expanded_entity_counts,
+    file_name,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -34,12 +36,39 @@ if TYPE_CHECKING:
 
     from ezdxf.document import Drawing
 
+    from green.application.assembly import ReferenceBinding
+
 _MIN_SOURCES = 2
 # Файл комплекта, у которого с основой общая меньше половины меньшего из двух габаритов, скорее
 # всего другой лист или другой объект: склейка пройдёт, а посадок не будет.
 _MIN_OVERLAP = 0.5
+# Не объекты: определения блоков и элементы таблиц. В словаре им быть нельзя.
+_NOT_OBJECTS = frozenset(
+    {"BLOCK", "ENDBLK", "BLOCK_RECORD", "LAYER", "LTYPE", "STYLE", "DIMSTYLE", "UCS", "VIEW",
+     "VPORT", "APPID"}
+)  # fmt: skip
 
 type Box = tuple[float, float, float, float]
+
+# Как внешняя ссылка вошла в комплект - словами для журнала чтения в интерфейсе. Коды
+# (embedded, provided_as_input ...) остаются в отчёте сборки: там их читает программа, а
+# английское слово в «Чтении чертежа» читал эксперт (жюри дизайна, итерация 7). Ссылку, файла
+# которой нет в исходных данных, журнал уже называет сам пакет - второй строкой не повторяем.
+_BINDING_NOTES = {
+    "embedded": "вставлен файл «{file}», масштаб и положение заданы исходной вставкой",
+    "provided_as_input": "ссылка на основу комплекта «{file}», основа загружена один раз",
+    "excluded_nested_overlay": "вложенная наложенная ссылка на «{file}» не загружается, как в CAD",
+}
+_NOTED_BY_PACKAGE = frozenset({"absent_in_source"})
+
+
+def _binding_note(binding: ReferenceBinding) -> str | None:
+    """Строка журнала чтения о внешней ссылке: как она вошла в комплект, имя файла без пути."""
+    if binding.action in _NOTED_BY_PACKAGE:
+        return None
+    template = _BINDING_NOTES.get(binding.action, binding.action + ": «{file}»")
+    source = file_name(binding.source or binding.reference)
+    return f"XREF {binding.block}: {template.format(file=source)}"
 
 
 def _extents(doc: Drawing) -> Box | None:
@@ -91,22 +120,20 @@ class EzdxfDrawingMerger:
         *,
         unit: str = "auto",
         source_names: Sequence[str] = (),
+        absent_references: Sequence[tuple[str, str]] = (),
     ) -> MergeResult:
         if len(sources) < _MIN_SOURCES:
             raise InputError("Склейка: нужно не меньше двух чертежей")
         if target.resolve() in {source.resolve() for source in sources}:
             raise InputError("Склейка не может перезаписать один из исходных файлов")
-        package = DrawingPackage.load(sources, source_names)
-        sat_by_sab = _collect_region_sidecars(sources, package.documents)
+        package = DrawingPackage.load(sources, source_names, absent_references)
         package.resolve()
         base = package.documents[0]
         notes = package.notes
+        # То, что меняет смысл плана (листы не перекрываются), - отдельно от журнала склейки.
+        warnings: list[str] = []
         assembly = package.report()
-        for binding in assembly.references:
-            notes.append(
-                f"XREF {binding.block}: {binding.action}, {binding.source or binding.reference}; "
-                "масштаб и положение заданы исходной вставкой"
-            )
+        notes.extend(filter(None, map(_binding_note, assembly.references)))
         counts = [len(base.modelspace())]
         base_unit = decide_units(base, unit).unit_m
         base_box = _extents(base)
@@ -129,7 +156,7 @@ class EzdxfDrawingMerger:
             if box is not None and base_box is not None and _area(base_box) > 0:
                 shared = _overlap(base_box, box)
                 if shared < _MIN_OVERLAP:
-                    notes.append(
+                    warnings.append(
                         f"Склейка: габариты {path.name} и уже склеенного комплекта "
                         f"перекрываются на {shared:.0%} - возможно, это разные листы или "
                         "разные объекты"
@@ -148,65 +175,15 @@ class EzdxfDrawingMerger:
                 "не перенесена. Расчёт на неполном комплекте остановлен."
             )
         target.parent.mkdir(parents=True, exist_ok=True)
-        _save_package(base, target)
-        _propagate_region_sidecars(sat_by_sab, target)
-        return MergeResult(path=target, notes=tuple(notes), assembly=assembly)
-
-
-def _collect_region_sidecars(
-    sources: Sequence[Path], documents: Sequence[Drawing]
-) -> dict[str, str]:
-    sat_by_sab: dict[str, str] = {}
-    for source, doc in zip(sources, documents, strict=True):
-        path = sidecar_path(source)
-        if not path.exists():
-            continue
-        with source.open("rb") as stream:
-            digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        load_region_sidecar(source, digest, doc)
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        for entry in payload["regions"].values():
-            sab_digest = entry["sab_sha256"]
-            sat = entry["sat"]
-            if sab_digest in sat_by_sab and sat_by_sab[sab_digest] != sat:
-                raise InputError("Склейка: одинаковый SAB получил разные SAT-контуры")
-            sat_by_sab[sab_digest] = sat
-    return sat_by_sab
-
-
-def _propagate_region_sidecars(sat_by_sab: dict[str, str], target: Path) -> None:
-    """Follow SAB content through ezdxf handle remapping when drawings are merged."""
-    if not sat_by_sab:
-        sidecar_path(target).unlink(missing_ok=True)
-        return
-    merged, _ = load_document(target)
-    regions = [entity for entity in merged.entitydb.values() if isinstance(entity, Region)]
-    mapped = {}
-    used: set[str] = set()
-    for region in regions:
-        if not region.sab:
-            continue
-        digest = hashlib.sha256(region.sab).hexdigest()
-        sat = sat_by_sab.get(digest)
-        if sat is not None:
-            mapped[region.dxf.handle] = {"sab_sha256": digest, "sat": sat}
-            used.add(digest)
-    if used != sat_by_sab.keys():
-        raise InputError("Склейка: один или несколько ACIS REGION потеряны или изменены")
-    with target.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    payload = {
-        "schema": 1,
-        "engine": "acadrust",
-        "engine_version": "0.5.5",
-        "dxf_sha256": digest,
-        "source_regions": len(regions),
-        "regions": mapped,
-    }
-    sidecar_path(target).write_text(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
-    )
-    load_region_sidecar(target, digest, merged)
+        dropped = _save_package(base, target)
+        if dropped:
+            notes.append(
+                f"Склейка: удалено {dropped} устаревших записей словарей (ассоциативные связи "
+                "и поля, которые ezdxf не переносит между файлами); геометрия не затронута"
+            )
+        return MergeResult(
+            path=target, notes=tuple(notes), assembly=assembly, warnings=tuple(warnings)
+        )
 
 
 def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> None:
@@ -221,12 +198,18 @@ def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> N
         )
     expected = expanded_entity_counts(base.modelspace()) + expanded_entity_counts(doc.modelspace())
     xref.load_modelspace(doc, base, conflict_policy=policy)
-    if expanded_entity_counts(base.modelspace()) != expected:
-        raise InputError(f"Склейка: при импорте {name} потеряны/заменены вложенные сущности")
+    actual = expanded_entity_counts(base.modelspace())
+    if actual != expected:
+        raise InputError(
+            f"Склейка: при импорте {name} потеряны/заменены вложенные сущности: "
+            f"{count_difference(expected, actual)}"
+        )
 
 
-def _save_package(doc: Drawing, target: Path) -> None:
+def _save_package(doc: Drawing, target: Path) -> int:
+    """Записать склейку и проверить её обратным чтением; число удалённых записей словарей."""
     require_exportable_document(doc, target.name)
+    dropped = _drop_stale_dictionary_entries(doc)
     expected = expanded_entity_counts(doc.modelspace())
     pending = target.with_name(f".{target.name}.pending")
     doc.saveas(pending)
@@ -234,6 +217,43 @@ def _save_package(doc: Drawing, target: Path) -> None:
     if expanded_entity_counts(written.modelspace()) != expected:
         raise InputError("Склейка: записанный DXF потерял часть структуры объектов")
     pending.replace(target)
+    return dropped
+
+
+def _drop_stale_dictionary_entries(doc: Drawing) -> int:
+    """Убрать из словарей записи, которые указывают не на объекты.
+
+    Словарь хранит только объекты секции OBJECTS. Когда ezdxf при внедрении ссылки не может
+    скопировать объект словаря (ACAD_ASSOCNETWORK, FIELD, прокси: «copy process ignored»), в
+    словаре остаётся старый handle исходного файла, а в собранном он занят чужой сущностью:
+    полилинией или определением блока (Харьковская, 25.09.2026). Аудит при чтении «отбирает»
+    такой блок словарю и падает. Сама запись - остаток ассоциативных связей, не геометрия.
+    Копия хранит ссылку исходного файла в двух видах: строкой handle или объектом чужого
+    документа, поэтому решает не значение, а то, во что handle превратится при чтении.
+    """
+    dropped = 0
+    for dictionary in doc.objects:
+        if not isinstance(dictionary, Dictionary):
+            continue
+        for key, value in list(dictionary.items()):
+            if _stale_entry(doc, value):
+                dictionary.discard(key)
+                dropped += 1
+    return dropped
+
+
+def _stale_entry(doc: Drawing, value: object) -> bool:
+    """Запись верна, только если её handle здесь - тот же самый объект секции OBJECTS."""
+    if isinstance(value, DXFEntity):
+        if not value.is_alive:
+            return True
+        handle = value.dxf.handle
+    else:
+        handle = str(value)
+    target = doc.entitydb.get(handle)
+    if target is None or (isinstance(value, DXFEntity) and target is not value):
+        return True
+    return is_graphic_entity(target) or target.dxftype() in _NOT_OBJECTS
 
 
 def _normalise(doc: Drawing, factor: float, name: str) -> None:

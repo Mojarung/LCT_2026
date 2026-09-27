@@ -8,8 +8,9 @@ import shapely
 from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 
 from green.application.barriers import BARRIER_NOTE
-from green.application.explain import citation_text
+from green.application.explain import LAWN_LABELS, citation_text
 from green.application.results import SourceSnapshot
+from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome, Verdict
 from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
 from green.infrastructure.cad.integrity import fingerprints
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from ezdxf.layouts import Modelspace
 
     from green.domain.norms import RuleBook
-    from green.domain.planting import Placement, Plan, Rejection, Species, Zone
+    from green.domain.planting import Lawn, Placement, Plan, Rejection, Species, Zone
     from green.infrastructure.cad.documents import DocumentCache
 
 TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
@@ -35,6 +36,7 @@ LAYER_REJECT = f"{RESULT_PREFIX}REJECT"
 LAYER_LABELS = f"{RESULT_PREFIX}LABELS"
 LAYER_ZONE_ALLOWED = f"{RESULT_PREFIX}ZONE_ALLOWED"
 LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
+LAYER_LAWN = f"{RESULT_PREFIX}LAWN"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 LAYER_COLORS = {
     LAYER_TREES: 3,
@@ -46,10 +48,18 @@ LAYER_COLORS = {
     LAYER_LABELS: 7,
     LAYER_ZONE_ALLOWED: 3,
     LAYER_ZONE_APPROVAL: 30,
+    LAYER_LAWN: 82,
 }
 ZONE_LAYERS = {Verdict.ALLOWED: LAYER_ZONE_ALLOWED, Verdict.NEEDS_APPROVAL: LAYER_ZONE_APPROVAL}
 ZONE_TRANSPARENCY = 0.7
+# Газон - условное обозначение (ГОСТ 21.508-2020, п. 10.4), а не заливка: травяной узор GRASS из
+# acad.pat не закрывает подоснову под собой. Узор описан в своих единицах, масштаб в метрах
+# чертежа даёт пучок травы 0,4 м через 2 м. Устраиваемый газон отличается цветом.
+LAWN_PATTERN = "GRASS"
+LAWN_PATTERN_SCALE_M = 0.08
+LAWN_COLORS = {LawnKind.KEPT: 82, LawnKind.NEW: 52}
 XDATA_CHUNK = 240
+XDATA_REAL = 1040
 NPA_REFS = 2
 
 
@@ -91,6 +101,8 @@ class EzdxfPlanWriter:
         msp = doc.modelspace()
         for zone in plan.zones:
             self._zone(msp, zone, scale)
+        for lawn in plan.lawns:
+            self._lawn(msp, lawn, scale)
         for placement in plan.placements:
             self._placement(doc, msp, placement, scale)
         for rejection in plan.rejections:
@@ -193,6 +205,37 @@ class EzdxfPlanWriter:
                     _ring(ring.coords, scale), is_closed=True, flags=BOUNDARY_PATH_DEFAULT
                 )
 
+    def _lawn(self, msp: Modelspace, lawn: Lawn, scale: float) -> None:
+        """Участок газона: штриховка узором с отверстиями посадочных мест и XDATA решения."""
+        color = LAWN_COLORS[lawn.kind]
+        rule_ids = ";".join(lawn.rule_ids)
+        for polygon in shapely.get_parts(lawn.geometry):
+            if polygon.geom_type != "Polygon" or polygon.is_empty:
+                continue
+            hatch = msp.add_hatch(color=color, dxfattribs={"layer": LAYER_LAWN})
+            hatch.set_pattern_fill(LAWN_PATTERN, color=color, scale=LAWN_PATTERN_SCALE_M * scale)
+            hatch.paths.add_polyline_path(
+                _ring(polygon.exterior.coords, scale),
+                is_closed=True,
+                flags=BOUNDARY_PATH_EXTERNAL,
+            )
+            for ring in polygon.interiors:
+                hatch.paths.add_polyline_path(
+                    _ring(ring.coords, scale), is_closed=True, flags=BOUNDARY_PATH_DEFAULT
+                )
+            hatch.set_xdata(
+                APPID,
+                [
+                    (1000, lawn.lawn_id),
+                    (1000, lawn.kind.value),
+                    (XDATA_REAL, round(float(polygon.area), 2)),
+                    *(
+                        (1000, rule_ids[i : i + XDATA_CHUNK])
+                        for i in range(0, len(rule_ids), XDATA_CHUNK)
+                    ),
+                ],
+            )
+
     def _rejection(self, msp: Modelspace, rejection: Rejection, scale: float) -> None:
         ref = msp.add_blockref(
             REJECT_BLOCK,
@@ -217,11 +260,18 @@ class EzdxfPlanWriter:
     def _legend(self, msp: Modelspace, plan: Plan, rulebook: RuleBook, scale: float) -> None:
         used = sorted({c.rule_id for p in plan.placements for c in p.checks})
         used += sorted({c.rule_id for r in plan.rejections for c in r.blocking} - set(used))
+        used += sorted({rule_id for lawn in plan.lawns for rule_id in lawn.rule_ids} - set(used))
         lines = ["Результат сервиса green: слои GREEN_*. Правила:"]
         for rule_id in used:
             rule = rulebook.rule(rule_id)
             if rule is not None:
                 lines.append(f"{rule_id}: {citation_text(rule, rulebook)}")
+        if plan.lawns:
+            totals = {
+                kind: sum(g.area_m2 for g in plan.lawns if g.kind is kind) for kind in LawnKind
+            }
+            areas = ", ".join(f"{LAWN_LABELS[k]} {_area(a)}" for k, a in totals.items() if a > 0)
+            lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
         xs = [p.x for p in plan.placements] + [r.x for r in plan.rejections]
         ys = [p.y for p in plan.placements] + [r.y for r in plan.rejections]
         if not xs:
@@ -246,3 +296,7 @@ def _insert_scale(scale: float) -> dict[str, float]:
 
 def _ring(coords: Iterable[Sequence[float]], scale: float) -> list[tuple[float, float]]:
     return [(point[0] * scale, point[1] * scale) for point in coords]
+
+
+def _area(value: float) -> str:
+    return f"{value:,.1f}".replace(",", " ").replace(".", ",")

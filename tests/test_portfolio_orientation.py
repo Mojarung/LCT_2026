@@ -92,7 +92,10 @@ def test_closed_curb_adds_a_complete_valid_aligned_alternative() -> None:
 
     def build(params: PlanParams) -> tuple[Plan, PlanValidation]:
         seen.append(params.lawn_rotation_deg)
-        score = 0.8 if abs(params.lawn_rotation_deg - 37) < 1e-6 else 0.3
+        # Поворот по борту без привязки к грунту: сетка на грунте (soil_frame) тоже повёрнута,
+        # но здесь проверяется именно вариант aligned.
+        aligned = abs(params.lawn_rotation_deg - 37) < 1e-6 and params.lawn_anchor != "soil"
+        score = 0.8 if aligned else 0.3
         return Plan((), (), quality=PlanQuality(score, "", (), 0, {}, ())), PlanValidation(0, ())
 
     plan, validation = choose_plan(
@@ -103,4 +106,5 @@ def test_closed_curb_adds_a_complete_valid_aligned_alternative() -> None:
     assert validation.ok
     assert any(abs(angle - 37) < 1e-6 for angle in seen)
     assert plan.portfolio is not None
-    assert plan.portfolio.chosen == "aligned"
+    # При равном индексе выигрывает посчитанный раньше: объединённый отбор идёт первым.
+    assert plan.portfolio.chosen == "aligned_joint"

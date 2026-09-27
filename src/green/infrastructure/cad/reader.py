@@ -3,86 +3,125 @@
 from __future__ import annotations
 
 import hashlib
-import math
+import struct
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import Body, Circle, Ellipse, LWPolyline, MLine, MText, Polyline, Region, Text
-from ezdxf.entities.boundary_paths import PolylinePath
-from ezdxf.entities.image import Image, Wipeout
-from ezdxf.entities.polygon import DXFPolygon
+from ezdxf import bbox
+from ezdxf.entities import Body, Circle, Ellipse, Insert, LWPolyline, MText, Polyline, Spline, Text
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
 
-from green.application.errors import InputError
+from green.application.semantic_names import local_name
 from green.domain.objects import (
     NO_XREF,
     Feature,
     GeometryGap,
-    InsertInstance,
     ReadDiagnostics,
     Scene,
     SourceRef,
+    SymbolInstance,
     TextLabel,
 )
-from green.infrastructure.cad.acis_sidecar import load_region_sidecar
+from green.infrastructure.cad.acis_region import RegionGeometryError, region_polygon
 from green.infrastructure.cad.curve_paths import (
     circle_vertices,
     ellipse_vertices,
+    fitted_vertices,
     polyline_vertices,
+    spline_vertices,
 )
 from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
-from green.infrastructure.cad.hatch_geometry import (
-    HatchGeometryError,
-    associated_polyline_error,
-    hatch_geometry,
-    hatch_outline,
-    linear_hatch_from_local_source,
-    match_region_outline,
-)
-from green.infrastructure.cad.image_footprint import image_footprint
-from green.infrastructure.cad.mline_footprint import bounded_mline_footprint
-from green.infrastructure.cad.polyline_footprint import bounded_invalid_polyline
-from green.infrastructure.cad.region_geometry import RegionGeometryError, region_polygon
+from green.infrastructure.cad.hatch_geometry import GAP_CLOSED, HatchGeometryError, hatch_geometry
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from ezdxf.document import Drawing
-    from ezdxf.entities import DXFGraphic, Insert
-    from ezdxf.math import Matrix44
+    from ezdxf.entities import DXFGraphic
+    from ezdxf.layouts import BlockLayout
     from shapely.geometry.base import BaseGeometry
 
     from green.infrastructure.cad.documents import DocumentCache
 
+install_ezdxf_fixes()
+
 MAX_BLOCK_DEPTH = 8
+# Исход примитива за рамкой обрезки XCLIP: CAD его не показывает, это не потеря.
+CLIPPED = "clipped:outside"
+# Починка геометрии без переосмысления: расхождение с нарисованным не больше этого (единицы
+# чертежа) - та же линия, а не новая.
+_EXACT_REPAIR = 1e-6
+_HATCH_UNCERTAINTY_MIN_M = 0.002
+# Контейнер, а не знак: обёртки MicroStation, выноски DIMTXT и анонимные блоки AutoCAD
+# (*U, *D, *T), а также пустые, многолюдные и крупные блоки - листы и сборки, не значки.
+CONTAINER_PREFIXES = ("msdelementtype", "dimtxt", "*")
+SYMBOL_MAX_PRIMITIVES = 64
+SYMBOL_MAX_SIZE_M = 12.0
 _AREA_ENTITIES = frozenset({"HATCH", "MPOLYGON"})
 _TEXT_ENTITIES = frozenset({"TEXT", "MTEXT", "ATTRIB"})
-_ANNOTATIONS = frozenset({"ATTDEF", "DIMENSION", "LEADER", "MULTILEADER", "VIEWPORT", "ACAD_TABLE"})
+# Размер дугой и большой радиальный - такое же оформление, как DIMENSION (Харьковский проезд:
+# 105 размеров ARC_DIMENSION раньше уходили в пробелы чтения).
+ANNOTATIONS = frozenset(
+    {
+        "ATTDEF",
+        "DIMENSION",
+        "ARC_DIMENSION",
+        "LARGE_RADIAL_DIMENSION",
+        "TOLERANCE",
+        "LEADER",
+        "MULTILEADER",
+        "VIEWPORT",
+        "ACAD_TABLE",
+    }
+)
+# Картинки под чертежом: растр (карта, спутник, скан), PDF/DWF/DGN-подложка, маска WIPEOUT,
+# OLE-вставка. Объектов съёмки в них нет: они учитываются исходом и предупреждением и прогон
+# не останавливают (решение пользователя 25.09.2026: незнакомое заменять правдоподобно).
+UNDERLAYS = frozenset(
+    {
+        "IMAGE",
+        "WIPEOUT",
+        "OLE2FRAME",
+        "PDFUNDERLAY",
+        "PDFREFERENCE",
+        "DWFUNDERLAY",
+        "DWFREFERENCE",
+        "DGNUNDERLAY",
+        "DGNREFERENCE",
+    }
+)
 _GAP_EXAMPLES = 5
-_MAX_HATCH_CLOSURE_M = 0.002
-_ASSOCIATIVE_HATCH_MIN_AREA_RATIO = 0.5
-_ASSOCIATIVE_HATCH_MAX_AREA_RATIO = 1.5
-_DEGENERATE_LINE_ULPS = 64
-_WIPEOUT_MIN_VERTICES = 4
-_WIPEOUT_RECTANGLE_VERTICES = 2
-_WIPEOUT_MAX_Z_SPAN = 1e-9
+# Починка самопересекающегося контура с площадью по правилу чёт-нечет (вопрос 1 пользователя).
+_EVEN_ODD = "even-odd"
+# Тип -> (пробел, если рисунок не разобрать; пробел, если рисунок пуст; исход при успехе).
+_DRAWN = {
+    "ACAD_PROXY_ENTITY": (
+        "proxy-graphic-not-readable",
+        "unsupported-spatial-entity",
+        "proxy:graphic",
+    ),
+    "MLINE": ("mline-not-readable", "geometry-not-readable", "mline:lines"),
+}
 _SKIPPED = frozenset(
     {
         "ATTDEF",
         "DIMENSION",
+        "ARC_DIMENSION",
+        "LARGE_RADIAL_DIMENSION",
+        "TOLERANCE",
         "LEADER",
         "MULTILEADER",
         "VIEWPORT",
-        "OLE2FRAME",
         "3DSOLID",
         "BODY",
         "SURFACE",
@@ -105,43 +144,18 @@ class EzdxfSceneReader:
     def read(self, path: Path, *, unit: str = AUTO) -> Scene:
         digest = _sha256(path)
         doc, warnings = self._documents.load(path) if self._documents else load_document(path)
-        region_sat = load_region_sidecar(path, digest, doc)
-        region_sat_by_sab: dict[bytes, tuple[str, ...]] = {}
-        for handle, sat in region_sat.items():
-            region = doc.entitydb.get(handle)
-            if not isinstance(region, Region):
-                raise InputError(f"ACIS sidecar: REGION {handle} исчез после чтения")
-            sab_digest = hashlib.sha256(region.sab).digest()
-            previous = region_sat_by_sab.get(sab_digest)
-            if previous is not None and previous != sat:
-                raise InputError("ACIS sidecar: одинаковые SAB дали разные SAT")
-            region_sat_by_sab[sab_digest] = sat
         units = decide_units(doc, unit)
-        dynamic_block_metadata = sum(
-            obj.dxftype() == "ACDB_BLOCKREPRESENTATION_DATA" for obj in doc.objects
-        )
         # Обход идёт в единицах чертежа, поэтому метровые пороги делятся на размер единицы.
         walker = _Walker(
             doc=doc,
             file_sha8=digest[:8],
             flatten=self._flatten / units.unit_m,
             unit_m=units.unit_m,
-            region_sat=region_sat,
-            region_sat_by_sab=region_sat_by_sab,
         )
         for entity in doc.modelspace():
             walker.visit(entity, parent_layer=None, chain=(), parent_handle="", index=0)
-        features, labels = _to_metres(walker.features, walker.labels, units.unit_m)
-        dynamic_notes = (
-            (
-                (
-                    "Обнаружены данные динамических блоков "
-                    f"ACDB_BLOCKREPRESENTATION_DATA: {dynamic_block_metadata}; "
-                    "их параметры ezdxf не интерпретирует. Проверьте условные знаки в CAD."
-                ),
-            )
-            if dynamic_block_metadata
-            else ()
+        features, labels, symbols = _to_metres(
+            walker.features, walker.labels, walker.instances(), units.unit_m
         )
         return Scene(
             source_name=path.name,
@@ -149,34 +163,23 @@ class EzdxfSceneReader:
             dxf_version=doc.dxfversion,
             features=features,
             labels=labels,
-            warnings=(
-                *warnings,
-                *units.notes,
-                *((f"Восстановлен ACIS REGION: {len(region_sat)}",) if region_sat else ()),
-                *dynamic_notes,
-                *walker.warnings(),
-            ),
+            warnings=(*warnings, *units.notes, *walker.warnings()),
             unit_m=units.unit_m,
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
                 skipped_by_type=dict(walker.skipped),
-                bounded_uncertainty_by_type={
-                    **(
-                        {"HATCH": walker.bounded_unreadable_hatches}
-                        if walker.bounded_unreadable_hatches
-                        else {}
-                    ),
-                    **walker.bounded_invalid_polylines,
-                    **({"MLINE": walker.bounded_mlines} if walker.bounded_mlines else {}),
-                },
+                bounded_uncertainty_by_type=(
+                    {"HATCH": walker.bounded_hatches} if walker.bounded_hatches else {}
+                ),
                 unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
                 geometry_gaps=walker.geometry_gaps(),
                 approximation_features=sum(bool(f.geometry_error_m) for f in features),
                 max_approximation_error_m=max(
                     (f.geometry_error_m or 0.0 for f in features), default=0.0
                 ),
-                dynamic_block_metadata=dynamic_block_metadata,
+                outcomes=dict(walker.outcomes),
             ),
+            symbols=symbols,
         )
 
 
@@ -186,25 +189,23 @@ class _Walker:
     file_sha8: str
     flatten: float
     unit_m: float = 1.0
-    region_sat: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    region_sat_by_sab: dict[bytes, tuple[str, ...]] = field(default_factory=dict)
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
+    bounded_hatches: int = 0
     visited: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
     gap_refs: dict[tuple[str, str, str | None, str], list[str]] = field(default_factory=dict)
-    matched_region_hatches: int = 0
-    matched_hatch_polylines: int = 0
-    matched_local_hatches: int = 0
-    collapsed_lines: int = 0
-    bounded_unreadable_hatches: int = 0
-    bounded_invalid_polylines: Counter[str] = field(default_factory=Counter)
-    bounded_mlines: int = 0
-    raster_footprints: int = 0
+    # Учёт чтения: у каждого посещения ровно один исход.
+    outcomes: Counter[str] = field(default_factory=Counter)
+    symbols: list[SymbolInstance] = field(default_factory=list)
+    strokes: Counter[str] = field(default_factory=Counter)
+    sizes: dict[str, bbox.BoundingBox | None] = field(default_factory=dict)
+    # Рамки обрезки XCLIP вставок, внутри которых идёт обход (единицы чертежа, WCS).
+    clips: list[BaseGeometry] = field(default_factory=list)
 
-    def visit(  # noqa: C901, PLR0912, PLR0913, PLR0915 - entity dispatch with loss accounting
+    def visit(  # noqa: PLR0913 - обход с явным учётом исходов
         self,
         entity: DXFGraphic,
         *,
@@ -213,10 +214,7 @@ class _Walker:
         parent_handle: str,
         index: int,
         parent_block: str | None = None,
-        insert_chain: tuple[InsertInstance, ...] = (),
-        block_matrix: Matrix44 | None = None,
-        sibling_regions: tuple[Region, ...] = (),
-        sibling_hatches: tuple[DXFPolygon, ...] = (),
+        owner: str | None = None,
     ) -> None:
         layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
         if layer == "0" and parent_layer is not None:
@@ -229,120 +227,184 @@ class _Walker:
         self.visited[kind] += 1
 
         if kind in _TEXT_ENTITIES:
-            self._label(entity, ref, layer, parent_block, chain)
+            outcome = self._label(entity, ref, layer, parent_block, chain, owner=owner)
         elif kind == "INSERT":
-            self._insert(entity, ref, layer, chain, insert_chain)  # ty: ignore[invalid-argument-type]
-        elif kind in _SKIPPED:
-            self.skipped[kind] += 1
-            if kind not in _ANNOTATIONS:
-                reason = "unsupported-spatial-entity"
-                if isinstance(entity, Body) and not entity.acis_data:
-                    reason = "missing-acis-data"
-                self._gap(kind, layer, parent_block, reason, ref)
+            outcome = self._insert(entity, ref, layer, chain, owner)  # ty: ignore[invalid-argument-type]
+        elif kind == "MLINE" or (kind == "ACAD_PROXY_ENTITY" and entity.proxy_graphic):
+            outcome = self._drawn(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
+        elif kind == "REGION":
+            outcome = self._region(entity, ref, layer, parent_block, owner)  # ty: ignore[invalid-argument-type]
+        elif kind in _SKIPPED or kind in UNDERLAYS:
+            outcome = self._not_drawn(entity, layer, parent_block, ref)
         else:
-            try:
-                geometry, error = self._geometry(
-                    entity,
-                    block_matrix=block_matrix,
-                    sibling_regions=sibling_regions,
-                    sibling_hatches=sibling_hatches,
+            outcome = self._linework(entity, ref, layer, parent_block, owner)
+        self.outcomes[outcome] += 1
+
+    def _linework(
+        self, entity: DXFGraphic, ref: SourceRef, layer: str, block: str | None, owner: str | None
+    ) -> str:
+        kind = entity.dxftype()
+        # Починки контура штриховки (чёт-нечет, разрыв замкнут хордой) идут в исход объекта.
+        repairs: tuple[str, ...] = ()
+        uncertainty_footprint = None
+        try:
+            if kind in _AREA_ENTITIES:
+                geometry, error, repairs = hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+                uncertainty_footprint = (
+                    self._hatch_uncertainty(entity, error, repairs) if kind == "HATCH" else None
                 )
-            except (HatchGeometryError, RegionGeometryError) as exc:
-                if (
-                    isinstance(entity, DXFPolygon)
-                    and kind == "HATCH"
-                    and str(exc)
-                    in {
-                        "hatch-invalid-ring",
-                        "hatch-open-boundary",
-                        "hatch-intersecting-boundaries",
-                        "hatch-disconnected-edges",
-                    }
-                ):
-                    footprint = bounded_hatch_footprint(entity, self.flatten)
-                    if footprint is not None:
-                        self.features.append(
-                            Feature(
-                                ref=ref,
-                                layer=layer,
-                                geometry=footprint,
-                                block=parent_block,
-                                geometry_error_m=0.0,
-                                source_entity_type=kind,
-                                uncertain_footprint=True,
-                                insert_chain=insert_chain,
-                            )
-                        )
-                        self.bounded_unreadable_hatches += 1
-                        return
-                self.skipped[kind] += 1
-                self._gap(kind, layer, parent_block, str(exc), ref)
-                return
-            if geometry is None or geometry.is_empty:
-                self.skipped[kind] += 1
-                self._gap(kind, layer, parent_block, "geometry-not-readable", ref)
-            elif not np.isfinite(shapely.get_coordinates(geometry)).all():
-                self.skipped[kind] += 1
-                self._gap(kind, layer, parent_block, "non-finite-coordinates", ref)
             else:
-                if kind == "MLINE":
-                    self.features.append(
-                        Feature(
-                            ref=ref,
-                            layer=layer,
-                            geometry=geometry,
-                            block=parent_block,
-                            geometry_error_m=0.0,
-                            source_entity_type=kind,
-                            uncertain_footprint=True,
-                            insert_chain=insert_chain,
-                        )
-                    )
-                    self.bounded_mlines += 1
-                    return
-                if not geometry.is_valid:
-                    if (
-                        kind in {"LWPOLYLINE", "POLYLINE"}
-                        and isinstance(geometry, Polygon)
-                        and error is not None
-                    ):
-                        footprint = bounded_invalid_polyline(geometry, error, self.flatten)
-                        if footprint is not None:
-                            self.features.append(
-                                Feature(
-                                    ref=ref,
-                                    layer=layer,
-                                    geometry=footprint,
-                                    block=parent_block,
-                                    geometry_error_m=0.0,
-                                    source_entity_type=kind,
-                                    uncertain_footprint=True,
-                                    insert_chain=insert_chain,
-                                )
-                            )
-                            self.bounded_invalid_polylines[kind] += 1
-                            return
-                    geometry = shapely.make_valid(geometry)
-                    error = None
-                if error is None:
-                    self._gap(kind, layer, parent_block, "approximation-error-not-bounded", ref)
-                radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" else None
-                center = entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" else None
-                self.features.append(
-                    Feature(
-                        ref=ref,
-                        layer=layer,
-                        geometry=geometry,
-                        block=parent_block,
-                        circle_radius_m=radius,
-                        geometry_error_m=error * self.unit_m if error is not None else None,
-                        source_entity_type=kind,
-                        insert_chain=insert_chain,
-                        circle_center_m=(center.x * self.unit_m, center.y * self.unit_m)
-                        if center is not None
-                        else None,
-                    )
-                )
+                geometry, error = self._geometry(entity)
+        except HatchGeometryError as exc:
+            return self._skip(kind, layer, block, str(exc), ref)
+        if geometry is None or geometry.is_empty:
+            return self._skip(kind, layer, block, "geometry-not-readable", ref)
+        if not np.isfinite(shapely.get_coordinates(geometry)).all():
+            return self._skip(kind, layer, block, "non-finite-coordinates", ref)
+        geometry, error, repairs = _repaired(geometry, error, repairs)
+        clipped = False
+        if self.clips:
+            visible = self._clip(geometry)
+            if visible.is_empty:
+                return CLIPPED
+            clipped = visible is not geometry
+            geometry = visible
+            if uncertainty_footprint is not None:
+                uncertainty_footprint = self._clip(uncertainty_footprint)
+                if uncertainty_footprint.is_empty:
+                    uncertainty_footprint = None
+        if error is None:
+            self._gap(kind, layer, block, "approximation-error-not-bounded", ref)
+        # Срезанный рамкой круг - уже не крона и не ствол целиком.
+        radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" and not clipped else None
+        center = (
+            entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" and not clipped else None
+        )
+        self._feature(
+            Feature(
+                ref=ref,
+                layer=layer,
+                geometry=geometry,
+                block=block,
+                circle_radius_m=radius,
+                geometry_error_m=error * self.unit_m if error is not None else None,
+                source_entity_type=kind,
+                uncertainty_footprint=uncertainty_footprint,
+                circle_center_m=(center.x * self.unit_m, center.y * self.unit_m)
+                if center is not None
+                else None,
+                symbol=owner,
+            )
+        )
+        self.bounded_hatches += int(uncertainty_footprint is not None)
+        # Починенный контур не молчит: исход несёт вид починки (feature:hatch-even-odd).
+        return "feature:" + "+".join(repairs) if repairs else "feature"
+
+    def _hatch_uncertainty(
+        self, entity: DXFGraphic, error: float, repairs: tuple[str, ...]
+    ) -> BaseGeometry | None:
+        if GAP_CLOSED not in repairs or error * self.unit_m <= _HATCH_UNCERTAINTY_MIN_M:
+            return None
+        footprint = bounded_hatch_footprint(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+        if footprint is None:
+            raise HatchGeometryError("hatch-footprint-unbounded")
+        return footprint
+
+    def _visible(self, point: Point) -> bool:
+        return all(region.covers(point) for region in self.clips)
+
+    def _clip(self, geometry: BaseGeometry) -> BaseGeometry:
+        """Видимая часть внутри всех рамок; тот же объект, если он целиком внутри."""
+        for region in self.clips:
+            if region.covers(geometry):
+                continue
+            geometry = _same_dimension(geometry, geometry.intersection(region))
+            if geometry.is_empty:
+                break
+        return geometry
+
+    def _drawn(  # noqa: PLR0913 - как у вставки: слой, цепочка, блок и владелец-знак
+        self,
+        entity: DXFGraphic,
+        ref: SourceRef,
+        layer: str,
+        *,
+        chain: tuple[str, ...],
+        block: str | None,
+        owner: str | None,
+    ) -> str:
+        """Объект, который CAD рисует набором примитивов, читается ими, как вставка: прокси-объект
+        стороннего приложения - по своему рисунку, мультилиния - линиями стиля на смещениях от
+        оси. Примитивы на слое «0» получают слой объекта. Документ не меняется."""
+        kind = entity.dxftype()
+        unreadable, empty, outcome = _DRAWN[kind]
+        try:
+            children = list(entity.virtual_entities())  # ty: ignore[unresolved-attribute]
+        except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
+            return self._skip(kind, layer, block, unreadable, ref)
+        if not children:
+            return self._skip(kind, layer, block, empty, ref)
+        for position, child in enumerate(children):
+            self.visit(
+                child,
+                parent_layer=layer,
+                chain=chain,
+                parent_handle=ref.handle,
+                index=position,
+                parent_block=block,
+                owner=owner,
+            )
+        return outcome
+
+    def _not_drawn(self, entity: DXFGraphic, layer: str, block: str | None, ref: SourceRef) -> str:
+        """Объект без геометрии для расчёта: подложка, оформление или пробел с причиной."""
+        kind = entity.dxftype()
+        self.skipped[kind] += 1
+        if kind in UNDERLAYS:
+            return f"skipped:{kind}:underlay"
+        if kind in ANNOTATIONS:
+            return f"skipped:{kind}:annotation"
+        reason = "unsupported-spatial-entity"
+        if isinstance(entity, Body) and not entity.acis_data:
+            reason = "missing-acis-data"
+        self._gap(kind, layer, block, reason, ref)
+        return f"skipped:{kind}:{reason}"
+
+    def _skip(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> str:
+        self.skipped[kind] += 1
+        self._gap(kind, layer, block, reason, ref)
+        return f"skipped:{kind}:{reason}"
+
+    def _feature(self, feature: Feature) -> None:
+        self.features.append(feature)
+        if feature.symbol is not None:
+            self.strokes[feature.symbol] += 1
+
+    def _region(
+        self, entity: Body, ref: SourceRef, layer: str, block: str | None, owner: str | None
+    ) -> str:
+        """REGION: форма в ACIS. Внутри вставки ezdxf оставляет матрицу вставки при копии."""
+        matrix = entity.temporary_transformation().get_matrix()
+        try:
+            geometry, error = region_polygon(entity, matrix, self.flatten)
+        except RegionGeometryError as exc:
+            return self._skip("REGION", layer, block, exc.reason, ref)
+        if self.clips:
+            geometry = self._clip(geometry)
+            if geometry.is_empty:
+                return CLIPPED
+        self._feature(
+            Feature(
+                ref=ref,
+                layer=layer,
+                geometry=geometry,
+                block=block,
+                geometry_error_m=error * self.unit_m,
+                source_entity_type="REGION",
+                symbol=owner,
+            )
+        )
+        return "feature"
 
     def _gap(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> None:
         key = (kind, layer, block, reason)
@@ -359,97 +421,189 @@ class _Walker:
         )
 
     def _insert(
-        self,
-        insert: Insert,
-        ref: SourceRef,
-        layer: str,
-        chain: tuple[str, ...],
-        insert_chain: tuple[InsertInstance, ...],
-    ) -> None:
+        self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...], owner: str | None
+    ) -> str:
         if insert.mcount > 1:
             for position, instance in enumerate(insert.multi_insert()):
                 instance_ref = replace(ref, handle=f"{ref.handle}@{position}")
-                self._insert(instance, instance_ref, layer, chain, insert_chain)
-            return
+                self._insert(instance, instance_ref, layer, chain, owner)
+            return "insert:multi"
         clip = XClip(insert)
+        region = None
         if clip.has_clipping_path and clip.is_clipping_enabled:
-            # virtual_entities() ignores XCLIP. Using the full block could invent
-            # positive soil evidence outside the visible crop. Until exact crop
-            # semantics are supported, expose this gap instead of guessing.
-            self.skipped["INSERT:XCLIP"] += 1
-            self._gap("INSERT", layer, insert.dxf.name, "XCLIP-not-applied", ref)
-            return
+            # virtual_entities() не знает обрезки, а блок целиком придумал бы грунт за
+            # рамкой: разобранное режется той же рамкой, что показывает CAD.
+            region = clip_region(clip)
+            if region is None:
+                self.skipped["INSERT:XCLIP"] += 1
+                self._gap("INSERT", layer, insert.dxf.name, "XCLIP-inverted-not-applied", ref)
+                return "insert:xclip"
         name = insert.dxf.name
         block = self.doc.blocks.get(name)
         if block is None or block.block is None:
             self.skipped["INSERT:no-block"] += 1
-            return
+            return "insert:no-block"
         if (block.block.is_xref or block.block.is_xref_overlay) and len(block) == 0:
             self.unresolved_xrefs.add(name)
-            return
+            return "insert:xref-unresolved"
         if len(chain) >= MAX_BLOCK_DEPTH:
             self.skipped["INSERT:too-deep"] += 1
-            return
-        position = insert.ocs().to_wcs(insert.dxf.insert)
-        instances = (
-            *insert_chain,
-            InsertInstance(
-                ref,
-                decode_dxf_unicode(name),
-                position.x,
-                position.y,
-                decode_dxf_unicode(insert.dxf.get("layer", "0")),
-            ),
+            return "insert:too-deep"
+        return self._placed(
+            insert, block, ref, layer, chain=(*chain, name), owner=owner, region=region
         )
+
+    def _placed(  # noqa: PLR0913 - вставка, её блок и место в обходе
+        self,
+        insert: Insert,
+        block: BlockLayout,
+        ref: SourceRef,
+        layer: str,
+        *,
+        chain: tuple[str, ...],
+        owner: str | None,
+        region: BaseGeometry | None,
+    ) -> str:
+        """Роль и разбор вставки внутри её рамки обрезки, если рамка есть."""
+        if region is not None:
+            self.clips.append(region)
+        try:
+            outcome, child_owner = self._role(insert, block, ref, layer, owner)
+            if outcome == CLIPPED:
+                return outcome
+            if not self._explode(insert, ref, layer, chain, child_owner):
+                self.skipped["INSERT:not-explodable"] += 1
+                return "insert:not-explodable"
+            return outcome
+        finally:
+            if region is not None:
+                self.clips.pop()
+
+    def _role(
+        self, insert: Insert, block: BlockLayout, ref: SourceRef, layer: str, owner: str | None
+    ) -> tuple[str, str | None]:
+        """Исход вставки и владелец её детей.
+
+        Экземпляр знака создаётся до обхода детей: они получают его как владельца. Вставка
+        внутри знака - часть его рисунка, а не второй знак.
+        """
+        if owner is not None:
+            return "insert:in-symbol", owner
+        if self._is_container(insert, block):
+            return "insert:container", None
+        point = insert.ocs().to_wcs(insert.dxf.insert)
+        if self.clips and not self._visible(Point(point.x, point.y)):
+            return CLIPPED, None
+        self.symbols.append(
+            SymbolInstance(
+                ref=ref,
+                block=decode_dxf_unicode(insert.dxf.name),
+                layer=layer,
+                x=point.x,
+                y=point.y,
+                rotation_deg=float(insert.dxf.get("rotation", 0.0)),
+                scale=float(insert.dxf.get("xscale", 1.0)),
+            )
+        )
+        return "insert:symbol", str(ref)
+
+    def _explode(
+        self, insert: Insert, ref: SourceRef, layer: str, chain: tuple[str, ...], owner: str | None
+    ) -> bool:
+        name = chain[-1]
         for position, attribute in enumerate(insert.attribs):
             # Attached values are instance data, not the ATTDEF default. Copying
             # removes the handle so MINSERT instances get distinct source refs.
             self.visit(
                 attribute.copy(),
                 parent_layer=layer,
-                chain=(*chain, name),
+                chain=chain,
                 parent_handle=f"{ref.handle}/attrib",
                 index=position,
                 parent_block=name,
-                insert_chain=instances,
+                owner=owner,
             )
         try:
-            block_matrix = insert.matrix44()
             children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
         except ValueError, TypeError, ArithmeticError:
-            self.skipped["INSERT:not-explodable"] += 1
-            return
-        regions = tuple(child for child in children if isinstance(child, Region))
-        hatches = tuple(
-            child
-            for child in children
-            if isinstance(child, DXFPolygon) and child.dxftype() == "HATCH"
-        )
+            return False
         for position, child in enumerate(children):
             self.visit(
                 child,
                 parent_layer=layer,
-                chain=(*chain, name),
+                chain=chain,
                 parent_handle=ref.handle,
                 index=position,
                 parent_block=name,
-                insert_chain=instances,
-                block_matrix=block_matrix,
-                sibling_regions=regions,
-                sibling_hatches=hatches,
+                owner=owner,
             )
+        return True
+
+    def _is_container(self, insert: Insert, block: BlockLayout) -> bool:
+        """Контейнер - обёртка или сборка, а не значок: знак - то, что внутри неё."""
+        if local_name(decode_dxf_unicode(block.name)).casefold().startswith(CONTAINER_PREFIXES):
+            return True
+        if len(block) > SYMBOL_MAX_PRIMITIVES:
+            return True
+        size = self._block_size(block)
+        if size is None:
+            return True
+        scale = max(abs(insert.dxf.get("xscale", 1.0)), abs(insert.dxf.get("yscale", 1.0)))
+        return size * scale * self.unit_m > SYMBOL_MAX_SIZE_M
+
+    def _block_size(self, block: BlockLayout) -> float | None:
+        """Наибольший размер рисунка блока в его единицах; None - пустой или неизмеримый."""
+        box = self._block_box(block, depth=0)
+        return max(box.size.x, box.size.y) if box is not None and box.has_data else None
+
+    def _block_box(self, block: BlockLayout, depth: int) -> bbox.BoundingBox | None:
+        """Габарит рисунка блока без разборки аннотаций.
+
+        bbox.extents разбирает выноски и размеры на примитивы и при этом создаёт в документе
+        блоки стрелок, а чтение не меняет исходный документ. Поэтому аннотации пропускаются,
+        а вложенные вставки обходятся здесь же, с их матрицей.
+        """
+        if block.name in self.sizes:
+            return self.sizes[block.name]
+        box = bbox.BoundingBox()
+        self.sizes[block.name] = None  # защита от цикла вставок
+        for entity in block:
+            kind = entity.dxftype()
+            if kind in ANNOTATIONS:
+                continue
+            if not isinstance(entity, Insert):
+                box.extend(bbox.extents([entity], fast=True))
+                continue
+            inner = self.doc.blocks.get(entity.dxf.name)
+            if inner is None or depth >= MAX_BLOCK_DEPTH:
+                continue
+            inner_box = self._block_box(inner, depth + 1)
+            if inner_box is None or not inner_box.has_data:
+                continue
+            (x0, y0, _), (x1, y1, _) = inner_box.extmin, inner_box.extmax
+            corners = [(x0, y0, 0), (x1, y0, 0), (x1, y1, 0), (x0, y1, 0)]
+            instances = entity.multi_insert() if entity.mcount > 1 else [entity]
+            for instance in instances:
+                box.extend(instance.matrix44().transform_vertices(corners))
+        self.sizes[block.name] = box if box.has_data else None
+        return self.sizes[block.name]
+
+    def instances(self) -> list[SymbolInstance]:
+        return [replace(s, strokes=self.strokes[str(s.ref)]) for s in self.symbols]
 
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
         self.skipped[f"VIRTUAL:{entity.dxftype()}:{reason}"] += 1
 
-    def _label(
+    def _label(  # noqa: PLR0913 - подпись с владельцем-знаком
         self,
         entity: DXFGraphic,
         ref: SourceRef,
         layer: str,
         block: str | None,
         chain: tuple[str, ...],
-    ) -> None:
+        *,
+        owner: str | None,
+    ) -> str:
         # CIF escapes are not decoded by ezdxf on load, including R2007+.
         # Decode before stripping MTEXT control sequences, only in our scene;
         # keep the source Drawing unchanged for export and integrity checks.
@@ -458,7 +612,7 @@ class _Walker:
         else:
             text = plain_text(decode_dxf_unicode(entity.dxf.text))
         if not text or not text.strip():
-            return
+            return "label:empty"
         original = entity.origin_of_copy or entity
         if (
             isinstance(original, Text)
@@ -467,9 +621,7 @@ class _Walker:
         ):
             # Text.transform() supplies a fallback before virtual_entities()
             # returns. Inspect the original too, or blocks hide missing data.
-            self._gap(entity.dxftype(), layer, block, "text-alignment-point-missing", ref)
-            self.skipped[entity.dxftype()] += 1
-            return
+            return self._skip(entity.dxftype(), layer, block, "text-alignment-point-missing", ref)
         point = entity.dxf.insert
         second = None
         if isinstance(entity, Text):
@@ -480,9 +632,9 @@ class _Walker:
         if not np.isfinite(tuple(point)).all() or (
             second is not None and not np.isfinite(tuple(second)).all()
         ):
-            self._gap(entity.dxftype(), layer, block, "non-finite-text-coordinates", ref)
-            self.skipped[entity.dxftype()] += 1
-            return
+            return self._skip(entity.dxftype(), layer, block, "non-finite-text-coordinates", ref)
+        if self.clips and not self._visible(Point(point.x, point.y)):
+            return CLIPPED
         self.labels.append(
             TextLabel(
                 ref=ref,
@@ -492,43 +644,18 @@ class _Walker:
                 text=text.strip(),
                 block=block,
                 block_chain=tuple(decode_dxf_unicode(name) for name in chain),
+                symbol=owner,
             )
         )
+        if owner is not None:
+            self.strokes[owner] += 1
+        return "label"
 
-    def _geometry(  # noqa: C901, PLR0911, PLR0912 - one branch per entity type
-        self,
-        entity: DXFGraphic,
-        *,
-        block_matrix: Matrix44 | None = None,
-        sibling_regions: tuple[Region, ...] = (),
-        sibling_hatches: tuple[DXFPolygon, ...] = (),
-    ) -> tuple[BaseGeometry | None, float | None]:
+    def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type
         kind = entity.dxftype()
         try:
-            if isinstance(entity, Region):
-                return region_polygon(
-                    entity,
-                    flatten=self.flatten,
-                    block_matrix=block_matrix,
-                    sat_lines=self._region_sat(entity),
-                )
-            if isinstance(entity, Wipeout):
-                return _wipeout_geometry(entity)
-            if isinstance(entity, Image):
-                footprint = image_footprint(entity)
-                if footprint is not None:
-                    self.raster_footprints += 1
-                return footprint, 0.0 if footprint is not None else None
-            if isinstance(entity, MLine):
-                footprint = bounded_mline_footprint(entity, self.flatten)
-                return footprint, 0.0 if footprint is not None else None
             if kind == "LINE":
                 start, end = entity.dxf.start, entity.dxf.end
-                extent = max(abs(start.x), abs(start.y), abs(end.x), abs(end.y))
-                length = math.hypot(start.x - end.x, start.y - end.y)
-                if length <= _DEGENERATE_LINE_ULPS * math.ulp(extent):
-                    self.collapsed_lines += 1
-                    return Point(start.x, start.y), length
                 return LineString([(start.x, start.y), (end.x, end.y)]), 0.0
             if kind == "POINT":
                 location = entity.dxf.location
@@ -548,147 +675,36 @@ class _Walker:
             if isinstance(entity, LWPolyline) or (
                 isinstance(entity, Polyline) and entity.is_2d_polyline
             ):
+                if isinstance(entity, Polyline) and (fitted := fitted_vertices(entity)):
+                    # Сглажена сплайном: на экране CAD ломаная по вершинам сглаживания.
+                    return _polyline(fitted, closed=entity.is_closed), 0.0
                 points, error = polyline_vertices(entity, self.flatten)
-                if isinstance(entity, Polyline) and entity.dxf.flags & 6:
-                    error = associated_polyline_error(
-                        entity,
-                        points,
-                        error,
-                        sibling_hatches,
-                        self.flatten,
-                        max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
-                        max_shift=0.02 / self.unit_m,
-                    )
-                    if error is not None:
-                        self.matched_hatch_polylines += 1
+                if isinstance(entity, Polyline) and entity.dxf.flags & 4:
+                    # Сглажена сплайном, но вершины сглаживания не читаются (дуги у них):
+                    # что рисует CAD, не установлено. Сглаживание дугами (флаг 2) - та же
+                    # ломаная с дугами через все вершины, её погрешность ограничена.
+                    error = None
                 return _polyline(points, closed=entity.is_closed), error
-            if kind in _AREA_ENTITIES:
-                try:
-                    return hatch_geometry(
-                        entity,  # ty: ignore[invalid-argument-type]
-                        self.flatten,
-                        max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
-                    )
-                except HatchGeometryError as error:
-                    if str(error) == "hatch-intersecting-boundaries" and block_matrix is not None:
-                        restored = linear_hatch_from_local_source(
-                            entity,  # ty: ignore[invalid-argument-type]
-                            block_matrix,
-                            self.flatten,
-                            max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
-                        )
-                        if restored is not None:
-                            self.matched_local_hatches += 1
-                            return restored
-                    if str(error) == "hatch-open-boundary":
-                        return self._associated_region_hatch(entity, block_matrix)
-                    if str(error) == "hatch-invalid-ring" and sibling_regions:
-                        matched = self._matched_sibling_region_hatch(
-                            entity, sibling_regions, block_matrix
-                        )
-                        if matched is not None:
-                            self.matched_region_hatches += 1
-                            return matched
-                    raise
+            if isinstance(entity, Spline) and (bounded := self._spline(entity)) is not None:
+                return bounded
             path = make_path(entity)
             vertices = [(v.x, v.y) for v in path.flattening(self.flatten)]
-        except HatchGeometryError, RegionGeometryError:
+        except HatchGeometryError:
             raise
         except TypeError, ValueError, ArithmeticError, AttributeError:
             return None, None
         return _polyline(vertices, closed=path.is_closed), None if path.has_curves else 0.0
 
-    def _matched_sibling_region_hatch(
-        self,
-        hatch: DXFGraphic,
-        siblings: tuple[Region, ...],
-        block_matrix: Matrix44 | None,
-    ) -> tuple[Polygon, float] | None:
-        """Infer a source only from one REGION in the same INSERT with matching boundary."""
+    def _spline(self, entity: Spline) -> tuple[BaseGeometry | None, float] | None:
+        """Сплайн с контрольными точками - с доказанной погрешностью; иначе None, и он идёт
+        общим путём с неограниченной погрешностью (пробел)."""
         try:
-            outline, error = hatch_outline(
-                hatch,  # ty: ignore[invalid-argument-type]
-                self.flatten,
-                max_closure=_MAX_HATCH_CLOSURE_M / self.unit_m,
-            )
-        except HatchGeometryError:
+            points, error = spline_vertices(entity, self.flatten)
+        except ValueError:
             return None
-        candidates = []
-        for region in siblings:
-            if decode_dxf_unicode(region.dxf.get("layer", "0")) != decode_dxf_unicode(
-                hatch.dxf.get("layer", "0")
-            ):
-                continue
-            try:
-                candidates.append(
-                    region_polygon(
-                        region,
-                        flatten=self.flatten,
-                        block_matrix=block_matrix,
-                        sat_lines=self._region_sat(region),
-                    )
-                )
-            except RegionGeometryError:
-                continue
-        return match_region_outline(outline, error, candidates, max_shift=0.02 / self.unit_m)
+        return _polyline(points, closed=entity.closed), error
 
-    def _associated_region_hatch(
-        self, hatch: DXFGraphic, block_matrix: Matrix44 | None
-    ) -> tuple[BaseGeometry, float]:
-        """Use a HATCH's explicit source REGION only when its vertices agree."""
-        paths = hatch.paths.paths  # ty: ignore[unresolved-attribute]
-        if not hatch.dxf.get("associative", 0) or len(paths) != 1:
-            raise HatchGeometryError("hatch-open-boundary")
-        path = paths[0]
-        handles = path.source_boundary_objects
-        if not isinstance(path, PolylinePath) or len(handles) != 1:
-            raise HatchGeometryError("hatch-open-boundary")
-        source = self.doc.entitydb.get(handles[0])
-        if (
-            not isinstance(source, Region)
-            or source.dxf.get("owner") != hatch.dxf.get("owner")
-            or source.dxf.get("layer", "0") != hatch.dxf.get("layer", "0")
-        ):
-            raise HatchGeometryError("hatch-open-boundary")
-        local, error = region_polygon(
-            source, flatten=self.flatten, sat_lines=self._region_sat(source)
-        )
-        if not path.vertices:
-            raise HatchGeometryError("hatch-open-boundary")
-        tolerance = max(error, 0.002 / self.unit_m)
-        ocs = hatch.ocs()
-        elevation = hatch.dxf.elevation.z
-        points = [ocs.to_wcs((x, y, elevation)) for x, y, _ in path.vertices]
-        if any(local.boundary.distance(Point(point.x, point.y)) > tolerance for point in points):
-            raise HatchGeometryError("hatch-open-boundary")
-        rough = Polygon([(point.x, point.y) for point in points])
-        # A few associative paths self-intersect in their millimetre-sized
-        # closure seam after DXF rounding. The REGION is the actual geometry;
-        # this coarse area check only guards against an unrelated source link.
-        if not (
-            _ASSOCIATIVE_HATCH_MIN_AREA_RATIO
-            <= rough.area / local.area
-            <= _ASSOCIATIVE_HATCH_MAX_AREA_RATIO
-        ):
-            raise HatchGeometryError("hatch-open-boundary")
-        if block_matrix is None:
-            return local, error
-        return region_polygon(
-            source,
-            flatten=self.flatten,
-            block_matrix=block_matrix,
-            sat_lines=self._region_sat(source),
-        )
-
-    def _region_sat(self, region: Region) -> tuple[str, ...] | None:
-        handle = region.dxf.get("handle")
-        if handle in self.region_sat:
-            return self.region_sat[handle]
-        if region.sab:
-            return self.region_sat_by_sab.get(hashlib.sha256(region.sab).digest())
-        return None
-
-    def warnings(self) -> list[str]:  # noqa: C901 - one branch per import diagnostic
+    def warnings(self) -> list[str]:
         messages = []
         if self.unresolved_xrefs:
             names = ", ".join(sorted(self.unresolved_xrefs)[:10])
@@ -699,79 +715,79 @@ class _Walker:
         if self.skipped:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
-        if self.matched_region_hatches:
+        if self.bounded_hatches:
             messages.append(
-                "HATCH восстановлены по единственному REGION того же блока и слоя: "
-                f"{self.matched_region_hatches}"
-            )
-        if self.matched_hatch_polylines:
-            messages.append(
-                "Кривые POLYLINE сверены с исходной границей HATCH того же блока: "
-                f"{self.matched_hatch_polylines}"
-            )
-        if self.matched_local_hatches:
-            messages.append(
-                "Прямые контуры HATCH объединены до преобразования блока: "
-                f"{self.matched_local_hatches}"
-            )
-        if self.collapsed_lines:
-            messages.append(
-                "LINE с совпадающими в пределах округления концами представлены точкой: "
-                f"{self.collapsed_lines}"
-            )
-        if self.bounded_unreadable_hatches:
-            messages.append(
-                "Повреждённые HATCH ограничены неопределённой областью без посадки: "
-                f"{self.bounded_unreadable_hatches}"
-            )
-        if self.bounded_invalid_polylines:
-            messages.append(
-                "Самопересекающиеся POLYLINE/LWPOLYLINE ограничены неопределённой "
-                f"областью без посадки: {sum(self.bounded_invalid_polylines.values())}"
-            )
-        if self.bounded_mlines:
-            messages.append(
-                f"MLINE ограничены неизвестной областью без посадки: {self.bounded_mlines}"
-            )
-        if self.raster_footprints:
-            messages.append(
-                "Рамки IMAGE прочитаны, содержимое растров не распознано: "
-                f"{self.raster_footprints}. Уточните роль каждого изображения."
+                f"HATCH с большим разрывом контура: {self.bounded_hatches}; "
+                "материал в ограниченной области не подтверждён, посадки там исключены."
             )
         return messages
 
 
-def _wipeout_geometry(entity: Wipeout) -> tuple[Polygon, float]:
-    """Retain the exact display mask as unknown terrain, including INSERT transforms."""
-    if entity.dxf.get("clip_mode", 0) != 0:
-        raise HatchGeometryError("wipeout-unsupported-clip-mode")
-    if (
-        entity.dxf.get("clipping", 0) == 0
-        and len(entity.boundary_path) != _WIPEOUT_RECTANGLE_VERTICES
-    ):
-        raise HatchGeometryError("wipeout-clipping-state-ambiguous")
-    if not entity.boundary_path:
-        raise HatchGeometryError("wipeout-invalid-boundary")
-    vertices = entity.boundary_path_wcs()
-    if len(vertices) < _WIPEOUT_MIN_VERTICES or not all(
-        math.isfinite(value) for vertex in vertices for value in (vertex.x, vertex.y, vertex.z)
-    ):
-        raise HatchGeometryError("wipeout-invalid-boundary")
-    z_span = max(vertex.z for vertex in vertices) - min(vertex.z for vertex in vertices)
-    if z_span > _WIPEOUT_MAX_Z_SPAN:
-        raise HatchGeometryError("wipeout-nonplanar-boundary")
-    mask = Polygon((vertex.x, vertex.y) for vertex in vertices)
-    if not mask.is_valid or mask.area <= 0:
-        raise HatchGeometryError("wipeout-invalid-boundary")
-    return mask, 0.0
+def clip_region(clip: XClip) -> BaseGeometry | None:
+    """Видимая область обычной обрезки в WCS; None - инвертированная или вырожденная."""
+    path = clip.get_wcs_clipping_path()
+    if clip.is_inverted_clip or path.is_inverted_clip or len(path.vertices) < 3:  # noqa: PLR2004 - многоугольник
+        return None
+    area = shapely.make_valid(Polygon([(v.x, v.y) for v in path.vertices]))
+    return area if area.area > 0 else None
+
+
+def _same_dimension(original: BaseGeometry, clipped: BaseGeometry) -> BaseGeometry:
+    """Пересечение с рамкой без осколков меньшей размерности (касание - не рисунок)."""
+    dimension = shapely.get_dimensions(original)
+    parts = [p for p in shapely.get_parts(clipped) if shapely.get_dimensions(p) == dimension]
+    while any(p.geom_type == "GeometryCollection" for p in parts):
+        parts = [q for p in parts for q in shapely.get_parts(p)]
+    kept = [p for p in parts if shapely.get_dimensions(p) == dimension]
+    return shapely.union_all(kept) if kept else shapely.Point()
+
+
+def _same_ink(drawn: BaseGeometry, repaired: BaseGeometry) -> bool:
+    """Починка ничего не переосмыслила: линии починенного - те же чернила, что нарисованы.
+
+    Отрезок нулевой длины становится точкой, сложенный контур нулевой площади - линией.
+    Самопересекающийся контур с площадью («восьмёрка») - заливка по правилу чёт-нечет, как у
+    штриховки (решение пользователя 25.09.2026, вопрос 1): границы частей заливки - те же
+    линии контура, узлы только в точках самопересечения. Погрешность остаётся прежней.
+    """
+    lines = shapely.boundary(drawn) if drawn.geom_type in {"Polygon", "MultiPolygon"} else drawn
+    return shapely.hausdorff_distance(lines, _ink(repaired)) <= _EXACT_REPAIR
+
+
+def _ink(geometry: BaseGeometry) -> BaseGeometry:
+    """Чернила геометрии: у площадей - их границы, линии и точки - как есть."""
+    parts = list(shapely.get_parts(geometry))
+    while any(part.geom_type in {"GeometryCollection", "MultiPolygon"} for part in parts):
+        parts = [p for part in parts for p in shapely.get_parts(part)]
+    return shapely.union_all(
+        [part.boundary if part.geom_type == "Polygon" else part for part in parts]
+    )
+
+
+def _repaired(
+    geometry: BaseGeometry, error: float | None, repairs: tuple[str, ...]
+) -> tuple[BaseGeometry, float | None, tuple[str, ...]]:
+    """Недопустимая геометрия чинится без смены чернил, иначе погрешность не ограничена."""
+    if geometry.is_valid:
+        return geometry, error, repairs
+    repaired = shapely.make_valid(geometry)
+    if not _same_ink(geometry, repaired):
+        return repaired, None, repairs
+    if _has_area(repaired):
+        return repaired, error, (*repairs, _EVEN_ODD)
+    return repaired, error, repairs
+
+
+def _has_area(geometry: BaseGeometry) -> bool:
+    return geometry.area > 0
 
 
 def _to_metres(
-    features: list[Feature], labels: list[TextLabel], unit_m: float
-) -> tuple[tuple[Feature, ...], tuple[TextLabel, ...]]:
+    features: list[Feature], labels: list[TextLabel], symbols: list[SymbolInstance], unit_m: float
+) -> tuple[tuple[Feature, ...], tuple[TextLabel, ...], tuple[SymbolInstance, ...]]:
     """Сцена в метрах: дальше по коду все пороги и нормы метровые."""
     if unit_m == 1.0:
-        return tuple(features), tuple(labels)
+        return tuple(features), tuple(labels), tuple(symbols)
     scaled = shapely.transform(
         np.asarray([f.geometry for f in features], dtype=object), lambda xy: xy * unit_m
     )
@@ -780,14 +796,16 @@ def _to_metres(
             replace(
                 feature,
                 geometry=geometry,
-                insert_chain=tuple(
-                    replace(instance, x=instance.x * unit_m, y=instance.y * unit_m)
-                    for instance in feature.insert_chain
+                uncertainty_footprint=(
+                    shapely.transform(feature.uncertainty_footprint, lambda xy: xy * unit_m)
+                    if feature.uncertainty_footprint is not None
+                    else None
                 ),
             )
             for feature, geometry in zip(features, scaled, strict=True)
         ),
         tuple(replace(label, x=label.x * unit_m, y=label.y * unit_m) for label in labels),
+        tuple(replace(symbol, x=symbol.x * unit_m, y=symbol.y * unit_m) for symbol in symbols),
     )
 
 

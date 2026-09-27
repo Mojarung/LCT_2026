@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
 from green.application.surface_faces import FaceMaterials, closed_face_materials
+from green.application.wording import counted
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -31,10 +33,43 @@ if TYPE_CHECKING:
 
 PAVED_LABELS = frozenset({"А", "Ц", "ПЛ", "БР", "Б", "Щ", "ГР", "АСФ", "ПЛИТКА"})
 SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
+# Подписи-фразы площадок и покрытий: «ДЕТ.ПЛ.», «СПОРТ ПЛ.», «СПЕЦ.ПОКРЫТИЕ», «ПЛИТКА БЕТОННАЯ».
+# Короткие обозначения («А», «Б») фразами не ищутся: «ж.б.» у трубы - не бетонное покрытие.
+PAVED_PHRASE = re.compile(r"ПОКР|^(ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК|АСФАЛЬТ|БРУСЧ|ПЛИТК|ТЕРРАВЕЙ")
+SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
+# Полигоны, чья середина - известный материал: штриховки газонов, тротуаров, проезжей части.
+SOIL_AREAS = frozenset({ObjectClass.LAWN})
+PAVED_AREAS = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})
 MAX_CELLS = 20_000_000
-_LINE_TYPES = frozenset({"LineString", "MultiLineString"})
+_LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _TREE_SEED = 4
+# Знак массива (LISTVL, SM): грунт, занятый существующими деревьями - посадки внутри нет.
+_WOODLAND_SEED = 5
+# Запас к радиусу при отборе близких точек: dwithin и distance идут в GEOS разными путями, и
+# точку у самой границы радиуса решает то же точное расстояние, что и раньше.
+_NEAR_MARGIN_M = 1e-6
+
+
+def distance_at_least(
+    geometry: BaseGeometry, points: NDArray[np.object_], radius_m: float
+) -> NDArray[np.bool_]:
+    """То же, что `shapely.distance(points, geometry) >= radius_m`, без перебора вершин.
+
+    Точное расстояние до контура газона улицы - перебор всех его вершин для каждой точки: на
+    Кустанайской это 60 с на вариант плана. Подготовленная проверка dwithin отсекает дальние
+    точки по индексу отрезков, точное расстояние считается только у близких, поэтому ответ тот
+    же, включая точку ровно на radius_m. У пустого контура расстояние NaN: не проходит никто.
+    """
+    if geometry.is_empty:
+        return np.zeros(len(points), dtype=bool)
+    shapely.prepare(geometry)
+    near = shapely.dwithin(geometry, points, radius_m + _NEAR_MARGIN_M)
+    result = ~near
+    rows = np.flatnonzero(near)
+    if len(rows):
+        result[rows] = shapely.distance(points[rows], geometry) >= radius_m
+    return result
 
 
 class Material(IntEnum):
@@ -68,7 +103,17 @@ class SurfaceMap:
     soil_area: BaseGeometry | None = None
     paved_area: BaseGeometry | None = None
     uncertainty_area: BaseGeometry | None = None
+    # Грани со знаком существующего массива: грунт, но не место для новой посадки.
+    woodland_area: BaseGeometry | None = None
+    # Совмещённый режим (вопрос 3 пользователя): материал вокруг подписей вне решённых
+    # граней, разлитый по расстоянию, - в растре inferred_grid; здесь его площадь и подписи.
+    hybrid_mode: bool = False
+    fallback_soil_m2: float = 0.0
+    fallback_paved_m2: float = 0.0
+    fallback_labels: int = 0
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
+    # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
+    _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
         """Материал под каждой точкой; вне растра UNKNOWN."""
@@ -81,6 +126,11 @@ class SurfaceMap:
         result = np.full(len(points), int(Material.UNKNOWN), dtype=np.int8)
         grid = self.grid if self.inferred_grid is None else self.inferred_grid
         result[inside] = grid[rows[inside], cols[inside]]
+        # Подготовка shapely при pickle теряется (контекст правки после перезапуска): без неё
+        # проверка точек на большой карте идёт на порядок дольше.
+        for area in (self.soil_area, self.paved_area, self.uncertainty_area):
+            if area is not None and not shapely.is_prepared(area):
+                shapely.prepare(area)
         if self.soil_area is not None:
             result[shapely.contains(self.soil_area, points)] = int(Material.SOIL)
         if self.paved_area is not None:
@@ -98,13 +148,19 @@ class SurfaceMap:
         This is deliberately conservative at raster edges; it is not a claim
         that the material inferred from labels is physically correct.
         """
-        on_soil = self.material(points) == Material.SOIL
+        on_soil = (self.material(points) == Material.SOIL) & self._clear_of_woodland(
+            points, radius_m
+        )
         if radius_m <= 0 or not len(points):
             return on_soil
         fits = np.zeros(len(points), dtype=bool)
         if self.soil_area is not None:
-            fits |= shapely.contains(self.soil_area, points) & (
-                shapely.distance(points, self.soil_area.boundary) >= radius_m
+            edge = self._soil_edge
+            if edge is None:
+                edge = self.soil_area.boundary
+                object.__setattr__(self, "_soil_edge", edge)
+            fits |= shapely.contains(self.soil_area, points) & distance_at_least(
+                edge, points, radius_m
             )
         grid = self.grid if self.inferred_grid is None else self.inferred_grid
         distances = self._soil_distances
@@ -123,10 +179,18 @@ class SurfaceMap:
         lower = distances[rr, cc] - self.cell / np.sqrt(2) - offset
         fits[inside] |= (grid[rr, cc] == Material.SOIL) & (lower >= radius_m)
         if self.paved_area is not None:
-            fits &= shapely.distance(points, self.paved_area) >= radius_m
+            fits &= distance_at_least(self.paved_area, points, radius_m)
         if self.uncertainty_area is not None:
-            fits &= shapely.distance(points, self.uncertainty_area) >= radius_m
+            fits &= distance_at_least(self.uncertainty_area, points, radius_m)
         return fits & on_soil
+
+    def _clear_of_woodland(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
+        if self.woodland_area is None or not len(points):
+            return np.ones(len(points), dtype=bool)
+        clear = ~shapely.intersects(self.woodland_area, points)
+        if radius_m > 0:
+            clear &= distance_at_least(self.woodland_area, points, radius_m)
+        return clear
 
     def summary(self) -> dict[str, int | float]:
         counted = {m: int((self.grid == m).sum()) for m in Material}
@@ -149,6 +213,8 @@ class SurfaceMap:
     def review_notes(self) -> tuple[str, ...]:
         if not self.closed_faces_mode:
             return ()
+        if self.hybrid_mode:
+            return self._hybrid_notes()
         notes = []
         if self.soil_area is None or self.soil_area.is_empty:
             notes.append(
@@ -173,13 +239,37 @@ class SurfaceMap:
             )
         return tuple(notes)
 
+    def _hybrid_notes(self) -> tuple[str, ...]:
+        notes = []
+        if (self.soil_area is None or self.soil_area.is_empty) and not self.fallback_soil_m2:
+            notes.append(
+                "Грунт не определён: нет ни площадей озеленения, ни подписей «ГАЗОН» с "
+                "непротиворечивым окружением."
+            )
+        if self.fallback_labels:
+            soil = f"{self.fallback_soil_m2:,.0f}".replace(",", " ")
+            paved = f"{self.fallback_paved_m2:,.0f}".replace(",", " ")
+            # Короткой фразой (жюри дизайна, итерация 7): как считался разлив, говорит заметка
+            # о карте покрытий, здесь - сколько и откуда.
+            labels = counted(self.fallback_labels, "подписи", "подписей", "подписей")
+            notes.append(
+                f"Грунт по близости подписи: газон {soil} м², покрытие {paved} м² не дальше "
+                f"{self.max_distance_m:g} м от {labels} вне замкнутых контуров."
+            )
+        if self.conflicting_faces:
+            notes.append(
+                f"Контуров с противоречивыми подписями покрытий: {self.conflicting_faces}; "
+                "материал в них решён по ближайшей подписи."
+            )
+        return tuple(notes)
+
     def _cells(self, xy: NDArray[np.float64]) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
         cols = np.floor((xy[:, 0] - self.origin[0]) / self.cell).astype(np.int64)
         rows = np.floor((xy[:, 1] - self.origin[1]) / self.cell).astype(np.int64)
         return rows, cols
 
 
-def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and named metric limits
+def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named metric limits
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
@@ -195,14 +285,17 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         raise ValueError("Surface distances must be finite")
     if cell_m <= 0 or max_distance_m <= 0 or ambiguity_m < 0 or tree_distance_m < 0:
         raise ValueError("Invalid surface distance or resolution")
-    if inference_mode not in {"closed_faces", "distance"}:
+    if inference_mode not in {"closed_faces", "distance", "hybrid"}:
         raise ValueError("Unknown surface inference mode")
+    faces_mode = inference_mode != "distance"
     seed_xy, seed_kind = _seeds(features, labels)
-    if inference_mode == "closed_faces":
-        keep = seed_kind != _TREE_SEED
-        seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
+    # Деревья - затравка только для заливки по расстоянию, знаки массивов - только для граней:
+    # исключить посадку можно лишь из замкнутого контура массива. Совмещённый режим деревья
+    # не берёт: дерево в решётке на тротуаре не открывает тротуар под посадку.
+    keep = seed_kind != (_TREE_SEED if faces_mode else _WOODLAND_SEED)
+    seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
     paved = int((seed_kind == Material.PAVED).sum())
-    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED]).sum())
+    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED, _WOODLAND_SEED]).sum())
     polygons = [
         f
         for f in features
@@ -230,7 +323,8 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         free &= _inside(extent, origin, cell, shape)
     soil_area, paved_area = _exact_areas(polygons, extent)
     faces = None
-    if inference_mode == "closed_faces":
+    fallback = _Fallback()
+    if faces_mode:
         faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
         if soil_area is not None:
             # A declared material polygon is independent of label propagation:
@@ -240,7 +334,18 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
             soil_area = soil_area.difference(faces.paved_evidence)
         soil_area = _merge_material_area(soil_area, faces.soil, extent)
         paved_area = _merge_material_area(paved_area, faces.paved, extent)
-        grid = np.full(shape, int(Material.UNKNOWN), dtype=np.int8)
+        fallback = _label_fallback(
+            free,
+            faces,
+            seed_xy,
+            seed_kind,
+            uncertain,
+            origin=origin,
+            cell=cell,
+            limit=max_distance_m if inference_mode == "hybrid" else 0.0,
+            ambiguity=ambiguity_m,
+        )
+        grid = fallback.grid
     else:
         cols = np.floor((seed_xy[:, 0] - origin[0]) / cell).astype(np.int64)
         rows = np.floor((seed_xy[:, 1] - origin[1]) / cell).astype(np.int64)
@@ -268,12 +373,75 @@ def build_surface_map(  # noqa: C901, PLR0913 - explicit evidence stages and nam
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
-        closed_faces_mode=inference_mode == "closed_faces",
+        woodland_area=_merge_material_area(None, faces.woodland, extent) if faces else None,
+        closed_faces_mode=faces_mode,
+        hybrid_mode=inference_mode == "hybrid",
+        fallback_soil_m2=fallback.soil_m2,
+        fallback_paved_m2=fallback.paved_m2,
+        fallback_labels=fallback.labels,
         closed_faces=faces.count if faces else 0,
         conflicting_faces=faces.conflicts if faces else 0,
         unassigned_labels=faces.unassigned_labels if faces else 0,
         open_edges=faces.open_edges if faces else 0,
         unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Fallback:
+    grid: NDArray[np.int8] = field(default_factory=lambda: np.zeros((0, 0), dtype=np.int8))
+    labels: int = 0
+    soil_m2: float = 0.0
+    paved_m2: float = 0.0
+
+
+def _label_fallback(  # noqa: PLR0913 - именованные пределы разлива
+    free: NDArray[np.bool_],
+    faces: FaceMaterials,
+    seed_xy: NDArray[np.float64],
+    seed_kind: NDArray[np.int8],
+    uncertain: BaseGeometry | None,
+    *,
+    origin: tuple[float, float],
+    cell: float,
+    limit: float,
+    ambiguity: float,
+) -> _Fallback:
+    """Подписи вне решённых граней разливают материал по расстоянию (вопрос 3 пользователя).
+
+    Решённая грань (замкнута подтверждёнными границами, подписи в ней согласны) не
+    переписывается и разливу закрыта. Разлив идёт только по свободным ячейкам (границы
+    покрытий - барьер), не дальше limit, а «ГАЗОН» и «А» конкурируют: ячейка, где разница
+    расстояний меньше ambiguity, остаётся неизвестной. Подпись в полосе погрешности границы
+    сторону не выбирает; деревья затравкой не служат.
+    """
+    unknown = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
+    decided = shapely.union_all([faces.soil, faces.paved])
+    points = shapely.points(seed_xy)
+    labels = np.isin(seed_kind, [int(Material.SOIL), int(Material.PAVED)])
+    if not decided.is_empty:
+        labels &= ~shapely.intersects(decided, points)
+    if uncertain is not None:
+        labels &= ~shapely.intersects(uncertain, points)
+    # limit 0 - строгий режим тиммейта: без разлива, растр граней пуст.
+    if limit <= 0 or not labels.any():
+        return _Fallback(grid=unknown)
+    open_cells = free.copy()
+    if not decided.is_empty:
+        open_cells &= ~_inside(decided, origin, cell, free.shape)
+    xy = seed_xy[labels]
+    seeds = _Seeds(
+        np.floor((xy[:, 1] - origin[1]) / cell).astype(np.int64),
+        np.floor((xy[:, 0] - origin[0]) / cell).astype(np.int64),
+        seed_kind[labels],
+    )
+    grid = _assign(open_cells, seeds, limit=limit / cell, ambiguity=ambiguity / cell, tree_limit=0)
+    area = cell * cell
+    return _Fallback(
+        grid=grid,
+        labels=int(labels.sum()),
+        soil_m2=float((grid == Material.SOIL).sum()) * area,
+        paved_m2=float((grid == Material.PAVED).sum()) * area,
     )
 
 
@@ -334,11 +502,13 @@ def _closed_materials(
             or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
         ]
     )
+    woodland = seed_kind == _WOODLAND_SEED
     faces = closed_face_materials(
         separating_lines,
-        seed_xy[certain & (seed_kind == Material.SOIL)],
+        seed_xy[certain & ((seed_kind == Material.SOIL) | woodland)],
         seed_xy[certain & (seed_kind == Material.PAVED)],
         material_lines=material_lines,
+        woodland_xy=seed_xy[woodland],
     )
     return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
 
@@ -361,8 +531,6 @@ def _exact_areas(
     paved = shapely.union_all([outer_area(f) for f in polygons if f.object_class.is_hard_surface])
     if extent is not None:
         soil, paved = soil.intersection(extent), paved.intersection(extent)
-    if soil.is_empty:
-        return None, None if paved.is_empty else paved
     soil = soil.difference(paved)
     return (None if soil.is_empty else soil, None if paved.is_empty else paved)
 
@@ -370,11 +538,8 @@ def _exact_areas(
 def _uncertainty_area(features: Sequence[Feature]) -> BaseGeometry | None:
     bands = []
     for feature in features:
-        if feature.source_entity_type == "IMAGE" and feature.object_class is not ObjectClass.IGNORE:
-            bands.append(feature.geometry)
-            continue
-        if feature.object_class in {ObjectClass.DRAWING_MASK, ObjectClass.UNCERTAIN_AREA}:
-            bands.append(feature.geometry)
+        if feature.uncertainty_footprint is not None:
+            bands.append(feature.uncertainty_footprint)
             continue
         error = error_bound(feature)
         if not error or not feature.object_class.is_surface_barrier:
@@ -398,24 +563,62 @@ def _seeds(
     xy: list[tuple[float, float]] = []
     kind: list[int] = []
     for label in labels:
-        if label.surface_role == "ignore":
+        material = _label_seed(label)
+        if material is not None:
+            xy.append((label.x, label.y))
+            kind.append(int(material))
+    # Знак газона или массива внутри контура - признак материала, как подпись.
+    for feature in features:
+        if feature.source_entity_type != "SYMBOL_MARKER":
             continue
-        text = label.text.strip().upper().rstrip(".")
-        if label.surface_role == "paved" or (label.surface_role == "auto" and text in PAVED_LABELS):
-            xy.append((label.x, label.y))
-            kind.append(int(Material.PAVED))
-        elif label.surface_role == "soil" or (label.surface_role == "auto" and text in SOIL_LABELS):
-            xy.append((label.x, label.y))
+        if feature.object_class is ObjectClass.LAWN:
+            xy.append((feature.geometry.x, feature.geometry.y))
             kind.append(int(Material.SOIL))
+        elif feature.object_class is ObjectClass.EXISTING_WOODLAND:
+            xy.append((feature.geometry.x, feature.geometry.y))
+            kind.append(_WOODLAND_SEED)
     trees = [f.geometry for f in features if f.object_class is ObjectClass.EXISTING_TREE]
     if trees:
-        centers = shapely.get_coordinates(shapely.centroid(np.array(trees, dtype=object)))
+        # Ствол и каждый кружок полосы деревьев - грунт; центр изогнутой полосы может лежать
+        # на тротуаре, поэтому у точек берутся сами точки, центр - только у прочих фигур.
+        points = [g for g in trees if g.geom_type in {"Point", "MultiPoint"}]
+        shapes = [g for g in trees if g.geom_type not in {"Point", "MultiPoint"}]
+        centers = shapely.get_coordinates(
+            np.array([*points, *shapely.centroid(np.array(shapes, dtype=object))], dtype=object)
+        )
         xy.extend(map(tuple, centers))
         kind.extend([_TREE_SEED] * len(centers))
     coordinates = np.array(xy, dtype=np.float64).reshape(-1, 2)
     kinds = np.array(kind, dtype=np.int8)
     finite = np.isfinite(coordinates).all(axis=1)
     return coordinates[finite], kinds[finite]
+
+
+def _label_seed(label: TextLabel) -> Material | None:
+    """Материал подписи. Роль задана явно (label_roles) - решает она; иначе материал по
+    тексту: короткое обозначение целиком или фраза площадки и покрытия («ДЕТ.ПЛ.»)."""
+    if label.surface_role == "paved":
+        return Material.PAVED
+    if label.surface_role == "soil":
+        return Material.SOIL
+    if label.surface_role == "auto":
+        return label_material(label.text)
+    return None
+
+
+def label_material(text: str) -> Material | None:
+    """Материал по подписи: короткое обозначение целиком или фраза площадки и покрытия."""
+    normalized = text.strip().upper().rstrip(".")
+    if normalized in PAVED_LABELS:
+        return Material.PAVED
+    if normalized in SOIL_LABELS:
+        return Material.SOIL
+    paved, soil = bool(PAVED_PHRASE.search(normalized)), bool(SOIL_PHRASE.search(normalized))
+    if paved and not soil:
+        return Material.PAVED
+    if soil and not paved:
+        return Material.SOIL
+    return None
 
 
 def _barrier_lines(features: Sequence[Feature]) -> NDArray[np.object_]:
@@ -473,25 +676,11 @@ def _rasterize(
 def _inside(
     extent: BaseGeometry, origin: tuple[float, float], cell: float, shape: tuple[int, int]
 ) -> NDArray[np.bool_]:
-    # Many real plans have tiny, distant material polygons in a large work
-    # boundary. Test only cell centres near each component, then combine their
-    # masks; the exact polygon stays in SurfaceMap for continuous clearances.
-    inside = np.zeros(shape, dtype=np.bool_)
-    for part in shapely.get_parts(extent):
-        if part.is_empty:
-            continue
-        x0, y0, x1, y1 = part.bounds
-        c0 = max(0, int(np.floor((x0 - origin[0]) / cell)) - 1)
-        c1 = min(shape[1], int(np.ceil((x1 - origin[0]) / cell)) + 1)
-        r0 = max(0, int(np.floor((y0 - origin[1]) / cell)) - 1)
-        r1 = min(shape[0], int(np.ceil((y1 - origin[1]) / cell)) + 1)
-        if c0 >= c1 or r0 >= r1:
-            continue
-        xs = origin[0] + (np.arange(c0, c1) + 0.5) * cell
-        ys = origin[1] + (np.arange(r0, r1) + 0.5) * cell
-        shapely.prepare(part)
-        inside[r0:r1, c0:c1] |= shapely.contains_xy(part, xs[None, :], ys[:, None])
-    return inside
+    rows, cols = np.mgrid[0 : shape[0], 0 : shape[1]]
+    xs = origin[0] + (cols.ravel() + 0.5) * cell
+    ys = origin[1] + (rows.ravel() + 0.5) * cell
+    shapely.prepare(extent)
+    return shapely.contains_xy(extent, xs, ys).reshape(shape)
 
 
 def _assign(

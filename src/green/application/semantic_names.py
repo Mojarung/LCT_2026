@@ -11,9 +11,39 @@ def name_key(value: str) -> str:
     return unicodedata.normalize("NFC", value).casefold()
 
 
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh",
+    "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",
+    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu",
+    "я": "ya",
+}  # fmt: skip
+
+
+def slug_key(value: str) -> str:
+    """Латинский ключ имени, как каталог улиц называет файлы и папки.
+
+    Внешние ссылки комплекта помнят исходные имена («00.1_10004141_Топография»), каталог
+    хранит их транслитом («00-1-10004141-topografiya»): ключ сводит оба к одному.
+    """
+    text = "".join(_TRANSLIT.get(char, char) for char in name_key(value))
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+
 def local_name(value: str) -> str:
     """XREF filenames are namespaces, not semantic labels of their children."""
     return re.split(r"\||\$\d+\$", unicodedata.normalize("NFC", value))[-1]
+
+
+def base_name(block: str) -> str:
+    """Код условного знака: локальное имя без номера экземпляра.
+
+    Мосгеотрест выгружает каждую вставку знака отдельным блоком с номером на конце
+    (`DEREVO_935`, `KUST1_162`), а копии первого экземпляра получают ещё один номер:
+    `AFIS_1`, `AFIS_1_1`, `AFIS_1_2` - один и тот же знак (одинаковые рисунок и слой,
+    перепись 25.09.2026). Поэтому снимаются все хвостовые группы `_цифры`.
+    """
+    return re.sub(r"(_\d+)+$", "", local_name(block))
 
 
 # Detect reasons to ask for a per-input assignment, never to grant soil. This is

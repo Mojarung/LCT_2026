@@ -22,16 +22,17 @@ from green.infrastructure.config.repositories import (
     YamlRuleBookSource,
     YamlSpeciesCatalog,
 )
-from green.infrastructure.convert.hybrid import HybridDwgConverter
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
+from green.infrastructure.gis.layers import YamlGisLayerSource
 from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
+from green.infrastructure.storage.contexts import PickleRunContextStore, code_fingerprint
 from green.infrastructure.storage.runs import FileSystemRunStore
 from green.infrastructure.streets import JsonStreetCatalog
 
-type Converter = HybridDwgConverter | LibreDwgConverter | OdaFileConverter
+type Converter = LibreDwgConverter | OdaFileConverter
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +79,7 @@ def build_container(settings: Settings | None = None) -> Container:
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
         merger=EzdxfDrawingMerger(),
+        gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
     )
     audit = AuditSite(
         reader=reader,
@@ -89,9 +91,17 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         merger=EzdxfDrawingMerger(),
     )
-    store = FileSystemRunStore(settings.runs_dir)
+    store = FileSystemRunStore(
+        settings.runs_dir,
+        max_bytes=round(settings.runs_max_gb * 2**30) if settings.runs_max_gb else None,
+    )
     streets = JsonStreetCatalog(settings.streets_dir)
-    contexts = RunContextCache(settings.edit_contexts)
+    contexts = RunContextCache(
+        settings.edit_contexts,
+        store=PickleRunContextStore(store, code_fingerprint())
+        if settings.edit_contexts_saved
+        else None,
+    )
     runs = RunService(
         store=store,
         use_case=use_case,
@@ -123,18 +133,12 @@ def build_container(settings: Settings | None = None) -> Container:
 
 
 def _converters(settings: Settings) -> tuple[Converter, ...]:
-    hybrid = HybridDwgConverter(
-        libredwg_binary=settings.libredwg_binary,
-        bridge_binary=settings.acis_bridge_binary,
-        timeout_s=settings.converter_timeout_s,
-    )
     oda = OdaFileConverter(binary=settings.oda_binary, timeout_s=settings.converter_timeout_s)
     libredwg = LibreDwgConverter(
         binary=settings.libredwg_binary, timeout_s=settings.converter_timeout_s
     )
     choice: dict[str, tuple[Converter, ...]] = {
-        "auto": (hybrid, oda, libredwg),
-        "hybrid": (hybrid,),
+        "auto": (oda, libredwg),
         "oda": (oda,),
         "libredwg": (libredwg,),
         "none": (),

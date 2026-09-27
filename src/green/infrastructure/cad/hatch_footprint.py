@@ -13,14 +13,7 @@ from typing import TYPE_CHECKING
 import shapely
 from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
 from ezdxf.math import Vec3, bulge_center, bulge_radius
-from shapely.errors import GEOSException
 from shapely.geometry import Polygon, box
-
-from green.infrastructure.cad.hatch_geometry import (
-    HatchGeometryError,
-    _checked_ring,
-    _path_polygon,
-)
 
 if TYPE_CHECKING:
     from ezdxf.entities.polygon import DXFPolygon
@@ -133,15 +126,10 @@ def bounded_hatch_footprint(
             path_box = bounds.polygon(reserve)
             if path_box is None:
                 return None
-            try:
-                polygon, error, _ = _path_polygon(hatch, path, reserve, reserve * 0.02)
-                ring = _checked_ring(polygon)
-                footprints.append(ring.buffer(reserve + error))
-            except HatchGeometryError, GEOSException, ValueError:
-                footprints.append(path_box)
+            footprints.append(path_box)
         result = shapely.union_all(footprints)
         if result.is_valid and not result.is_empty:
             return result
         return global_bounds.polygon(reserve)
-    except ArithmeticError, GEOSException, TypeError, ValueError, OverflowError:
+    except ArithmeticError, TypeError, ValueError, OverflowError:
         return None

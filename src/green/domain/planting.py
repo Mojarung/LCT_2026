@@ -6,12 +6,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from green.domain.norms import PlantingType
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from shapely.geometry.base import BaseGeometry
 
-    from green.domain.norms import PlantingType
+    from green.domain.effect import StreetEffect
+    from green.domain.norms import LawnKind
     from green.domain.objects import ObjectClass, SourceRef
     from green.domain.portfolio import PortfolioReport
     from green.domain.quality import PlanQuality
@@ -206,6 +209,9 @@ class Placement:
     checks: tuple[RuleCheck, ...]
     notes: tuple[str, ...] = field(default=())
     assortment: AssortmentInfo | None = None
+    # Место посадки (application/places): roadside, street, yard, square, park, unknown;
+    # пусто - ещё не определялось.
+    place: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +226,9 @@ class Rejection:
     # Причина, не выраженная проверками расстояний: квоты, условия вида,
     # недостаточное посадочное место или ручная правка. Допустимость задаёт verdict.
     note: str = ""
+    # Ближайшее расстояние до сети или бордюра, если место закрыто только ими и прикорневой
+    # барьер (СП 42.13330, табл. 9.1, прим. 5) сделал бы его допустимым. None - не поможет.
+    barrier_m: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +254,31 @@ class Zone:
 
 
 @dataclass(frozen=True, slots=True)
+class Lawn:
+    """Участок газона плана: грунт без посадочных мест и массивов (п. 3 ТЗ, травянистые покрытия).
+
+    Участок - одна связная область. kind отличает газон, который по чертежу уже есть (он
+    сохраняется или восстанавливается после посадки), от устраиваемого на грунте без газона.
+    rule_ids - основания из свода норм: без них участок не выделяется.
+    """
+
+    lawn_id: str
+    number: int
+    kind: LawnKind
+    geometry: BaseGeometry
+    rule_ids: tuple[str, ...]
+    notes: tuple[str, ...] = field(default=())
+
+    @property
+    def planting_type(self) -> PlantingType:
+        return PlantingType.LAWN
+
+    @property
+    def area_m2(self) -> float:
+        return float(self.geometry.area)
+
+
+@dataclass(frozen=True, slots=True)
 class Plan:
     placements: tuple[Placement, ...]
     rejections: tuple[Rejection, ...]
@@ -260,6 +294,10 @@ class Plan:
     # Historical generation-stage evidence; not a certificate for later edits or species quotas.
     selection: SelectionReport | None = None
     portfolio: PortfolioReport | None = None
+    # Травянистое покрытие на грунте, который посадки оставили свободным (application/lawns).
+    lawns: tuple[Lawn, ...] = field(default=())
+    # Что план даёт улице: баланс «было - стало», виды посадок, шумозащита (application/effect).
+    effect: StreetEffect | None = None
 
     @property
     def allowed_count(self) -> int:

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from green.application.params import PlanParams
     from green.application.placement import PlacementStrategy
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Placement, Rejection, Species
@@ -40,6 +41,7 @@ def fill_shrub_groups(  # noqa: PLR0913 - сценарий передаёт вс
     catalog: Sequence[Species],
     params: PlanParams,
     existing: Mapping[str, int] | None = None,
+    surface: SurfaceMap | None = None,
 ) -> Plan:
     empty = [r for r in plan.rejections if r.note]
     if (
@@ -69,6 +71,7 @@ def fill_shrub_groups(  # noqa: PLR0913 - сценарий передаёт вс
         shrubs[0],  # вид-заглушка: подбор заменит его или место останется пустым
         shrub_params,
         centers=[(r.x, r.y) for r in empty],
+        surface=surface,
     )
     if plan.placements and points:
         trees = shapely.STRtree(shapely.points([(p.x, p.y) for p in plan.placements]))

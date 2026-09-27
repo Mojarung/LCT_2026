@@ -162,8 +162,8 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> TestClient:
     return TestClient(create_app(build_container(settings)))
 
 
-def test_run_page_and_api_show_progress_of_a_running_run(client: TestClient) -> None:
-    """Запись идущего прогона отдаётся и странице, и API с одной и той же оценкой."""
+def test_api_shows_progress_of_a_running_run(client: TestClient) -> None:
+    """Запись идущего прогона отдаёт этап, долю, оценку остатка и список этапов."""
     container = client.app.state.container  # type: ignore[attr-defined]
     record = container.store.create("street.dxf", "strict", {})
     now = datetime.now(UTC)
@@ -196,18 +196,24 @@ def test_run_page_and_api_show_progress_of_a_running_run(client: TestClient) -> 
     assert body["progress"]["eta_s"] > 0
     assert [s["state"] for s in body["progress"]["steps"]][:3] == ["done", "active", "pending"]
 
-    page = client.get(f"/runs/{record.run_id}").text
-    assert 'id="progress"' in page
-    assert "Чтение чертежа" in page
-    assert "layer-toggles" in page, "слои нужны и до конца расчёта"
-    assert "edit-bar" not in page, "правка появляется только у готового плана"
-
 
 def test_finished_run_has_no_progress_but_keeps_the_basemap(client: TestClient) -> None:
-    created = client.post("/web/demo", data={"exploratory": "true"}, follow_redirects=False)
-    run_id = created.headers["location"].rsplit("/", 1)[-1]
+    created = client.post("/api/v1/runs/demo")
+    run_id = created.json()["id"]
     body = client.get(f"/api/v1/runs/{run_id}").json()
 
     assert body["state"] == "succeeded"
     assert body["progress"] is None
     assert "basemap.geojson" in {a["name"] for a in body["artifacts"]}
+
+
+def test_demo_run_through_the_api(client: TestClient) -> None:
+    """Встроенный фрагмент запускается из JSON API и доходит до плана."""
+    created = client.post("/api/v1/runs/demo")
+
+    assert created.status_code == 202, created.text
+    run_id = created.json()["id"]
+    assert created.headers["location"].endswith(run_id)
+    body = client.get(f"/api/v1/runs/{run_id}").json()
+    assert body["state"] == "succeeded", body.get("error")
+    assert body["summary"]["placements"] > 0

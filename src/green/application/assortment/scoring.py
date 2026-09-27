@@ -52,8 +52,13 @@ def score_species(species: Species, ctx: SiteContext, params: PlanParams) -> Sco
         "longevity": min(1.0, species.lifespan_years / _REFERENCE_LIFESPAN_YEARS),
         "care": _CARE.get(species.care_level, 0.0),
         "pilot": min(1.0, species.pilot_streets / _PILOT_STREETS),
-        "category": _CATEGORY.get(species.categories.get(params.planting_category, ""), 0.25),
+        "category": _CATEGORY.get(
+            species.categories.get(ctx.category or params.planting_category, ""), 0.25
+        ),
     }
+    if species.is_tree:
+        crown = species.crown_mature_m or species.crown_diameter_m
+        factors["shade"] = min(1.0, max(crown, 0.0) / params.canopy_crown_m)
     weights = params.assortment_weights or DEFAULT_WEIGHTS
     total_weight = sum(max(0.0, weights.get(name, 0.0)) for name in factors)
     if total_weight <= 0:

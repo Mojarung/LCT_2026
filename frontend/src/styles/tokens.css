@@ -1,0 +1,189 @@
+/* Токены. Основная тема - «бумага», как на слайдах презентации: тёплый лист с сеткой,
+   раскрашенный газон и асфальт, здания со штриховкой, карточки с рисованной обводкой.
+   Тёмная «графит и кость» - по переключателю, для тех, кто привык к CAD. Имена токенов
+   прежние: их же читает движок карты через getComputedStyle (src/map/palette.ts). */
+:root {
+  color-scheme: light;
+  --is-dark: 0;
+
+  --ground: #efe6d2;
+  --panel: #fbf7ee;
+  --panel-2: #f3ecdc;
+  --hair: #ddd1b8;
+  --hair-2: #bcae92;
+  --bone: #2b2620;
+  --bone-2: #564e43;
+  --bone-3: #665d4f;
+  --inverse: #fbf7ee;
+  /* Отметка выбранного на карте. Ахроматична намеренно: любой цветной контур читался бы
+     как ещё один класс объектов. Подложка под ней - цвет бумаги. */
+  --accent: #2b2620;
+  --accent-halo: #fbf7ee;
+  /* Обводка карточек поверх плана: чернила, как рамки выносок на слайдах. */
+  --edge: #2b2620;
+
+  --ok: #3d7a4e;
+  --warn: #946214;
+  --bad: #a8402f;
+
+  /* Подоснова. Значения читает палитра карты (src/map/palette.ts) через getComputedStyle. */
+  --c-curb: #2d2a22;
+  --c-pavement: #8c8272;
+  --c-building: #3b3128;
+  --c-building-fill: #dcc49c;
+  --c-building-hatch: rgba(125, 92, 52, 0.42);
+  --c-shadow: rgba(92, 74, 44, 0.24);
+  --c-lawn: #cfdfb2;
+  --c-lawn-fill: #cfdfb2;
+  --c-lawn-blade: rgba(92, 128, 64, 0.42);
+  --c-asphalt: #dcd7ce;
+  --c-asphalt-speck: rgba(96, 88, 76, 0.26);
+  --c-road: #9a9181;
+  --c-fence: #8a7f6c;
+  --c-slope: #a58a62;
+  --c-boundary: #2b2620;
+  --c-water: #2f74b5;
+  --c-sewer: #7d5a3a;
+  --c-storm: #2f8f8f;
+  --c-heat: #b0661c;
+  --c-gas: #9a861a;
+  --c-power: #c0392b;
+  --c-telecom: #6f469a;
+  --c-utility: #7a7264;
+  --c-overhead: #b0306a;
+  --c-pole: #3a342c;
+  --c-existing: #8a866d;
+  --utility-opacity: 0.62;
+  --c-existing-crown: #d6d5bd;
+  --c-existing-shrub: #d9dcc0;
+  /* Газоны плана поверх травы карты покрытий: сохраняемый - тоном зелени, устраиваемый - тоном
+     соломы (газон ещё не засеян), контур у обоих один. */
+  --c-plan-lawn: rgba(74, 128, 62, 0.24);
+  --c-plan-lawn-new: rgba(182, 150, 58, 0.34);
+  --c-plan-lawn-edge: #4a7a3c;
+  /* Зоны допустимости: холодный тон поверх травы - где дерево проходит все нормы; на
+     согласовании - янтарь, как кольцо такой посадки. */
+  --c-zone: rgba(46, 116, 168, 0.2);
+  --c-zone-edge: #2f6f9f;
+  --c-zone-approval: rgba(196, 136, 36, 0.24);
+  --c-zone-approval-edge: #b07a1e;
+  /* Карта уточнения объектов (/runs/:id/review): серый - контекст, оранжевый - выбранная
+     группа, красный - выбранный объект; подписи и выбранная подпись. */
+  --review-context: #8a918b;
+  --review-group: #b66100;
+  --review-object: #c41c2e;
+  --review-label: #3a4a40;
+  --review-label-active: #1f45c8;
+  /* Сетка чертёжного листа под планом: заметна только как фактура бумаги, спорить с линиями
+     подосновы ей нельзя. */
+  --grid: rgba(140, 116, 78, 0.16);
+
+  --sans: 'Plex', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'PlexMono', ui-monospace, Consolas, 'Liberation Mono', monospace;
+
+  /* Шкала кеглей: шесть ступеней, половинных шагов нет, ниже 12px не опускаемся. */
+  --fs-micro: 12px;
+  --fs-small: 13px;
+  --fs-body: 14px;
+  --fs-strong: 16px;
+  --fs-title: 21px;
+  --fs-metric: 30px;
+
+  --gutter: clamp(16px, 3.5vw, 36px);
+  /* Высота плавающей пилюли шапки: под ней начинаются панели. */
+  --bar: 46px;
+  /* Полоса рабочих кнопок внизу карты: панели обязаны остановиться над ней. */
+  --tools: 44px;
+  /* Поле между краем экрана и всем, что лежит поверх плана. */
+  --inset: 12px;
+  /* Высота панели обозначений: значение по умолчанию до первого замера, дальше его
+     проставляет панель обозначений (Legend.tsx) - у разных прогонов она разной высоты, а пульт обязан под неё
+     ужаться. */
+  --legend-h: 260px;
+
+  /* Поверхности, которые лежат на плане. Радиус один на всё: панель, пилюля шапки и полоса
+     кнопок - один материал. На бумаге это карточки выносок: радиус мелкий, тень сдвинута
+     вниз-вправо, как у зданий на плане. */
+  --r-panel: 8px;
+  --r-control: 6px;
+  --glass: color-mix(in srgb, var(--panel) 94%, transparent);
+  /* Размытие под карточкой: при непрозрачности 0,94 его не видно, а платит за него каждый
+     кадр карты (жюри дизайна, итерация 7). На бумаге его нет, в тёмной теме оно работает. */
+  --glass-filter: none;
+  /* Залитая кнопка под курсором - на тон к фону, как контурная: прозрачность просвечивала
+     чертёж под кнопкой на карте. */
+  --bone-hover: color-mix(in oklab, var(--bone) 84%, var(--inverse));
+  --lift: 2px 3px 0 rgba(43, 38, 32, 0.16), 0 14px 28px -16px rgba(60, 48, 30, 0.42);
+}
+
+/* Тёмная тема: план читается на ней так же, как в CAD. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --is-dark: 1;
+
+  --ground: #0e1013;
+  --panel: #171a1e;
+  --panel-2: #1e2227;
+  --hair: #272c32;
+  --hair-2: #3a4048;
+  --bone: #e9e6e0;
+  --bone-2: #a5a39d;
+  --bone-3: #8e8b84;
+  --inverse: #0e1013;
+  --accent: #f4f1ea;
+  --accent-halo: #0e1013;
+  --edge: #272c32;
+
+  --ok: #6fae86;
+  --warn: #cfa14a;
+  --bad: #d97b6c;
+
+  --c-curb: #9aa0a8;
+  --c-pavement: #6c727a;
+  --c-building: #767c84;
+  --c-building-fill: rgba(118, 124, 132, 0.18);
+  --c-building-hatch: rgba(160, 166, 174, 0.2);
+  --c-shadow: rgba(0, 0, 0, 0.34);
+  --c-lawn: rgba(120, 150, 118, 0.14);
+  --c-lawn-fill: #1d2721;
+  --c-lawn-blade: rgba(128, 170, 116, 0.26);
+  --c-asphalt: #1b1f23;
+  --c-asphalt-speck: rgba(210, 214, 220, 0.08);
+  --c-road: #4b5158;
+  --c-fence: #6f757d;
+  --c-slope: #a38c6d;
+  --c-boundary: #e9e6e0;
+  --c-water: #4a9fdd;
+  --c-sewer: #a3815c;
+  --c-storm: #46b3b3;
+  --c-heat: #d08a3c;
+  --c-gas: #c4b13a;
+  --c-power: #e2604f;
+  --c-telecom: #a077cc;
+  --c-utility: #99a0a8;
+  --c-overhead: #e05a8a;
+  --c-pole: #c3c8cf;
+  --c-existing: #6bb076;
+  --utility-opacity: 1;
+  --c-existing-crown: #4b5347;
+  --c-existing-shrub: #4f5749;
+  --c-plan-lawn: rgba(111, 174, 134, 0.2);
+  --c-plan-lawn-new: rgba(207, 176, 90, 0.24);
+  --c-plan-lawn-edge: #7fb48a;
+  --c-zone: rgba(104, 170, 220, 0.2);
+  --c-zone-edge: #79b4df;
+  --c-zone-approval: rgba(230, 172, 76, 0.22);
+  --c-zone-approval-edge: #e2ad55;
+  --review-context: #5d646d;
+  --review-group: #e3902f;
+  --review-object: #f06070;
+  --review-label: #c3cbc6;
+  --review-label-active: #86a8ff;
+  --grid: rgba(233, 230, 224, 0.052);
+
+  --r-panel: 16px;
+  --r-control: 10px;
+  --glass: color-mix(in srgb, var(--panel) 84%, transparent);
+  --glass-filter: blur(18px) saturate(140%);
+  --lift: 0 1px 1px rgba(5, 7, 10, 0.34), 0 14px 34px -14px rgba(5, 7, 10, 0.62);
+}

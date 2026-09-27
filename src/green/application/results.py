@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from green.domain.norms import LawnKind
 from green.domain.objects import ReadDiagnostics
 
 if TYPE_CHECKING:
@@ -18,7 +19,9 @@ if TYPE_CHECKING:
     from green.application.classification import ClassificationReport, LayerCoverage
     from green.application.editing import RunContext
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.application.validation import PlanValidation
+    from green.application.volumes import Volumes
     from green.domain.norms import RuleBook
     from green.domain.planting import Plan
 
@@ -62,6 +65,9 @@ class PlanExportReport:
     expected_placements: int
     found_placements: int
     issues: tuple[str, ...]
+    # Газоны: участков в плане и штриховок слоя GREEN_LAWN в записанном DXF.
+    expected_lawns: int = 0
+    found_lawns: int = 0
 
     @property
     def ok(self) -> bool:
@@ -86,9 +92,16 @@ class RunReport:
     output_dxf: Path
     converter: str | None
     warnings: tuple[str, ...] = field(default=())
+    # Журнал чтения чертежа и склейки комплекта: аудит, ремонт строк, единицы, блоки.
+    load_notes: tuple[str, ...] = field(default=())
     # Подоснова для карты в вебе. Может отсутствовать: прогон из CLI её не требует, а на
     # чертеже без классифицированных объектов рисовать нечего.
     basemap: Basemap | None = None
+    # Карта покрытий прогона: грунт и твёрдое, как их понял сервис. Уходит в веб растром.
+    surface: SurfaceMap | None = None
+    # Объёмы зданий для трёхмерной сцены. Считаются вместе с подосновой и от правки плана не
+    # зависят: пересборка после правки переносит их в новый отчёт как есть.
+    volumes: Volumes | None = None
     # Состояние прогона для интерактивной правки. В артефакты не попадает: живёт в памяти
     # сервиса ровно столько, сколько его там держат.
     context: RunContext | None = None
@@ -99,8 +112,18 @@ class RunReport:
     classification: ClassificationReport | None = None
 
     def summary(self) -> dict[str, object]:
+        lawns = self.plan.lawns
+
+        def lawn_m2(*kinds: LawnKind) -> float:
+            return round(sum((g.area_m2 for g in lawns if g.kind in kinds), 0.0), 1)
+
         return {
             "placements": len(self.plan.placements),
+            # Газоны (п. 3 ТЗ): число участков и площади в м², всего и по видам.
+            "lawns": len(lawns),
+            "lawn_m2": lawn_m2(*LawnKind),
+            "lawn_kept_m2": lawn_m2(LawnKind.KEPT),
+            "lawn_new_m2": lawn_m2(LawnKind.NEW),
             "semantic_assignments_complete": self.classification.ready
             if self.classification
             else None,
@@ -117,6 +140,7 @@ class RunReport:
             "total_ms": round(sum(t.ms for t in self.timings), 1),
             "stats": dict(self.plan.stats),
             "warnings": list(self.warnings),
+            "load_notes": list(self.load_notes),
         }
 
 

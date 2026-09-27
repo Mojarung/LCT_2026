@@ -12,13 +12,16 @@ from pydantic import ValidationError
 
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
+from green.application.name_semantics import Vocabulary, build_vocabulary
 from green.application.params import PlanParams
+from green.application.symbols import SymbolCatalog, SymbolEntry
 from green.domain.norms import (
     Act,
     Citation,
     DistanceRule,
     InvasiveGroupRule,
     InvasiveSpecies,
+    LawnRule,
     Reference,
     RuleBook,
     SpeciesRestriction,
@@ -32,6 +35,8 @@ from green.infrastructure.config.schemas import (
     RulesFile,
     SpeciesFile,
     SpeciesModel,
+    SymbolsFile,
+    VocabularyFile,
 )
 
 if TYPE_CHECKING:
@@ -142,6 +147,7 @@ class YamlRuleBookSource:
                 genera=frozenset(g.casefold() for g in r.genera),
                 min_crown_m=r.min_crown_m,
                 traits=frozenset(r.traits),
+                sp42_edition=r.sp42_edition,
             )
             for r in rules_file.distance_rules
         )
@@ -172,6 +178,10 @@ class YamlRuleBookSource:
                 SpeciesRestriction(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
                 for r in rules_file.species_restrictions
             ),
+            lawn_rules=tuple(
+                LawnRule(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
+                for r in rules_file.lawn_rules
+            ),
         )
         ids = [rule.rule_id for rule in rulebook.all_rules]
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
@@ -187,8 +197,17 @@ class YamlRuleBookSource:
 
 
 class YamlLayerMapSource:
-    def __init__(self, path: Path) -> None:
+    """Карта слоёв, словарь условных знаков и словарь слов имён рядом с ней (symbols.yaml,
+    vocabulary.yaml - если есть)."""
+
+    def __init__(
+        self, path: Path, symbols: Path | None = None, vocabulary: Path | None = None
+    ) -> None:
         self._path = path
+        self._symbols = symbols if symbols is not None else path.with_name("symbols.yaml")
+        self._vocabulary = (
+            vocabulary if vocabulary is not None else path.with_name("vocabulary.yaml")
+        )
 
     def load(self) -> LayerMap:
         data, digest = _read(self._path)
@@ -201,11 +220,30 @@ class YamlLayerMapSource:
                 confirmed=rule.confirmed,
                 geometry=rule.geometry,
                 priority=rule.priority,
-                symbol_instance=rule.symbol_instance,
+                reason=rule.reason,
             )
             for rule in parsed.rules
         )
-        return LayerMap(rules=rules, fingerprint=digest)
+        catalog = SymbolCatalog()
+        if self._symbols.exists():
+            symbol_data, symbol_digest = _read(self._symbols)
+            parsed_symbols = _validate(SymbolsFile, symbol_data, self._symbols)
+            catalog = SymbolCatalog(
+                entries={
+                    code: SymbolEntry(model.object_class, model.role, model.confirmed, model.note)
+                    for code, model in parsed_symbols.symbols.items()
+                },
+                fingerprint=symbol_digest,
+            )
+            # Отпечаток семантики прогона учитывает и слои, и знаки.
+            digest = hashlib.sha256(f"{digest}:{symbol_digest}".encode()).hexdigest()
+        vocabulary = Vocabulary()
+        if self._vocabulary.exists():
+            words_data, words_digest = _read(self._vocabulary)
+            parsed_words = _validate(VocabularyFile, words_data, self._vocabulary)
+            vocabulary = build_vocabulary(parsed_words.model_dump(mode="json"), words_digest)
+            digest = hashlib.sha256(f"{digest}:{words_digest}".encode()).hexdigest()
+        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary)
 
 
 class YamlSpeciesCatalog:

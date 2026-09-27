@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,12 +18,19 @@ from green.application.surfaces import Material
 from green.domain.planting import Verdict, Zone
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from numpy.typing import NDArray
 
     from green.application.constraints import ConstraintIndex
 
 MAX_ZONE_POINTS = 600_000
 ZONE_VERDICTS = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL)
+# Самый плотный шаг деревьев по норме: 743-ПП, табл. 3.6.2 - однорядная 5-6 м, групповая 5-7 м.
+DENSEST_STEP_M = 5.0
+# Статистика плана: вместимость по местам своего варианта и общая по вариантам портфеля.
+CAPACITY_STAT = "capacity_trees"
+SITE_CAPACITY_STAT = "site_capacity_trees"
 
 
 def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
@@ -52,6 +60,30 @@ def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
         if not merged.is_empty:
             zones.append(Zone(verdict=verdict, geometry=merged))
     return tuple(zones)
+
+
+def pack_count(points: Iterable[tuple[float, float]], step_m: float = DENSEST_STEP_M) -> int:
+    """Сколько деревьев встанет на эти точки с шагом не меньше step_m: жадно, в данном порядке.
+
+    Свойство участка, а не плана, когда точки - все места, прошедшие нормы: узкая полоса вдоль
+    борта получает длину / шаг деревьев, широкий газон - почти гексагональную укладку. Нужна
+    индексу, чтобы плотность мерилась «при условии допустимости насаждений» (МГСН 1.02-02,
+    табл. В.1, сноска).
+    """
+    cells: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    count = 0
+    for x, y in points:
+        cx, cy = math.floor(x / step_m), math.floor(y / step_m)
+        near = any(
+            math.hypot(px - x, py - y) < step_m
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            for px, py in cells.get((cx + dx, cy + dy), ())
+        )
+        if not near:
+            cells.setdefault((cx, cy), []).append((x, y))
+            count += 1
+    return count
 
 
 def _grid(index: ConstraintIndex, cell_m: float) -> tuple[NDArray[np.float64], float]:

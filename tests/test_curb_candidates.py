@@ -74,6 +74,8 @@ def _plan(tail: float, y: float = 4, *, remote_branch: bool = False) -> Plan:
             placement_solver="greedy",
             zones=False,
             curb_offsets_m=(2, 3),
+            # Границы числа станций ниже посчитаны для шага 6 м; по умолчанию шаг 5 м.
+            spacing_m=6.0,
         ),
     )
 
@@ -113,7 +115,7 @@ def test_extremely_long_input_line_is_clipped_before_station_allocation() -> Non
     lines = _curb_lines(features, box(0, 0, 100, 30), 3.002)
     assert sum(line.length for line in lines) < 107
     # Allocate candidates only after the independent bounded-length assertion.
-    assert len(_curb_candidates(lines, PlanParams())) <= 120
+    assert len(_curb_candidates(lines, PlanParams(spacing_m=6.0))) <= 120
 
 
 def test_empty_offsets_do_not_allocate_stations() -> None:

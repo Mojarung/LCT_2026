@@ -36,6 +36,8 @@ _UNIDENTIFIED = re.compile(r"самосев|поросл|пень|сухосто
 # В ведомости между таблицами идут строки-заголовки («Вырубить», «Сохранить») и строки
 # других разделов - размеры ям «0,5х0,5х0,4», «5-ти м зона». Породой они не являются.
 _NOT_SPECIES = re.compile(r"^\d|^выруб|^сохран|зона|^прим|^итог")
+# Служебные строки ведомости: подписи, итоги по состоянию и компенсации - не породы.
+_SERVICE = re.compile(r"инженер|дендролог|из них|аварийн|без компенс|неудовл|:\s*$")
 _MIN_NAME_LETTERS = 3
 _MAX_HEADER_ROW = 40
 
@@ -54,17 +56,23 @@ def read_inventory(path: Path, catalog: Sequence[Species]) -> InventoryCounts:
     unmatched = Counter[str]()
     approximate: dict[str, str] = {}
     lookup = _lookup(catalog)
-    read = removed = without_count = rows_matched = rows_unmatched = 0
+    read = removed = removed_count = without_count = rows_matched = rows_unmatched = 0
     for row in rows[index + 1 :]:
         name = _text(row, columns.get("name"))
         folded = name.casefold()
-        if not name or _SUMMARY.search(folded) or _NOT_SPECIES.search(folded):
+        if (
+            not name
+            or _SUMMARY.search(folded)
+            or _NOT_SPECIES.search(folded)
+            or _SERVICE.search(folded)
+        ):
             continue
         if len(re.findall(r"[а-яa-z]", folded)) < _MIN_NAME_LETTERS:
             continue
         read += 1
         if _REMOVE.search(_text(row, columns.get("verdict")).casefold()):
             removed += 1
+            removed_count += _count(_text(row, columns.get("count"))) or 1
             continue
         count = _count(_text(row, columns.get("count")))
         if count is None:
@@ -85,6 +93,7 @@ def read_inventory(path: Path, catalog: Sequence[Species]) -> InventoryCounts:
         approximate=dict(sorted(approximate.items())),
         rows_read=read,
         rows_removed=removed,
+        removed=removed_count,
         rows_matched=rows_matched,
         rows_unmatched=rows_unmatched,
         rows_without_count=without_count,

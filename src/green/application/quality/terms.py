@@ -1,12 +1,19 @@
-"""Слагаемые индекса качества и точная поправка каждого на удаление любой посадки.
+"""Слагаемые индекса качества v3 и точная поправка каждого на удаление любой посадки.
 
-Каждая функция возвращает оценку слагаемого от 0 до 1 и массив deltas: насколько оценка
-упадёт, если убрать посадку i (при тех же параметрах). Считается это не пересчётом плана N
-раз, а локально - сдвиг счётчика вида, уникальная площадь кроны, соседи по ряду. Совпадение с
-прямым пересчётом проверяет tests/test_quality.py.
+v3 (docs/plans/2026-09-26-index-v3-design.md): слагаемое не падает, когда в план добавляется
+посадка, прошедшая нормы. Меры-количества считаются к целевому числу посадок участка (МГСН
+1.02-02, табл. В.1: 150 деревьев и 600 кустарников на 1 км, деревьев - не больше вместимости
+мест, прошедших нормы), а не средним по плану: дерево чуть хуже среднего индекс не снижает,
+оно просто добавляет меньше. Выше цели слагаемое насыщено - перебор не штрафуется, но и
+баллов не даёт (заказчик: «лучший вариант не самый плотный»).
 
-Если после удаления слагаемое перестаёт быть определённым, undefined_without помечает
-такую посадку. Сборщик индекса перераспределяет веса так же, как при полном пересчёте.
+Каждая функция возвращает оценку от 0 до 1 и массив deltas: насколько оценка упадёт, если
+убрать посадку i (при тех же параметрах). Считается это не пересчётом плана N раз, а локально -
+сумма без посадки, уникальная площадь кроны, ряд без посадки. Совпадение с прямым пересчётом
+проверяет tests/test_quality.py.
+
+Если после удаления слагаемое перестаёт быть определённым, undefined_without помечает такую
+посадку. Сборщик индекса перераспределяет веса так же, как при полном пересчёте.
 """
 
 from __future__ import annotations
@@ -14,6 +21,7 @@ from __future__ import annotations
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -21,13 +29,16 @@ import shapely
 from scipy.spatial import KDTree
 
 from green.application.barriers import BARRIER_NOTE
-from green.application.placement import MODE_LABELS
-from green.application.quality.coverage import measure_crowns
+from green.application.explain import OBJECT_LABELS
+from green.application.places import category_of
+from green.application.quality.coverage import FixedCrowns, fixed_crowns, measure_crowns
+from green.application.quality.site import WIDE_STREET_M, site_length
+from green.application.wording import decimal, decimal_g
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Sequence
 
     from numpy.typing import NDArray
 
@@ -35,10 +46,12 @@ if TYPE_CHECKING:
     from green.application.quality.site import Site
     from green.domain.planting import Placement, Rejection
 
-ALLEY_NOTE = MODE_LABELS["alley"]
 ROW_TOLERANCE = 0.05  # допуск разбивки к вилке шага ряда
+SHRUB_ROW_SPACING_M = (0.3, 1.0)  # 743-ПП, табл. 3.6.2: кустарники в ряду 0,3-0,4 и 0,5-1 м
+# МГСН 1.02-02, табл. В.6: рекомендован - 1, с ограничением - 0,5, не рекомендован - 0. Вид,
+# о котором таблица молчит, засчитывается половиной: акт его не отвергает, но и не советует.
 _CATEGORY = {"plus": 1.0, "limited": 0.5, "minus": 0.0}
-_CATEGORY_UNKNOWN = 0.25  # вида нет в табл. В.6: как в оценке подбора (assortment/scoring.py)
+CATEGORY_SILENT = 0.5
 _CATEGORY_WHERE = {
     "streets": "улиц",
     "yards": "дворов",
@@ -61,10 +74,11 @@ _MONTHS_IN = (
     "декабре",
 )
 _CIRCLE_SEGMENTS = 8
-# Шире этого граница работ уже не полоса улицы: в ней дворы или площадь, и «на 1 км улицы»
-# теряет смысл. Самый широкий профиль магистральной улицы в Москве - порядка 80 м.
-WIDE_STREET_M = 80.0
 _MIN_UNIQUE_M2 = 1.0
+# Главная порода деревьев выше этой доли - замечание в разнообразии: в принятых проектах
+# медиана 40%, половина - предел практики (docs/notes/34-designer-practice.md).
+TOP_SHARE_PRACTICE = 0.5
+_HALF = 0.5
 
 
 @dataclass(slots=True)
@@ -113,176 +127,298 @@ def _crown(placement: Placement) -> float:
     return max(species.crown_mature_m or species.crown_diameter_m, 0.0)
 
 
+# --- Цели участка --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Targets:
+    """Целевые числа посадок участка: к ним меряются слагаемые-количества.
+
+    Свойство участка, а не плана: одинаковы для всех вариантов одной улицы, поэтому варианты
+    сравниваются честно, а добавленная посадка не сдвигает собственную цель.
+    """
+
+    length_m: float
+    trees: float
+    shrubs: float
+    # 150 деревьев на 1 км (МГСН 1.02-02, табл. В.1) до поправки на вместимость.
+    trees_norm: float
+    # Сколько деревьев встаёт с шагом 5 м на места, прошедшие нормы (размещение считает её
+    # по всем проверенным кандидатам, портфель берёт наибольшую по вариантам).
+    capacity: float | None
+    # Длина улицы задана из пояснительной записки проекта, а не измерена по оси границы.
+    from_note: bool
+
+    def of(self, tree: bool) -> float:  # noqa: FBT001 - группа посадок: деревья или кустарники
+        return self.trees if tree else self.shrubs
+
+    @property
+    def capped(self) -> bool:
+        return self.capacity is not None and self.trees < self.trees_norm
+
+
+def targets_of(site: Site, params: PlanParams, capacity: float | None) -> Targets | None:
+    """Цели участка; None - длина улицы неизвестна (нет границы работ и не задана длина)."""
+    length = site_length(site.boundary, params)
+    if not length:
+        return None
+    km = length / 1000
+    trees_norm = params.density_trees_per_km[0] * km
+    trees = trees_norm
+    if params.density_admissible and capacity is not None:
+        # МГСН 1.02-02, табл. В.1, сноска: «на 1 км при условии допустимости насаждений».
+        trees = min(trees, capacity)
+    return Targets(
+        length_m=length,
+        trees=max(trees, 1.0),
+        shrubs=max(params.density_shrubs_per_km[0] * km, 1.0),
+        trees_norm=trees_norm,
+        capacity=capacity,
+        from_note=bool(params.street_length_m),
+    )
+
+
+def _sums(
+    layout: Layout,
+    values: NDArray[np.float64],
+    targets: Targets | None,
+    counted: NDArray[np.bool_] | None = None,
+) -> tuple[float, NDArray[np.float64], tuple[float, float]]:
+    """Половина за деревья, половина за кустарники: min(1, сумма группы / цель группы).
+
+    Возвращает оценку, её убыль от удаления каждой посадки и суммы по группам. Без цели
+    (длина улицы неизвестна) - среднее по учтённым посадкам: слагаемое показывает качество
+    посадок, а индекс без границы работ и так не выставляется, поэтому убыль не считается.
+    """
+    counted = np.ones(layout.size, dtype=bool) if counted is None else counted
+    tree_sum = float(values[layout.is_tree].sum())
+    shrub_sum = float(values[layout.is_shrub].sum())
+    deltas = np.zeros(layout.size)
+    if targets is None:
+        mask = counted & (layout.is_tree | layout.is_shrub)
+        score = float(values[mask].mean()) if mask.any() else 0.0
+        return score, deltas, (tree_sum, shrub_sum)
+    score = 0.0
+    for mask, total, target in (
+        (layout.is_tree, tree_sum, targets.trees),
+        (layout.is_shrub, shrub_sum, targets.shrubs),
+    ):
+        part = min(1.0, total / target)
+        score += _HALF * part
+        deltas[mask] = _HALF * (part - np.minimum(1.0, (total - values[mask]) / target))
+    return score, deltas, (tree_sum, shrub_sum)
+
+
 # --- Плотность ---------------------------------------------------------------------------
 
 
-def fork(value: float, low: float, high: float, *, excess: bool = True) -> float:
-    """Трапеция по вилке нормы: ниже - доля от нижней границы, выше - спад к нулю на 3*high.
-
-    Заказчик прямо сказал «лучший вариант не самый плотный», поэтому переплотнение стоит
-    баллов. Но В.1 - рекомендуемый максимум, а не запрет, поэтому спад сверху вдвое положе.
-    """
-    if value < low:
-        return max(value, 0.0) / low
-    if value <= high or not excess:
-        return 1.0
-    return max(0.0, 1.0 - (value - high) / (2 * high))
-
-
-def density(layout: Layout, site: Site, params: PlanParams) -> TermResult:
-    length = site.street_length_m
-    if not length:
+def density(layout: Layout, site: Site, targets: Targets | None) -> TermResult:
+    """Число деревьев и кустарников против цели участка по МГСН 1.02-02, табл. В.1."""
+    if targets is None:
         return layout.empty("длина улицы не определена: в чертеже нет границы работ")
-    km = length / 1000
-    trees, shrubs = int(layout.is_tree.sum()), int(layout.is_shrub.sum())
-    t_low, t_high = params.density_trees_per_km
-    s_low, s_high = params.density_shrubs_per_km
-    # Если граница шире улицы, в ней дворы, и число посадок на 1 км улицы завышено. Оценка
-    # сверху доказывает недосадку, но не перебор: перебор здесь не штрафуется.
-    width = site.area_m2 / length
-    excess = width <= WIDE_STREET_M
-
-    def score_of(t: int, s: int) -> float:
-        return 0.5 * fork(t / km, t_low, t_high, excess=excess) + 0.5 * fork(
-            s / km, s_low, s_high, excess=excess
-        )
-
-    score = score_of(trees, shrubs)
-    tree_drop = score - score_of(trees - 1, shrubs)
-    shrub_drop = score - score_of(trees, shrubs - 1)
-    deltas = np.where(layout.is_tree, tree_drop, np.where(layout.is_shrub, shrub_drop, 0.0))
-    per_km_t, per_km_s = trees / km, shrubs / km
-    tree_note = _density_phrase("деревьев", per_km_t, t_low, t_high, excess=excess)
-    shrub_note = _density_phrase("кустарников", per_km_s, s_low, s_high, excess=excess)
+    score, deltas, (trees, shrubs) = _sums(layout, np.ones(layout.size), targets)
+    km = targets.length_m / 1000
+    tree_note = _count_phrase("деревьев", trees, targets.trees)
+    shrub_note = _count_phrase("кустарников", shrubs, targets.shrubs)
     details = [
         tree_note if t else shrub_note if s else ""
         for t, s in zip(layout.is_tree.tolist(), layout.is_shrub.tolist(), strict=True)
     ]
+    where = "по записке проекта" if targets.from_note else "по оси границы работ"
     note = (
-        f"{per_km_t:.0f} деревьев и {per_km_s:.0f} кустарников на 1 км улицы "
-        f"({length:.0f} м по границе работ, средняя ширина {width:.0f} м) при вилке "
-        f"{t_low:.0f}-{t_high:.0f} и {s_low:.0f}-{s_high:.0f}"
+        f"{trees:.0f} деревьев и {shrubs:.0f} кустарников - {trees / km:.0f} и {shrubs / km:.0f} "
+        f"на 1 км ({targets.length_m:.0f} м {where}); цель - {targets.trees:.0f} деревьев и "
+        f"{targets.shrubs:.0f} кустарников"
     )
-    if not excess:
+    if targets.capped:
         note += (
-            "; граница шире улицы - в неё попали дворы или площади, плотность на 1 км здесь "
-            "оценка сверху, и перебор не штрафуется"
+            f"; деревьев в цели не больше, чем встаёт с шагом 5 м на места, прошедшие нормы "
+            f"({targets.capacity:.0f} при {targets.trees_norm:.0f} по В.1)"
+        )
+    width = site.area_m2 / targets.length_m if site.boundary is not None else 0.0
+    if width > WIDE_STREET_M:
+        note += (
+            "; граница шире улицы - в неё попали дворы или площади, число на 1 км здесь - "
+            "оценка сверху"
         )
     measure = {
-        "street_length_m": round(length, 1),
+        "street_length_m": round(targets.length_m, 1),
         "mean_width_m": round(width, 1),
-        "trees_per_km": round(per_km_t, 1),
-        "shrubs_per_km": round(per_km_s, 1),
+        "trees_per_km": round(trees / km, 1),
+        "shrubs_per_km": round(shrubs / km, 1),
+        "target_trees": round(targets.trees, 1),
+        "target_shrubs": round(targets.shrubs, 1),
     }
+    if targets.capacity is not None:
+        measure["capacity_trees"] = round(targets.capacity, 1)
     return TermResult(score, note, deltas, details, measure)
 
 
-def _density_phrase(
-    what: str, per_km: float, low: float, high: float, *, excess: bool = True
-) -> str:
-    fork_text = f"{low:.0f}-{high:.0f}, МГСН 1.02-02, табл. В.1"
-    if per_km < low:
-        return (
-            f"{what} на улице меньше нормы ({per_km:.0f} на 1 км при {fork_text}): каждое на счету"
-        )
-    if per_km > high and excess:
-        return f"{what} больше рекомендуемого максимума ({per_km:.0f} на 1 км при {fork_text})"
-    return ""
+def _count_phrase(what: str, count: float, target: float) -> str:
+    if count > target:
+        return ""
+    return (
+        f"{what} в плане {count:.0f} при цели {target:.0f} (МГСН 1.02-02, табл. В.1): "
+        "каждое на счету"
+    )
 
 
 # --- Ярусность ---------------------------------------------------------------------------
 
 
-def tiers(layout: Layout) -> TermResult:
-    """Доля деревьев аллеи, под кроной которых есть кустарник (МГСН 1.02-02, п. 4.2.9.2)."""
-    alley = [
-        i for i, p in enumerate(layout.placements) if layout.is_tree[i] and ALLEY_NOTE in p.notes
-    ]
-    if not alley:
-        return layout.empty("аллеи нет: ярусность под кронами мерить не на чем")
-    shrub_index = np.flatnonzero(layout.is_shrub)
-    covering: dict[int, list[int]] = {}
-    if len(shrub_index):
-        tree = KDTree(layout.xy[shrub_index])
-        for i in alley:
-            hits = tree.query_ball_point(layout.xy[i], layout.radius[i])
-            covering[i] = [int(shrub_index[h]) for h in hits]
-    total = len(alley)
-    covered = sum(1 for i in alley if covering.get(i))
-    score = covered / total
+def tiers(layout: Layout, site: Site, targets: Targets | None) -> TermResult:
+    """Деревья с кустарником под кроной против цели по деревьям (МГСН 1.02-02, п. 4.2.9.2).
+
+    Существующее дерево, под крону которого план посадил кустарник, - тоже второй ярус,
+    созданный планом; дерево, у которого кустарник уже был, в счёт не идёт.
+    """
+    trees = np.flatnonzero(layout.is_tree)
+    covering = _under_crowns(layout, trees)
+    existing = _under_existing(layout, site)
+    covered = sum(1 for i in trees.tolist() if covering.get(i)) + len(existing)
+    goal = targets.trees if targets is not None else float(max(len(trees), 1))
+    score = min(1.0, covered / goal)
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
+    groups = [covering[i] for i in trees.tolist() if covering.get(i)]
+    for i in trees.tolist():
+        if covering.get(i):
+            deltas[i] = score - min(1.0, (covered - 1) / goal)
+            details[i] = "под кроной есть кустарник: второй ярус"
+    sole, under = _shrub_tallies([*groups, *existing])
+    for s, count in sole.items():
+        deltas[s] = score - min(1.0, (covered - count) / goal)
+    for s, count in under.items():
+        details[s] = f"нижний ярус под кронами деревьев: {count}"
+    if targets is None:
+        deltas[:] = 0.0
+    note = f"деревьев с кустарником под кроной: {covered} из {len(trees) + site.stock.trees}"
+    if existing:
+        note += f", из них существующих {len(existing)}"
+    if targets is not None:
+        note += f", цель - {targets.trees:.0f}"
+    measure = {
+        "trees": len(trees),
+        "covered": covered,
+        "goal": round(goal, 1),
+        "existing": len(existing),
+    }
+    return TermResult(score, note, deltas, details, measure)
+
+
+def _shrub_tallies(groups: list[list[int]]) -> tuple[Counter[int], Counter[int]]:
+    """Сколько деревьев держится только на этом кусте (sole) и под скольким он стоит (under)."""
     sole: Counter[int] = Counter()
     under: Counter[int] = Counter()
-    for i in alley:
-        shrubs = covering.get(i, [])
-        after = (covered - (1 if shrubs else 0)) / (total - 1) if total > 1 else 0.0
-        deltas[i] = score - after
-        if shrubs:
-            details[i] = "под кроной есть кустарник: второй ярус аллеи"
+    for shrubs in groups:
         if len(shrubs) == 1:
             sole[shrubs[0]] += 1
         for s in shrubs:
             under[s] += 1
-    for s, count in sole.items():
-        deltas[s] = score - (covered - count) / total
-    for s, count in under.items():
-        details[s] = f"нижний ярус под кронами деревьев аллеи: {count}"
-    note = f"под кронами {covered} из {total} деревьев аллеи есть кустарник"
-    undefined = np.array([total == 1 and i in alley for i in range(layout.size)], dtype=bool)
-    return TermResult(
-        score, note, deltas, details, {"alley_trees": total, "covered": covered}, undefined
-    )
+    return sole, under
+
+
+def _under_existing(layout: Layout, site: Site) -> list[list[int]]:
+    """Новые кусты под кроной каждого существующего дерева в границе без своего куста."""
+    stock = site.stock
+    shrub_index = np.flatnonzero(layout.is_shrub)
+    if not len(shrub_index) or not stock.crown_inside.any():
+        return []
+    trunks = stock.crown_xy[stock.crown_inside]
+    tree = KDTree(layout.xy[shrub_index])
+    own = KDTree(stock.shrubs_xy) if len(stock.shrubs_xy) else None
+    result = []
+    for xy in trunks:
+        if own is not None and own.query_ball_point(xy, stock.crown_radius):
+            continue
+        hits = tree.query_ball_point(xy, stock.crown_radius)
+        if hits:
+            result.append([int(shrub_index[h]) for h in hits])
+    return result
+
+
+def _under_crowns(layout: Layout, trees: NDArray[np.intp]) -> dict[int, list[int]]:
+    """Кустарники под взрослой кроной каждого дерева."""
+    shrub_index = np.flatnonzero(layout.is_shrub)
+    if not len(shrub_index) or not len(trees):
+        return {}
+    tree = KDTree(layout.xy[shrub_index])
+    return {
+        i: [int(shrub_index[h]) for h in tree.query_ball_point(layout.xy[i], layout.radius[i])]
+        for i in trees.tolist()
+    }
 
 
 # --- Ряды: один вид и ровный шаг --------------------------------------------------------
 
 
-def rows(layout: Layout, params: PlanParams) -> TermResult:
-    """Однородность там, где она нужна: ряд аллеи - один вид и шаг по 743-ПП, табл. 3.6.2."""
+def rows(
+    layout: Layout, params: PlanParams, targets: Targets | None, *, exact: bool = True
+) -> TermResult:
+    """Посадки рядов, которые держат ряд: сосед того же вида на шаге нормы.
+
+    743-ПП, табл. 3.6.2: однорядная посадка деревьев 5-6 м, кустарников 0,3-1 м. Посадка с
+    чужим видом или без соседа на шаге нормы в счёт не идёт, но и не отнимает: разрыв ряда
+    у въезда или колодца - условие места, а не ошибка плана.
+    """
     members: dict[str, list[int]] = defaultdict(list)
     for i, p in enumerate(layout.placements):
         info = p.assortment
         if info is not None and info.structure_kind == "row" and info.structure_id:
             members[info.structure_id].append(i)
-    groups = {key: ids for key, ids in members.items() if len(ids) >= 2}  # noqa: PLR2004 - ряд
-    if not groups:
-        return layout.empty("рядов нет: однородность и шаг мерить не на чем")
-    low, high = params.row_spacing_m
-    band = (low * (1 - ROW_TOLERANCE), high * (1 + ROW_TOLERANCE))
-
-    def score_of(ids: list[int]) -> float:
-        return _row_score(layout, ids, band)[0]
-
-    scores = {key: score_of(ids) for key, ids in groups.items()}
-    total = sum(len(ids) for ids in groups.values())
-    weighted = sum(len(groups[key]) * scores[key] for key in groups)
-    score = weighted / total
+    groups = [ids for ids in members.values() if len(ids) >= 2]  # noqa: PLR2004 - ряд
+    holds = np.zeros(layout.size, dtype=np.float64)
+    bands = [_band(layout, ids, params) for ids in groups]
+    for ids, band in zip(groups, bands, strict=True):
+        holds[ids] = _holders(layout, ids, band)
+    score, _, (tree_rows, shrub_rows) = _sums(layout, holds, targets)
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
-    for key, ids in groups.items():
-        rest = weighted - len(ids) * scores[key]
-        for i in ids:
-            others = [j for j in ids if j != i]
-            if len(others) >= 2:  # noqa: PLR2004 - ряд из двух посадок
-                after = (rest + len(others) * score_of(others)) / (total - 1)
-            else:
-                remaining = total - len(ids)
-                after = rest / remaining if remaining else 0.0
-            deltas[i] = score - after
-        _row_details(layout, ids, band, (low, high), details)
-    in_band = sum(_row_score(layout, ids, band)[1] for ids in groups.values())
-    gaps = sum(len(ids) - 1 for ids in groups.values())
-    note = (
-        f"{len(groups)} рядов, {total} посадок; шагов в вилке {low:g}-{high:g} м: "
-        f"{in_band} из {gaps}"
+    if targets is not None and exact:
+        for ids, band in zip(groups, bands, strict=True):
+            for i in ids:
+                # Ряд без посадки: её место пустеет, соседи сходятся, ряд из одной - не ряд.
+                others = [j for j in ids if j != i]
+                rest = holds.copy()
+                rest[ids] = 0.0
+                if len(others) >= 2:  # noqa: PLR2004 - ряд
+                    rest[others] = _holders(layout, others, band)
+                change = holds - rest
+                deltas[i] = score - _row_score(
+                    tree_rows - float(change[layout.is_tree].sum()),
+                    shrub_rows - float(change[layout.is_shrub].sum()),
+                    targets,
+                )
+    for ids, band in zip(groups, bands, strict=True):
+        _row_details(layout, ids, band, _fork(layout, ids, params), details)
+    rows_count = len(groups)
+    total = sum(len(ids) for ids in groups)
+    note = f"{rows_count} рядов, {total} посадок; держат ряд (сосед того же вида на шаге нормы): "
+    note += f"{int(holds.sum())}"
+    if targets is not None:
+        note += (
+            f"; к цели - деревьев {tree_rows:.0f} из {targets.trees:.0f}, кустарников "
+            f"{shrub_rows:.0f} из {targets.shrubs:.0f}"
+        )
+    measure = {"rows": rows_count, "members": total, "holding": int(holds.sum())}
+    return TermResult(score, note, deltas, details, measure)
+
+
+def _row_score(tree_rows: float, shrub_rows: float, targets: Targets) -> float:
+    return _HALF * min(1.0, tree_rows / targets.trees) + _HALF * min(
+        1.0, shrub_rows / targets.shrubs
     )
-    undefined = np.zeros(layout.size, dtype=bool)
-    if len(groups) == 1 and total == 2:  # noqa: PLR2004 - единственный ряд из двух посадок
-        undefined[next(iter(groups.values()))] = True
-    return TermResult(
-        score, note, deltas, details, {"rows": len(groups), "gaps_in_band": in_band}, undefined
-    )
+
+
+def _fork(layout: Layout, ids: list[int], params: PlanParams) -> tuple[float, float]:
+    # Ряд кустарника меряется своей вилкой: 743-ПП, табл. 3.6.2 - высоких 0,5-1 м, средних
+    # и низких 0,3-0,4 м.
+    return SHRUB_ROW_SPACING_M if layout.is_shrub[ids].all() else params.row_spacing_m
+
+
+def _band(layout: Layout, ids: list[int], params: PlanParams) -> tuple[float, float]:
+    low, high = _fork(layout, ids, params)
+    return (low * (1 - ROW_TOLERANCE), high * (1 + ROW_TOLERANCE))
 
 
 def _row_order(layout: Layout, ids: list[int]) -> list[int]:
@@ -293,13 +429,22 @@ def _row_order(layout: Layout, ids: list[int]) -> list[int]:
     return [ids[k] for k in order.tolist()]
 
 
-def _row_score(layout: Layout, ids: list[int], band: tuple[float, float]) -> tuple[float, int]:
+def _holders(layout: Layout, ids: list[int], band: tuple[float, float]) -> NDArray[np.float64]:
+    """1 у посадки ряда (в порядке ids), которая держит ряд: сосед того же вида на шаге нормы.
+
+    Правило локальное: «вид ряда» по большинству перескакивал бы при равенстве счёта, и
+    добавленная посадка меняла бы оценку чужих. Здесь посадка держит ряд своим соседством.
+    """
     ordered = _row_order(layout, ids)
     steps = np.hypot(*np.diff(layout.xy[ordered], axis=0).T)
-    in_band = int(((steps >= band[0]) & (steps <= band[1])).sum())
-    codes = Counter(layout.placements[i].species.code for i in ids)
-    dominant = max(codes.values()) / len(ids)
-    return dominant * in_band / len(steps), in_band
+    codes = [layout.placements[i].species.code for i in ordered]
+    same = np.array([a == b for a, b in pairwise(codes)], dtype=bool)
+    good = (steps >= band[0]) & (steps <= band[1]) & same
+    near = np.zeros(len(ordered), dtype=bool)
+    near[:-1] |= good
+    near[1:] |= good
+    result = dict(zip(ordered, near.astype(np.float64).tolist(), strict=True))
+    return np.array([result[i] for i in ids], dtype=np.float64)
 
 
 def _row_details(
@@ -311,243 +456,202 @@ def _row_details(
 ) -> None:
     ordered = _row_order(layout, ids)
     steps = np.hypot(*np.diff(layout.xy[ordered], axis=0).T).tolist()
-    codes = Counter(layout.placements[i].species.code for i in ids)
-    main = codes.most_common(1)[0][0]
+    codes = [layout.placements[i].species.code for i in ordered]
     for position, i in enumerate(ordered):
-        near = [steps[k] for k in (position - 1, position) if 0 <= k < len(steps)]
-        shown = " и ".join(f"{step:.1f}" for step in near).replace(".", ",")
-        good = all(band[0] <= step <= band[1] for step in near)
+        near = [k for k in (position - 1, position) if 0 <= k < len(steps)]
+        shown = " и ".join(f"{steps[k]:.1f}" for k in near).replace(".", ",")
+        good = any(band[0] <= steps[k] <= band[1] for k in near)
         verdict = "держит шаг ряда" if good else "шаг ряда вне нормы"
+        fork = "-".join(decimal_g(value) for value in fork_m)
         text = (
             f"{verdict}: {position + 1}-я в ряду из {len(ordered)}, шаг {shown} м при норме "
-            f"{fork_m[0]:g}-{fork_m[1]:g} м (743-ПП, табл. 3.6.2)"
+            f"{fork} м (743-ПП, табл. 3.6.2)"
         )
-        if layout.placements[i].species.code != main:
-            text += "; вид отличается от остального ряда"
+        neighbours = [codes[k + (1 if k == position else 0)] for k in near]
+        if neighbours and codes[position] not in neighbours:
+            text += "; вид отличается от соседей по ряду"
         details[i] = text
 
 
-# --- Разнообразие между структурами ---------------------------------------------------------
+# --- Разнообразие -------------------------------------------------------------------------
 
 
-def diversity(layout: Layout, params: PlanParams) -> TermResult:
-    """Число видов и запас до квот 10-20-30 по плану целиком.
+def diversity(layout: Layout, params: PlanParams, targets: Targets | None) -> TermResult:
+    """Видов деревьев и кустарников против цели 5 на группу (медиана принятых проектов).
 
-    Цель по числу видов - не больше, чем видов допустимо на этих местах: у борта соль и крона
-    оставляют немного видов, и штрафовать улицу за то, что нормы сузили выбор, нечестно.
-    Допустимыми считаются выбранные виды и альтернативы, которые подбор предлагал местам.
+    Вид засчитывается полностью, когда в нём не меньше diversity_species_share от цели группы
+    (при цели 150 деревьев - 15 деревьев), меньше - долей: три посадки редкого вида рядом со
+    150 липами - ещё не разнообразие. Мера не падает от добавления посадки: главная порода с
+    большой долей не отнимает баллов, их не добирают остальные виды (docs/notes/34).
     """
-    if not layout.size:
-        return layout.empty("посадок нет")
     placements = layout.placements
-    counts = Counter(p.species.code for p in placements)
-    options = [
-        {p.species.code} | {a.code for a in p.assortment.alternatives}
-        if p.assortment is not None
-        else {p.species.code}
-        for p in placements
-    ]
-    occurrences = Counter(code for codes in options for code in codes)
-    admissible = set(occurrences)
-    target = max(1, min(params.diversity_target, len(admissible)))
-    targets_without = [
-        max(
-            1,
-            min(params.diversity_target, len(admissible) - sum(occurrences[c] == 1 for c in codes)),
-        )
-        for codes in options
-    ]
-    populations = _populations(layout, params)
-
-    def score_of(removed: int | None) -> tuple[float, float, float]:
-        tally = counts.copy()
-        if removed is not None:
-            tally[placements[removed].species.code] -= 1
-        n = sum(tally.values())
-        local_target = target if removed is None else targets_without[removed]
-        richness = min(1.0, _effective(tally.values(), n) / local_target) if n else 0.0
-        fits = [(pop.size_without(removed), pop.fit(removed)) for pop in populations]
-        weight = sum(size for size, _ in fits)
-        quota = sum(size * fit for size, fit in fits) / weight if weight else 1.0
-        return 0.5 * richness + 0.5 * quota, richness, quota
-
-    score, richness, quota = score_of(None)
-    cache: dict[tuple[str, bool, int], float] = {}
-    deltas = np.zeros(layout.size)
-    for i, p in enumerate(placements):
-        key = (p.species.code, bool(layout.is_tree[i]), targets_without[i])
-        if key not in cache:
-            cache[key] = score - score_of(i)[0]
-        deltas[i] = cache[key]
-    details = [_diversity_phrase(layout, i, populations) for i in range(layout.size)]
-    effective = _effective(counts.values(), layout.size)
-    quota_text = "соблюдены" if quota >= 1 else f"превышены, выполнение {quota:.2f}"
-    note = (
-        f"{len(counts)} видов, эффективное число {effective:.1f} при цели {target} "
-        f"(допустимо местам видов: {len(admissible)}); квоты вида, рода и семейства {quota_text}"
-    )
-    measure = {
-        "species": len(counts),
-        "effective_species": round(effective, 2),
-        "target": target,
-        "admissible": len(admissible),
-        "richness": round(richness, 4),
-        "quota_fit": round(quota, 4),
-    }
-    return TermResult(
-        score, note, deltas, details, measure, np.full(layout.size, layout.size == 1, dtype=bool)
-    )
-
-
-def _effective(values: Iterable[int], n: int) -> float:
-    """Эффективное число видов exp(H) по Шеннону: столько равных по численности видов."""
-    counts = [v for v in values if v > 0]
-    if not n or not counts:
-        return 0.0
-    return math.exp(-sum((v / n) * math.log(v / n) for v in counts))
-
-
-@dataclass(slots=True)
-class _Population:
-    """Деревья или кустарники: у каждой группы свои квоты разнообразия."""
-
-    members: list[int]
-    keys: dict[int, tuple[str, str, str]]  # посадка -> (вид, род, семейство)
-    quotas: tuple[float, float, float]
-    tallies: tuple[Counter[str], Counter[str], Counter[str]]
-
-    @property
-    def size(self) -> int:
-        return len(self.members)
-
-    def size_without(self, removed: int | None) -> int:
-        return self.size - (1 if removed in self.keys else 0)
-
-    def fit(self, removed: int | None) -> float:
-        """Выполнение квот: 1 - все доли в пределах, иначе квота / худшая доля."""
-        n = self.size_without(removed)
-        if n <= 0:
-            return 1.0
-        worst = 1.0
-        for level, (tally, quota) in enumerate(zip(self.tallies, self.quotas, strict=True)):
-            local = tally
-            if removed in self.keys:
-                local = tally.copy()
-                local[self.keys[removed][level]] -= 1
-            # Один экземпляр вида, рода или семейства квоту не нарушает (как в подборе).
-            shares = [count / n for count in local.values() if count >= 2]  # noqa: PLR2004
-            top = max(shares, default=0.0)
-            if top > quota:
-                worst = min(worst, quota / top)
-        return worst
-
-
-def _populations(layout: Layout, params: PlanParams) -> list[_Population]:
-    groups = (
-        (layout.is_tree, (params.quota_species, params.quota_genus, params.quota_family)),
-        (
-            layout.is_shrub,
-            (params.shrub_quota_species, params.shrub_quota_genus, params.shrub_quota_family),
-        ),
-    )
-    result = []
-    for mask, quotas in groups:
+    target = params.diversity_target
+    groups = []
+    for mask, tree in ((layout.is_tree, True), (layout.is_shrub, False)):
         members = np.flatnonzero(mask).tolist()
-        keys = {
-            i: (
-                layout.placements[i].species.code,
-                layout.placements[i].species.genus or layout.placements[i].species.code,
-                layout.placements[i].species.family or layout.placements[i].species.code,
-            )
-            for i in members
-        }
-        tallies = (
-            Counter(key[0] for key in keys.values()),
-            Counter(key[1] for key in keys.values()),
-            Counter(key[2] for key in keys.values()),
+        counts = Counter(placements[i].species.code for i in members)
+        goal = targets.of(tree) if targets is not None else float(max(len(members), 1))
+        unit = max(1.0, params.diversity_species_share * goal)
+        credit = {code: min(1.0, count / unit) for code, count in counts.items()}
+        richness = sum(credit.values())
+        groups.append((members, counts, unit, credit, richness))
+    score = sum(_HALF * min(1.0, richness / target) for *_, richness in groups)
+    deltas = np.zeros(layout.size)
+    for members, counts, unit, credit, richness in groups:
+        part = min(1.0, richness / target)
+        for i in members:
+            code = placements[i].species.code
+            drop = credit[code] - min(1.0, (counts[code] - 1) / unit)
+            deltas[i] = _HALF * (part - min(1.0, (richness - drop) / target))
+    if targets is None:
+        deltas[:] = 0.0
+    tallies = _tallies(layout)
+    details = [_diversity_phrase(layout, i, tallies) for i in range(layout.size)]
+    (tree_members, tree_counts, _, _, tree_rich), (_, shrub_counts, _, _, shrub_rich) = groups
+    top = max(tree_counts.values(), default=0) / len(tree_members) if tree_members else 0.0
+    note = (
+        f"деревьев {len(tree_counts)} видов (засчитано {decimal(tree_rich)}), кустарников "
+        f"{len(shrub_counts)} видов (засчитано {decimal(shrub_rich)}) при цели {target} на группу"
+    )
+    if tree_members:
+        note += f"; главная порода деревьев - {top:.0%}"
+        if top > TOP_SHARE_PRACTICE:
+            note += " - выше практики принятых проектов (медиана 40%, docs/notes/34)"
+    measure = {
+        "species_trees": len(tree_counts),
+        "species_shrubs": len(shrub_counts),
+        "richness_trees": round(tree_rich, 3),
+        "richness_shrubs": round(shrub_rich, 3),
+        "top_share_trees": round(top, 4),
+        "target": target,
+    }
+    return TermResult(score, note, deltas, details, measure)
+
+
+_Tally = tuple[Counter[str], Counter[str], Counter[str]]
+
+
+def _tallies(layout: Layout) -> dict[bool, _Tally]:
+    """Счёт семейств, родов и видов отдельно у деревьев и у кустарников."""
+    result: dict[bool, _Tally] = {}
+    for tree, mask in ((True, layout.is_tree), (False, layout.is_shrub)):
+        species = [layout.placements[j].species for j in np.flatnonzero(mask).tolist()]
+        result[tree] = (
+            Counter(s.family for s in species if s.family),
+            Counter(s.genus for s in species if s.genus),
+            Counter(s.code for s in species),
         )
-        result.append(_Population(members, keys, quotas, tallies))
     return result
 
 
-def _diversity_phrase(layout: Layout, i: int, populations: list[_Population]) -> str:
+def _diversity_phrase(layout: Layout, i: int, tallies: dict[bool, _Tally]) -> str:
     species = layout.placements[i].species
-    for population in populations:
-        if i not in population.keys:
-            continue
-        code, genus, family = population.keys[i]
-        tally_species, tally_genus, tally_family = population.tallies
-        if tally_family[family] == 1 and species.family:
-            return f"единственный представитель семейства {species.family} в плане"
-        if tally_genus[genus] == 1 and species.genus:
-            return f"единственный представитель рода {species.genus.capitalize()} в плане"
-        if tally_species[code] == 1:
-            return "единственная посадка своего вида в плане"
-        share = tally_species[code] / population.size
-        if share > population.quotas[0]:
-            return f"вид сверх квоты: {share:.0%} посадок при квоте {population.quotas[0]:.0%}"
+    if not (layout.is_tree[i] or layout.is_shrub[i]):
+        return ""
+    families, genera, codes = tallies[bool(layout.is_tree[i])]
+    if species.family and families[species.family] == 1:
+        return f"единственный представитель семейства {species.family} в плане"
+    if species.genus and genera[species.genus] == 1:
+        return f"единственный представитель рода {species.genus.capitalize()} в плане"
+    if codes[species.code] == 1:
+        return "единственная посадка своего вида в плане"
     return ""
 
 
-# --- Средние по посадкам: пригодность, категория, запас ------------------------------------
+# --- Пригодность, категория, запас: суммы по посадкам к цели -----------------------------
 
 
-def _mean_term(
-    values: list[float | None], note: Callable[[float], str], measure_key: str
-) -> tuple[float | None, NDArray[np.float64], str, dict[str, float], NDArray[np.bool_]]:
-    defined = [v for v in values if v is not None]
-    deltas = np.zeros(len(values))
-    undefined = np.array([v is not None and len(defined) == 1 for v in values], dtype=bool)
-    if not defined:
-        return None, deltas, "", {}, undefined
-    total, count = sum(defined), len(defined)
-    score = total / count
-    for i, value in enumerate(values):
-        if value is None:
-            continue
-        deltas[i] = score - ((total - value) / (count - 1) if count > 1 else 0.0)
-    return score, deltas, note(score), {measure_key: round(score, 4)}, undefined
+def fit(layout: Layout, params: PlanParams, targets: Targets | None) -> TermResult:
+    """Пригодность вида месту (оценка подбора из семи факторов) за вычетом поправки за условие.
 
-
-def fit(layout: Layout) -> TermResult:
-    """Средняя пригодность вида месту: оценка подбора из семи факторов (assortment/scoring)."""
-    values: list[float | None] = [
-        p.assortment.percent / 100 if p.assortment is not None else None for p in layout.placements
+    Поправка та же, что в подборе (PlanParams.condition_penalty, assortment._obligation):
+    посадка на условии (барьер, мужские клоны, контроль вида группы III) и слабый аллерген
+    743-ПП не запрещает, но это обязательство на годы. Посадка с поправкой добавляет меньше,
+    но не отнимает: отдельного штрафа, который мог бы перевесить посадку, нет.
+    """
+    percents = [
+        p.assortment.percent if p.assortment is not None else None for p in layout.placements
     ]
-    score, deltas, note, measure, undefined = _mean_term(
-        values, lambda s: f"средняя пригодность вида месту {s:.0%}", "mean"
-    )
-    if score is None:
+    counted = np.array([value is not None for value in percents], dtype=bool)
+    if not counted.any():
         return layout.empty("виды не подбирались: оценки пригодности нет")
+    penalty = params.condition_penalty
+    obligations = [obligation(p) for p in layout.placements]
+    values = np.array(
+        [
+            0.0 if percent is None else max(0.0, percent / 100 - penalty * len(owed))
+            for percent, owed in zip(percents, obligations, strict=True)
+        ],
+        dtype=np.float64,
+    )
+    score, deltas, (trees, shrubs) = _sums(layout, values, targets, counted)
+    details = []
+    for percent, owed, value in zip(percents, obligations, values.tolist(), strict=True):
+        if percent is None:
+            details.append("")
+        elif owed:
+            details.append(
+                f"пригодность вида месту {percent}%, с поправкой за {', '.join(owed)} - {value:.0%}"
+            )
+        else:
+            details.append(f"пригодность вида месту {percent}%")
+    mean = float(values[counted].mean())
+    note = f"средняя пригодность вида месту {mean:.0%}"
+    if targets is not None:
+        note += (
+            f"; сумма к цели: деревья {trees:.0f} из {targets.trees:.0f}, кустарники "
+            f"{shrubs:.0f} из {targets.shrubs:.0f}"
+        )
+    undefined = counted & (counted.sum() == 1)
+    return TermResult(score, note, deltas, details, {"mean": round(mean, 4)}, undefined)
+
+
+def obligation(placement: Placement) -> list[str]:
+    """Обязательства посадки: условие (барьер, клоны, контроль вида) и слабый аллерген."""
+    owed = []
+    if conditional(placement):
+        owed.append("условие посадки")
+    if placement.species.allergen == 1:
+        owed.append("слабый аллерген")
+    return owed
+
+
+def category(layout: Layout, params: PlanParams, targets: Targets | None) -> TermResult:
+    """Рекомендация вида для категории территории по МГСН 1.02-02, табл. В.6, к цели участка.
+
+    Вид вне таблицы - половина балла, как «с ограничением»: акт о нём молчит. Сверх этого он
+    слабее на 0,25 в факторе «категория» оценки пригодности - это пригодность, а здесь -
+    рекомендация акта.
+    """
+    # Категория - по месту посадки (application/places): у двора и улицы она своя; место
+    # не определено - категория профиля.
+    keys = [category_of(p.place, params.planting_category) for p in layout.placements]
+    marks = [p.species.categories.get(k, "") for p, k in zip(layout.placements, keys, strict=True)]
+    values = np.array([_CATEGORY.get(mark, CATEGORY_SILENT) for mark in marks], dtype=np.float64)
+    score, deltas, _ = _sums(layout, values, targets)
+    tally = Counter(mark if mark in _CATEGORY else "silent" for mark in marks)
     details = [
-        f"пригодность вида месту {p.assortment.percent}%" if p.assortment is not None else ""
-        for p in layout.placements
+        _category_phrase(mark, _CATEGORY_WHERE.get(k, k))
+        for mark, k in zip(marks, keys, strict=True)
     ]
-    return TermResult(score, note, deltas, details, measure, undefined)
+    wheres = sorted({_CATEGORY_WHERE.get(k, k) for k in keys}) or [
+        _CATEGORY_WHERE.get(params.planting_category, params.planting_category)
+    ]
+    note = (
+        f"для {' и '.join(wheres)} рекомендованы {tally['plus']} посадок, с ограничением "
+        f"{tally['limited']}, не рекомендованы {tally['minus']}, вне табл. В.6 "
+        f"{tally['silent']} (засчитаны половиной)"
+    )
+    measure = {name: float(tally[name]) for name in ("plus", "limited", "minus", "silent")}
+    return TermResult(score, note, deltas, details, measure)
 
 
-def category(layout: Layout, params: PlanParams) -> TermResult:
-    """Доля посадок, рекомендованных МГСН 1.02-02, табл. В.6 для категории территории."""
-    key = params.planting_category
-    where = _CATEGORY_WHERE.get(key, key)
-    marks = [p.species.categories.get(key, "") for p in layout.placements]
-    values: list[float | None] = [_CATEGORY.get(mark, _CATEGORY_UNKNOWN) for mark in marks]
-    score, deltas, _, _, undefined = _mean_term(values, str, "mean")
-    if score is None:
-        return layout.empty("посадок нет")
-    plus = sum(1 for mark in marks if mark == "plus")
-    unknown = sum(1 for mark in marks if mark not in _CATEGORY)
-    phrases = {
+def _category_phrase(mark: str, where: str) -> str:
+    return {
         "plus": f"рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
         "limited": f"для {where} с ограничением (МГСН 1.02-02, табл. В.6)",
         "minus": f"не рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
-    }
-    details = [phrases.get(mark, "в табл. В.6 МГСН 1.02-02 вида нет") for mark in marks]
-    note = (
-        f"рекомендованы для {where} {plus} из {len(marks)} посадок; вида нет в табл. В.6: {unknown}"
-    )
-    measure = {"plus": plus, "unknown": unknown}
-    return TermResult(score, note, deltas, details, measure, undefined)
+    }.get(mark, "в табл. В.6 МГСН 1.02-02 вида нет")
 
 
 def _m(value: float) -> str:
@@ -555,171 +659,278 @@ def _m(value: float) -> str:
 
 
 def tightest(placement: Placement) -> tuple[float, str] | None:
-    """Относительный запас до самой тесной нормы и её описание."""
+    """Запас до самой тесной нормы до подземной сети, м (измерено минус норма), и её описание.
+
+    Только сети: СП 317.1325800.2017, п. 5.3.5.3 говорит о «скрытых точках подземных
+    сооружений». Борт, стену и ограду при посадке меряют от настоящих, их положение на плане
+    не догадка.
+    """
     best: tuple[float, str] | None = None
     for check in placement.checks:
         if check.measured_m is None or not check.threshold_m or check.threshold_m <= 0:
             continue
+        if check.object_class is None or not check.object_class.is_utility:
+            continue
         # Мягкая норма «на согласование» тоже в счёт: запас по ней отрицательный, балл ноль.
         if check.outcome is CheckOutcome.NO_DATA:
             continue
-        margin = (check.measured_m - check.threshold_m) / check.threshold_m
-        if best is None or margin < best[0]:
-            text = f"{_m(check.measured_m)} м при норме {_m(check.threshold_m)} м ({check.rule_id})"
-            best = (margin, text)
+        slack = check.measured_m - check.threshold_m
+        if best is None or slack < best[0]:
+            # Сеть называется по имени, правило уже стоит в блоке нормы той же панели.
+            target = OBJECT_LABELS.get(check.object_class, "сети")
+            text = f"до {target} {_m(check.measured_m)} м при норме {_m(check.threshold_m)} м"
+            best = (slack, text)
     return best
 
 
-def margin(layout: Layout, params: PlanParams) -> TermResult:
-    """Средний запас до ближайшей нормы: полный балл с запасом margin_target и больше."""
-    target = params.margin_target
+def margin(layout: Layout, params: PlanParams, targets: Targets | None) -> TermResult:
+    """Посадки с запасом до подземных сетей: полный балл с margin_target_m сверх нормы.
+
+    СП 317.1325800.2017, п. 5.3.5.3: на плане 1:500 положение подземных сетей может
+    расходиться с натурой до 0,5 м. Посадка ровно на норме по чертежу на месте может оказаться
+    ближе нормы: она засчитывается долей запаса. Посадка без сети рядом - полный балл.
+    """
+    goal = params.margin_target_m
     found = [tightest(p) for p in layout.placements]
-    values: list[float | None] = [
-        None if item is None else min(1.0, max(0.0, item[0] / target)) for item in found
-    ]
-    score, deltas, note, measure, undefined = _mean_term(
-        values, lambda s: f"средний запас до ближайшей нормы - {s:.0%} от цели {target:.0%}", "mean"
+    values = np.array(
+        [1.0 if item is None else min(1.0, max(0.0, item[0] / goal)) for item in found],
+        dtype=np.float64,
     )
-    if score is None:
-        return layout.empty("измеренных отступов нет")
+    score, deltas, _ = _sums(layout, values, targets)
+    # Запас больше цели слагаемое уже насытил: «запас 42 м» - не заслуга посадки, а отсутствие
+    # сети рядом, и в причинах ценности он только занимает строку.
     details = [
-        "" if item is None else f"запас до ближайшей нормы {item[0]:.0%}: {item[1]}"
+        "" if item is None or item[0] >= goal else f"запас {_m(item[0])} м сверх нормы: {item[1]}"
         for item in found
     ]
-    return TermResult(score, note, deltas, details, measure, undefined)
+    tight = sum(1 for item in found if item is not None and item[0] < goal)
+    note = (
+        f"посадок с запасом не меньше {_m(goal)} м сверх нормы до подземных сетей или без сетей "
+        f"рядом: {layout.size - tight} из {layout.size}; впритык к норме: {tight}"
+    )
+    return TermResult(score, note, deltas, details, {"tight": float(tight)})
 
 
 # --- Тень и пылезащита --------------------------------------------------------------------
 
 
 def canopy(
-    layout: Layout, site: Site, params: PlanParams, zone_m2: float | None = None
+    layout: Layout,
+    site: Site,
+    params: PlanParams,
+    targets: Targets | None,
+    *,
+    exact: bool = True,
 ) -> TermResult:
-    """Площадь взрослых крон в долях от зоны, где посадка допустима; полный балл при цели.
+    """Площадь взрослых крон против крон целевого числа деревьев; полный балл с canopy_target.
 
-    Делить на весь участок бессмысленно: проезжая часть, здания и полосы сетей, где сажать
-    нельзя, занимают больше 90% границы работ, и доля крон выходит нулём на любом плане.
-    Зона допустимости - то место, которое план вообще мог затенить посадками.
+    Цель - кроны целевого числа деревьев участка с кроной canopy_crown_m (медиана взрослой
+    кроны деревьев каталога): так тень меряется в тех же единицах, что плотность, и
+    мелкокронный вид даёт меньше, чем крупнокронный (Kenney, van Wassenaer, Satel 2011:
+    относительная площадь крон «optimal» с 75% потенциала).
     """
-    if site.boundary is None or site.area_m2 <= 0:
-        return layout.empty("нет границы работ: не от чего считать долю крон")
+    if site.boundary is None or site.area_m2 <= 0 or targets is None:
+        return layout.empty("нет границы работ: не от чего считать тень")
     boundary = site.boundary
-    area = zone_m2 if zone_m2 and zone_m2 > 0 else site.area_m2
-    base = "зоны, где посадка допустима," if zone_m2 and zone_m2 > 0 else "участка"
+    crown = params.canopy_crown_m
+    goal = params.canopy_target * targets.trees * math.pi * (crown / 2) ** 2
     trees = np.flatnonzero(layout.is_tree)
-    target = params.canopy_target
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
+    # Существующие кроны: тень улицы - их и новых вместе, новая крона поверх существующей
+    # ничего не добавляет. Они одинаковы во всех вариантах, выбор решает прирост.
+    existing = site.stock.canopy
+    existing_m2 = float(existing.area) if existing is not None else 0.0
     if not len(trees):
-        return TermResult(0.0, "деревьев нет", deltas, details, {"share": 0.0})
+        return TermResult(
+            min(1.0, existing_m2 / goal),
+            "деревьев нет" + (f"; существующие кроны {existing_m2:.0f} м²" if existing_m2 else ""),
+            deltas,
+            details,
+            {"m2": round(existing_m2), "goal_m2": goal, "existing_m2": round(existing_m2)},
+        )
     circles = shapely.buffer(
         shapely.points(layout.xy[trees]), layout.radius[trees], quad_segs=_CIRCLE_SEGMENTS
     )
     shapely.prepare(boundary)
-    covered = float(shapely.intersection(shapely.union_all(circles), boundary).area)
-    share = covered / area
-    score = min(1.0, share / target)
+    planted = shapely.intersection(shapely.union_all(circles), boundary)
+    if existing is not None:
+        shapely.prepare(existing)
+        planted = shapely.union(planted, existing)
+    covered = float(planted.area)
+    score = min(1.0, covered / goal)
     index = shapely.STRtree(circles)
-    for k, i in enumerate(trees.tolist()):
+    for k, i in enumerate(trees.tolist() if exact else ()):
         own = circles[k]
         near = [j for j in index.query(own, predicate="intersects").tolist() if j != k]
         if near:
             own = shapely.difference(own, shapely.union_all(circles[near]))
+        if existing is not None and shapely.intersects(existing, own):
+            own = shapely.difference(own, existing)
         unique = (
             float(own.area)
             if shapely.contains(boundary, own)
             else float(shapely.intersection(own, boundary).area)
         )
-        deltas[i] = score - min(1.0, (covered - unique) / area / target)
+        deltas[i] = score - min(1.0, (covered - unique) / goal)
         if unique >= _MIN_UNIQUE_M2:
             details[i] = (
                 f"взрослая крона даёт {unique:.0f} м² тени, которых не даёт больше ни одно дерево"
             )
     note = (
-        f"взрослые кроны закрывают {covered:.0f} м², это {share:.0%} площади {base} "
-        f"{area:.0f} м², при цели {target:.0%}; от всей границы работ - "
-        f"{covered / site.area_m2:.1%}"
+        f"взрослые кроны закрывают {covered:.0f} м²; цель - {params.canopy_target:.0%} крон "
+        f"{targets.trees:.0f} деревьев с кроной {decimal(crown)} м (медиана каталога), "
+        f"{goal:.0f} м²"
     )
+    if existing_m2:
+        note += f"; из них существующие кроны {existing_m2:.0f} м²"
+    # Сумма кругов крон без перекрытий: отношение m2 / sum_m2 - перекрытие крон этого участка;
+    # по нему оценивается тень плана, у которого есть состав, но нет координат (проектировщик).
+    total = float(np.sum(math.pi * layout.radius[trees] ** 2))
     measure = {
-        "share": round(share, 4),
         "m2": round(covered),
-        "base_m2": round(area),
-        "boundary_share": round(covered / site.area_m2, 5),
+        "goal_m2": round(goal),
+        "share": round(covered / goal, 4),
+        "sum_m2": round(total),
+        "existing_m2": round(existing_m2),
     }
     return TermResult(score, note, deltas, details, measure)
 
 
 def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
     """Доля бортов под кронами, взвешенная газоустойчивостью вида (0-2 -> 0-1)."""
-    if not len(site.curb_segments):
+    segments = site.curb_segments
+    if not len(segments):
         return layout.empty("бортов в границе работ нет: пылезащиту мерить не по чему")
+    total_curb = _length(segments)
+    if params.dust_admissible and site.curb_soil is not None:
+        # Только борта с грунтом в полосе у борта: там нижнему ярусу есть где встать.
+        segments = segments[site.curb_soil]
+        if not len(segments):
+            return layout.empty("у бортов нет грунта: нижнему ярусу встать негде")
     target = params.dust_target
-    weight = np.array([p.species.gas_tolerance / 2 for p in layout.placements], dtype=np.float64)
-    coverage = measure_crowns(site.curb_segments, layout.xy, layout.radius, weight)
+    # Abhijith et al. 2017: в уличном каньоне кроны над проезжей частью ухудшают воздух у
+    # земли, а работает сомкнутый низкий ярус от земли. Кустарник у борта засчитывается целиком,
+    # метр только под кроной дерева - с коэффициентом dust_crown_factor.
+    layer = np.where(layout.is_shrub, 1.0, params.dust_crown_factor)
+    weight = layer * np.array(
+        [p.species.gas_tolerance / 2 for p in layout.placements], dtype=np.float64
+    )
+    # Кустарник закрывает борт, если стоит в полосе у борта (полоса, закрытая для деревьев);
+    # дерево - только кроной над бортом. Длина считается точно по отрезкам (coverage.py).
+    cover = np.where(layout.is_shrub, np.maximum(layout.radius, params.dust_strip_m), layout.radius)
+    # Существующие кроны и кусты тоже закрывают борт: вид неизвестен, газоустойчивость средняя
+    # (1 из 2). Вклад новой посадки - только то, чего они не закрывают.
+    fixed = _fixed_cover(site, params, segments)
+    coverage = measure_crowns(segments, layout.xy, cover, weight, fixed=fixed)
+    loss, reach = coverage.loss_m, coverage.reach_m
     total, count = coverage.weighted_m, coverage.length_m
     share = total / count
     score = min(1.0, share / target)
-    deltas = score - np.minimum(1.0, (total - coverage.loss_m) / count / target)
+    deltas = score - np.minimum(1.0, (total - loss) / count / target)
     covered = coverage.covered_m
+    existing_covered = fixed.covered_m
     details = [
-        f"крона прикрывает {coverage.reach_m[i]:.1f} м борта, "
-        f"газоустойчивость {p.species.gas_tolerance} из 2"
-        if coverage.reach_m[i]
+        (
+            f"{'нижний ярус у борта' if layout.is_shrub[i] else 'крона над бортом'}: "
+            f"{decimal(reach[i])} м, газоустойчивость {p.species.gas_tolerance} из 2"
+        )
+        if reach[i]
         else ""
         for i, p in enumerate(layout.placements)
     ]
     note = (
-        f"под кронами {covered:.1f} м бортов из {count:.1f} ({covered / count:.0%}), "
+        f"под кронами {decimal(covered)} м бортов из {decimal(count)} ({covered / count:.0%}), "
         f"с поправкой на газоустойчивость {share:.0%} при цели {target:.0%}"
     )
-    measure = {"curb_m": count, "covered_m": covered, "share": round(share, 4)}
+    if existing_covered:
+        note += f"; существующие кроны и кусты закрывают {decimal(existing_covered)} м"
+    measure = {
+        "curb_m": count,
+        "covered_m": covered,
+        "share": round(share, 4),
+        "existing_covered_m": existing_covered,
+    }
+    if count < total_curb - _LENGTH_EPS_M:
+        note += f"; в счёт только борта с грунтом рядом, {count:.0f} м из {total_curb:.0f}"
+        measure["curb_total_m"] = total_curb
     return TermResult(score, note, deltas, details, measure)
+
+
+# Газоустойчивость существующего насаждения, вид которого чертёж не называет: средняя, 1 из 2.
+EXISTING_GAS_WEIGHT = 0.5
+
+
+# Существующие кроны одинаковы во всех оценках прогона: их покрытие бортов считается один раз
+# на участок (сдвиг слабых мест оценивает сотни пробных планов). Ключ - сами массивы участка:
+# запись хранит ссылки на них, поэтому чужой участок с тем же id её не получит.
+_FIXED: list[tuple[tuple[tuple[object, ...], tuple[object, ...]], FixedCrowns]] = []
+_FIXED_SIZE = 4
+
+
+def _fixed_cover(site: Site, params: PlanParams, segments: NDArray[np.float64]) -> FixedCrowns:
+    arrays = (site.stock, site.curb_segments, site.curb_soil)
+    values = (params.dust_strip_m, params.dust_crown_factor, params.dust_admissible)
+    for (held, same), fixed in _FIXED:
+        if all(a is b for a, b in zip(held, arrays, strict=True)) and same == values:
+            return fixed
+    fixed = fixed_crowns(segments, *_existing_cover(site, params))
+    _FIXED.insert(0, ((arrays, values), fixed))
+    del _FIXED[_FIXED_SIZE:]
+    return fixed
+
+
+def _existing_cover(
+    site: Site, params: PlanParams
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """Существующие кроны и кусты для покрытия бортов: центры, радиусы, веса."""
+    crowns, radii = site.stock.crowns()
+    shrubs = site.stock.shrubs_xy
+    return (
+        np.vstack([crowns, shrubs]),
+        np.concatenate([radii, np.full(len(shrubs), params.dust_strip_m)]),
+        np.concatenate(
+            [
+                np.full(len(crowns), params.dust_crown_factor * EXISTING_GAS_WEIGHT),
+                np.full(len(shrubs), EXISTING_GAS_WEIGHT),
+            ]
+        ),
+    )
+
+
+# Разница длин бортов меньше этого - округление, а не отсеянные борта без грунта.
+_LENGTH_EPS_M = 1e-6
+
+
+def _length(segments: NDArray[np.float64]) -> float:
+    return float(np.linalg.norm(segments[:, 1] - segments[:, 0], axis=1).sum())
 
 
 # --- Сезонность ---------------------------------------------------------------------------
 
 
 def season(layout: Layout) -> TermResult:
-    """Сколько месяцев из 12 есть декоративные посадки и насколько ровно они распределены."""
+    """Сколько месяцев из 12 есть декоративные посадки (из каталога видов)."""
     months = [sorted(p.species.decor_months) for p in layout.placements]
     base = np.zeros(12)
     for owned in months:
         for month in owned:
             base[month - 1] += 1
-
-    def score_of(tally: NDArray[np.float64]) -> float:
-        total = float(tally.sum())
-        coverage = float((tally > 0).sum()) / 12
-        if total <= 0:
-            return 0.0
-        shares = tally[tally > 0] / total
-        evenness = float(-(shares * np.log(shares)).sum() / math.log(12))
-        return 0.5 * coverage + 0.5 * evenness
-
-    if not base.sum():
-        return layout.empty("у посадок плана нет месяцев декоративности")
-    score = score_of(base)
-    cache: dict[tuple[int, ...], float] = {}
+    active = int((base > 0).sum())
+    score = active / 12
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
     for i, owned in enumerate(months):
-        key = tuple(owned)
-        if key not in cache:
-            tally = base.copy()
-            for month in owned:
-                tally[month - 1] -= 1
-            cache[key] = score - score_of(tally)
-        deltas[i] = cache[key]
-        alone = [_MONTHS_IN[m - 1] for m in owned if base[m - 1] == 1]
+        alone = [m for m in owned if base[m - 1] == 1]
+        deltas[i] = len(alone) / 12
         if alone:
-            details[i] = f"единственная декоративная посадка в {', '.join(alone)}"
-    active = int((base > 0).sum())
+            where = ", ".join(_MONTHS_IN[m - 1] for m in alone)
+            details[i] = f"единственная декоративная посадка в {where}"
     note = f"декоративные посадки есть в {active} месяцах из 12"
-    undefined = np.array([len(owned) == base.sum() for owned in months], dtype=bool)
-    return TermResult(score, note, deltas, details, {"months": active}, undefined)
+    return TermResult(score, note, deltas, details, {"months": active})
 
 
-# --- Штрафы -------------------------------------------------------------------------------
+# --- Штрафы и отметки ---------------------------------------------------------------------
 
 
 def conditional(placement: Placement) -> bool:

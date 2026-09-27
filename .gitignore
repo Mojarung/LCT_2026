@@ -34,3 +34,6 @@ var/
 
 # снимки и снапшоты playwright-cli при проверке вёрстки
 .playwright-cli/
+
+# рабочие копии агентов Claude Code
+.claude/worktrees/

@@ -17,7 +17,16 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import KDTree
 
-from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_LAWN, MODE_SHRUB_GROUP
+from green.application.placement import (
+    MODE_ALLEY,
+    MODE_CURB_HEDGE,
+    MODE_LABELS,
+    MODE_LAWN,
+    MODE_SHRUB_FILL,
+    MODE_SHRUB_GROUP,
+    MODE_SHRUB_ROW,
+    MODE_UNDERSTORY,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -130,9 +139,9 @@ def _mode_of(placement: Placement) -> str:
 def _kind(mode: str, size: int) -> str:
     if size < _MIN_ROW:
         return SINGLE
-    if mode == MODE_SHRUB_GROUP:
+    if mode in {MODE_SHRUB_GROUP, MODE_UNDERSTORY, MODE_SHRUB_FILL}:
         return GROUP
-    if mode == MODE_ALLEY:
+    if mode in {MODE_ALLEY, MODE_SHRUB_ROW, MODE_CURB_HEDGE}:
         return ROW
     if mode == MODE_LAWN and size >= _MIN_GROUP:
         return GROUP

@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment import assign_species
+from green.application.barriers import mark_barrier_options
 from green.application.basemap import build_basemap
 from green.application.classification import (
     classification_report,
@@ -17,16 +18,40 @@ from green.application.classification import (
     promote_unknown_lines,
     require_classified,
 )
+from green.application.constraints import work_boundary
 from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
+from green.application.effect import street_effect
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
+from green.application.lawns import plan_lawns
+from green.application.placement import (
+    MODE_CURB_HEDGE,
+    MODE_LABELS,
+    MODE_SHRUB_FILL,
+    MODE_SHRUB_ROW,
+    MODE_UNDERSTORY,
+)
+from green.application.places import place_map, with_places
 from green.application.portfolio import choose_plan
 from green.application.quality import assess, site_of
+from green.application.refine import refine_weak
 from green.application.results import RunReport, StageTiming
+from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
-from green.application.validation import PlanValidation, validate_plan
+from green.application.shrub_rows import fill_shrub_rows
+from green.application.species_traces import with_species_traces
+from green.application.surfaces import build_surface_map
+from green.application.understory import fill_understory
+from green.application.validation import (
+    PlanValidation,
+    drop_spacing_conflicts,
+    trim_to_quotas,
+    validate_plan,
+)
+from green.application.volumes import build_volumes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -37,6 +62,7 @@ if TYPE_CHECKING:
     from green.application.ports import (
         DrawingConverter,
         DrawingMerger,
+        GisLayerSource,
         IntegrityChecker,
         InventoryCounts,
         LayerMapSource,
@@ -47,11 +73,23 @@ if TYPE_CHECKING:
         SpeciesCatalog,
     )
     from green.application.results import IntegrityReport, PlanExportReport
-    from green.domain.planting import Plan
+    from green.domain.objects import Scene
+    from green.domain.planting import Placement, Plan
 
 RESULT_DXF = "result.dxf"
 PENDING_DXF = ".result.pending.dxf"
 MERGED_DXF = "merged_source.dxf"
+
+
+# Посадки добавочных этапов кустарника: их можно снять ради квот, основу плана - нельзя.
+_STAGE_NOTES = frozenset(
+    MODE_LABELS[mode]
+    for mode in (MODE_SHRUB_ROW, MODE_CURB_HEDGE, MODE_UNDERSTORY, MODE_SHRUB_FILL)
+)
+
+
+def _added_by_stages(placement: Placement) -> bool:
+    return bool(placement.notes) and placement.notes[0] in _STAGE_NOTES
 
 
 def _inventory_note(counts: InventoryCounts) -> str:
@@ -77,6 +115,10 @@ class PlanRequest:
     extra_sources: tuple[Path, ...] = ()
     # Original package paths/names survive upload renaming and DWG conversion.
     source_names: tuple[str, ...] = ()
+    # Внешние ссылки (файл комплекта, путь), файлов которых нет в исходных данных заказчика.
+    absent_references: tuple[tuple[str, str], ...] = ()
+    # Дополнительные слои ГИС (GeoJSON, SHP): кадастр, зонирование, охранные зоны, data.mos.ru.
+    gis_layers: tuple[Path, ...] = ()
 
 
 @dataclass(slots=True)
@@ -110,7 +152,9 @@ class PlanSite:
         writer: PlanWriter,
         integrity: IntegrityChecker,
         merger: DrawingMerger | None = None,
+        gis: GisLayerSource | None = None,
     ) -> None:
+        self._gis = gis
         self._reader = reader
         self._converters = tuple(converters)
         self._rules = rules
@@ -142,7 +186,9 @@ class PlanSite:
                 for path in request.extra_sources
             ]
         merge_notes: tuple[str, ...] = ()
+        gis_notes: tuple[str, ...] = ()
         assembly = None
+        merge_warnings: tuple[str, ...] = ()
         if extras:
             if self._merger is None:
                 raise InputError("Комплект из нескольких чертежей: склейка не подключена")
@@ -153,11 +199,13 @@ class PlanSite:
                     unit=params.drawing_unit,
                     source_names=request.source_names
                     or tuple(str(path) for path in (request.source, *request.extra_sources)),
+                    absent_references=request.absent_references,
                 )
                 source, merge_notes = merged.path, merged.notes
                 assembly = merged.assembly
+                merge_warnings = merged.warnings
         with watch.stage("load_config"):
-            rulebook = self._rules.load()
+            rulebook = self._rules.load().for_sp42_edition(params.sp42_edition)
             layer_map = self._layers.load()
             species = self._species.get(params.species_code)
         with watch.stage("read"):
@@ -191,27 +239,51 @@ class PlanSite:
                 )
             if params.unknown_lines_as_utility:
                 scene = promote_unknown_lines(scene)
+            if request.gis_layers:
+                scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
-            basemap = build_basemap(features)
+            basemap = build_basemap(features, scene.labels)
             if progress is not None:
                 progress.basemap(basemap)
-        site = site_of(features)
+            # Объёмы зданий для трёхмерной сцены - из тех же объектов и подписей, что и карта.
+            # Отдельного этапа у них нет: на встроенном фрагменте Берзарина это 0,07 с, на
+            # сцене из 560 тыс. объектов (49 копий фрагмента) - 2,8 с.
+            volumes = build_volumes(features, scene.labels)
+        # Карта покрытий на прогон одна: её читают ряд кустарника у борта, подлесок, группы на
+        # газоне, сдвиг слабых мест, индекс качества и карта в браузере - «как сервис понял,
+        # где грунт». Параметры те же, что у размещения, поэтому и грунт тот же.
+        with watch.stage("surface"):
+            surface = (
+                build_surface_map(
+                    features,
+                    scene.labels,
+                    work_boundary(features),
+                    params.surface_cell_m,
+                    max_distance_m=params.surface_max_distance_m,
+                    ambiguity_m=params.surface_ambiguity_m,
+                    tree_distance_m=params.tree_seed_distance_m,
+                    inference_mode=params.surface_inference_mode,
+                )
+                if params.require_soil
+                else None
+            )
+        site = site_of(features, surface, crown_m=params.existing_crown_m)
+        places = place_map(features)
+        inventory = request.inventory
+        existing = inventory.matched if inventory else None
 
         def complete_variant(params: PlanParams) -> tuple[Plan, PlanValidation]:
             with watch.stage("place"):
-                plan = self._strategy.plan(features, scene.labels, rulebook, species, params)
-            with watch.stage("assort"):
-                inventory = request.inventory
-                plan = assign_species(
-                    plan,
-                    rulebook,
-                    self._species.all(),
-                    params,
-                    inventory.matched if inventory else None,
+                plan = self._strategy.plan(
+                    features, scene.labels, rulebook, species, params, surface=surface
                 )
+                # Место посадки до подбора вида: категория В.6 у двора и улицы своя.
+                plan = with_places(plan, places)
+            with watch.stage("assort"):
+                plan = assign_species(plan, rulebook, self._species.all(), params, existing)
                 if inventory is not None:
                     plan = replace(plan, warnings=(*plan.warnings, _inventory_note(inventory)))
             with watch.stage("shrub_groups"):
@@ -223,9 +295,58 @@ class PlanSite:
                     rulebook=rulebook,
                     catalog=self._species.all(),
                     params=params,
-                    existing=inventory.matched if inventory else None,
+                    existing=existing,
+                    surface=surface,
                 )
-            # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+            # Кустарник вдоль бортов, под кронами аллеи и на газоне ставится до проверки плана:
+            # независимая проверка видит план целиком, и вариант с нарушением не проходит.
+            with watch.stage("shrub_rows"):
+                plan = fill_shrub_rows(
+                    plan,
+                    features=features,
+                    labels=scene.labels,
+                    rulebook=rulebook,
+                    catalog=self._species.all(),
+                    params=params,
+                    surface=surface,
+                )
+            with watch.stage("understory"):
+                plan = fill_understory(
+                    plan,
+                    features=features,
+                    labels=scene.labels,
+                    rulebook=rulebook,
+                    catalog=self._species.all(),
+                    params=params,
+                    surface=surface,
+                )
+            with watch.stage("shrub_fill"):
+                plan = fill_shrub_gaps(
+                    plan,
+                    strategy=self._strategy,
+                    features=features,
+                    labels=scene.labels,
+                    rulebook=rulebook,
+                    catalog=self._species.all(),
+                    params=params,
+                    surface=surface,
+                )
+            # Добавочные этапы подбирают вид каждый в своей выборке, квота же считается по
+            # всему плану: лишние кусты этих этапов снимаются до проверки, основа плана цела.
+            with watch.stage("quotas"):
+                spaced = drop_spacing_conflicts(plan.placements, params, removable=_added_by_stages)
+                kept = trim_to_quotas(
+                    spaced,
+                    params,
+                    self._species.all(),
+                    existing or {},
+                    removable=_added_by_stages,
+                )
+                if len(kept) != len(plan.placements):
+                    # Номера посадок идут подряд: снятые кусты не оставляют дыр в ведомости.
+                    renumbered = tuple(replace(p, number=i) for i, p in enumerate(kept, 1))
+                    plan = replace(plan, placements=renumbered)
+            plan = with_places(plan, places)
             with watch.stage("validate_plan"):
                 validation = validate_plan(
                     plan,
@@ -234,17 +355,69 @@ class PlanSite:
                     rulebook,
                     params,
                     catalog=self._species.all(),
-                    existing=inventory.matched if inventory else None,
+                    existing=existing,
+                    surface=surface,
                 )
-            with watch.stage("quality"):
-                if validation.ok:
-                    plan = assess(plan, site, params)
             return plan, validation
 
-        plan, validation = choose_plan(complete_variant, params, features)
+        def score_variant(plan: Plan, params: PlanParams) -> Plan:
+            # Индекс качества считается до объяснений: ценность посадки входит в её текст.
+            # Портфель зовёт оценку, когда собраны все варианты: цель плотности у них общая.
+            with watch.stage("quality"):
+                # Барьер не ставится по умолчанию, но место, которое он спас бы, видно на
+                # карте: решение за проектировщиком, а не за сервисом.
+                plan = mark_barrier_options(plan, rulebook, applied=params.root_barriers)
+                return assess(plan, site, params)
+
+        plan, validation = choose_plan(complete_variant, params, features, score_variant)
         require_valid_plan(validation)
+        # Слабые места - посадки впритык к норме - сервис сдвигает сам, если индекс от этого
+        # растёт. Сдвинутый план принимается, только если его снова пропустила проверка.
+        with watch.stage("refine"):
+            refined = refine_weak(
+                plan,
+                features=features,
+                labels=scene.labels,
+                rulebook=rulebook,
+                params=params,
+                site=site,
+                surface=surface,
+            )
+            if refined.moved:
+                recheck = validate_plan(
+                    refined.plan,
+                    features,
+                    scene.labels,
+                    rulebook,
+                    params,
+                    catalog=self._species.all(),
+                    existing=existing,
+                    surface=surface,
+                )
+                if recheck.ok:
+                    plan, validation = refined.plan, recheck
+        # Газон - грунт, который итоговый план оставил свободным: считается после сдвига слабых
+        # мест, иначе посадочное место сдвинутой посадки легло бы на газон. Нормы посадок газон
+        # не меняет, поэтому проверку плана не повторяет.
+        with watch.stage("lawns"):
+            plan = plan_lawns(
+                plan,
+                features=features,
+                labels=scene.labels,
+                surface=surface,
+                rulebook=rulebook,
+                params=params,
+            )
+        # Что план даёт улице: было - существующие насаждения, стало - вместе с планом.
+        with watch.stage("effect"):
+            plan = replace(
+                plan,
+                effect=street_effect(
+                    plan, site, params, inventory, surface=surface, catalog=self._species.all()
+                ),
+            )
         with watch.stage("explain"):
-            plan = explain(plan, rulebook)
+            plan = explain(with_species_traces(plan, features, rulebook, params), rulebook)
         output = request.work_dir / RESULT_DXF
         pending = request.work_dir / PENDING_DXF
         with watch.stage("write_dxf"):
@@ -254,6 +427,14 @@ class PlanSite:
             export_validation = self._integrity.check_plan(pending, plan, unit_m=scene.unit_m)
             require_valid_export(integrity, export_validation)
             pending.replace(output)
+        integrity_notes: tuple[str, ...] = ()
+        if integrity.unexportable:
+            integrity_notes = (
+                (
+                    f"В исходнике {integrity.unexportable} сущностей без данных (REGION без "
+                    "ACIS после конвертации DWG): ezdxf их не сохраняет, в сверку они не входят."
+                ),
+            )
         report = RunReport(
             run_id=request.run_id,
             source_name=request.source.name,
@@ -270,8 +451,14 @@ class PlanSite:
             timings=tuple(watch.timings),
             output_dxf=output,
             converter=converter,
-            warnings=(*merge_notes, *scene.warnings, *plan.warnings),
+            # Журнал склейки отдельно: в сводке прогона он вытеснял то, что меняет смысл плана
+            # (на улице из каталога - около сорока строк аудита планшетов). Предупреждения
+            # чтения и классификации остаются в сводке: они о допустимости посадок.
+            warnings=(*merge_warnings, *scene.warnings, *plan.warnings, *integrity_notes),
+            load_notes=(*merge_notes, *gis_notes),
             basemap=basemap,
+            surface=surface,
+            volumes=volumes,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,
             export_validation=export_validation,
@@ -291,9 +478,28 @@ class PlanSite:
             source=source,
             unit_m=scene.unit_m,
             report=report,
+            inventory=inventory,
             _site=site,
+            _surface=surface,
+            _surface_built=params.require_soil,
         )
         return replace(report, context=context)
+
+    def _with_gis_layers(
+        self, scene: Scene, paths: tuple[Path, ...]
+    ) -> tuple[Scene, tuple[str, ...]]:
+        """Объекты слоёв ГИС встают в сцену после классификации чертежа: размещение, итоговая
+        проверка плана и правка на карте видят их так же, как объекты подосновы."""
+        if self._gis is None:
+            raise InputError("Слои ГИС не подключены к сервису")
+        layers = self._gis.read(paths)
+        notes, warnings = alignment_notes(layers.features, scene.features)
+        scene = replace(
+            scene,
+            features=(*scene.features, *layers.features),
+            warnings=(*scene.warnings, *layers.warnings, *warnings),
+        )
+        return scene, (*layers.notes, *notes)
 
     def rebuild(self, context: RunContext, plan: Plan, work_dir: Path) -> RunReport:
         """Переписать DXF и отчёт по исправленному плану, не перечитывая чертёж.
@@ -318,6 +524,7 @@ class PlanSite:
                 existing=context.report.plan.assortment_summary.existing
                 if context.report.plan.assortment_summary
                 else None,
+                surface=context.surface_map(),
             )
             require_valid_plan(validation)
         with watch.stage("write_dxf"):
@@ -366,13 +573,12 @@ def require_valid_plan(result: PlanValidation) -> None:
 def to_dxf(
     converters: Sequence[DrawingConverter], source: Path, work_dir: Path
 ) -> tuple[Path, str | None]:
-    """DXF отдаётся как есть, DWG конвертирует доступный конвертер."""
+    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер."""
     suffix = source.suffix.lower()
     if suffix == ".dxf":
         return source, None
     if suffix != ".dwg":
         raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
-    failed: list[str] = []
     for converter in converters:
         if converter.available():
             # Packages often contain different drawings with the same basename.
@@ -382,10 +588,5 @@ def to_dxf(
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             converted_dir = work_dir / "converted" / digest[:20]
             converted_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                return converter.to_dxf(source, converted_dir), converter.name
-            except ConversionError as error:
-                failed.append(f"{converter.name}: {error}")
-    if failed:
-        raise ConversionError("DWG -> DXF: " + "; ".join(failed))
-    raise ConversionError("Нет доступного конвертера DWG -> DXF")
+            return converter.to_dxf(source, converted_dir), converter.name
+    raise ConversionError("Нет доступного конвертера DWG -> DXF (LibreDWG или ODA File Converter)")

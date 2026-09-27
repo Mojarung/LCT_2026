@@ -9,8 +9,11 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import math
 import re
+from collections import Counter
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -92,8 +95,18 @@ def run(
     source = work / "street.dxf"
     _street(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
+    # Ряд кустарника у борта, кустарник под кронами и группы на газоне проверяются своими тестами
+    # (tests/test_shrub_rows.py, tests/test_pipeline_levers.py): эти писались под план из
+    # деревьев и по нему сверяют аллею, газон и блоки видов.
     params = container.profiles.load(
-        "strict", {"max_rejections": 50, "placement_solver": request.param}
+        "strict",
+        {
+            "max_rejections": 50,
+            "placement_solver": request.param,
+            "shrub_rows": False,
+            "understory": False,
+            "shrub_fill": False,
+        },
     )
     report = container.use_case.execute(PlanRequest("test", source, work / "out", "strict", params))
     artifacts = container.artifacts.save(work / "out", report)
@@ -162,11 +175,30 @@ def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
     assert summary is not None
     assert summary.shannon > 0
     assert sum(summary.counts.values()) == sum(p.species.is_tree for p in plan.placements)
-    assert not summary.quota_violations
+    # Квоты профиля мягкие (notes/34): перебор доли вида допустим и виден в сводке, но
+    # потолок хвойных жёсткий - его перебора нет.
+    assert all("хвойн" not in violation for violation in summary.quota_violations)
     shrubs = plan.shrub_assortment_summary
     if any(p.species.is_shrub for p in plan.placements):
         assert shrubs is not None
         assert sum(shrubs.counts.values()) == sum(p.species.is_shrub for p in plan.placements)
+
+
+def test_every_trace_uses_the_rules_of_the_planted_species(run: dict[str, object]) -> None:
+    """Трасса объяснения - правила посаженного вида, как у проверки плана, а не вида профиля."""
+    from dataclasses import replace  # noqa: PLC0415 - нужен только здесь
+
+    from green.application.params import PlanParams, species_distance_rules  # noqa: PLC0415
+    from green.infrastructure.config.repositories import YamlRuleBookSource  # noqa: PLC0415
+
+    rulebook = YamlRuleBookSource(ROOT / "config" / "acts.yaml", ROOT / "config" / "rules.yaml")
+    book = rulebook.load().for_sp42_edition("2016")
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    for placement in plan.placements:
+        params = replace(PlanParams(), planting_type=placement.planting_type)
+        allowed = {r.rule_id for r in species_distance_rules(book, params, placement.species)}
+        traced = {c.rule_id for c in placement.checks}
+        assert traced <= allowed, (placement.species.code, traced - allowed)
 
 
 def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
@@ -196,6 +228,49 @@ def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     assert not re.search(r";\d+\.\d{2}(;|$)", schedule, re.MULTILINE), "площади с запятой"
 
 
+def test_explanation_is_written_once_per_decision(run: dict[str, object]) -> None:
+    """Текст объяснения - один раз на посадку, отказ или газон, а не в каждой строке её
+    проверок: на Кустанайской повтор давал 62 из 76 МБ CSV. Фильтр по номеру показывает его."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    artifacts = run["artifacts"]
+    text = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    rows = list(csv.DictReader(io.StringIO(text), delimiter=";"))
+    explained = Counter((r["kind"], r["subject_id"]) for r in rows if r["explanation"])
+    subjects = {(r["kind"], r["subject_id"]) for r in rows}
+
+    texts = {e.subject_id for e in plan.explanations if e.text}
+    assert set(explained.values()) == {1}
+    assert all(explained[key] == 1 for key in subjects if key[1] in texts)
+
+
+def test_readable_report_names_the_governing_norm_of_every_planting(
+    run: dict[str, object],
+) -> None:
+    """Отчёт для эксперта: по каждой посадке - определяющая норма, расстояние, норма, запас и
+    пункт акта; HTML печатается в PDF; CSV - одна строка на посадку с текстом объяснения."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    artifacts = run["artifacts"]
+    md = artifacts["interpretations.md"].read_text(encoding="utf-8")  # type: ignore[index]
+    section = md.split("## Посадки")[1].split("## Отказы")[0]
+    rows = [line for line in section.splitlines() if line.startswith("| ") and "---" not in line]
+
+    assert "## Нормативная база" in md
+    assert "СП 42.13330.2016" in md
+    assert len(rows) - 1 == len(plan.placements)  # строка заголовка
+    assert all(line.count(" | ") == 10 for line in rows)
+    assert all("п. " in line for line in rows[1:])
+
+    page = artifacts["report.html"].read_text(encoding="utf-8")  # type: ignore[index]
+    assert "@page" in page
+    assert page.count("<tr>") >= len(plan.placements)
+
+    text = artifacts["plantings.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    table = list(csv.DictReader(io.StringIO(text), delimiter=";"))
+    assert len(table) == len(plan.placements)
+    assert all(row["explanation"] and row["governing_rule"] for row in table)
+    assert all(row["place"] == "место не определено" for row in table)
+
+
 def test_zones_and_integrity(run: dict[str, object]) -> None:
     report = run["report"]  # type: ignore[assignment]
     assert report.integrity.ok  # type: ignore[attr-defined]
@@ -214,6 +289,50 @@ def test_zones_and_integrity(run: dict[str, object]) -> None:
             for p in report.plan.placements  # type: ignore[attr-defined]
         )
     assert run["artifacts"]["zones.geojson"].exists()  # type: ignore[index]
+
+
+def test_lawns_cover_free_soil_and_reach_the_dxf(run: dict[str, object]) -> None:
+    """П. 3 ТЗ, травянистые покрытия: газон - грунт в границе работ, который посадки оставили
+    свободным, на своём слое GREEN_LAWN; исходник цел, выгрузка совпадает с планом."""
+    report = run["report"]
+    plan = report.plan  # type: ignore[attr-defined]
+    soil = report.surface.soil_area  # type: ignore[attr-defined]
+    assert plan.lawns
+    assert soil is not None
+    for lawn in plan.lawns:
+        assert lawn.kind.value == "kept"  # весь грунт улицы - контур слоя «Леса и газоны»
+        assert box(0, 0, 120, 60).covers(lawn.geometry)
+        assert lawn.geometry.difference(soil).area < 1e-6
+        for p in plan.placements:
+            params = run["report"].params  # type: ignore[attr-defined]
+            pit = params.planting_radius_m if p.species.is_tree else params.shrub_planting_radius_m
+            assert lawn.geometry.distance(Point(p.x, p.y)) >= pit - 1e-6
+    texts = {e.subject_id: e for e in plan.explanations}
+    for lawn in plan.lawns:
+        assert texts[lawn.lawn_id].kind == "lawn"
+        assert "R-LAWN-KEPT-001" in texts[lawn.lawn_id].text
+    summary = report.summary()  # type: ignore[attr-defined]
+    assert summary["lawn_m2"] == pytest.approx(sum(g.area_m2 for g in plan.lawns), abs=0.1)
+    assert summary["lawn_kept_m2"] == summary["lawn_m2"]
+
+    doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
+    assert "GREEN_LAWN" in doc.layers
+    hatches = doc.modelspace().query("HATCH[layer=='GREEN_LAWN']")
+    assert len(hatches) == len(plan.lawns)
+    assert {h.get_xdata("LCT_GREEN")[0].value for h in hatches} == {g.lawn_id for g in plan.lawns}
+    assert {h.dxf.pattern_name for h in hatches} == {"GRASS"}
+    assert report.integrity.ok  # type: ignore[attr-defined]
+    exported = report.export_validation  # type: ignore[attr-defined]
+    assert exported.ok
+    assert exported.expected_lawns == exported.found_lawns == len(plan.lawns)
+
+    artifacts = run["artifacts"]
+    payload = orjson.loads(artifacts["plan.json"].read_bytes())  # type: ignore[index]
+    assert [g["id"] for g in payload["lawns"]] == [g.lawn_id for g in plan.lawns]
+    assert payload["lawns"][0]["geometry"]["type"] == "Polygon"
+    assert payload["lawns"][0]["planting_type"] == "lawn"
+    rows = artifacts["interpretations.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    assert any(line.startswith("lawn;") for line in rows.splitlines())
 
 
 def test_every_assigned_species_gets_its_own_block_in_the_result(run: dict[str, object]) -> None:
@@ -241,12 +360,30 @@ def test_unfinished_material_contours_produce_no_confirmed_planting(tmp_path: Pa
     source = tmp_path / "open-materials.dxf"
     _street(source, material_areas=False)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
-    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    # Строгий режим тиммейта: грунт только в замкнутой подтверждённой грани.
+    params = container.profiles.load(
+        "strict", {"placement_solver": "greedy", "surface_inference_mode": "closed_faces"}
+    )
     report = container.use_case.execute(
         PlanRequest("open", source, tmp_path / "out", "strict", params)
     )
     assert not report.plan.placements
     assert any("замкнут" in warning for warning in report.warnings)
+
+
+def test_hybrid_default_plants_by_labels_of_unfinished_contours(tmp_path: Path) -> None:
+    """Вопрос 3 пользователя: незамкнутый газон с подписью - грунт по близости подписи,
+    и отчёт об этом говорит; план не пуст."""
+    source = tmp_path / "open-materials.dxf"
+    _street(source, material_areas=False)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    report = container.use_case.execute(
+        PlanRequest("open", source, tmp_path / "out", "strict", params)
+    )
+    assert report.plan.placements
+    assert any("по близости подписи" in warning for warning in report.warnings)
+    assert report.summary()["surface_inference_review_required"] is False
 
 
 def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> None:
@@ -262,3 +399,16 @@ def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> 
     assert report.plan.placements
     assert report.summary()["surface_inference_review_required"] is True
     assert any("Исследовательский режим покрытий" in warning for warning in report.warnings)
+
+
+def test_moved_weak_places_keep_every_norm(run: dict[str, object]) -> None:
+    """Сдвиг слабого места (application/refine) не имеет права купить запас нарушением."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    moved = [p for p in plan.placements if any(n.startswith("сдвинута сервисом") for n in p.notes)]
+    for placement in moved:
+        assert placement.verdict.value != "forbidden"
+        assert all(c.outcome.value != "fail" for c in placement.checks)
+    assert plan.quality is not None
+    assert plan.quality.index is not None
+    if moved:
+        assert any(w.startswith("Сдвиг от сетей:") for w in plan.warnings)

@@ -7,7 +7,8 @@ from green.domain.planting import Species
 
 
 def test_spacing_conflict_tries_the_next_offset() -> None:
-    selector = _Selector(Species("test", "Тест", "Test test", 3), PlanParams())
+    # Шаг задан явно: механизм запасного отступа не зависит от шага по умолчанию (5 м).
+    selector = _Selector(Species("test", "Тест", "Test test", 3), PlanParams(spacing_m=6.0))
     index = ConstraintIndex([], [], require_utility_data=False)
     _offer(
         index,

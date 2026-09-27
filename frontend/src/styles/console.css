@@ -1,0 +1,390 @@
+/* --- страница запуска: лист чертежа, а не лендинг --- */
+
+.launch {
+  padding: clamp(16px, 2.2vw, 24px) var(--inset) clamp(24px, 3vw, 40px);
+}
+
+/* Лист: волосяная рамка без скругления и тени, графы разделены той же линией. Карточки
+   с тенью были языком любого SaaS; сервис выдаёт чертёж, и консоль говорит его языком. */
+.sheet {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--hair-2);
+}
+.sheet-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+}
+.sheet-cell {
+  padding: clamp(18px, 2.2vw, 26px);
+  min-width: 0;
+}
+.sheet-cell + .sheet-cell {
+  border-left: 1px solid var(--hair-2);
+}
+
+/* Штамп: название сервиса слева, графы свода справа - подпись мелко, значение крупно. */
+.stamp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-bottom: 1px solid var(--hair-2);
+}
+.stamp-title {
+  padding: 16px clamp(18px, 2.2vw, 26px);
+  min-width: 0;
+}
+.stamp-title h1 {
+  margin: 0 0 4px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.stamp-title p {
+  max-width: 60ch;
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
+}
+
+/* Подписи разделов строчными, как подписи полей: разрядка капсом - язык любого шаблона,
+   а на листе чертежа графы подписаны обычным шрифтом. */
+.section-label {
+  margin: 0 0 16px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--bone-2);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.start-title {
+  margin: 0 0 7px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.start-form > .start-title {
+  margin-bottom: 18px;
+}
+
+/* Встроенный участок стоит на месте каталога улиц: тот же вес строки, что у поля выбора. */
+.sample-title {
+  margin: 0 0 4px;
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+
+/* Два источника прогона в одной форме: улица из каталога или свой чертёж. */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+}
+
+.form-error {
+  margin: 0 0 12px;
+  font-size: var(--fs-small);
+  color: var(--bad);
+}
+.form-error:empty {
+  margin: 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, auto) minmax(0, 190px);
+  height: 100%;
+  margin: 0;
+}
+.facts div {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 12px 18px;
+  border-left: 1px solid var(--hair-2);
+}
+.facts dt {
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+  white-space: nowrap;
+}
+.facts dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+/* Перечень актов - не число: моноширинный и крупный делают его тяжелее самих значений. */
+.facts dd.acts {
+  font-family: var(--sans);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  color: var(--bone-2);
+}
+
+/* --- реестр прогонов --- */
+
+.registry {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.registry th {
+  text-align: left;
+  padding: 0 10px 7px 0;
+  border-bottom: 1px solid var(--hair);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--bone-3);
+}
+.registry td {
+  padding: 9px 10px 9px 0;
+  border-bottom: 1px solid var(--hair);
+  vertical-align: baseline;
+}
+.registry td:last-child,
+.registry th:last-child {
+  padding-right: 0;
+}
+.registry .num {
+  text-align: right;
+}
+.registry .nowrap {
+  white-space: nowrap;
+}
+/* Ширина 100% с max-width: 0 - стандартный приём для колонки-резинки в таблице:
+   без него длинное имя чертежа переносится и ломает ритм строк. */
+.registry .name {
+  width: 100%;
+  max-width: 0;
+}
+.registry .name a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.registry td.mono {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+  font-variant-numeric: tabular-nums;
+}
+.registry a {
+  font-weight: 500;
+  text-decoration: none;
+}
+.registry a:hover {
+  text-decoration: underline;
+}
+.registry tr:hover td {
+  background: var(--panel-2);
+}
+
+/* Состояние - отдельная узкая колонка с квадратом: приписанное к имени файла, оно
+   переносилось на вторую строку и выглядело случайным. */
+.registry td.state {
+  width: 16px;
+  padding-right: 0;
+  position: relative;
+}
+.registry td.state::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%);
+  background: currentColor;
+}
+/* Готовый прогон - нейтральный квадрат: цвет --ok носят кроны на карте, и в реестре он
+   читался как «посадки», а не как «готово». Цвет остаётся за тем, что требует внимания. */
+.state-succeeded {
+  color: var(--bone-3);
+}
+.state-failed {
+  color: var(--bad);
+}
+.state-running,
+.state-queued {
+  color: var(--warn);
+}
+
+.empty {
+  padding: 18px 0;
+  color: var(--bone-3);
+  font-size: var(--fs-small);
+}
+.empty p {
+  margin: 0 0 6px;
+}
+
+/* --- база моделей растений (/models) --- */
+.models-back {
+  margin: 0;
+  padding: 16px clamp(18px, 2.2vw, 26px);
+  font-size: var(--fs-small);
+  align-self: center;
+}
+.models-body {
+  display: grid;
+  gap: 28px;
+  padding: clamp(18px, 2.2vw, 26px);
+}
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.models-grid li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.models-grid li > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--fs-small);
+  line-height: 1.35;
+}
+.models-grid b {
+  font-weight: 600;
+  color: var(--bone);
+}
+.models-grid i {
+  color: var(--bone-2);
+}
+.models-grid span {
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+
+/* --- уточнение объектов чертежа (/runs/:id/review) --- */
+.review-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+}
+/* Поля слева прокручиваются сами: карта справа остаётся на месте, пока человек идёт по
+   группам сверху вниз. */
+.review-controls {
+  padding: clamp(18px, 2.2vw, 26px);
+  border-right: 1px solid var(--hair-2);
+  max-height: calc(100dvh - 190px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-2) transparent;
+}
+.review-controls > .hint:first-child {
+  margin-top: 0;
+}
+.review-status {
+  margin: 14px 0 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+  background: var(--panel-2);
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--bone);
+}
+.review-detail {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--fs-micro) / 1.5 var(--mono);
+  color: var(--bone-2);
+}
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 20px;
+}
+.review-controls textarea {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.review-map {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: clamp(14px, 1.8vw, 20px);
+}
+.review-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.review-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 520px;
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-control);
+  touch-action: none;
+}
+.review-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.review-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  border: 1px dashed var(--hair-2);
+  border-radius: var(--r-control);
+}
+/* Уточнять нечего: строка и дорога назад в поле листа, без формы (жюри, итерация 7). */
+.review-none {
+  padding: clamp(18px, 2.2vw, 26px);
+}
+.review-none p {
+  max-width: 60ch;
+  margin: 0;
+}
+.review-none .hint {
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .review-body {
+    grid-template-columns: 1fr;
+  }
+  .review-controls {
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--hair-2);
+  }
+  .review-canvas {
+    min-height: 60vh;
+  }
+}

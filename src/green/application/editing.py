@@ -28,9 +28,12 @@ from green.application.assortment.reassessment import NOT_ON_SOIL, reassess_plac
 from green.application.assortment.summary import refresh_summaries
 from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
+from green.application.effect import street_effect
 from green.application.errors import InputError
 from green.application.explain import explain
+from green.application.lawns import plan_lawns
 from green.application.params import active_distance_rules, species_distance_rules
+from green.application.places import place_map, with_places
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
 from green.application.validation import validate_plan
@@ -42,6 +45,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.params import PlanParams
+    from green.application.ports import InventoryCounts, RunContextStore
     from green.application.quality import Site
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -96,6 +100,8 @@ class RunContext:
     # Отчёт исходного прогона: нужен, чтобы пересобрать результат по исправленному плану,
     # не перечитывая чертёж. Ссылку на сам контекст из него уже убрали.
     report: RunReport | None = None
+    # Перечётка прогона: «было» баланса после правки то же, что при прогоне.
+    inventory: InventoryCounts | None = None
     # Карта покрытий не зависит от вида и строится долго, поэтому считается один раз.
     _surface: SurfaceMap | None = field(default=None, repr=False)
     _surface_built: bool = field(default=False, repr=False)
@@ -110,8 +116,21 @@ class RunContext:
 
     def site(self) -> Site:
         if self._site is None:
-            self._site = site_of(self.features)
+            self._site = site_of(
+                self.features, self.surface_map(), crown_m=self.params.existing_crown_m
+            )
         return self._site
+
+    def surface_map(self) -> SurfaceMap | None:
+        """Карта покрытий прогона - та же, что у размещения; строится не больше одного раза.
+
+        Её же берёт проверка правленого плана: иначе каждая правка строила бы карту заново
+        (на улице пилота - десятки секунд на одно перетаскивание)."""
+        if not self.params.require_soil:
+            return None
+        if not self._surface_built:
+            return self._surface_map(self.index_for(None))
+        return self._surface
 
     def index_for(
         self, species: Species | None, kind: PlantingType | None = None
@@ -165,23 +184,39 @@ class RunContext:
 
 
 class RunContextCache:
-    """Контексты последних прогонов. Размер маленький намеренно: сцена генплана весит сотни МБ."""
+    """Контексты последних прогонов. Размер маленький намеренно: сцена генплана весит сотни МБ.
 
-    def __init__(self, size: int = 1) -> None:
+    С хранилищем контекст прогона после записи результата лежит и на диске, и прогон,
+    вытесненный из памяти или сделанный до перезапуска сервиса, поднимается оттуда при первой
+    правке: иначе жюри, поднявшее сервис заново, не могло бы править ни один прогон.
+    """
+
+    def __init__(self, size: int = 1, store: RunContextStore | None = None) -> None:
         self._size = max(size, 1)
         self._items: OrderedDict[str, RunContext] = OrderedDict()
+        self._store = store
 
     def put(self, context: RunContext) -> None:
-        self._items[context.run_id] = context
-        self._items.move_to_end(context.run_id)
-        while len(self._items) > self._size:
-            self._items.popitem(last=False)
+        """Запомнить контекст; с хранилищем - и сохранить: прогон закончен или пересобран."""
+        self._remember(context)
+        if self._store is not None:
+            self._store.save(context)
 
     def get(self, run_id: str) -> RunContext | None:
         context = self._items.get(run_id)
         if context is not None:
             self._items.move_to_end(run_id)
+            return context
+        context = self._store.load(run_id) if self._store is not None else None
+        if context is not None:
+            self._remember(context)
         return context
+
+    def _remember(self, context: RunContext) -> None:
+        self._items[context.run_id] = context
+        self._items.move_to_end(context.run_id)
+        while len(self._items) > self._size:
+            self._items.popitem(last=False)
 
     def drop(self, run_id: str) -> None:
         self._items.pop(run_id, None)
@@ -253,10 +288,21 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
 
     plan = _rebuild_plan(context, [p for p in current if p is not None], catalog)
     plan = refresh_summaries(plan, context.params, catalog)
+    # Посадочные места сдвинулись: газон считается заново по той же карте покрытий прогона.
+    plan = plan_lawns(
+        plan,
+        features=context.features,
+        labels=context.labels,
+        surface=context.surface_map(),
+        rulebook=context.rulebook,
+        params=context.params,
+    )
     return explain(_assess_edited(context, plan, catalog), context.rulebook)
 
 
 def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> Plan:
+    # Перенесённая и добавленная посадки - в новой точке: место и категория В.6 заново.
+    plan = with_places(plan, place_map(context.features))
     validation = validate_plan(
         plan,
         context.features,
@@ -265,10 +311,23 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
         context.params,
         catalog=catalog,
         existing=plan.assortment_summary.existing if plan.assortment_summary else None,
+        surface=context.surface_map(),
     )
     # Keep the draft editable when spacing/quotas need further changes, but do
     # not advertise a quality index or removal advice for an invalid plan.
     plan = assess(plan, context.site(), context.params)
+    # Перечётки в контексте правки нет: «было» по деревьям после правки - по чертежу.
+    plan = replace(
+        plan,
+        effect=street_effect(
+            plan,
+            context.site(),
+            context.params,
+            getattr(context, "inventory", None),
+            surface=context.surface_map(),
+            catalog=catalog,
+        ),
+    )
     if not validation.ok and plan.quality is not None:
         gate = "После правки план не прошёл проверку: " + "; ".join(
             f"{issue.code}: {issue.message}" for issue in validation.issues[:5]
@@ -374,6 +433,7 @@ def _moved(context: RunContext, placement: Placement, edit: Edit) -> Placement:
             *((BARRIER_NOTE,) if verdict.needs_barrier else ()),
             "Посадка перенесена вручную, нормы пересчитаны в новой точке.",
         ),
+        place="",  # место новой точки определяется заново (_assess_edited)
     )
 
 

@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from test_pipeline_synthetic import ROOT, _street
 
@@ -18,6 +20,7 @@ from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.infrastructure.streets import JsonStreetCatalog
 from green.interfaces.api.app import create_app
+from green.interfaces.api.intake import accept_street_run
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -113,51 +116,110 @@ def test_api_lists_streets(client: TestClient) -> None:
     assert rows[0]["files"] == 2, "комплект считается вместе с сетями"
 
 
-def test_index_offers_the_street(client: TestClient) -> None:
-    page = client.get("/").text
+def test_api_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
+    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
+    created = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street", "profile": "strict", "overrides": '{"spacing_m": 6}'},
+    )
 
-    assert "Улица пилотного проекта" in page
-    assert "07-test-street" in page
-
-
-def test_built_in_fragment_gives_way_to_the_catalog(client: TestClient) -> None:
-    """Когда улицы есть, встроенный фрагмент с первого экрана уходит.
-
-    Он нужен ровно там, где датасет не смонтирован: иначе он занимает первое место формы
-    и предлагает триста метров улицы вместо девятнадцати настоящих.
-    """
-    page = client.get("/").text
-
-    assert "Встроенный участок" not in page
-    assert "/web/demo" not in page
-    assert "Тестовая улица" in page
+    assert created.status_code == 202, created.text
+    record = client.get(f"/api/v1/runs/{created.json()['id']}").json()
+    assert record["state"] == "succeeded", record.get("error")
+    assert record["summary"]["placements"] > 0
+    assert record["source_name"] == "Тестовая улица.dxf"
+    assert record["overrides"] == {"spacing_m": 6}
 
 
-def test_unknown_street_is_refused(client: TestClient) -> None:
-    response = client.post("/web/runs", data={"street": "нет-такой-улицы"}, follow_redirects=False)
+def test_api_refuses_unknown_street(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"street": "нет-такой-улицы"})
 
     assert response.status_code == 422
     assert "нет в каталоге" in response.json()["detail"]
 
 
-def test_run_without_any_source_says_what_to_do(client: TestClient) -> None:
-    response = client.post("/web/runs", data={}, follow_redirects=False)
+def test_api_run_needs_a_source(client: TestClient) -> None:
+    response = client.post("/api/v1/runs", data={"profile": "strict"})
 
     assert response.status_code == 422
     assert "улицу" in response.json()["detail"]
 
 
-def test_street_run_goes_all_the_way_to_a_plan(client: TestClient) -> None:
-    """Главное: выбранная улица копируется в прогон и доходит до плана с посадками."""
-    created = client.post(
-        "/web/runs",
-        data={"street": "07-test-street", "profile": "strict", "spacing_m": "6"},
-        follow_redirects=False,
+def test_api_refuses_street_and_file_together(client: TestClient, work: Path) -> None:
+    """Два источника - два разных прогона: сервис не выбирает за человека, какой из них нужен."""
+    path = work / "own.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"file": ("own.dxf", path.read_bytes(), "image/vnd.dxf")},
     )
 
-    assert created.status_code == 303
-    run_id = created.headers["location"].rsplit("/", 1)[-1]
-    record = client.get(f"/api/v1/runs/{run_id}").json()
-    assert record["state"] == "succeeded", record.get("error")
-    assert record["summary"]["placements"] > 0
-    assert record["source_name"] == "Тестовая улица.dxf", "в реестре улица названа улицей"
+    assert response.status_code == 422
+    assert "одно" in response.json()["detail"]
+
+
+def test_api_street_takes_no_extra_drawings(client: TestClient, work: Path) -> None:
+    """У улицы свой комплект: чужой лист сети рядом с ним склеился бы молча."""
+    path = work / "extra.dxf"
+    _street(path)
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street"},
+        files={"extra": ("extra.dxf", path.read_bytes(), "image/vnd.dxf")},
+    )
+
+    assert response.status_code == 422
+    assert "комплект" in response.json()["detail"]
+
+
+def test_catalog_gives_archive_paths_and_absent_references(tmp_path: Path) -> None:
+    """Сборка ищет файл ссылки по пути в архиве, как AutoCAD; ссылки без файла у заказчика
+    каталог перечисляет, чтобы прогон показал пробел, а не молча его проглотил."""
+    folder = _catalog_with_street(tmp_path, extra=True)
+    catalog = json.loads((tmp_path / "catalog.json").read_text(encoding="utf-8"))
+    catalog[0]["sources"] = {
+        "main.dxf": "Исходные данные/ГП.dwg",
+        "utilities.dxf": "Исходные данные/сети/tp.dwg",
+    }
+    catalog[0]["missing_xrefs"] = [
+        {"host": "main.dxf", "block": "НО", "reference": r".\НО.dwg", "why": "нет в архиве"},
+        {"host": "gone.dxf", "block": "X", "reference": "X.dwg", "why": "нет в архиве"},
+    ]
+    (tmp_path / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False), "utf-8")
+
+    street = JsonStreetCatalog(tmp_path).get("07-test-street")
+
+    assert street is not None
+    assert street.main == folder / "main.dxf"
+    assert street.sources == ("Исходные данные/ГП.dwg", "Исходные данные/сети/tp.dwg")
+    assert street.absent_references == (("Исходные данные/ГП.dwg", r".\НО.dwg"),)
+
+
+def test_street_units_from_the_catalog_reach_the_run(tmp_path: Path) -> None:
+    """Песчаный: заголовок генплана говорит «миллиметры», геометрия метровая. Каталог знает
+    ответ, и прогон улицы получает drawing_unit из него, если человек не задал единицы сам."""
+    _catalog_with_street(tmp_path)
+    catalog = json.loads((tmp_path / "catalog.json").read_text(encoding="utf-8"))
+    catalog[0]["drawing_unit"] = "m"
+    (tmp_path / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False), "utf-8")
+    street = JsonStreetCatalog(tmp_path).get("07-test-street")
+    assert street is not None
+    assert street.drawing_unit == "m"
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+
+    # Приём прогона асинхронный (перечётная ведомость читается из запроса), фон не запускается.
+    record = asyncio.run(
+        accept_street_run(container=container, background=BackgroundTasks(), street=street)
+    )
+    own = asyncio.run(
+        accept_street_run(
+            container=container,
+            background=BackgroundTasks(),
+            street=street,
+            overrides='{"drawing_unit": "mm"}',
+        )
+    )
+
+    assert record.overrides["drawing_unit"] == "m"
+    assert own.overrides["drawing_unit"] == "mm"

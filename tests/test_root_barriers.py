@@ -15,11 +15,21 @@ from shapely.geometry import LineString, Polygon
 
 from green.application.assortment.context import SiteContext
 from green.application.assortment.filters import species_verdict
-from green.application.barriers import barrier_distance
+from green.application.barriers import barrier_distance, barrier_option, mark_barrier_options
 from green.application.constraints import ConstraintIndex
+from green.application.explain import describe_barrier
 from green.application.params import PlanParams, active_distance_rules
+from green.domain.norms import PlantingType
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.domain.planting import CheckOutcome, LifeForm, Species, Verdict
+from green.domain.planting import (
+    CheckOutcome,
+    LifeForm,
+    Plan,
+    Rejection,
+    RuleCheck,
+    Species,
+    Verdict,
+)
 from green.infrastructure.config.repositories import YamlProfileSource, YamlRuleBookSource
 
 CONFIG = Path(__file__).resolve().parents[1] / "config"
@@ -121,4 +131,45 @@ def test_barriers_profile_is_shipped() -> None:
     params = YamlProfileSource(CONFIG / "profiles").load("barriers")
     assert params.root_barriers
     assert min(params.curb_offsets_m) == 1.0
-    assert params.curb_offsets_m[0] == 2.0  # сначала табличные отступы
+    assert min(params.curb_offsets_m[:3]) == 2.0  # сначала табличные отступы
+
+
+def _rejection(*checks: tuple[str, float, CheckOutcome]) -> Rejection:
+    return Rejection(
+        rejection_id="r-1",
+        number=1,
+        planting_type=PlantingType.TREE,
+        x=0.0,
+        y=0.0,
+        verdict=Verdict.FORBIDDEN,
+        blocking=tuple(
+            RuleCheck(rule_id, outcome, threshold_m=2.0, measured_m=measured)
+            for rule_id, measured, outcome in checks
+        ),
+    )
+
+
+def test_a_place_closed_only_by_a_cable_is_offered_with_a_barrier() -> None:
+    """Прим. 5 к табл. 9.1: барьер снимает норму до сетей и бордюров, но не ближе 0,5 м."""
+    place = _rejection(("R-POWER-TREE-001", 1.2, CheckOutcome.FAIL))
+    assert barrier_option(place, RULEBOOK) == 1.2
+    assert "высотой до 20 м" in describe_barrier(replace(place, barrier_m=1.2))
+    assert "высотой до 5 м" in describe_barrier(replace(place, barrier_m=0.7))
+
+
+def test_a_barrier_does_not_help_near_a_manhole_or_too_close_to_a_cable() -> None:
+    manhole = _rejection(
+        ("R-POWER-TREE-001", 1.2, CheckOutcome.FAIL), ("R-ACCESS-TREE-001", 1.0, CheckOutcome.FAIL)
+    )
+    too_close = _rejection(("R-POWER-TREE-001", 0.3, CheckOutcome.FAIL))
+    assert barrier_option(manhole, RULEBOOK) is None
+    assert barrier_option(too_close, RULEBOOK) is None
+    assert barrier_option(replace(too_close, note="квоты разнообразия"), RULEBOOK) is None
+
+
+def test_barrier_places_are_not_marked_when_barriers_are_already_on() -> None:
+    plan = Plan(
+        placements=(), rejections=(_rejection(("R-CURB-TREE-001", 1.5, CheckOutcome.FAIL)),)
+    )
+    assert mark_barrier_options(plan, RULEBOOK, applied=False).stats["barrier_places"] == 1
+    assert mark_barrier_options(plan, RULEBOOK, applied=True) is plan

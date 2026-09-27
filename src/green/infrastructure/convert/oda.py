@@ -45,8 +45,11 @@ class OdaFileConverter:
         inbox, outbox = staging / "in", staging / "out"
         inbox.mkdir(parents=True, exist_ok=True)
         outbox.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, inbox / source.name)
-        command = [executable, str(inbox), str(outbox), self._version, "DXF", "0", "1", source.name]
+        # Последний аргумент ODA - маска файлов: скобки в именах Мосгеотреста
+        # («output[1-8]_3_...») она читает как класс символов и молча пропускает файл.
+        staged = inbox / f"source{source.suffix.lower()}"
+        shutil.copy2(source, staged)
+        command = [executable, str(inbox), str(outbox), self._version, "DXF", "0", "1", staged.name]
         if sys.platform.startswith("linux"):
             command = [shutil.which("xvfb-run") or "xvfb-run", "-a", *command]
         try:
@@ -61,5 +64,5 @@ class OdaFileConverter:
             )
         except subprocess.TimeoutExpired as error:
             raise ConversionError(f"ODA File Converter не уложился в {self._timeout} с") from error
-        fresh = outbox / f"{source.stem}.dxf"
+        fresh = outbox / f"{staged.stem}.dxf"
         return publish_conversion(completed, fresh, target, name=self.name)

@@ -11,12 +11,14 @@ flowchart LR
         browser["Браузер: веб-интерфейс /<br/>Swagger /docs, curl / скрипт"]
     end
     subgraph host["Сервер или ноутбук с Docker (МосТех.ОС)"]
-        subgraph image["Образ green (Ubuntu 26.04, 640-840 МБ)"]
+        subgraph image["Образ green (Ubuntu 26.04, 640-850 МБ)"]
             api["Granian ASGI :8000<br/>FastAPI /api/v1"]
+            web["React-бандл /app/web<br/>интерфейс / и Swagger UI /docs"]
             cli["green CLI<br/>run / audit / inspect / verify"]
             core["Ядро: ezdxf, Shapely, numpy, scipy<br/>config/: rules.yaml, layer_map.yaml, species.yaml, profiles/"]
-            dwg["dwg2dxf + green-acis-bridge<br/>ODA File Converter по флагу сборки"]
+            dwg["dwg2dxf (LibreDWG 0.14)<br/>ODA File Converter по флагу сборки"]
             api --> core
+            api --> web
             cli --> core
             core --> dwg
         end
@@ -39,12 +41,8 @@ flowchart LR
 | ОС | Linux x86-64 с Docker Engine 24+ и плагином `docker compose` (МосТех.ОС, Ubuntu 22.04+). Проверено: Ubuntu 26.04 в образе, Docker Desktop на Windows 11 как хост |
 | RAM | 16 ГБ. Замер 18.09.2026: генплан Берзарина (99 МБ DXF, 207 тыс. сущностей) - 1,9 ГБ пиковой памяти процесса (PeakWorkingSet); комплект на 309 тыс. сущностей по числу сущностей даёт около 3 ГБ. `GREEN_MAX_PARALLEL_RUNS` по умолчанию 2 |
 | CPU | 4+ ядра; сборка LibreDWG из исходников использует все ядра (`make -j`) |
-| Диск | Не менее 3 ГБ для работы образа и томов; кэш сборки Rust требует дополнительного места, свежий замер не проведён. Результаты: копия исходного DXF на каждый прогон (Берзарина 90 МБ) |
+| Диск | Образ около 0,9 ГБ; том прогонов ограничен `GREEN_RUNS_MAX_GB` (8 ГБ в `compose.yaml`). Прогон хранит копию входа, `result.dxf`, план, интерпретации и контекст правки: Кустанайская около 0,3 ГБ, самые тяжёлые улицы - единицы ГБ |
 | Сеть | только на сборку образа (пакеты Ubuntu, uv, исходники LibreDWG 0.14 с GitHub, ODA по флагу) |
-
-Локальный замер гибридной конвертации DWG с 5628 REGION: 12,96 с, пиковая RSS
-Python 540 МБ и наибольшего дочернего процесса 341 МБ (отдельные пики). Это
-macOS, не контроль общего пика полного проекта на целевом Linux.
 
 ## Пошаговый запуск в Docker
 
@@ -73,8 +71,11 @@ macOS, не контроль общего пика полного проекта
    ```
 
    Веб-интерфейс: `http://localhost:8000/` - загрузка чертежа, карта плана, объяснения по пунктам
-   НПА, правка посадок. Внешних запросов не делает, интернет на стенде не нужен.
-   Swagger: `http://localhost:8000/docs`. Схема без запущенного сервера: `docs/openapi.json`.
+   НПА, правка посадок. Это React-приложение (`frontend/`): его собирает стадия `node:24-slim`
+   того же Dockerfile, в рабочем образе node нет, только статический бандл в `/app/web`.
+   Внешних запросов не делает, интернет на стенде не нужен.
+   Swagger: `http://localhost:8000/docs`, статика Swagger UI тоже из бандла (без CDN). Схема без
+   запущенного сервера: `docs/openapi.json`.
 
    Опциональная сборка с ODA File Converter (лицензия ODA; сравнительная полнота конвертации в этой ветке не установлена): `docker compose build --build-arg WITH_ODA=true`.
 
@@ -101,31 +102,36 @@ macOS, не контроль общего пика полного проекта
    docker compose run --rm api green verify "/dataset/улица.dxf" /out/street/result.dxf
    ```
 
-   DWG на входе конвертируется внутри контейнера. При доступном `green-acis-bridge`
-   конвертер переносит из DWG секцию AcDs с геометрией REGION в DXF LibreDWG и
-   проверяет хеши исходного файла, DXF и каждого SAB. Конвертированный DXF и
-   `*.acis.json` остаются рядом с результатом. Если мост не сможет обработать
-   конкретный DWG, режим `auto` перейдёт к следующему конвертеру; непрочитанная
-   пространственная геометрия по-прежнему остановит строгий расчёт.
+   DWG на входе конвертируется внутри контейнера (`dwg2dxf`), конвертированный DXF остаётся рядом с результатом.
 
 6. Открыть `out/street/result.dxf` в nanoCAD или QCAD: исходные слои на месте, результат на слоях `GREEN_*` (деревья `GREEN_TREES`, кустарники `GREEN_SHRUBS`, отказы `GREEN_REJECT`, зоны `GREEN_ZONE_*`, подписи `GREEN_LABELS`). У каждой посадки атрибуты `NUM`, `SPECIES`, `NPA` и XDATA `LCT_GREEN` с id решения и списком правил; полный текст объяснения по номеру - в `interpretations.csv`.
+
+## Проверка образа 27.09.2026
+
+Образ собран с нуля (`docker compose build --no-cache`, 860 МБ), сервис поднят `docker compose up -d`:
+
+| Проверка | Итог |
+|---|---|
+| Интерфейс `/`, Swagger `/docs`, каталог улиц `/api/v1/streets` | 200, 19 улиц из `streets_oda` |
+| Кустанайская из каталога через API | 309 с; 861 посадка (838 допустимы, 23 на согласовании), 425 отказов, целостность исходника и сверка экспорта - да; тот же план, что на Windows. Прогон на диске - 208 МБ, из них контекст правки 46 МБ |
+| Правка после `docker restart` | проверка точки отвечает за 2,6 с вместе с подъёмом контекста с диска |
+| `docker restart` посреди прогона | прогон читается как прерванный: «Прогон прерван: процесс сервиса остановился до конца расчёта» |
+| DWG генплана Берзарина через API | конвертация LibreDWG в образе - 52 с; чтение останавливает расчёт: у 8932 объектов REGION нет геометрии (LibreDWG теряет данные ACIS), в ошибке слои и способ исправления. Вход по ТЗ - DXF; DWG с REGION сначала конвертировать ODA File Converter 27.1 и подавать DXF |
 
 ## Запуск без Docker
 
 ```bash
 uv sync                                   # Python 3.14 и зависимости из uv.lock
 uv run green run улица.dxf --profile strict
+(cd frontend && npm ci && npm run build)  # веб-интерфейс в frontend/dist, нужен Node 24
 uv run green serve --port 8000
 ```
 
-Для DWG нужен `dwg2dxf` (LibreDWG 0.14) в `PATH` или путь в
-`GREEN_LIBREDWG_BINARY`. Для восстановления REGION из AcDs дополнительно соберите
-локальный мост командой
-`cargo build --locked --release --manifest-path tools/acis_bridge/Cargo.toml`
-и задайте `GREEN_ACIS_BRIDGE_BINARY` как абсолютный
-путь к `tools/acis_bridge/target/release/green-acis-bridge`. Docker собирает и
-включает оба инструмента автоматически. Runtime не требует Rust, GPU, API или
-сети. Если мост не установлен, `auto` использует прежние конвертеры.
+Без собранного интерфейса `/` отвечает 503 с этой командой, API и Swagger работают.
+Разработка интерфейса: `green serve --port 8010` и `npm run dev` в `frontend/` (Vite проксирует
+`/api` на 8010).
+
+Для DWG нужен `dwg2dxf` (LibreDWG 0.14) в `PATH` или путь в `GREEN_LIBREDWG_BINARY`; без него принимаются только DXF.
 
 ## Переменные окружения
 
@@ -135,9 +141,13 @@ uv run green serve --port 8000
 |---|---|---|
 | `GREEN_CONFIG_DIR` | `config` (`/app/config` в образе) | нормы, классификатор слоёв, каталог видов, профили |
 | `GREEN_RUNS_DIR` | `var/runs` (`/data/runs` в образе) | прогоны API: вход, артефакты, статусы |
+| `GREEN_RUNS_MAX_GB` | `20` (`8` в `compose.yaml`) | предел объёма прогонов: перед новым прогоном самые старые законченные удаляются, пока каталог больше предела; идущий прогон не удаляется; `0` - без предела |
+| `GREEN_STREETS_DIR` | `dataset/streets_oda` (`/dataset/streets_oda` в `compose.yaml`) | каталог улиц пилота (`tools/prepare_streets.py`, ODA) |
+| `GREEN_EDIT_CONTEXTS_SAVED` | `true` | контекст правки сохраняется в каталоге прогона: правка на карте переживает перезапуск сервиса |
+| `GREEN_WEB_DIR` | `frontend/dist` (`/app/web` в образе) | собранный веб-интерфейс и Swagger UI |
 | `GREEN_DEFAULT_PROFILE` | `strict` | профиль, если запрос его не задал |
-| `GREEN_CONVERTER` | `auto` | `auto`, `hybrid`, `libredwg`, `oda`, `none` |
-| `GREEN_LIBREDWG_BINARY`, `GREEN_ACIS_BRIDGE_BINARY`, `GREEN_ODA_BINARY` | `dwg2dxf`, `green-acis-bridge`, `ODAFileConverter` | пути к конвертерам |
+| `GREEN_CONVERTER` | `auto` | `auto`, `libredwg`, `oda`, `none` |
+| `GREEN_LIBREDWG_BINARY`, `GREEN_ODA_BINARY` | `dwg2dxf`, `ODAFileConverter` | пути к конвертерам |
 | `GREEN_CONVERTER_TIMEOUT_S` | `600` | предел на конвертацию одного DWG |
 | `GREEN_TEXT_FONT` | `DejaVuSans.ttf` | шрифт стиля `GREEN_TEXT` (кириллица в подписях) |
 | `GREEN_CORS_ORIGINS` | пусто | JSON-список источников для браузерного клиента |

@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from green import __version__
 from green.bootstrap.container import Container, build_container
 from green.infrastructure.logs import configure_logging
 from green.interfaces.api.errors import install_error_handlers
 from green.interfaces.api.routers import edits, runs, system
-from green.interfaces.web import router as web_router
-
-WEB_STATIC = Path(__file__).resolve().parent.parent / "web" / "static"
+from green.interfaces.web import mount_spa
 
 API_PREFIX = "/api/v1"
 TAGS = [
@@ -42,8 +37,10 @@ def create_app(container: Container | None = None) -> FastAPI:
         ),
         openapi_tags=TAGS,
         openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        # /docs отдаёт mount_spa: Swagger берёт статику из сборки интерфейса, а не с CDN.
+        # ReDoc убран - он грузит скрипт из интернета, а ТЗ требует только Swagger.
+        docs_url=None,
+        redoc_url=None,
     )
     app.state.container = container
     # Подоснова на настоящем чертеже - 12,9 МБ JSON, который жмётся до 1,3 МБ. Без сжатия
@@ -61,8 +58,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(system.router, prefix=API_PREFIX)
     app.include_router(runs.router, prefix=API_PREFIX)
     app.include_router(edits.router, prefix=API_PREFIX)
-    app.mount("/static", StaticFiles(directory=str(WEB_STATIC)), name="static")
-    # Веб-роутер подключается последним: он держит корень "/", и его маршруты не должны
-    # перехватывать ничего из /api/v1.
-    app.include_router(web_router)
+    # Интерфейс подключается последним: он держит всё, что не /api, и не должен
+    # перехватывать маршруты API.
+    mount_spa(app, settings.web_dir)
     return app

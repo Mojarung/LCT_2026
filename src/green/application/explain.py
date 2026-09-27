@@ -5,13 +5,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from green.domain.norms import DistanceRule
+from green.application.barriers import FAR_M, LOW_CROWN_M, NEAR_M, barrier_height_limit
+from green.domain.norms import DistanceRule, LawnKind
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
     from green.domain.norms import AnyRule, RuleBook
-    from green.domain.planting import Placement, Reason, Rejection, RuleCheck
+    from green.domain.planting import Lawn, Placement, Reason, Rejection, RuleCheck
     from green.domain.quality import PlantingValue
 
 OBJECT_LABELS: dict[ObjectClass, str] = {
@@ -39,6 +40,10 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.SLOPE: "откоса",
     ObjectClass.EXISTING_TREE: "существующего дерева",
     ObjectClass.EXISTING_SHRUB: "существующего кустарника",
+    ObjectClass.EXISTING_WOODLAND: "существующего древесного массива",
+    ObjectClass.OBSTACLE: "наземного препятствия",
+    ObjectClass.ZONE_POWER: "охранной зоны воздушной линии",
+    ObjectClass.ZONE_GAS: "охранной зоны газопровода",
 }
 
 _FACTOR_LABELS = {
@@ -49,6 +54,7 @@ _FACTOR_LABELS = {
     "care": "простота ухода",
     "pilot": "применение в пилоте",
     "category": "рекомендация МГСН для категории",
+    "shade": "тень взрослой кроны",
 }
 
 _STRUCTURE_LABELS = {
@@ -64,11 +70,17 @@ VERDICT_LABELS: dict[Verdict, str] = {
     Verdict.UNKNOWN: "решение невозможно: нет данных",
 }
 
+LAWN_LABELS: dict[LawnKind, str] = {
+    LawnKind.KEPT: "сохраняемый или восстанавливаемый",
+    LawnKind.NEW: "устраиваемый",
+}
+
 
 def explain(plan: Plan, rulebook: RuleBook) -> Plan:
     values = plan.quality.values if plan.quality is not None else {}
     explanations = [_placement(p, rulebook, values.get(p.placement_id)) for p in plan.placements]
     explanations += [_rejection(r, rulebook) for r in plan.rejections]
+    explanations += [_lawn(lawn, rulebook) for lawn in plan.lawns]
     return replace(plan, explanations=tuple(explanations))
 
 
@@ -99,13 +111,14 @@ def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
         )
     if check.measured_m is None:
         return f"{target} в чертеже нет ({cite(check, rulebook)})"
-    sign = ">=" if check.outcome is CheckOutcome.PASS else "<"
+    sign = "≥" if check.outcome is CheckOutcome.PASS else "<"
     barrier = ", допустимо с прикорневым барьером" if check.outcome is CheckOutcome.BARRIER else ""
     measure = ""
     if isinstance(rule, DistanceRule) and rule.measure_to.value == "outer_wall":
         measure = " до наружной стенки"
+    norm = f" {sign} {_metres(check.threshold_m)} м" if check.threshold_m is not None else ""
     return (
-        f"до {target}{measure} {check.measured_m:.2f} м {sign} {check.threshold_m:.2f} м"
+        f"до {target}{measure} {_metres(check.measured_m)} м{norm}"
         f"{barrier} ({cite(check, rulebook)})"
     )
 
@@ -144,13 +157,28 @@ def describe_value(value: PlantingValue | None) -> str:
     if value is None:
         return ""
     why = f": {'; '.join(value.reasons)}" if value.reasons else ""
+    weak = f" Слабее всего: {'; '.join(value.weak)}." if value.weak else ""
     if abs(value.delta * 1000) < PERMILLE_ZERO:
-        return f" Ценность: вклад в индекс качества около нуля{why}."
+        return (
+            " Ценность: вклад в индекс качества около нуля - цели участка по её показателям уже "
+            f"выполнены{why}.{weak}"
+        )
+    if value.flagged:
+        # Не «без неё план лучше»: посадка даёт зелень, но тянет вниз средний запас или
+        # пригодность. Это слабое место, которое чинится сдвигом или заменой вида.
+        gives = f" Что даёт: {'; '.join(value.reasons)}." if value.reasons else ""
+        what = "; ".join(value.weak) or "ниже среднего по плану"
+        # Отрицательный вклад - ещё не разрешение убрать посадку: оговорка проверки квот.
+        scope = f" {value.scope}" if value.delta < 0 and value.scope else ""
+        return f" Слабое место ({permille(value.delta)} к индексу качества): {what}.{gives}{scope}"
     if value.delta < 0:
         higher = permille(-value.delta)[1:]
-        return f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. {value.scope}"
+        return (
+            f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. {value.scope}"
+            f"{weak}"
+        )
     rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
-    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}."
+    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}.{weak}"
 
 
 def describe_assortment(placement: Placement) -> str:
@@ -209,4 +237,43 @@ def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
         + "; ".join(parts)
         + "."
     )
+    text += describe_barrier(rejection)
     return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
+
+
+def _lawn(lawn: Lawn, rulebook: RuleBook) -> Explanation:
+    """Газон: вид, площадь, что вырезано и основания - только правила участка из свода."""
+    grounds = []
+    for rule_id in lawn.rule_ids:
+        rule = rulebook.rule(rule_id)
+        grounds.append(
+            f"{rule_id}: {citation_text(rule, rulebook)}"
+            if rule is not None
+            else f"{rule_id} (правило отсутствует в базе)"
+        )
+    how = "".join(f"; {note}" for note in lawn.notes)
+    area = f"{lawn.area_m2:,.1f}".replace(",", " ").replace(".", ",")
+    text = (
+        f"Газон №{lawn.number}: {LAWN_LABELS[lawn.kind]}, {area} м²{how}. "
+        f"Основания: {'; '.join(grounds)}."
+    )
+    return Explanation(lawn.lawn_id, lawn.number, "lawn", text)
+
+
+def describe_barrier(rejection: Rejection) -> str:
+    """Место, которое спас бы прикорневой барьер: при каком условии и для каких деревьев."""
+    if rejection.barrier_m is None:
+        return ""
+    height = barrier_height_limit(rejection.barrier_m)
+    allowed = NEAR_M if height <= LOW_CROWN_M else FAR_M
+    return (
+        f" С прикорневым барьером место допустимо для деревьев высотой до {height:.0f} м "
+        f"(СП 42.13330.2016, табл. 9.1, прим. 5): до сети или бордюра "
+        f"{_metres(rejection.barrier_m)} м, с барьером можно от {_metres(allowed)} м. "
+        "Условие не выполнено: барьер в этом прогоне не заложен, включается параметром "
+        "root_barriers."
+    )
+
+
+def _metres(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")

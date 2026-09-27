@@ -4,6 +4,10 @@ Geometry alone cannot distinguish a small millimetre drawing from a large metre
 drawing. Pilot files with incorrect headers need an explicit override. Unitless
 input requires one too. Blocks retain their explicit INSERT scale; their unit
 metadata must not cause a second, implicit conversion (ezdxf units documentation).
+
+A header that the geometry clearly contradicts is not guessed around either: it stops
+the run and names the numbers, so the override is always explicit (Peschanyy: a
+millimetre template header over a metre survey, the street would shrink a thousandfold).
 """
 
 from __future__ import annotations
@@ -78,6 +82,9 @@ class Spread:
     # решала бы за чертёж), а для вопроса «лежат ли два файла в одном месте» нужна она:
     # рамка между процентилями у улицы из штрихов борта вырождается в линию.
     bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    # Сколько точек привязки измерено: о споре единиц с геометрией судят только по чертежу,
+    # где есть что мерить (у подосновы их тысячи; одной надписи заголовок верен).
+    anchors: int = 0
 
     @property
     def width(self) -> float:
@@ -116,8 +123,42 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
         raise InputError(f"Неизвестные единицы {header}; задайте drawing_unit явно") from exc
     if not np.isfinite(factor) or factor <= 0:
         raise InputError(f"Некорректные единицы {header}; задайте drawing_unit явно")
+    conflict = _geometry_conflict(doc, factor)
+    if conflict is not None:
+        raise InputError(
+            f"Единицы чертежа спорят с геометрией: {header}, но {conflict}. Задайте единицы "
+            "явно: drawing_unit=m, если координаты в метрах, или drawing_unit=mm, если заголовок "
+            "верен."
+        )
     note = f"Единицы: приняты объявленные {header}; 1 единица = {factor:g} м."
     return UnitDecision(factor, () if code == _METRES else (note + _RESCALED_TAIL,))
+
+
+# Заголовок верен, пока геометрия ему явно не противоречит (решение 23.09.2026: исправление
+# заголовка - только явным drawing_unit). Явное противоречие - два признака сразу, как в
+# docs/notes/19: участок короче 10 м по заголовку при тексте метровой высоты (в метровом
+# чертеже текст 0,5-5 единиц, в миллиметровом 1:500 - от 250), или участок больше 100 км.
+_MIN_SITE_M = 10.0
+_MAX_SITE_M = 100_000.0
+_METRE_TEXT_UNITS = 20.0
+
+
+def _geometry_conflict(doc: Drawing, factor: float) -> str | None:
+    """Чем геометрия противоречит объявленным единицам; None - не противоречит."""
+    spread = measure(doc)
+    if spread is None or spread.anchors < _MIN_ANCHORS:
+        return None
+    size = max(spread.width, spread.height)
+    text = spread.text_height
+    extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
+    if factor < 1 and size * factor < _MIN_SITE_M and text is not None and text < _METRE_TEXT_UNITS:
+        return (
+            f"геометрия метровая: {extent} (по заголовку {size * factor:.2f} м, меньше "
+            f"{_MIN_SITE_M:g} м), высота текста {text:g} единиц"
+        )
+    if factor >= 1 and size * factor > _MAX_SITE_M and (text is None or text >= _METRE_TEXT_UNITS):
+        return f"геометрия не метровая: {extent} (по заголовку {size * factor / 1000:.0f} км)"
+    return None
 
 
 _RESCALED_TAIL = (
@@ -232,6 +273,7 @@ class _Collector:
                 float(points[:, 0].max()),
                 float(points[:, 1].max()),
             ),
+            anchors=len(points),
         )
 
 

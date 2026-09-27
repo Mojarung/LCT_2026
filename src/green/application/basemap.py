@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import shapely
 from shapely.errors import GEOSException
 
+from green.application.surfaces import Material, label_material
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 
     from shapely.geometry.base import BaseGeometry
 
-    from green.domain.objects import Feature
+    from green.domain.objects import Feature, TextLabel
 
 # Классы, которым на карте нечего делать: «ignore» отсеян классификатором намеренно,
 # «unknown» - это подписи, штриховки и условные знаки, не несущие нормативного смысла.
@@ -58,6 +59,16 @@ class BasemapFeature:
 
 
 @dataclass(frozen=True, slots=True)
+class MaterialLabel:
+    """Подпись материала покрытия с чертежа: «А», «ГАЗОН», «ДЕТ.ПЛ.»."""
+
+    x: float
+    y: float
+    text: str
+    material: str  # paved | soil
+
+
+@dataclass(frozen=True, slots=True)
 class Basemap:
     """Подоснова для карты вместе с балансом отбора.
 
@@ -74,10 +85,25 @@ class Basemap:
     # мелочи. Оба зависят от веса чертежа, поэтому едут вместе с данными, а не в коде.
     tolerance_m: float = DEFAULT_TOLERANCE_M
     min_span_m: float = 0.0
+    # Подписи, по которым сервис решил, где грунт, а где покрытие. Без них на карте не видно,
+    # что прямоугольник - это детская площадка со спецпокрытием, а не газон.
+    labels: tuple[MaterialLabel, ...] = ()
+
+
+def material_labels(labels: Sequence[TextLabel]) -> tuple[MaterialLabel, ...]:
+    """Подписи, которые карта покрытий прочитала как материал."""
+    found = []
+    for label in labels:
+        material = label_material(label.text)
+        if material is not None:
+            kind = "paved" if material is Material.PAVED else "soil"
+            found.append(MaterialLabel(label.x, label.y, label.text.strip(), kind))
+    return tuple(found)
 
 
 def build_basemap(
     features: Sequence[Feature],
+    labels: Sequence[TextLabel] = (),
     *,
     tolerance_m: float = DEFAULT_TOLERANCE_M,
     precision_m: float = DEFAULT_PRECISION_M,
@@ -129,6 +155,7 @@ def build_basemap(
         bbox=_bbox(kept),
         tolerance_m=round(tolerance_m, 3),
         min_span_m=round(min_span_m, 3),
+        labels=material_labels(labels),
     )
 
 

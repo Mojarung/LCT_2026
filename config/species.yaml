@@ -77,8 +77,7 @@ species:
      categories: {parks: plus, squares: plus, streets: limited, yards: plus, special: plus},
      sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Береза повислая»",
                hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
-               allergen: "пыльца берёзы - основной весенний аллерген средней полосы; массовая
-                 аллергия при цветении, запрет по 743-ПП п. 3.6.18"}}
+               allergen: "справочник: пыльца берёзы - основной весенний аллерген средней полосы"}}
 
   - {code: quercus_robur, name_ru: Дуб черешчатый, name_lat: Quercus robur, genus: quercus,
      family: Fagaceae, life_form: tree_large, height_m: 30, crown_diameter_m: 5.0,

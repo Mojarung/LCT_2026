@@ -228,7 +228,7 @@ class AuditSite:
                 )
                 source, notes = merged.path, merged.notes
         with watch.stage("load_config"):
-            rulebook = self._rules.load()
+            rulebook = self._rules.load().for_sp42_edition(params.sp42_edition)
             layer_map = self._layers.load()
             typer = _PlantingTyper(request, self._species.all())
         with watch.stage("read"):

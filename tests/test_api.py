@@ -121,6 +121,22 @@ def test_run_succeeds_and_lists_artifacts(finished: dict[str, object]) -> None:
     } <= names
 
 
+def test_readable_report_opens_in_the_browser(
+    client: TestClient, finished: dict[str, object]
+) -> None:
+    """Отчёт интерпретаций открывается вкладкой и печатается в PDF, а не скачивается файлом."""
+    run_id = finished["id"]
+    names = {a["name"] for a in finished["artifacts"]}  # type: ignore[union-attr]
+    assert {"interpretations.md", "report.html", "plantings.csv"} <= names
+
+    page = client.get(f"{API_PREFIX}/runs/{run_id}/artifacts/report.html")
+
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/html")
+    assert page.headers["content-disposition"] == "inline"
+    assert "<table>" in page.text
+
+
 def test_artifacts_download_and_match_the_summary(
     client: TestClient, finished: dict[str, object], work: Path
 ) -> None:
@@ -162,7 +178,7 @@ def test_kit_of_two_drawings_is_merged(client: TestClient, work: Path) -> None:
     assert response.status_code == 202, response.text
     run = client.get(response.headers["Location"]).json()
     assert run["state"] == "succeeded", run
-    assert any("Склейка комплекта" in w for w in run["summary"]["warnings"])
+    assert any("Склейка комплекта" in w for w in run["summary"]["load_notes"])
 
 
 @pytest.mark.parametrize(
@@ -196,9 +212,13 @@ def test_framework_errors_use_the_same_format(client: TestClient) -> None:
     assert refused.headers["allow"]  # заголовок фреймворка доезжает до клиента
 
 
-def test_request_without_a_file_is_a_validation_problem(client: TestClient) -> None:
+def test_request_without_a_source_is_a_problem(client: TestClient) -> None:
+    """Файл больше не обязателен сам по себе: источником может быть улица из каталога.
+
+    Без обоих - всё та же 422 в формате RFC 9457, но с тем, что сделать, а не со схемой полей.
+    """
     body = _assert_problem(client.post(f"{API_PREFIX}/runs", data={"profile": "strict"}), 422)
-    assert body["errors"]
+    assert "свой чертёж" in body["detail"]
 
 
 def test_extra_file_that_is_not_a_drawing_is_refused(client: TestClient, street: bytes) -> None:
@@ -250,3 +270,36 @@ def test_unknown_runs_and_artifacts_are_not_found(
 ) -> None:
     response = client.get(f"{API_PREFIX}{path.format(run=finished['id'])}")
     _assert_problem(response, 404)
+
+
+def test_artifacts_carry_their_size(finished: dict[str, object]) -> None:
+    """Размер файла нужен списку «Файлы результата»: DXF на сотню мегабайт качают осознанно."""
+    artifacts = finished["artifacts"]
+    assert isinstance(artifacts, list)
+    sizes = {a["name"]: a["size_bytes"] for a in artifacts}
+
+    assert sizes["result.dxf"] > 0
+    assert sizes["plan.json"] > 0
+
+
+def test_profile_parameters_for_the_form(client: TestClient) -> None:
+    """Форма показывает значения выбранного профиля и шлёт только то, что человек изменил."""
+    strict = client.get(f"{API_PREFIX}/profiles/strict").json()
+    shrubs = client.get(f"{API_PREFIX}/profiles/shrubs").json()
+    barriers = client.get(f"{API_PREFIX}/profiles/barriers").json()
+
+    assert strict["name"] == "strict"
+    assert strict["spacing_m"] == 5.0
+    assert "fill" in strict["modes"]
+    assert shrubs["planting_type"] == "shrub"
+    assert "fill" not in shrubs["modes"]
+    assert barriers["root_barriers"] is True
+    assert strict["root_barriers"] is False
+    assert strict["shrub_fill"] is True, "группы кустарника на газоне тоже выключаются формой"
+
+
+def test_unknown_profile_is_not_found(client: TestClient) -> None:
+    """404 от самого маршрута, а не от фреймворка: в ответе названы доступные профили."""
+    body = _assert_problem(client.get(f"{API_PREFIX}/profiles/no_such_profile"), 404)
+    assert "no_such_profile" in str(body["detail"])
+    assert "strict" in str(body["detail"])

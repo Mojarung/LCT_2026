@@ -47,7 +47,8 @@ def test_ascii_line_endings_and_chunk_boundaries(
     newline: bytes,
 ) -> None:
     source = tmp_path / "newlines.dxf"
-    source.write_bytes(_dxf(source).replace(b"\n", newline))
+    # ezdxf пишет переводы строк ОС: на Windows это уже CRLF. Сначала к LF, потом к варианту теста.
+    source.write_bytes(_dxf(source).replace(b"\r\n", b"\n").replace(b"\n", newline))
     monkeypatch.setattr("green.infrastructure.cad.structure._CHUNK", 32)
     require_complete_container(source)
     doc, _ = load_document(source)

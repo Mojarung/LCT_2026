@@ -9,19 +9,10 @@ import ezdxf
 import numpy as np
 import pytest
 import shapely
-from ezdxf.entities.boundary_paths import PolylinePath
-from ezdxf.math import Matrix44
 from shapely.geometry import Point, Polygon, box
 
-from green.application.approximation import inner_area
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
-from green.infrastructure.cad.hatch_geometry import (
-    HatchGeometryError,
-    _valid_transformed_area,
-    hatch_geometry,
-    linear_hatch_from_local_source,
-)
 from green.infrastructure.cad.reader import EzdxfSceneReader
 
 if TYPE_CHECKING:
@@ -66,7 +57,6 @@ def test_hatch_curves_have_native_distance_bound(
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     feature = scene.features[0]
-    assert feature.geometry_error_m is not None
     assert 0 < feature.geometry_error_m <= 0.100001
     native = [
         hatch.ocs().to_wcs((radius * math.cos(a), radius * ratio * math.sin(a), 7))
@@ -110,115 +100,6 @@ def test_multiple_external_areas_are_kept_for_each_hatch_style(tmp_path: Path, s
     assert scene.features[0].geometry.equals(box(0, 0, 10, 10).union(box(20, 0, 30, 10)))
 
 
-@pytest.mark.parametrize("offset", [(10, 0), (10, 10)])
-def test_adjacent_hatch_rings_share_only_a_boundary(tmp_path: Path, offset: tuple) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    hatch.dxf.hatch_style = 1
-    rectangle(hatch, (0, 0, 10, 10))
-    rectangle(hatch, (offset[0], offset[1], offset[0] + 10, offset[1] + 10))
-    scene = read(doc, tmp_path)
-    require_complete_geometry(scene)
-    expected = box(0, 0, 10, 10).union(box(offset[0], offset[1], offset[0] + 10, offset[1] + 10))
-    assert scene.features[0].geometry.equals(expected)
-    assert scene.features[0].geometry.area == pytest.approx(200)
-
-
-def test_nested_ring_touching_outer_boundary_is_rejected(tmp_path: Path) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    rectangle(hatch, (0, 0, 10, 10))
-    rectangle(hatch, (0, 4, 4, 6), flags=16)
-    scene = read(doc, tmp_path)
-    require_complete_geometry(scene)
-    assert scene.features[0].uncertain_footprint
-    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
-
-
-def test_adjacent_rings_with_floating_point_overlap_are_unioned(tmp_path: Path) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    rectangle(hatch, (0, 0, 10, 10))
-    rectangle(hatch, (math.nextafter(10, 0), 0, 20, 10))
-    scene = read(doc, tmp_path)
-    require_complete_geometry(scene)
-    assert scene.features[0].geometry.hausdorff_distance(box(0, 0, 20, 10)) < 1e-12
-    assert scene.features[0].geometry.area == pytest.approx(200)
-
-
-def test_local_straight_hatch_repairs_only_transform_roundoff() -> None:
-    doc = ezdxf.new()
-    source = doc.modelspace().add_hatch()
-    rectangle(source, (0, 0, 1, 1))
-    rectangle(source, (1, 0, 2, 1))
-    matrix = Matrix44.translate(18_000, 15_000, 0)
-
-    def virtual_with_overlap(overlap: float) -> Hatch:
-        virtual = source.copy()
-        virtual.transform(matrix)
-        path = virtual.paths.paths[1]
-        assert isinstance(path, PolylinePath)
-        path.vertices = [
-            (x - overlap if abs(x - 18_001) < 1e-6 else x, y, bulge)
-            for x, y, bulge in path.vertices
-        ]
-        return virtual
-
-    rounded = virtual_with_overlap(1e-10)
-    with pytest.raises(HatchGeometryError, match="hatch-intersecting-boundaries"):
-        hatch_geometry(rounded, 0.1, max_closure=0.002)
-    restored = linear_hatch_from_local_source(rounded, matrix, 0.1, max_closure=0.002)
-    assert restored is not None
-    assert restored[0].area == pytest.approx(2)
-    assert restored[1] < 1e-9
-
-    changed = virtual_with_overlap(1e-10)
-    changed_path = changed.paths.paths[1]
-    assert isinstance(changed_path, PolylinePath)
-    changed_path.vertices = [
-        (x + 1e-4 if abs(x - 18_002) < 1e-6 else x, y, bulge)
-        for x, y, bulge in changed_path.vertices
-    ]
-    assert linear_hatch_from_local_source(changed, matrix, 0.1, max_closure=0.002) is None
-
-
-@pytest.mark.parametrize(("seam", "accepted"), [(1e-16, True), (1e-5, False)])
-def test_local_hatch_source_seam_must_be_within_machine_roundoff(
-    seam: float, *, accepted: bool
-) -> None:
-    doc = ezdxf.new()
-    source = doc.modelspace().add_hatch()
-    source.paths.add_polyline_path([(0, 0), (1, 0), (1, 1), (0, 1), (0, seam)], is_closed=False)
-    rectangle(source, (1, 0, 2, 1))
-    matrix = Matrix44.translate(18_000, 15_000, 0)
-    virtual = source.copy()
-    virtual.transform(matrix)
-    path = virtual.paths.paths[1]
-    assert isinstance(path, PolylinePath)
-    path.vertices = [
-        (x - 1e-10 if abs(x - 18_001) < 1e-6 else x, y, bulge) for x, y, bulge in path.vertices
-    ]
-    with pytest.raises(HatchGeometryError, match="hatch-intersecting-boundaries"):
-        hatch_geometry(virtual, 0.1, max_closure=0.002)
-    restored = linear_hatch_from_local_source(virtual, matrix, 0.1, max_closure=0.002)
-    assert (restored is not None) == accepted
-    if restored is not None:
-        assert restored[0].area == pytest.approx(2)
-        assert restored[1] < 1e-9
-
-
-def test_zero_area_transform_artifact_does_not_change_filled_area() -> None:
-    with_dangling_line = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0), (1, 1), (0, 0)])
-    repaired = _valid_transformed_area(with_dangling_line, 1e-9)
-    assert repaired is not None
-    assert repaired.equals(box(0, 0, 2, 2))
-    bow_tie = Polygon([(0, 0), (1, 1), (0, 1), (1, 0)])
-    assert _valid_transformed_area(bow_tie, 1e-9) is None
-
-
 @pytest.mark.parametrize(
     ("style", "expected"),
     [
@@ -244,10 +125,18 @@ def test_nested_islands_respect_style_and_ignore_vertex_winding(
     assert [area.covers(Point(i, 10)) for i in (1, 3, 5, 7)] == expected
 
 
-@pytest.mark.parametrize("kind", ["edge_gap", "open_polyline", "crossing_loops"])
-def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
-    tmp_path: Path, kind: str
+@pytest.mark.parametrize(
+    ("kind", "expected", "gap"),
+    [
+        ("edge_gap", box(0, 0, 10, 10), 2.0),
+        ("open_polyline", Polygon([(0, 0), (10, 0), (10, 10)]), math.hypot(10, 10)),
+    ],
+)
+def test_open_boundary_is_closed_by_a_chord_with_the_gap_as_its_error(
+    tmp_path: Path, kind: str, expected: Polygon, gap: float
 ) -> None:
+    """Разрыв контура замыкается хордой, как заливку замыкает CAD; неизвестный кусок контура не
+    молчит: длина разрыва уходит в погрешность, исход штриховки помечен починкой."""
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
@@ -257,45 +146,40 @@ def test_ambiguous_boundaries_cannot_silently_become_plantable_area(
         path.add_line((10, 2), (10, 10))
         path.add_line((10, 10), (0, 10))
         path.add_line((0, 10), (0, 0))
-    elif kind == "open_polyline":
-        hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10)], is_closed=False)
     else:
-        rectangle(hatch, (0, 0, 10, 10))
-        rectangle(hatch, (5, 5, 15, 15))
-    scene = read(doc, tmp_path)
-    require_complete_geometry(scene)
-    assert scene.features[0].uncertain_footprint
-    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
-
-
-def test_tiny_selfcross_lobe_is_retained_with_clearance_error(tmp_path: Path) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path(
-        [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (0.01, 0.01), (-0.01, 0.01)]
-    )
+        hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10)], is_closed=False)
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     feature = scene.features[0]
-    assert feature.geometry.geom_type == "MultiPolygon"
-    assert feature.geometry_error_m is not None
-    assert feature.geometry_error_m == pytest.approx(math.sqrt(2) * 0.01)
-    assert not inner_area(feature).intersects(box(-0.01, 0, 0, 0.01))
+    assert feature.geometry.symmetric_difference(expected).area == pytest.approx(0.0, abs=1e-9)
+    assert feature.geometry_error_m >= gap - 1e-9
+    assert scene.read_diagnostics.outcomes["feature:hatch-gap-closed"] == 1
 
 
-@pytest.mark.parametrize("lobe", [0.03, 0.5])
-def test_larger_selfcross_lobe_remains_unknown(tmp_path: Path, lobe: float) -> None:
+@pytest.mark.parametrize("kind", ["crossing_loops", "bowtie"])
+def test_crossing_boundaries_are_filled_even_odd_as_cad_draws_them(
+    tmp_path: Path, kind: str
+) -> None:
+    """Пересекающиеся контуры и восьмёрка заливаются по правилу чёт-нечет: точно, без
+    погрешности, и исход штриховки помечен (решение пользователя 25.09.2026)."""
     doc = ezdxf.new()
     doc.units = 6
     hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path(
-        [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (lobe, lobe), (-lobe, lobe)]
-    )
+    if kind == "crossing_loops":
+        rectangle(hatch, (0, 0, 10, 10))
+        rectangle(hatch, (5, 5, 15, 15))
+        expected = box(0, 0, 10, 10).symmetric_difference(box(5, 5, 15, 15))
+    else:
+        hatch.paths.add_polyline_path([(0, 0), (10, 10), (10, 0), (0, 10)], is_closed=True)
+        expected = Polygon([(0, 0), (5, 5), (0, 10)]).union(Polygon([(10, 0), (5, 5), (10, 10)]))
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
-    assert scene.features[0].uncertain_footprint
-    assert scene.features[0].geometry.covers(box(-lobe, 0, 1, 1))
+    feature = scene.features[0]
+    assert feature.geometry.is_valid
+    assert feature.geometry.symmetric_difference(expected).area == pytest.approx(0.0, abs=1e-9)
+    assert feature.geometry_error_m == 0
+    assert not feature.geometry.covers(Point(7.5, 7.5)) or kind == "bowtie"
+    assert scene.read_diagnostics.outcomes["feature:hatch-even-odd"] == 1
 
 
 def test_open_flag_with_explicitly_closed_vertices_is_accepted(tmp_path: Path) -> None:
@@ -306,32 +190,6 @@ def test_open_flag_with_explicitly_closed_vertices_is_accepted(tmp_path: Path) -
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     assert scene.features[0].geometry.area == 50
-
-
-def test_millimetre_seam_is_closed_with_reported_error(tmp_path: Path) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.001)], is_closed=False)
-    scene = read(doc, tmp_path)
-    require_complete_geometry(scene)
-    feature = scene.features[0]
-    assert feature.geometry.area == pytest.approx(100)
-    assert feature.geometry_error_m is not None
-    assert feature.geometry_error_m >= 0.001
-
-
-def test_large_curve_tolerance_does_not_close_centimetre_seam(tmp_path: Path) -> None:
-    doc = ezdxf.new()
-    doc.units = 6
-    hatch = doc.modelspace().add_hatch()
-    hatch.paths.add_polyline_path([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0.01)], is_closed=False)
-    source = tmp_path / "open.dxf"
-    doc.saveas(source)
-    scene = EzdxfSceneReader(flatten_distance_m=10).read(source)
-    require_complete_geometry(scene)
-    assert scene.features[0].uncertain_footprint
-    assert scene.features[0].geometry.covers(box(0, 0, 10, 10))
 
 
 @pytest.mark.parametrize("start", [11.1, 40.1, -45.1, 355.9])
@@ -385,3 +243,35 @@ def test_basic_mpolygon_keeps_its_hole(tmp_path: Path) -> None:
     scene = read(doc, tmp_path)
     require_complete_geometry(scene)
     assert scene.features[0].geometry.area == 64
+
+
+def test_three_crossing_loops_count_every_crossing(tmp_path: Path) -> None:
+    """Точка в трёх контурах сразу залита (нечётно), в двух - нет (чётно)."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    for bounds in [(0, 0, 10, 10), (5, 0, 15, 10), (2.5, 5, 12.5, 15)]:
+        rectangle(hatch, bounds)
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    area = scene.features[0].geometry
+    assert area.covers(Point(7, 7))
+    assert not area.covers(Point(7, 2))
+    assert not area.covers(Point(3.5, 7))
+    assert area.covers(Point(1, 1))
+
+
+def test_zero_area_hatch_is_read_as_the_outline_cad_draws(tmp_path: Path) -> None:
+    """Две совпадающие петли гасят заливку по чёт-нечет (шаблонная штриховка Измайловской,
+    127 м чернил): CAD рисует только контур - контур и читается, пробела нет."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    rectangle(hatch, (0, 0, 10, 10))
+    rectangle(hatch, (0, 0, 10, 10))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.geom_type in {"LineString", "MultiLineString"}
+    assert feature.geometry.length == pytest.approx(40.0)
+    assert scene.read_diagnostics.outcomes["feature:hatch-even-odd+hatch-outline"] == 1

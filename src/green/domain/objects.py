@@ -42,9 +42,25 @@ class ObjectClass(StrEnum):
     WORK_BOUNDARY = "work_boundary"
     EXISTING_TREE = "existing_tree"
     EXISTING_SHRUB = "existing_shrub"
+    # Лесной массив или древесно-кустарниковая группа сплошной областью (знаки LISTVL, SM):
+    # не газон и не место для новой посадки.
+    EXISTING_WOODLAND = "existing_woodland"
+    # Наземное препятствие в точке, не сеть и не опора: афишная тумба, шлагбаум, колонка.
+    OBSTACLE = "obstacle"
+    # Охранные зоны из слоёв ГИС (GeoJSON, SHP): полигон зоны, а не линия сети. Посадка, яма
+    # которой заходит в зону, требует согласования (ПП РФ N 160, п. 10; N 878, п. 16).
+    ZONE_POWER = "zone.power_line"
+    ZONE_GAS = "zone.gas"
+    # Вид территории из слоя функционального зонирования (ГИС): где улица, где двор, где сквер.
+    # Отступа не дают; задают место посадки и категорию по МГСН 1.02-02, табл. В.6.
+    TERRITORY_STREET = "territory.street"
+    TERRITORY_YARD = "territory.yard"
+    TERRITORY_SQUARE = "territory.square"
+    TERRITORY_PARK = "territory.park"
     LAWN = "lawn"
-    DRAWING_MASK = "drawing_mask"
-    UNCERTAIN_AREA = "uncertain_area"
+    # Линия или контур без известного смысла на незнакомом чертеже (задача 14): разделяет
+    # покрытия, как граница, но отступа не даёт - материал внутри решают подписи.
+    CONTOUR = "contour"
     IGNORE = "ignore"
     UNKNOWN = "unknown"
 
@@ -57,6 +73,12 @@ class ObjectClass(StrEnum):
         """«Инженерные сети и бордюры улиц и дорог»: к ним прим. 5 табл. 9.1 разрешает посадку
         дерева ближе нормы при прикорневом барьере. Колодцы, здания, опоры и тротуары - нет."""
         return self.is_utility or self in {ObjectClass.CURB, ObjectClass.ROAD}
+
+    @property
+    def occupies_interior(self) -> bool:
+        """Замкнутый контур занимает площадь внутри: в середине фонтана или памятника посадки нет,
+        хотя до линии контура оттуда дальше нормы."""
+        return self in {ObjectClass.OBSTACLE, ObjectClass.ZONE_POWER, ObjectClass.ZONE_GAS}
 
     @property
     def is_hard_surface(self) -> bool:
@@ -83,6 +105,7 @@ class ObjectClass(StrEnum):
             ObjectClass.TRAM,
             ObjectClass.RAILWAY,
             ObjectClass.WORK_BOUNDARY,
+            ObjectClass.CONTOUR,
         }
 
 
@@ -113,17 +136,6 @@ class ClassificationEvidence:
 
 
 @dataclass(frozen=True, slots=True)
-class InsertInstance:
-    """One transformed INSERT occurrence, including a distinct MINSERT cell."""
-
-    ref: SourceRef
-    block: str
-    x: float
-    y: float
-    declared_layer: str
-
-
-@dataclass(frozen=True, slots=True)
 class Feature:
     """Геометрический объект подосновы с исходным слоем и присвоенным классом."""
 
@@ -144,14 +156,11 @@ class Feature:
     # Distinguish closed linework from explicit fills after semantic mapping.
     # None carries no evidence that a polygon is just a boundary.
     source_entity_type: str | None = None
-    # Geometry encloses unreadable CAD content; it is a forbidden unknown region,
-    # never positive material evidence from the feature's layer or block.
-    uncertain_footprint: bool = False
-    # Raw primitives keep the full instance path. A logical symbol retains the
-    # source refs of all collapsed primitives for CAD review and provenance.
-    insert_chain: tuple[InsertInstance, ...] = ()
-    symbol_parts: tuple[SourceRef, ...] = ()
-    symbol_layers: tuple[str, ...] = ()
+    # Area in which an open HATCH boundary does not prove its material. The CAD
+    # fill geometry is retained separately for rendering and source fidelity.
+    uncertainty_footprint: BaseGeometry | None = None
+    # Штрих условного знака: строка ref экземпляра SymbolInstance, которому принадлежит.
+    symbol: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +177,28 @@ class TextLabel:
     surface_role: str = "auto"
     surface_evidence: ClassificationEvidence | None = None
     block_chain: tuple[str, ...] = ()
+    # Подпись внутри условного знака: строка ref его экземпляра.
+    symbol: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolInstance:
+    """Вставка условного знака: один объект подосновы в точке вставки (дерево, куст, люк).
+
+    Примитивы знака остаются в сцене штрихами (Feature.symbol, TextLabel.symbol) со ссылкой
+    на экземпляр. Контейнеры (обёртки MicroStation, DIMTXT, анонимные и крупные блоки) не
+    знаки: знаком становится то, что внутри них.
+    """
+
+    ref: SourceRef
+    block: str
+    layer: str
+    x: float
+    y: float
+    rotation_deg: float = 0.0
+    scale: float = 1.0
+    # Сколько примитивов знака прочитано в штрихи и подписи.
+    strokes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,7 +229,9 @@ class ReadDiagnostics:
     geometry_gaps: tuple[GeometryGap, ...] = ()
     approximation_features: int = 0
     max_approximation_error_m: float = 0.0
-    dynamic_block_metadata: int = 0
+    # Учёт чтения: у каждого посещённого примитива ровно один исход («feature», «label»,
+    # «insert:symbol», «skipped:<ТИП>:<причина>» ...), сумма равна сумме visited_by_type.
+    outcomes: Mapping[str, int] = field(default_factory=dict)
 
     @property
     def block_failures(self) -> tuple[str, ...]:
@@ -223,3 +256,4 @@ class Scene:
     warnings: tuple[str, ...] = field(default=())
     unit_m: float = 1.0
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
+    symbols: tuple[SymbolInstance, ...] = field(default=())

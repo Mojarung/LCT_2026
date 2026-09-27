@@ -17,8 +17,9 @@ import numpy as np
 import shapely
 
 from green.application.barriers import BARRIER_CONDITION, BARRIER_NOTE, barrier_distance
-from green.application.constraints import ConstraintIndex
-from green.application.params import active_distance_rules
+from green.application.constraints import ConstraintIndex, occupied_geometry
+from green.application.params import active_distance_rules, step_with_tolerance
+from green.application.places import category_of
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
 from green.domain.norms import MeasureTo, PlantingType, Severity
@@ -26,11 +27,12 @@ from green.domain.objects import ObjectClass
 from green.domain.planting import Verdict
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from numpy.typing import NDArray
 
     from green.application.params import PlanParams
+    from green.application.surfaces import SurfaceMap
     from green.domain.norms import DistanceRule, RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Placement, Plan, Species
@@ -73,7 +75,7 @@ class PlanValidation:
 
 class _Objects:
     def __init__(self, features: Sequence[Feature]) -> None:
-        self.tree = shapely.STRtree([f.geometry for f in features])
+        self.tree = shapely.STRtree([occupied_geometry(f) for f in features])
         self.radii = np.array([(f.diameter_m or 0.0) / 2 for f in features])
         self.errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
         if not np.isfinite(self.errors).all() or (self.errors < 0).any():
@@ -143,7 +145,14 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
     *,
     catalog: Sequence[Species] = (),
     existing: Mapping[str, int] | None = None,
+    surface: SurfaceMap | None = None,
 ) -> PlanValidation:
+    """Проверка плана заново от объектов чертежа: отступы, посадочные места, квоты.
+
+    surface - карта покрытий прогона. Она функция чертежа и параметров покрытий, построенная
+    той же build_surface_map, поэтому взять её у сценария - не довериться генератору: каждое
+    расстояние, место и квоту проверка всё равно считает сама. None - построить здесь.
+    """
     issues: list[ValidationIssue] = []
     groups = _group_placements(plan.placements, params, issues)
     by_class: dict[ObjectClass, list[Feature]] = defaultdict(list)
@@ -151,8 +160,10 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
         by_class[feature.object_class].append(feature)
     objects = {cls: _Objects(items) for cls, items in by_class.items()}
     base_index = ConstraintIndex(features, [], require_utility_data=params.require_utility_data)
-    surface = (
-        build_surface_map(
+    if not params.require_soil:
+        surface = None
+    elif surface is None:
+        surface = build_surface_map(
             features,
             labels,
             base_index.boundary,
@@ -162,9 +173,6 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             tree_distance_m=params.tree_seed_distance_m,
             inference_mode=params.surface_inference_mode,
         )
-        if params.require_soil
-        else None
-    )
     for (_, kind), placements in groups.items():
         local = replace(params, planting_type=kind)
         species = placements[0].species
@@ -194,16 +202,20 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
                     "No recognised utility data",
                 )
             )
-        norms = species_norms(species, rulebook, params.territory, params.planting_category)
-        if norms.blocking:
-            issues.append(
-                ValidationIssue(
-                    "species_rule",
-                    tuple(p.placement_id for p in placements),
-                    norms.blocking.text,
-                    norms.blocking.rule_id,
+        by_category: dict[str, list[Placement]] = {}
+        for p in placements:
+            by_category.setdefault(category_of(p.place, params.planting_category), []).append(p)
+        for category, members in by_category.items():
+            norms = species_norms(species, rulebook, params.territory, category)
+            if norms.blocking:
+                issues.append(
+                    ValidationIssue(
+                        "species_rule",
+                        tuple(p.placement_id for p in members),
+                        norms.blocking.text,
+                        norms.blocking.rule_id,
+                    )
                 )
-            )
         _check_distances(placements, points, objects, rulebook, local, issues=issues)
         issues.extend(_site_conditions(placements, points, objects, local))
     finite = [p for group in groups.values() for p in group]
@@ -345,12 +357,12 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
     )
     steps = np.array(
         [
-            (
+            step_with_tolerance(
                 params.spacing_m
                 if p.planting_type is params.planting_type
-                else params.shrub_group_spacing_m
+                else params.shrub_group_spacing_m,
+                p.planting_type,
             )
-            * 0.95
             for p in placements
         ]
     )
@@ -399,42 +411,138 @@ def composition_issues(
     species_by_code = {s.code: s for s in catalog} | {p.species.code: p.species for p in placements}
     for trees in (True, False):
         part = [p for p in placements if p.species.is_tree is trees]
-        grown = {
-            code: count
-            for code, count in existing.items()
-            if code in species_by_code
-            and species_by_code[code].is_tree is trees
-            and (trees or params.shrub_quotas_use_inventory)
-        }
-        shares = (
-            (params.quota_species, params.quota_genus, params.quota_family, params.conifer_share[1])
-            if trees
-            else (
-                params.shrub_quota_species,
-                params.shrub_quota_genus,
-                params.shrub_quota_family,
-                params.shrub_conifer_share[1],
-            )
+        grown, shares = _quota_terms(trees, params, existing, species_by_code)
+        issues.extend(
+            ValidationIssue("quota", (), f"{attribute} {key}: {count} > {limit}")
+            for attribute, key, count, limit in _quota_excess(part, grown, shares, species_by_code)
+            if _hard_quota(attribute, params)
         )
-        # A standalone shrub profile uses its primary quotas, like assignment.
-        if not trees and params.planting_type is not PlantingType.TREE:
-            shares = (
-                params.quota_species,
-                params.quota_genus,
-                params.quota_family,
-                params.conifer_share[1],
-            )
-        issues.extend(_group_quota_issues(part, grown, shares, species_by_code))
     return issues
 
 
-def _group_quota_issues(
+def _hard_quota(attribute: str, params: PlanParams) -> bool:
+    """Превышение, которое план не пропускает. При мягких квотах (quota_penalty > 0) доли вида,
+    рода и семейства - штраф в подборе и в индексе, а не нарушение: место, прошедшее нормы, не
+    пустеет (notes/34). Потолок хвойных и в мягком режиме жёсткий, как в задаче подбора."""
+    return attribute == "is_conifer" or params.quota_penalty <= 0
+
+
+def trim_to_quotas(
+    placements: Sequence[Placement],
+    params: PlanParams,
+    catalog: Sequence[Species],
+    existing: Mapping[str, int],
+    *,
+    removable: Callable[[Placement], bool],
+) -> tuple[Placement, ...]:
+    """Снять добавочные посадки, пока состав не уложится в квоты разнообразия.
+
+    Этапы, которые добирают кустарник к готовому плану (ряд у борта, подлесок, группы на
+    газоне), подбирают вид каждый в своей выборке, а квота считается по всему плану. Здесь
+    лишние снимаются с конца, только те, что removable разрешает: основу плана квоты уже
+    прошли при подборе. Расчёт квот тот же, что у проверки (composition_issues).
+    """
+    if params.assortment_mode in {"single", "given"}:
+        return tuple(placements)
+    kept = list(placements)
+    species_by_code = {s.code: s for s in catalog} | {p.species.code: p.species for p in kept}
+    for trees in (True, False):
+        grown, shares = _quota_terms(trees, params, existing, species_by_code)
+        while True:
+            part = [p for p in kept if p.species.is_tree is trees]
+            excess = [
+                item
+                for item in _quota_excess(part, grown, shares, species_by_code)
+                if _hard_quota(item[0], params)
+            ]
+            if not excess:
+                break
+            attribute, key, _, _ = excess[0]
+            victim = next(
+                (
+                    p
+                    for p in reversed(part)
+                    if removable(p) and getattr(p.species, attribute) == key
+                ),
+                None,
+            )
+            if victim is None:
+                break
+            kept.remove(victim)
+    return tuple(kept)
+
+
+def drop_spacing_conflicts(
+    placements: Sequence[Placement],
+    params: PlanParams,
+    *,
+    removable: Callable[[Placement], bool],
+) -> tuple[Placement, ...]:
+    """Снять добавочные посадки, чьи посадочные места налезают на соседей.
+
+    Правило то же, что у проверки (_spacing): ямы не перекрываются, у посадок одного типа -
+    ещё и шаг. Этапы кустарника держат его сами, но на стыке двух бортов или у соседних
+    деревьев их выборки встречаются; из пары снимается более поздняя из разрешённых.
+    """
+    issues = _spacing(placements, params)
+    if not issues:
+        return tuple(placements)
+    order = {p.placement_id: k for k, p in enumerate(placements)}
+    dropped: set[int] = set()
+    pairs = sorted(tuple(sorted(order[pid] for pid in issue.placements)) for issue in issues)
+    for first, second in sorted(pairs, key=lambda pair: pair[1]):
+        if first in dropped or second in dropped:
+            continue
+        if removable(placements[second]):
+            dropped.add(second)
+        elif removable(placements[first]):
+            dropped.add(first)
+    return tuple(p for k, p in enumerate(placements) if k not in dropped)
+
+
+def _quota_terms(
+    trees: bool,  # noqa: FBT001 - деревья или кустарники: две ветви одной формулы
+    params: PlanParams,
+    existing: Mapping[str, int],
+    species_by_code: Mapping[str, Species],
+) -> tuple[dict[str, int], tuple[float, ...]]:
+    """Уже растущие растения, входящие в квоты, и доли квот для деревьев или кустарников."""
+    grown = {
+        code: count
+        for code, count in existing.items()
+        if code in species_by_code
+        and species_by_code[code].is_tree is trees
+        and (trees or params.shrub_quotas_use_inventory)
+    }
+    shares = (
+        (params.quota_species, params.quota_genus, params.quota_family, params.conifer_share[1])
+        if trees
+        else (
+            params.shrub_quota_species,
+            params.shrub_quota_genus,
+            params.shrub_quota_family,
+            params.shrub_conifer_share[1],
+        )
+    )
+    # A standalone shrub profile uses its primary quotas, like assignment.
+    if not trees and params.planting_type is not PlantingType.TREE:
+        shares = (
+            params.quota_species,
+            params.quota_genus,
+            params.quota_family,
+            params.conifer_share[1],
+        )
+    return grown, shares
+
+
+def _quota_excess(
     part: Sequence[Placement],
     grown: Mapping[str, int],
     shares: tuple[float, ...],
     species_by_code: Mapping[str, Species],
-) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
+) -> list[tuple[str, str | bool, int, int]]:
+    """Превышения квот: признак (вид, род, семейство, хвойность), значение, число, предел."""
+    excess: list[tuple[str, str | bool, int, int]] = []
     attributes = ("code", "genus", "family", "is_conifer")
     for attribute, share in zip(attributes, shares, strict=True):
         counts = Counter(getattr(p.species, attribute) for p in part)
@@ -456,11 +564,5 @@ def _group_quota_issues(
                     )
                 )
             if count > limit:
-                issues.append(
-                    ValidationIssue(
-                        "quota",
-                        (),
-                        f"{attribute} {key}: {count} > {limit}",
-                    )
-                )
-    return issues
+                excess.append((attribute, key, count, limit))
+    return excess

@@ -74,7 +74,10 @@ def _audit(work: Path, profile: str = "strict", **options: str) -> AuditReport:
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=work / "runs"))
     # These tests explicitly exercise the legacy partial audit and its warnings.
     # The default strict path is tested separately and refuses this unknown line.
-    params = container.profiles.load(profile, {"require_known_objects": False})
+    # Вывод незнакомого (задача 14) здесь выключен: проверяется частичный режим тиммейта.
+    params = container.profiles.load(
+        profile, {"require_known_objects": False, "infer_unknown": False}
+    )
     request = AuditRequest(
         "audit", source, work / "out", profile, params, planting_layers=PATTERN, **options
     )

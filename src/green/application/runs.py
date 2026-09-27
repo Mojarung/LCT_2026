@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from green.application.classification import ClassificationError
+from green.application.constraints import forget_drawings
 from green.application.errors import GreenError
 from green.application.progress import plan_stages
 from green.application.results import RunProgress, RunRecord, RunState
@@ -99,12 +100,15 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
-    def execute(
+    def execute(  # noqa: PLR0913 - комплект прогона приходит отдельными частями
         self,
         run_id: str,
         inventory_path: Path | None = None,
         extra_sources: tuple[Path, ...] = (),
         source_names: tuple[str, ...] = (),
+        absent_references: tuple[tuple[str, str], ...] = (),
+        *,
+        gis_layers: tuple[Path, ...] = (),
     ) -> RunRecord:
         """Синхронный прогон: вызывается из пула потоков, CPU-работа не блокирует event loop."""
         record = self._store.get(run_id)
@@ -141,6 +145,8 @@ class RunService:
                         extra_sources=extra_sources,
                         source_names=source_names
                         or (record.source_name, *(str(path) for path in extra_sources)),
+                        absent_references=absent_references,
+                        gis_layers=gis_layers,
                     ),
                     reporter,
                 )
@@ -164,6 +170,9 @@ class RunService:
                 return self._transition(
                     reporter.record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )
+            finally:
+                # Индекс чертежа и память проверок нужны только внутри прогона.
+                forget_drawings()
             return self._transition(
                 reporter.record,
                 RunState.SUCCEEDED,
@@ -198,6 +207,8 @@ class RunService:
                     record, RunState.FAILED, error=f"{type(error).__name__}: {error}"
                 )
             context.report = report
+            # Сохранённый контекст - уже с правками: после перезапуска правят этот план.
+            self._contexts.put(context)
             return self._transition(
                 record,
                 RunState.SUCCEEDED,

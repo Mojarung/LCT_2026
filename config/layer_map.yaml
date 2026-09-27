@@ -9,7 +9,8 @@ version: 1
 rules:
   # Прочитанная геометрия оформления сохраняется; исключение является видимым правилом,
   # которое можно переопределить, а не безвозвратной потерей в парсере.
-  - {pattern: "^DIMTXT(?:_|$)", target: block, object_class: ignore, confirmed: true}
+  - {pattern: "^DIMTXT(?:_|$)", target: block, object_class: ignore, confirmed: true,
+     reason: "блок текста размера: текст идёт в подписи, линии - оформление размера"}
   # Блоки-символы: определяются по имени блока раньше, чем по слою.
   - {pattern: "^(люк|решетка)$|^РСО_Люк_", target: block, object_class: utility.access, confirmed: true}
   - {pattern: "опор[аы].*(освещени|контактн)|^фонарь$|^светофор$", target: block, object_class: pole, confirmed: true}
@@ -17,13 +18,14 @@ rules:
   # Оформление и служебные слои любых чертежей: размеры, выноски, рамки, штампы условных знаков,
   # разбивочные сетки. «Условные_штампы» Геотреста: до миллиона отрезков легенды.
   - {pattern: "Условн\\w*_штампы|Размер|Выноск|Рамк|Штамп|Разбивочная сетка|^Сетка$|Оформление|ОФОРМЛЕНИЕ|Вспомогат|Координат|Номера|НУМДЕНДР|Вертикалк|вертикалка|Горизонтали|Отметки|GRADES",
-     object_class: ignore, confirmed: true}
+     object_class: ignore, confirmed: true,
+     reason: "оформление листа: размеры, выноски, рамки, штампы легенды, сетки, координаты, номера, горизонтали, отметки"}
 
   # Дендрологические изыскания проектировщиков (ИП_*.dwg, слои «!!!_1. Дендра_*»): сохранить -
   # блоки существующих деревьев, вырубка - деревья под снос, остальное подписи.
-  - {pattern: "Дендра_сохранить", object_class: existing_tree, confirmed: true, priority: 10,
-     symbol_instance: true}
-  - {pattern: "Дендра_|Дендро\\w* Выноски|Дендроплан \\(существующие", object_class: ignore, confirmed: true}
+  - {pattern: "Дендра_сохранить", object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "Дендра_|Дендро\\w* Выноски|Дендроплан \\(существующие", object_class: ignore, confirmed: true,
+     reason: "подписи дендроплана и деревья под снос; сохраняемые деревья - правило «Дендра_сохранить»"}
 
   # Генпланы проектировщиков (АПОТ, слои «ДВ_ГП_*», «_АД_*», «Борт ...»): проектные борта,
   # покрытия смежных территорий штриховками, газоны, граница работ.
@@ -33,6 +35,13 @@ rules:
   - {pattern: "ДВ_ПП_Газон_[РУ]", object_class: lawn, confirmed: true, priority: 10}
   - {pattern: "ДВ_ПП_Тип\\d+_[РУ]_?ПЧ|ДВ_ПП_Тип\\d+_Р_покрытия_ПЧ", object_class: road, confirmed: true, priority: 10}
   - {pattern: "ДВ_ПП_Тип\\d+_[РУ]_?ТР|ДВ_ПП_Тип\\d+_Р ТР|ДВ_ПП_Ремонт плитки", object_class: sidewalk, confirmed: true, priority: 10}
+  # План покрытий «ДВ_ПП_ДО_*» (Харьковская): «Тип2_Ремонт_покрытия_ПЧ», «Тип4_Устройство_уширений» -
+  # проезжая часть; «Тип5_Замена_покрытия_трот», «Тип9_Устройство_трот», «Устройство_площадки» -
+  # твёрдое покрытие. Штриховки - полигоны: посадка внутри них запрещена нормой до края.
+  # Имя с упоминанием газона («на месте газона», «газон уничтож») - переход покрытия, стадию
+  # решает словарь (проектная грамматика), а в режиме проверки - человек; правило его не берёт.
+  - {pattern: "ДВ_ПП_ДО_(?!.*(?i:газон))Тип\\w*_(ПЧ|Ремонт_покрытия_ПЧ|Устройство_уширений)", object_class: road, confirmed: true, priority: 10}
+  - {pattern: "ДВ_ПП_ДО_(?!.*(?i:газон))Тип\\w*_(трот|Капремонт_трот|Устройство_площадки)", object_class: sidewalk, confirmed: true, priority: 10}
   - {pattern: "Устройство покр\\. ТЕРРАВЕЙ|покрытия детских и спортивных площадок|Восстанавливаемое плиточное|Замена а_б покрытия тротуара|конструкции тротуара",
      object_class: sidewalk, confirmed: true, note: "твёрдое покрытие дорожек и площадок"}
   # Колодцы и камеры на генпланах проектировщиков: «_ГП_В1/К1/ТС/Г колодцы_сущ.», «_ГП_СК СУЩ», дождеприёмники.
@@ -42,12 +51,13 @@ rules:
   - {pattern: "СМЕЖ_ПЧ|_ПЧ$|Проезжая часть", object_class: road, confirmed: true}
   - {pattern: "СМЕЖ_ТРОТ|Тротуар|_АБ ТР", object_class: sidewalk, confirmed: true}
   - {pattern: "Газон|ГЗН", object_class: lawn, confirmed: true}
-  - {pattern: "Границ[аы] работ", object_class: work_boundary, confirmed: true}
+  - {pattern: "Граница работ", object_class: work_boundary, confirmed: true}
   - {pattern: "Трамвайные линии", object_class: tram, confirmed: true}
   - {pattern: "Подземный переход", object_class: structure, confirmed: true}
   - {pattern: "_НО_Опора|Опора_КО|СУЩ\\.ОПОРА|нумерация опор", object_class: pole, confirmed: true}
   - {pattern: "ЭН_Труб|ЭС_Футляр|Трубы НО|_КЛ 0\\.4|ЭС_КЛ", object_class: utility.power_cable, confirmed: true}
-  - {pattern: "разметка|Разметка|_знаки|Знаки", object_class: ignore, confirmed: true}
+  - {pattern: "разметка|Разметка|_знаки|Знаки", object_class: ignore, confirmed: true,
+     reason: "разметка лежит на покрытии, ограничение даёт само покрытие; стойки, нарисованные условным знаком, решает словарь знаков раньше слоя"}
 
   # АСУ ОДХ: номер классификатора в начале имени слоя.
   - {pattern: "(?:^|[|$])13\\s*Проезжие части", object_class: road, confirmed: true}
@@ -56,9 +66,11 @@ rules:
   - {pattern: "(?:^|[|$])20\\s*Трамвайные пути", object_class: tram, confirmed: true}
   - {pattern: "(?:^|[|$])8\\s*Люки", object_class: utility.access, confirmed: true}
   - {pattern: "(?:^|[|$])(5\\s*Остановки|7\\s*Малые архитектурные|9\\s*Инженерные сооружения)", object_class: structure, confirmed: true}
-  - {pattern: "(?:^|[|$])(10\\s*Знаки)", object_class: ignore, confirmed: true}
+  - {pattern: "(?:^|[|$])(10\\s*Знаки)", object_class: ignore, confirmed: true,
+     reason: "дорожные знаки АСУ ОДХ: условные знаки решает словарь знаков раньше слоя, простые линии слоя - рисунок знаков"}
   - {pattern: "(?:^|[|$])Объекты дорожного хозяйства$", object_class: work_boundary, confirmed: true, note: "контур объекта АСУ ОДХ"}
-  - {pattern: "(?:^|[|$])(Штиховка|Подписи$)", object_class: ignore, confirmed: true}
+  - {pattern: "(?:^|[|$])(Штиховка|Подписи$)", object_class: ignore, confirmed: true,
+     reason: "штриховка покрытий АСУ ОДХ (контуры дают слои покрытий) и подписи"}
 
   # Воздушные линии раньше кабелей: «Возд линии телеграф» в топоплане не подземная сеть.
   - {pattern: "Возд\\w*\\s+лини", object_class: power_line_overhead, confirmed: true}
@@ -84,6 +96,9 @@ rules:
   - {pattern: "Полоса деревьев", geometry: circle, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: point, object_class: existing_tree, confirmed: true}
   - {pattern: "Полоса деревьев", geometry: line, object_class: lawn, confirmed: true}
+  # Залитый ствол в ряду полосы - область REGION до 0,5 м (Макеева 18, Грузинская 11, всего 98 на
+  # шести улицах); мелкие точки пунктира той же заливкой лежат в ряду между стволами.
+  - {pattern: "Полоса деревьев", geometry: area, object_class: existing_tree, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Колодцы|Люки|Решетки)$", object_class: utility.access, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Фонари|Столбы|Светофоры)$|Опоры конта", object_class: pole, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)ЛЭП$", object_class: power_line_overhead, confirmed: true}
@@ -92,24 +107,51 @@ rules:
      note: "наружная стена здания и сооружения"}
   - {pattern: "(?:^|[|$]|Топо_)(Парапеты|Лестницы набережных|Мосты)$", object_class: structure, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)(Вышки|Громоотвод)$", object_class: pole, confirmed: true}
+  # Препятствия на земле (перепись слоёв 19 улиц, 25.09.2026): посадки нет ни на них, ни
+  # внутри замкнутого контура; отступ - правила R-OBST-*.
+  - {pattern: "(?:^|[|$]|Топо_)(Крыльца|Фонтаны|Памятники|Береговая линия)$", object_class: obstacle, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Вентиляторы$", object_class: structure, confirmed: true,
+     note: "вентиляционные киоски подземных сооружений"}
   - {pattern: "(?:^|[|$]|Топо_)Выгребные ямы$", object_class: utility.sewer, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)Трубы$|Трубы под дорогами", object_class: utility.unknown, confirmed: true}
+  # Слои топоплана, которых словарь не знал (перепись слоёв 19 улиц, 25.09.2026). Смысл взят
+  # из картинок слоя и подписей рядом с его линиями по всем улицам (docs/notes/32).
+  # Контур площадки - граница покрытия, как «Граница улицы»; внутри подписи СПЕЦ.ПОКР., ГРАВИЙ,
+  # рядом ДЕТ.ПЛ., СПОРТ ПЛ. (14 улиц, 9396 объектов).
+  - {pattern: "(?:^|[|$]|Топо_)Граница площадки$", object_class: pavement_edge, confirmed: true}
+  # Предметы на земле с подписью: велопарковки, лифты, бытовки, деревянные настилы, клумбы,
+  # гаражи, летние кафе, трибуны; траншеи и навалы грунта; столбики-указатели подземных сетей
+  # (сама сеть - слоями сетей); башенные краны. Посадки нет ни на них, ни внутри контура.
+  - {pattern: "(?:^|[|$]|Топо_)(Топографические объекты|Грунты|Указатель подз коммуникаций|Подъемные краны)$",
+     object_class: obstacle, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Платформы ЖД$", object_class: structure, confirmed: true}
+  # Коллектор водостока: стенки двумя линиями и ось (Нижние Поля, Песчаный, Макеева).
+  - {pattern: "Водосточный коллектор", object_class: utility.storm, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)Территории$", object_class: ignore, confirmed: true,
+     reason: "контуры территорий: стройплощадки, склады, навалы на момент съёмки и зоны регулирования застройки - временное или правовое, а не предмет на земле; бытовки, траншеи, ограды и покрытия внутри нарисованы своими слоями"}
   - {pattern: "Железные дороги", object_class: railway, confirmed: true}
   - {pattern: "Топливопровод", object_class: utility.unknown, confirmed: true,
      note: "продуктопровод: отдельной строки нормы нет, требуется уточнение"}
-  - {pattern: "(?:^|[|$]|Топо_)(Геодезические пункты)$", object_class: ignore, confirmed: true}
+  - {pattern: "(?:^|[|$]|Топо_)(Геодезические пункты)$", object_class: ignore, confirmed: true,
+     reason: "знак пункта съёмочного обоснования; охранная зона пункта не учитывается - требует уточнения"}
   # Барьеры карты покрытий: «Граница улицы» это граница покрытий с подписями материала («А», «Ц», «ПЛ»).
-  - {pattern: "Граница улицы", object_class: pavement_edge, confirmed: true}
+  # «Граница площадки» - контур детской, спортивной, хозяйственной площадки со своим покрытием
+  # («ДЕТ.ПЛ. СПЕЦ.ПОКРЫТИЕ»). Пока слой был в ignore, грунт газона на карте покрытий затекал
+  # внутрь площадки, и на Харьковской группы кустарника встали на детскую площадку (23.09.2026).
+  - {pattern: "Граница улицы|Граница площадки", object_class: pavement_edge, confirmed: true}
   - {pattern: "(?:^|[|$]|Топо_)Ограды$", object_class: fence, confirmed: true}
   # Условный знак откоса Геотреста: бровка и штрихи до подошвы. Табл. 9.1 СП 42 меряет от
   # подошвы; сервис меряет до любого элемента знака, это строже: на теле откоса посадок нет.
   - {pattern: "Откос", object_class: slope, confirmed: true,
      note: "Откосы, Топо_Откосы, Новый_Откосы, ДВ_ГП_Откос, Укрепление откосов"}
   - {pattern: "Горизонтали|Пояснительные|Номер дома|Внутреннее заполнение",
-     object_class: ignore, confirmed: true}
+     object_class: ignore, confirmed: true,
+     reason: "рельеф горизонталями, пояснительные надписи, номера домов, заполнение контуров - оформление"}
 
   # Геотрест kl и brd.
-  - {pattern: "Красные линии", object_class: ignore, confirmed: true}
+  - {pattern: "Красные линии", object_class: ignore, confirmed: true,
+     reason: "граница планировки, а не предмет на земле"}
   # Имена 0, Layer1 и 0_геоподоснова не несут смысла: требуется уточнение.
   - {pattern: "Граница заказа", object_class: work_boundary, confirmed: true}
-  - {pattern: "Координатные кресты|(?:^|[|$])Рамки$|Подписи рамок", object_class: ignore, confirmed: true}
+  - {pattern: "Координатные кресты|(?:^|[|$])Рамки$|Подписи рамок", object_class: ignore, confirmed: true,
+     reason: "оформление листа: координатные кресты и рамки"}

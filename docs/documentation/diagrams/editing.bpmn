@@ -1,0 +1,134 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="green_editing_definitions" targetNamespace="https://github.com/Mojarung/LCT_2026">
+  <process id="green_after_run" name="После прогона: правка плана и визуализация" isExecutable="false">
+    <startEvent id="start" name="Готовый прогон: DXF, план, контекст правки" />
+    <exclusiveGateway id="g_after" name="Что дальше?" />
+    <task id="t_edit" name="Правка на карте: перенос, удаление, проверка точки теми же нормами" />
+    <task id="t_recheck" name="Независимая проверка исправленного плана" />
+    <task id="t_rewrite" name="Запись GREEN_* в копию исходника, сверка исходника и DXF" />
+    <exclusiveGateway id="g_ok" name="Проверки пройдены?" />
+    <endEvent id="e_saved" name="Исправленный DXF и интерпретации" />
+    <endEvent id="e_kept" name="Экспорт отклонён, прежний DXF сохранён" />
+    <task id="t_scene" name="3D-сцена из scene.json: здания, покрытия, посадки по видам" />
+    <task id="t_shots" name="Снимки участка в PNG: сезон, возраст посадок, погода" />
+    <endEvent id="e_scene" name="Визуализации, согласованные с планом" />
+    <sequenceFlow id="e1" sourceRef="start" targetRef="g_after" />
+    <sequenceFlow id="e2" name="правка" sourceRef="g_after" targetRef="t_edit" />
+    <sequenceFlow id="e3" sourceRef="t_edit" targetRef="t_recheck" />
+    <sequenceFlow id="e4" sourceRef="t_recheck" targetRef="t_rewrite" />
+    <sequenceFlow id="e5" sourceRef="t_rewrite" targetRef="g_ok" />
+    <sequenceFlow id="e6" name="да" sourceRef="g_ok" targetRef="e_saved" />
+    <sequenceFlow id="e7" name="нет" sourceRef="g_ok" targetRef="e_kept" />
+    <sequenceFlow id="e8" name="визуализация" sourceRef="g_after" targetRef="t_scene" />
+    <sequenceFlow id="e9" sourceRef="t_scene" targetRef="t_shots" />
+    <sequenceFlow id="e10" sourceRef="t_shots" targetRef="e_scene" />
+  </process>
+  <bpmndi:BPMNDiagram id="editing_diagram">
+    <bpmndi:BPMNPlane id="editing_plane" bpmnElement="green_after_run">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="182" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="115" y="122" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_after_di" bpmnElement="g_after" isMarkerVisible="true">
+        <dc:Bounds x="389" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="329" y="44" width="170" height="23" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_edit_di" bpmnElement="t_edit">
+        <dc:Bounds x="538" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_recheck_di" bpmnElement="t_recheck">
+        <dc:Bounds x="752" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_rewrite_di" bpmnElement="t_rewrite">
+        <dc:Bounds x="966" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_ok_di" bpmnElement="g_ok" isMarkerVisible="true">
+        <dc:Bounds x="1245" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1185" y="44" width="170" height="23" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_saved_di" bpmnElement="e_saved">
+        <dc:Bounds x="1466" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1399" y="122" width="170" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_kept_di" bpmnElement="e_kept">
+        <dc:Bounds x="1252" y="207" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1185" y="247" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_scene_di" bpmnElement="t_scene">
+        <dc:Bounds x="538" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_shots_di" bpmnElement="t_shots">
+        <dc:Bounds x="752" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_scene_di" bpmnElement="e_scene">
+        <dc:Bounds x="1038" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="971" y="432" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e1_di" bpmnElement="e1">
+        <di:waypoint x="218" y="100" />
+        <di:waypoint x="389" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e2_di" bpmnElement="e2">
+        <di:waypoint x="439" y="100" />
+        <di:waypoint x="538" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="443" y="76" width="64" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e3_di" bpmnElement="e3">
+        <di:waypoint x="718" y="100" />
+        <di:waypoint x="752" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e4_di" bpmnElement="e4">
+        <di:waypoint x="932" y="100" />
+        <di:waypoint x="966" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e5_di" bpmnElement="e5">
+        <di:waypoint x="1146" y="100" />
+        <di:waypoint x="1245" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e6_di" bpmnElement="e6">
+        <di:waypoint x="1295" y="100" />
+        <di:waypoint x="1466" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1299" y="76" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e7_di" bpmnElement="e7">
+        <di:waypoint x="1270" y="125" />
+        <di:waypoint x="1270" y="207" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1276" y="131" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e8_di" bpmnElement="e8">
+        <di:waypoint x="414" y="125" />
+        <di:waypoint x="414" y="410" />
+        <di:waypoint x="538" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="420" y="131" width="118" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e9_di" bpmnElement="e9">
+        <di:waypoint x="718" y="410" />
+        <di:waypoint x="752" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e10_di" bpmnElement="e10">
+        <di:waypoint x="932" y="410" />
+        <di:waypoint x="1038" y="410" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

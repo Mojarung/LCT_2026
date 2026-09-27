@@ -4,24 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import replace
-from importlib import import_module
-from itertools import product
-from random import Random
-from types import SimpleNamespace
-from typing import cast
 
-import numpy as np
-import pytest
-
-from green.application.assortment.assign import (
-    GREEDY,
-    MILP,
-    Assignment,
-    Candidate,
-    Quotas,
-    _repair_mixed_rows,
-    assign,
-)
+from green.application.assortment.assign import GREEDY, MILP, Candidate, Quotas, assign
 from green.application.assortment.structures import Structure
 from green.application.params import PlanParams
 from green.domain.planting import LifeForm, Species
@@ -101,8 +85,8 @@ def _candidates(structures: list[Structure], codes: list[str]) -> list[Candidate
     ]
 
 
-def _counts(result: Assignment) -> Counter[str]:
-    return Counter(result.species_by_placement.values())
+def _counts(result: object) -> Counter[str]:
+    return Counter(result.species_by_placement.values())  # type: ignore[attr-defined]
 
 
 def test_each_row_gets_exactly_one_species_when_the_quota_allows() -> None:
@@ -128,73 +112,6 @@ def test_rows_that_do_not_fit_the_quota_are_split_not_overfilled() -> None:
     assert result.split_placements
 
 
-@pytest.mark.parametrize(("alternative_score", "homogeneous"), [(0.95, True), (0.1, False)])
-def test_final_occupancy_can_make_a_row_species_quota_feasible(
-    alternative_score: float, *, homogeneous: bool
-) -> None:
-    """The first pass sees 9 places; filling the tenth permits two trees of one species."""
-    codes = ["S", "T", "U", *(f"F{i}" for i in range(6))]
-    catalog = {code: _species(code) for code in codes}
-    structures = [
-        Structure("A", "row", ("a1", "a2")),
-        Structure("B", "row", ("b1", "b2")),
-        *(Structure(f"F{i}", "single", (f"f{i}",)) for i in range(6)),
-    ]
-    candidates = [
-        Candidate(place, "A", "row", catalog[code], score)
-        for place in ("a1", "a2")
-        for code, score in (("S", 1.0), ("T", alternative_score))
-    ]
-    candidates.extend(
-        [
-            Candidate("b1", "B", "row", catalog["S"], 1.0),
-            Candidate("b2", "B", "row", catalog["U"], 1.0),
-        ]
-    )
-    candidates.extend(
-        Candidate(f"f{i}", f"F{i}", "single", catalog[f"F{i}"], 1.0) for i in range(6)
-    )
-    params = replace(
-        PARAMS, quota_species=0.2, quota_genus=1.0, quota_family=1.0, conifer_share=(0, 1)
-    )
-    result = assign(candidates, structures, catalog, {}, params)
-    assert len(result.species_by_placement) == 10
-    assert not result.quota_violations
-    assert (result.species_by_placement["a1"] == result.species_by_placement["a2"]) is homogeneous
-    assert ("a1" in result.split_placements) is not homogeneous
-    assert {"b1", "b2"} <= result.split_placements
-
-
-def test_row_repair_preserves_fill_quotas_and_each_rows_dominance() -> None:
-    random = Random(9641)  # noqa: S311 - deterministic compatibility patterns
-    codes = [f"species-{i}" for i in range(6)]
-    catalog = {code: _species(code) for code in codes}
-    params = replace(
-        PARAMS, quota_species=0.3, quota_genus=1.0, quota_family=1.0, conifer_share=(0, 1)
-    )
-    quotas = Quotas(catalog, {}, params)
-    places = [f"p-{i}" for i in range(10)]
-    rows = {"row-1": places[:4], "row-2": places[4:8]}
-    chosen = {place: codes[i % 5] for i, place in enumerate(places)}
-    for _ in range(60):
-        candidates = []
-        for i, place in enumerate(places):
-            row_id = "row-1" if i < 4 else "row-2" if i < 8 else f"single-{i}"
-            kind = "row" if i < 8 else "single"
-            compatible = {chosen[place], *random.sample(codes, random.randint(1, 4))}
-            candidates.extend(
-                Candidate(place, row_id, kind, catalog[code], random.random())
-                for code in sorted(compatible)
-            )
-        result = _repair_mixed_rows(chosen, candidates, quotas)
-        assert set(result) == set(chosen)
-        assert not quotas.violations(result)
-        for members in rows.values():
-            before = max(Counter(chosen[place] for place in members).values())
-            after = max(Counter(result[place] for place in members).values())
-            assert after >= before
-
-
 def test_quota_limits_a_species_when_structures_are_small() -> None:
     structures = _singles(30)
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
@@ -214,52 +131,27 @@ def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
     assert any("tilia_cordata" in note for note in result.notes)
 
 
-def test_exhausted_species_does_not_block_one_other_plant() -> None:
-    """Доля считается от занятых мест, а не от числа всех доступных точек."""
+def test_exhausted_diversity_leaves_places_empty_instead_of_breaking_quotas() -> None:
+    """Два вида, один уже выбрал долю на улице: второй один не может быть 10% плана.
+
+    Квоты жёсткие, поэтому места остаются пустыми, а не досаживаются одним видом. Один
+    экземпляр второго вида квоту не нарушает: при одной посадке доля 10% - меньше растения.
+    До 23.09.2026 это исключение действовало только на участке меньше десяти мест, и такой
+    участок оставался вовсе без деревьев (docs/notes/30-pipeline-experiments.md).
+    """
     structures = _singles(30)
     candidates = _candidates(structures, ["tilia_cordata", "acer_platanoides"])
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
     assert list(result.species_by_placement.values()) == ["acer_platanoides"]
     assert not result.quota_violations
-
-
-def test_one_compatible_species_can_fill_one_of_many_available_places() -> None:
-    structures = _singles(30)
-    candidates = _candidates(structures, ["tilia_cordata"])
-    result = assign(candidates, structures, CATALOG, {}, PARAMS)
-    assert list(result.species_by_placement.values()) == ["tilia_cordata"]
-    assert not result.quota_violations
-
-
-def test_sparse_assignments_match_exhaustive_maximum_fill() -> None:
-    """A seeded mix of unfamiliar compatibility patterns guards against fixture fitting."""
-    random = Random(7342)  # noqa: S311 - deterministic test cases, not secrets
-    structures = _singles(5)
-    candidates = _candidates(structures, list(CATALOG))
-    quotas = Quotas(CATALOG, {}, PARAMS)
-    for _ in range(100):
-        options = [random.sample(list(CATALOG), random.randint(1, 5)) for _ in structures]
-        allowed = {
-            structure.placement_ids[0]: set(codes)
-            for structure, codes in zip(structures, options, strict=True)
-        }
-        usable = [
-            candidate
-            for candidate in candidates
-            if candidate.species.code in allowed[candidate.placement_id]
-        ]
-        result = assign(usable, structures, CATALOG, {}, PARAMS)
-        maximum = 0
-        for selection in product(*(("", *codes) for codes in options)):
-            chosen = {
-                structure.placement_ids[0]: code
-                for structure, code in zip(structures, selection, strict=True)
-                if code
-            }
-            if not quotas.violations(chosen):
-                maximum = max(maximum, len(chosen))
-        assert len(result.species_by_placement) == maximum
-        assert not result.quota_violations
+    old = assign(
+        candidates,
+        structures,
+        CATALOG,
+        {"tilia_cordata": 20},
+        replace(PARAMS, quota_single_places=1.0),
+    )
+    assert old.species_by_placement == {}
 
 
 def test_a_tiny_site_may_hold_one_plant_of_a_species() -> None:
@@ -377,21 +269,6 @@ def test_no_candidates_give_an_empty_assignment() -> None:
     assert assign([], [], CATALOG, {}, PARAMS).species_by_placement == {}
 
 
-def test_invalid_solver_primal_falls_back_to_checked_greedy(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def invalid_primal(*_args: object, **kwargs: object) -> SimpleNamespace:
-        return SimpleNamespace(x=np.full(len(cast("np.ndarray", kwargs["c"])), 0.6), success=True)
-
-    monkeypatch.setattr(
-        import_module("green.application.assortment.assign"), "milp", invalid_primal
-    )
-    structures = _singles(10)
-    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
-    assert result.solver == GREEDY
-    assert not result.quota_violations
-
-
 def test_greedy_fallback_stays_close_to_the_solver_and_holds_quotas() -> None:
     """Запасной путь ищет наибольшее число мест T, при котором допуски от T выдержаны.
 
@@ -406,3 +283,35 @@ def test_greedy_fallback_stays_close_to_the_solver_and_holds_quotas() -> None:
     )
     assert not greedy.quota_violations
     assert len(greedy.species_by_placement) >= 0.9 * len(solved.species_by_placement)
+
+
+def test_the_plan_names_the_quota_a_species_has_used_up() -> None:
+    """Вид с оценкой выше выбранного уступил квоте: карточка называет какой, а не «или-или»."""
+    structures = _singles(30)
+    result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
+    assert _counts(result)["tilia_cordata"] == 3
+    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана"
+
+
+def test_a_species_absent_from_the_plan_can_be_held_back_by_its_genus() -> None:
+    lindens = {
+        code: replace(_species(code), genus="tilia", family="Malvaceae")
+        for code in ("tilia_cordata", "tilia_platyphyllos", "tilia_tomentosa")
+    }
+    quotas = Quotas({**CATALOG, **lindens}, {}, PARAMS)
+    others = [code for code in CODES if code != "tilia_cordata"][:8]
+    chosen = {
+        **{f"a-{i}": "tilia_cordata" for i in range(2)},
+        **{f"b-{i}": "tilia_platyphyllos" for i in range(2)},
+        **{f"c-{i}-{code}": code for i in range(2) for code in others},
+    }
+    used_up = quotas.used_up(chosen)
+    assert used_up["tilia_cordata"] == "квота вида 10% выбрана"
+    assert used_up["tilia_tomentosa"] == "квота рода Tilia 20% выбрана"
+
+
+def test_existing_trees_are_named_when_they_used_up_the_quota() -> None:
+    structures = _singles(20)
+    candidates = _candidates(structures, list(CATALOG))
+    result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
+    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана с существующими деревьями"

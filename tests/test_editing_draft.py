@@ -66,9 +66,8 @@ def test_draft_survives_failed_export_and_becomes_saved_only_after_success(tmp_p
         assert client.get(url).json()["state"] == "failed"
         assert client.get(url + "/artifacts/result.dxf").content == original_dxf
         assert client.get(url + "/draft").json()["stale"] is True
-        html = client.get(f"/runs/{run_id}").text
-        assert 'data-ready="1"' in html
-        assert 'id="edit-toggle"' in html
+        # Страницу прогона рисует React-приложение (frontend/), его разметку проверяют тесты
+        # фронтенда; здесь - только то, что отдаёт API.
         client.post(
             url + "/edits",
             json={
@@ -91,5 +90,8 @@ def test_draft_survives_failed_export_and_becomes_saved_only_after_success(tmp_p
             final["plan"]["placements"]
             == client.get(url + "/artifacts/plan.json").json()["placements"]
         )
+        # Вытесненный из памяти прогон поднимается с диска - с планом после пересборки.
         container.contexts.drop(run_id)
-        assert client.get(url + "/draft").status_code == 409
+        reopened = client.get(url + "/draft").json()
+        assert reopened["stale"] is False
+        assert reopened["plan"]["placements"] == final["plan"]["placements"]

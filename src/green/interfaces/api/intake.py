@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
 
 CHUNK = 1024 * 1024
 DRAWING_SUFFIXES = frozenset({".dxf", ".dwg"})
+# Слой ГИС через форму: GeoJSON или SHP одним архивом (.shp без .shx и .dbf не читается).
+UPLOAD_LAYER_SUFFIXES = frozenset({".geojson", ".json", ".zip"})
+_UNSAFE = re.compile(r"[^\w.\- ]", re.UNICODE)
 
 
 def parse_overrides(raw: str | None) -> dict[str, object]:
@@ -62,6 +66,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
     overrides: str | None = None,
     inventory: UploadFile | None = None,
     extra: Sequence[UploadFile] | None = None,
+    layers: Sequence[UploadFile] | None = None,
 ) -> RunRecord:
     """Сохранить комплект, зарегистрировать прогон и поставить его в фоновую очередь."""
     settings = container.settings
@@ -77,15 +82,8 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         container.runs.reject(record.run_id, str(error))
         raise
 
-    inventory_path = None
-    if inventory is not None and inventory.filename:
-        suffix = Path(inventory.filename).suffix or ".xlsx"
-        inventory_path = container.store.input_path(record.run_id).with_name(f"inventory{suffix}")
-        try:
-            await store_upload(inventory, inventory_path, limit)
-        except PayloadTooLargeError as error:
-            container.runs.reject(record.run_id, str(error))
-            raise
+    inventory_path = await _store_inventory(container, record.run_id, inventory)
+    layer_paths = await _store_layers(container, record.run_id, layers)
 
     extra_paths: list[Path] = []
     source_names = [file.filename or "drawing.dxf"]
@@ -111,11 +109,63 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         inventory_path,
         tuple(extra_paths),
         tuple(source_names),
+        gis_layers=layer_paths,
     )
     return record
 
 
-def _copy_and_execute(container: Container, run_id: str, street: StreetSource) -> None:
+async def _store_layers(
+    container: Container, run_id: str, layers: Sequence[UploadFile] | None
+) -> tuple[Path, ...]:
+    """Слои ГИС - под исходными именами: по имени файла конфиг выбирает класс объектов."""
+    paths: list[Path] = []
+    folder = container.store.input_path(run_id).parent / "gis"
+    for upload in layers or ():
+        if not upload.filename:
+            continue
+        name = _UNSAFE.sub("_", Path(upload.filename).name)[:120] or "layer.geojson"
+        suffix = Path(name).suffix.lower()
+        if suffix not in UPLOAD_LAYER_SUFFIXES:
+            message = (
+                "layers: ожидается GeoJSON (.geojson, .json) или SHP в .zip, получен "
+                f"{suffix or 'файл без типа'}"
+            )
+            container.runs.reject(run_id, message)
+            raise InputError(message)
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / name
+        try:
+            await store_upload(upload, target, container.settings.max_upload_mb * CHUNK)
+        except PayloadTooLargeError as error:
+            container.runs.reject(run_id, str(error))
+            raise
+        paths.append(target)
+    return tuple(paths)
+
+
+async def _store_inventory(
+    container: Container, run_id: str, inventory: UploadFile | None
+) -> Path | None:
+    """Сохранить перечётную ведомость рядом с чертежом прогона, если её прислали."""
+    if inventory is None or not inventory.filename:
+        return None
+    suffix = Path(inventory.filename).suffix or ".xlsx"
+    target = container.store.input_path(run_id).with_name(f"inventory{suffix}")
+    try:
+        await store_upload(inventory, target, container.settings.max_upload_mb * CHUNK)
+    except PayloadTooLargeError as error:
+        container.runs.reject(run_id, str(error))
+        raise
+    return target
+
+
+def _copy_and_execute(
+    container: Container,
+    run_id: str,
+    street: StreetSource,
+    inventory: Path | None = None,
+    gis_layers: tuple[Path, ...] = (),
+) -> None:
     """Скопировать комплект улицы в прогон и посчитать его.
 
     Копия, а не ссылка на файл каталога: прогон пишет рядом с исходником и правится на
@@ -132,26 +182,39 @@ def _copy_and_execute(container: Container, run_id: str, street: StreetSource) -
     except OSError as error:
         container.runs.reject(run_id, f"комплект улицы не скопирован: {error}")
         return
+    names = street.sources or tuple(str(path) for path in (street.main, *street.extra))
     container.runs.execute(
-        run_id, None, tuple(extra_paths), tuple(str(path) for path in (street.main, *street.extra))
+        run_id,
+        inventory,
+        tuple(extra_paths),
+        names,
+        street.absent_references,
+        gis_layers=gis_layers,
     )
 
 
-def accept_street_run(
+async def accept_street_run(  # noqa: PLR0913 - те же поля, что у прогона своего чертежа
     *,
     container: Container,
     background: BackgroundTasks,
     street: StreetSource,
     profile: str | None = None,
     overrides: str | None = None,
+    inventory: UploadFile | None = None,
+    layers: Sequence[UploadFile] | None = None,
 ) -> RunRecord:
     """Поставить в очередь прогон по улице из каталога.
 
     Файлы уже лежат на диске, поэтому копирование идёт фоном вместе с самим прогоном:
     подоснова улицы весит до двух сотен мегабайт, и копировать её в обработчике запроса
-    значит держать event loop на время копирования.
+    значит держать event loop на время копирования. Перечётная ведомость приходит от
+    человека и сохраняется сразу: у улицы из каталога её нет.
     """
     values = parse_overrides(overrides)
+    # Единицы из каталога - когда заголовок основы с геометрией спорит; явный выбор
+    # человека сильнее каталога.
+    if street.drawing_unit and "drawing_unit" not in values:
+        values["drawing_unit"] = street.drawing_unit
     # Имя прогона проходит ту же проверку, что имя загруженного файла, поэтому расширение
     # обязательно: в реестре человек ищет улицу по названию, а не по имени файла из архива.
     record = container.runs.register(
@@ -159,5 +222,9 @@ def accept_street_run(
         profile or container.settings.default_profile,
         values,
     )
-    background.add_task(_copy_and_execute, container, record.run_id, street)
+    inventory_path = await _store_inventory(container, record.run_id, inventory)
+    layer_paths = await _store_layers(container, record.run_id, layers)
+    background.add_task(
+        _copy_and_execute, container, record.run_id, street, inventory_path, layer_paths
+    )
     return record

@@ -1,33 +1,49 @@
-"""Запись артефактов: plan.json, quality.json, basemap.geojson, interpretations.csv/json,
-run_manifest.json, verify.json."""
+"""Запись артефактов: plan.json, quality.json, basemap.geojson, scene.json,
+interpretations.csv/json, run_manifest.json, verify.json."""
 
 from __future__ import annotations
 
 import csv
+import math
 import platform
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import orjson
 import shapely
 
+from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
+from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
+from green.infrastructure.reports.interpretation_report import (
+    write_html,
+    write_markdown,
+    write_plantings_csv,
+)
+from green.infrastructure.reports.png import encode_rgba
+from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from shapely.geometry.base import BaseGeometry
+
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport
     from green.application.results import RunReport
+    from green.application.surfaces import SurfaceMap
+    from green.domain.effect import StreetEffect
     from green.domain.norms import RuleBook
     from green.domain.objects import Scene
     from green.domain.planting import (
         AssortmentInfo,
         AssortmentSummary,
         Explanation,
+        Lawn,
         Plan,
         RuleCheck,
         Species,
@@ -60,8 +76,12 @@ CSV_COLUMNS = (
     "url",
     "explanation",
     "value",
+    "area_m2",
 )
 _PACKAGES = ("green", "ezdxf", "shapely", "fastapi", "pydantic")
+# Геометрия газона в plan.json: сантиметры - точность чертежа 1:500, больше знаков только
+# раздувают файл, который браузер разбирает при открытии прогона.
+_LAWN_DIGITS = 2
 
 
 class FileArtifactSink:
@@ -73,6 +93,9 @@ class FileArtifactSink:
             "plan.json": _write_json(directory / "plan.json", _plan(report)),
             "interpretations.json": _write_json(directory / "interpretations.json", rows),
             "interpretations.csv": _write_csv(directory / "interpretations.csv", rows),
+            "interpretations.md": write_markdown(directory / "interpretations.md", report),
+            "report.html": write_html(directory / "report.html", report),
+            "plantings.csv": write_plantings_csv(directory / "plantings.csv", report),
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "export_validation.json": _write_json(
@@ -99,6 +122,12 @@ class FileArtifactSink:
             ),
             "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
             "basemap.geojson": self.save_basemap(directory, report.basemap),
+            # Сцену, как и подоснову, читает браузер, а не человек: без отступов.
+            "scene.json": _write_json(
+                directory / "scene.json",
+                scene_payload(report.plan, report.volumes),
+                indent=False,
+            ),
             "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
             "assortment.json": _write_json(
                 directory / "assortment.json",
@@ -112,7 +141,8 @@ class FileArtifactSink:
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
             "quality.json": _write_json(
-                directory / "quality.json", quality_payload(report.plan.quality)
+                directory / "quality.json",
+                quality_payload(report.plan.quality, report.plan.effect),
             ),
             "selection.json": _write_json(
                 directory / "selection.json",
@@ -122,6 +152,7 @@ class FileArtifactSink:
                 directory / "portfolio.json",
                 asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
             ),
+            **_surface(directory, report.surface),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
@@ -158,7 +189,11 @@ def classification_payload(report: ClassificationReport | None) -> dict[str, Any
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
-    """Одна строка на пару (решение, правило): эксперт фильтрует по номеру посадки или отказа."""
+    """Одна строка на пару (решение, правило): эксперт фильтрует по номеру посадки или отказа.
+
+    Текст объяснения - в первой строке решения, а не в каждой строке его проверок: на
+    Кустанайской повтор текста около 2 КБ в 24 строках посадки давал 62 из 76 МБ CSV.
+    """
     texts = {e.subject_id: e for e in plan.explanations}
     values = plan.quality.values if plan.quality is not None else {}
     rows: list[dict[str, Any]] = []
@@ -167,9 +202,61 @@ def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
         value = values.get(placement.placement_id)
         if value is not None:
             own = [{**row, "value": value.delta} for row in own]
-        rows += own
+        rows += _explained_once(own)
     for rejection in plan.rejections:
-        rows += _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
+        rows += _explained_once(
+            _rows(rejection, rejection.blocking, texts.get(rejection.rejection_id), rulebook)
+        )
+    for lawn in plan.lawns:
+        rows += _explained_once(_lawn_rows(lawn, texts.get(lawn.lawn_id), rulebook))
+    return rows
+
+
+def _explained_once(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row if i == 0 else {**row, "explanation": ""} for i, row in enumerate(rows)]
+
+
+def _lawn_rows(
+    lawn: Lawn, explanation: Explanation | None, rulebook: RuleBook
+) -> list[dict[str, Any]]:
+    """Газон: строка на каждое основание участка, площадь - в своей графе."""
+    point = lawn.geometry.representative_point()
+    base = {
+        "kind": "lawn",
+        "number": lawn.number,
+        "subject_id": lawn.lawn_id,
+        "planting_type": lawn.planting_type.value,
+        "species_ru": "",
+        "species_lat": "",
+        "x": round(point.x, 3),
+        "y": round(point.y, 3),
+        "verdict": "",
+        "outcome": lawn.kind.value,
+        "reason": f"{LAWN_LABELS[lawn.kind]} газон",
+        "explanation": explanation.text if explanation else "",
+        "area_m2": round(lawn.area_m2, 2),
+    }
+    rows = []
+    for rule_id in lawn.rule_ids:
+        rule = rulebook.rule(rule_id)
+        citation = rule.citation if rule else None
+        act = rulebook.act_of(citation) if citation else None
+        rows.append(
+            {
+                **base,
+                "rule_id": rule_id,
+                "act_id": citation.act_id if citation else "",
+                "act_title": act.title if act else "",
+                "clause": citation.clause if citation else "",
+                "related": "; ".join(
+                    f"{rulebook.label_of(ref.act_id)}, {ref.clause}"
+                    for ref in (citation.related if citation else ())
+                ),
+                "citation_status": citation.status.value if citation else "",
+                "quote": citation.quote if citation else "",
+                "url": act.url if act else "",
+            }
+        )
     return rows
 
 
@@ -339,15 +426,21 @@ def _value(value: PlantingValue | None) -> dict[str, Any] | None:
         "by_term": dict(value.by_term),
         "reasons": list(value.reasons),
         "scope": value.scope,
+        "weak": list(value.weak),
+        "flagged": value.flagged,
     }
 
 
-def quality_payload(quality: PlanQuality | None) -> dict[str, Any]:
-    """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки."""
+def quality_payload(
+    quality: PlanQuality | None, effect: StreetEffect | None = None
+) -> dict[str, Any]:
+    """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки; рядом -
+    отдельным блоком - что план даёт улице (effect), с индексом не смешивается."""
     if quality is None:
-        return {"index": None, "gate": "индекс не считался"}
+        return {"index": None, "gate": "индекс не считался", "effect": effect_payload(effect)}
     ranked = sorted(quality.values.values(), key=lambda v: -v.delta)
     return {
+        "effect": effect_payload(effect),
         "index": quality.index,
         "gate": quality.gate,
         "summary": list(quality.summary),
@@ -370,10 +463,51 @@ def quality_payload(quality: PlanQuality | None) -> dict[str, Any]:
             for v in ranked[:10]
         ],
         "negative": [
-            {"id": v.placement_id, "delta": v.delta, "reasons": list(v.reasons)}
+            {"id": v.placement_id, "delta": v.delta, "weak": list(v.weak)}
             for v in reversed(ranked)
             if v.delta < 0
         ][:50],
+    }
+
+
+def effect_payload(effect: StreetEffect | None) -> dict[str, Any] | None:
+    """Баланс озеленения «было - стало», виды посадок и шумозащита (application/effect)."""
+    if effect is None:
+        return None
+    return {
+        "stock_source": effect.stock_source,
+        "area_m2": effect.area_m2,
+        "curb_m": effect.curb_m,
+        "length_m": effect.length_m,
+        "measures": [
+            {
+                "key": m.key,
+                "title": m.title,
+                "unit": m.unit,
+                "before": m.before,
+                "after": m.after,
+                "delta": m.delta,
+                "basis": m.basis,
+                "kind": m.kind,
+                "note": m.note,
+            }
+            for m in effect.measures
+        ],
+        "kinds": [
+            {
+                "key": k.key,
+                "title": k.title,
+                "planting_type": k.planting_type,
+                "count": k.count,
+                "length_m": k.length_m,
+                "area_m2": k.area_m2,
+                "basis": k.basis,
+                "places": dict(k.places),
+            }
+            for k in effect.kinds
+        ],
+        "noise": [asdict(b) for b in effect.noise],
+        "notes": list(effect.notes),
     }
 
 
@@ -403,6 +537,8 @@ def _plan(report: RunReport) -> dict[str, Any]:
         "source": _source(report),
         "summary": report.summary(),
         "warnings": list(report.warnings),
+        # Журнал склейки - отдельно от предупреждений, которые меняют смысл плана.
+        "load_notes": list(report.load_notes),
     }
 
 
@@ -421,6 +557,7 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
                 "y": p.y,
                 "verdict": p.verdict.value,
                 "notes": list(p.notes),
+                "place": p.place,
                 "explanation": texts.get(p.placement_id, ""),
                 "assortment": _assortment(p.assortment),
                 "value": _value(values.get(p.placement_id)),
@@ -437,13 +574,36 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
                 "y": r.y,
                 "verdict": r.verdict.value,
                 "note": r.note,
+                "barrier_m": r.barrier_m,
                 "explanation": texts.get(r.rejection_id, ""),
                 "blocking": [_check(c) for c in r.blocking],
             }
             for r in plan.rejections
         ],
+        "lawns": [
+            {
+                "id": lawn.lawn_id,
+                "number": lawn.number,
+                "planting_type": lawn.planting_type.value,
+                "kind": lawn.kind.value,
+                "area_m2": round(lawn.area_m2, 2),
+                "rule_ids": list(lawn.rule_ids),
+                "notes": list(lawn.notes),
+                "explanation": texts.get(lawn.lawn_id, ""),
+                "geometry": _geojson(lawn.geometry),
+            }
+            for lawn in plan.lawns
+        ],
         "warnings": list(plan.warnings),
     }
+
+
+def _geojson(geometry: BaseGeometry) -> dict[str, Any]:
+    """GeoJSON в координатах чертежа: внешний контур против часовой стрелки, отверстия по ней
+    (RFC 7946), так правило ненулевого обхода заливки в браузере оставляет ямы пустыми."""
+    oriented = shapely.orient_polygons(geometry)
+    rounded = shapely.transform(oriented, lambda xy: np.round(xy, _LAWN_DIGITS))
+    return orjson.loads(shapely.to_geojson(rounded))
 
 
 def _rules(rulebook: RuleBook) -> dict[str, Any]:
@@ -505,6 +665,12 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             "min_span_m": basemap.min_span_m,
         },
         "bbox": list(basemap.bbox),
+        # Подписи материала отдельным списком, а не объектами GeoJSON: они не участвуют в
+        # балансе отбора и рисуются текстом, а не геометрией.
+        "labels": [
+            [round(label.x, 2), round(label.y, 2), label.text, label.material]
+            for label in basemap.labels
+        ],
         "features": [
             {
                 "type": "Feature",
@@ -514,6 +680,41 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             for feature in basemap.features
         ],
     }
+
+
+# Цвета карты покрытий: грунт - зеленоватый, твёрдое - серый, полупрозрачные, чтобы линии
+# подосновы читались поверх. Барьеры и неизвестное - прозрачные.
+SURFACE_COLORS = {
+    Material.UNKNOWN: (0, 0, 0, 0),
+    Material.PAVED: (140, 142, 150, 96),
+    Material.SOIL: (104, 158, 104, 88),
+    Material.BARRIER: (0, 0, 0, 0),
+}
+SURFACE_MAX_SIDE = 4096  # пикселей по длинной стороне: больше браузеру не нужно
+
+
+def _surface(directory: Path, surface: SurfaceMap | None) -> dict[str, Path]:
+    """Карта покрытий растром: PNG и привязка к координатам чертежа."""
+    if surface is None:
+        return {}
+    grid = surface.grid
+    step = max(1, math.ceil(max(grid.shape) / SURFACE_MAX_SIDE))
+    sampled = grid[::step, ::step]
+    palette = np.zeros((max(int(m) for m in Material) + 1, 4), dtype=np.uint8)
+    for material, color in SURFACE_COLORS.items():
+        palette[int(material)] = color
+    image = directory / "surface.png"
+    image.write_bytes(encode_rgba(palette[sampled]))
+    meta = {
+        "origin": [surface.origin[0], surface.origin[1]],
+        "cell_m": surface.cell * step,
+        "width": int(sampled.shape[1]),
+        "height": int(sampled.shape[0]),
+        "row_order": "строка 0 - минимальный Y чертежа",
+        "colors": {m.name.lower(): list(c) for m, c in SURFACE_COLORS.items()},
+        "counts": {m.name.lower(): int((grid == m).sum()) for m in Material},
+    }
+    return {"surface.png": image, "surface.json": _write_json(directory / "surface.json", meta)}
 
 
 def _zones(plan: Plan) -> dict[str, Any]:

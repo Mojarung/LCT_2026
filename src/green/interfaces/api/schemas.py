@@ -56,9 +56,30 @@ class MetaOut(BaseModel):
     converters: list[ConverterOut]
 
 
+class ProfileOut(BaseModel):
+    """Параметры профиля, которые показывает форма запуска.
+
+    Форма заполняется ими и отправляет в overrides только изменённое человеком: иначе выбор
+    профиля терялся под значениями формы по умолчанию.
+    """
+
+    name: str
+    planting_type: str = Field(description="tree или shrub")
+    spacing_m: float = Field(description="Шаг посадки, м")
+    modes: list[str] = Field(description="Приёмы размещения: alley, lawn, fill")
+    root_barriers: bool
+    shrub_groups: bool
+    shrub_rows: bool
+    curb_hedges: bool
+    understory: bool
+    shrub_fill: bool = Field(description="Группы кустарника на свободном газоне")
+    lawns: bool = Field(description="Газоны на грунте, который посадки оставили свободным")
+
+
 class ArtifactOut(BaseModel):
     name: str
     url: str
+    size_bytes: int | None = Field(default=None, description="Размер файла; null, если его нет")
 
 
 class StepOut(BaseModel):
@@ -110,7 +131,13 @@ class RunOut(BaseModel):
     )
 
     @classmethod
-    def from_record(cls, record: RunRecord, artifact_url: Callable[[str, str], str]) -> RunOut:
+    def from_record(
+        cls,
+        record: RunRecord,
+        artifact_url: Callable[[str, str], str],
+        artifact_size: Callable[[str, str], int | None] | None = None,
+    ) -> RunOut:
+        size = artifact_size or (lambda _run_id, _name: None)
         return cls(
             id=record.run_id,
             state=record.state,
@@ -122,7 +149,11 @@ class RunOut(BaseModel):
             error=record.error,
             summary=dict(record.summary),
             artifacts=[
-                ArtifactOut(name=name, url=artifact_url(record.run_id, name))
+                ArtifactOut(
+                    name=name,
+                    url=artifact_url(record.run_id, name),
+                    size_bytes=size(record.run_id, name),
+                )
                 for name in record.artifacts
             ],
             progress=(
