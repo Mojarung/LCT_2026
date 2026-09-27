@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from shapely.geometry import LineString, Point, box
+from test_quality import LAWN, LIME, SPIREA, _place, _plan
 
 from green.application.params import PlanParams
 from green.application.quality import Site, evaluate, site_of
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.domain.planting import Plan
-from test_quality import LAWN, LIME, SPIREA, _place, _plan
+
+if TYPE_CHECKING:
+    from green.domain.planting import Plan
 
 PARAMS = PlanParams()
 EXISTING = (100.0, 0.0)

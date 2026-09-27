@@ -15,6 +15,9 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 # LibreDWG собирается из исходников статически: в репозиториях Ubuntu 26.04 пакета нет.
 FROM ubuntu:${UBUNTU_VERSION} AS libredwg
 ARG LIBREDWG_VERSION
+# Generated LibreDWG C units are large; CPU count does not reflect available RAM.
+# Raise explicitly on larger build hosts: --build-arg LIBREDWG_BUILD_JOBS=4.
+ARG LIBREDWG_BUILD_JOBS=1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential ca-certificates curl pkg-config python3 xz-utils \
@@ -24,8 +27,8 @@ RUN curl -fsSL "https://github.com/LibreDWG/libredwg/releases/download/${LIBREDW
     | tar -xJ --strip-components=1
 RUN ./configure --prefix=/opt/libredwg --disable-shared --enable-static --disable-bindings \
         --disable-dependency-tracking \
-    && make -j"$(nproc)" -C src \
-    && make -j"$(nproc)" -C programs \
+    && make -j"${LIBREDWG_BUILD_JOBS}" -C src \
+    && make -j"${LIBREDWG_BUILD_JOBS}" -C programs \
     && install -d /opt/libredwg/bin \
     && install -s programs/dwg2dxf programs/dwgread /opt/libredwg/bin/
 

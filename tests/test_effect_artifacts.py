@@ -54,7 +54,7 @@ def test_quality_json_has_the_effect_block(run: dict[str, object]) -> None:
     keys = {m["key"] for m in effect["measures"]}
     assert {"trees", "shrubs", "canopy_m2", "curb_green_m", "tiers_trees", "noise_curb_m"} <= keys
     assert {k["key"] for k in effect["kinds"]} & {"alley", "lawn"}
-    assert [b["width"] for b in effect["noise"]][0] == "10-15"
+    assert next(b["width"] for b in effect["noise"]) == "10-15"
 
 
 def test_readable_report_has_the_balance_and_kinds(run: dict[str, object]) -> None:

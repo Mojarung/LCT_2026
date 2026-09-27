@@ -6,6 +6,8 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import shapely
+
 from green.domain.norms import LawnKind
 from green.domain.objects import ReadDiagnostics
 
@@ -113,6 +115,20 @@ class RunReport:
 
     def summary(self) -> dict[str, object]:
         lawns = self.plan.lawns
+        confirmed = 0
+        if self.surface is not None:
+            for is_tree, radius in (
+                (True, self.params.planting_radius_m),
+                (False, self.params.shrub_planting_radius_m),
+            ):
+                coordinates = [
+                    (p.x, p.y) for p in self.plan.placements if p.species.is_tree == is_tree
+                ]
+                if coordinates:
+                    confirmed += int(
+                        self.surface.fits_confirmed_soil(shapely.points(coordinates), radius).sum()
+                    )
+        unconfirmed = len(self.plan.placements) - confirmed
 
         def lawn_m2(*kinds: LawnKind) -> float:
             return round(sum((g.area_m2 for g in lawns if g.kind in kinds), 0.0), 1)
@@ -128,7 +144,9 @@ class RunReport:
             if self.classification
             else None,
             "surface_inference_review_required": self.params.require_soil
-            and self.params.surface_inference_mode == "distance",
+            and (self.params.surface_inference_mode == "distance" or unconfirmed > 0),
+            "surface_confirmed_placements": confirmed,
+            "surface_unconfirmed_placements": unconfirmed,
             "allowed": self.plan.allowed_count,
             "needs_approval": self.plan.approval_count,
             "rejections": len(self.plan.rejections),

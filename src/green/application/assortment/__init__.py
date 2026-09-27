@@ -65,6 +65,47 @@ def assign_species(
     params: PlanParams,
     existing: Mapping[str, int] | None = None,
 ) -> Plan:
+    """Keep solver tie-breaking independent of opaque public placement IDs.
+
+    IDs derived from absolute coordinates change when a drawing is translated.
+    Give the solver spatial ranks, then restore public IDs on both plants and
+    new rejections. Rounding only orders locations; all geometry stays exact.
+    """
+    if params.assortment_mode == SINGLE or not plan.placements:
+        return _assign_species(plan, rulebook, catalog, params, existing)
+    ordered = sorted(
+        plan.placements,
+        key=lambda p: (round(p.x, 6), round(p.y, 6), p.placement_id),
+    )
+    forward = {p.placement_id: f"site-{i:012d}" for i, p in enumerate(ordered)}
+    backward = {local: public for public, local in forward.items()}
+    local = replace(
+        plan,
+        placements=tuple(replace(p, placement_id=forward[p.placement_id]) for p in plan.placements),
+    )
+    result = _assign_species(local, rulebook, catalog, params, existing)
+    return replace(
+        result,
+        placements=tuple(
+            replace(p, placement_id=backward[p.placement_id]) for p in result.placements
+        ),
+        rejections=(
+            *plan.rejections,
+            *(
+                replace(r, rejection_id=backward[r.rejection_id])
+                for r in result.rejections[len(plan.rejections) :]
+            ),
+        ),
+    )
+
+
+def _assign_species(
+    plan: Plan,
+    rulebook: RuleBook,
+    catalog: Sequence[Species],
+    params: PlanParams,
+    existing: Mapping[str, int] | None = None,
+) -> Plan:
     """Назначить вид каждой посадке плана и собрать сводку состава."""
     index = {species.code: species for species in catalog}
     # Квоты деревьев считаются по существующим деревьям, квоты кустарников - по кустарникам:

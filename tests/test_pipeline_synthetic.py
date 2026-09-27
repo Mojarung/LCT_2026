@@ -383,7 +383,8 @@ def test_hybrid_default_plants_by_labels_of_unfinished_contours(tmp_path: Path) 
     )
     assert report.plan.placements
     assert any("по близости подписи" in warning for warning in report.warnings)
-    assert report.summary()["surface_inference_review_required"] is False
+    assert report.summary()["surface_inference_review_required"] is True
+    assert report.summary()["surface_unconfirmed_placements"] > 0
 
 
 def test_explicit_distance_mode_is_marked_for_surface_review(tmp_path: Path) -> None:

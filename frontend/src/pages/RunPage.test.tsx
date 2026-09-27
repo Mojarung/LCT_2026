@@ -148,6 +148,28 @@ function succeededRoutes(record: RunOut = done()) {
 }
 
 describe('RunPage: finished run', () => {
+  it('does not call inferred ground unrestricted and shows pits requiring review', async () => {
+    const record = done();
+    mockApi(
+      succeededRoutes({
+        ...record,
+        summary: {
+          ...record.summary,
+          placements: 40,
+          surface_inference_review_required: true,
+          surface_unconfirmed_placements: 40,
+        },
+      }),
+    );
+    renderApp('/runs/r1');
+    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    expect(await within(left).findByText(/требуется проверка/)).toBeVisible();
+    expect(left).not.toHaveTextContent('все без ограничений');
+    expect(left).toHaveTextContent(
+      'Грунт под всей посадочной ямой не подтверждён замкнутыми контурами у 40 из 40 посадок',
+    );
+  });
+
   it('leads with the number of placements and the integrity of the base drawing', async () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');

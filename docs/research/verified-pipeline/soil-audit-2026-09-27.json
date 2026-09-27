@@ -1,0 +1,139 @@
+{
+  "annotation_sha256": "2bfe527b513879c99ac7a3d370e5f16c93da12fb46f9bcd7fa7c660f5f057439",
+  "method": "Assistant visual interpretation of raw ezdxf renders, not expert or field-verified ground truth. Prior output was seen in preceding turn; no claim of blinded annotation. Polygons fixed before scoring this turn.",
+  "cases": [
+    {
+      "case": "bagritskogo_kit1",
+      "result_sha256": "c3c653afe3a765f4adc95f03be61bfd88bf203d9232fc70dc4ff568e622653ce",
+      "primary": {
+        "band_m": 0.25,
+        "count": 40,
+        "supported_soil": 40,
+        "paved_conflict": 0,
+        "uncertain": 0
+      },
+      "sensitivity": [
+        {
+          "band_m": 0.1,
+          "count": 40,
+          "supported_soil": 40,
+          "paved_conflict": 0,
+          "uncertain": 0
+        },
+        {
+          "band_m": 0.25,
+          "count": 40,
+          "supported_soil": 40,
+          "paved_conflict": 0,
+          "uncertain": 0
+        },
+        {
+          "band_m": 0.5,
+          "count": 40,
+          "supported_soil": 40,
+          "paved_conflict": 0,
+          "uncertain": 0
+        }
+      ],
+      "area_metrics": {
+        "predicted_soil_m2": 511.4999309987644,
+        "supported_soil_m2": 502.1220852802303,
+        "paved_conflict_m2": 0.0,
+        "unassessed_or_boundary_m2": 9.377845718534104,
+        "assessed_soil_recall": 0.877107364299721,
+        "precision_on_assessed_area": 1.0
+      }
+    },
+    {
+      "case": "natashinskiy_kit8",
+      "result_sha256": "053de1b01afaaefb42e478b83d6419401674093603f6fccc508c848cf3503f4f",
+      "primary": {
+        "band_m": 0.25,
+        "count": 48,
+        "supported_soil": 47,
+        "paved_conflict": 0,
+        "uncertain": 1
+      },
+      "sensitivity": [
+        {
+          "band_m": 0.1,
+          "count": 48,
+          "supported_soil": 47,
+          "paved_conflict": 0,
+          "uncertain": 1
+        },
+        {
+          "band_m": 0.25,
+          "count": 48,
+          "supported_soil": 47,
+          "paved_conflict": 0,
+          "uncertain": 1
+        },
+        {
+          "band_m": 0.5,
+          "count": 48,
+          "supported_soil": 44,
+          "paved_conflict": 0,
+          "uncertain": 4
+        }
+      ],
+      "area_metrics": {
+        "predicted_soil_m2": 234.25,
+        "supported_soil_m2": 215.75447880332553,
+        "paved_conflict_m2": 1.636151519165678,
+        "unassessed_or_boundary_m2": 16.859369677508795,
+        "assessed_soil_recall": 0.9284882063330456,
+        "precision_on_assessed_area": 0.9924736796763572
+      }
+    }
+  ],
+  "scorer_controls": [
+    {
+      "control": "soil_interior",
+      "expected": "supported_soil",
+      "actual": "supported_soil",
+      "passed": true
+    },
+    {
+      "control": "paved_interior",
+      "expected": "paved_conflict",
+      "actual": "paved_conflict",
+      "passed": true
+    },
+    {
+      "control": "boundary_uncertain",
+      "expected": "uncertain",
+      "actual": "uncertain",
+      "passed": true
+    },
+    {
+      "control": "outside_annotations",
+      "expected": "uncertain",
+      "actual": "uncertain",
+      "passed": true
+    },
+    {
+      "control": "bagritskogo_kit1_injected_asphalt",
+      "expected": "paved_conflict",
+      "actual": "paved_conflict",
+      "passed": true
+    },
+    {
+      "control": "natashinskiy_kit8_injected_asphalt",
+      "expected": "paved_conflict",
+      "actual": "paved_conflict",
+      "passed": true
+    }
+  ],
+  "algorithm_revision": "7f4ece9",
+  "runtime_code_changed": false,
+  "annotation_file_local": "out/soil-audit-2026-09-27/annotations-v1.json",
+  "limitations": [
+    "Single assistant reviewer, not domain expert; prior output seen in previous turn",
+    "Manual polygons approximate dashed CAD boundaries; uncertainty bands 0.1, 0.25, 0.5 metres",
+    "Partial annotation, unassessed areas not treated as paved",
+    "No field verification, soil-depth or pit engineering assessment",
+    "Two small sheets are not representative of all jury inputs",
+    "Stored existing plans assessed; production generator not rerun or changed"
+  ]
+}
