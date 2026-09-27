@@ -28,10 +28,12 @@ from green.application.assortment.reassessment import NOT_ON_SOIL, reassess_plac
 from green.application.assortment.summary import refresh_summaries
 from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
+from green.application.effect import street_effect
 from green.application.errors import InputError
 from green.application.explain import explain
 from green.application.lawns import plan_lawns
 from green.application.params import active_distance_rules, species_distance_rules
+from green.application.places import place_map, with_places
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
 from green.application.validation import validate_plan
@@ -43,7 +45,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.params import PlanParams
-    from green.application.ports import RunContextStore
+    from green.application.ports import InventoryCounts, RunContextStore
     from green.application.quality import Site
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -98,6 +100,8 @@ class RunContext:
     # Отчёт исходного прогона: нужен, чтобы пересобрать результат по исправленному плану,
     # не перечитывая чертёж. Ссылку на сам контекст из него уже убрали.
     report: RunReport | None = None
+    # Перечётка прогона: «было» баланса после правки то же, что при прогоне.
+    inventory: InventoryCounts | None = None
     # Карта покрытий не зависит от вида и строится долго, поэтому считается один раз.
     _surface: SurfaceMap | None = field(default=None, repr=False)
     _surface_built: bool = field(default=False, repr=False)
@@ -112,7 +116,9 @@ class RunContext:
 
     def site(self) -> Site:
         if self._site is None:
-            self._site = site_of(self.features, self.surface_map())
+            self._site = site_of(
+                self.features, self.surface_map(), crown_m=self.params.existing_crown_m
+            )
         return self._site
 
     def surface_map(self) -> SurfaceMap | None:
@@ -295,6 +301,8 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
 
 
 def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> Plan:
+    # Перенесённая и добавленная посадки - в новой точке: место и категория В.6 заново.
+    plan = with_places(plan, place_map(context.features))
     validation = validate_plan(
         plan,
         context.features,
@@ -308,6 +316,18 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
     # Keep the draft editable when spacing/quotas need further changes, but do
     # not advertise a quality index or removal advice for an invalid plan.
     plan = assess(plan, context.site(), context.params)
+    # Перечётки в контексте правки нет: «было» по деревьям после правки - по чертежу.
+    plan = replace(
+        plan,
+        effect=street_effect(
+            plan,
+            context.site(),
+            context.params,
+            getattr(context, "inventory", None),
+            surface=context.surface_map(),
+            catalog=catalog,
+        ),
+    )
     if not validation.ok and plan.quality is not None:
         gate = "После правки план не прошёл проверку: " + "; ".join(
             f"{issue.code}: {issue.message}" for issue in validation.issues[:5]
@@ -413,6 +433,7 @@ def _moved(context: RunContext, placement: Placement, edit: Edit) -> Placement:
             *((BARRIER_NOTE,) if verdict.needs_barrier else ()),
             "Посадка перенесена вручную, нормы пересчитаны в новой точке.",
         ),
+        place="",  # место новой точки определяется заново (_assess_edited)
     )
 
 

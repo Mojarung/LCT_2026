@@ -287,6 +287,11 @@ export interface components {
              */
             inventory?: string | null;
             /**
+             * Layers
+             * @description Слои ГИС: GeoJSON (.geojson, .json) или SHP в .zip (.shp, .shx, .dbf, .prj) - охранные зоны, здания и границы data.mos.ru, кадастр. Класс объектов - по config/geo_layers.yaml или атрибуту green_class; WGS 84 пересчитывается в систему чертежа
+             */
+            layers?: string[] | null;
+            /**
              * Overrides
              * @description JSON-объект параметров поверх профиля
              */
@@ -1052,6 +1057,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description Content Too Large */
             413: {
                 headers: {
@@ -1103,6 +1117,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1172,6 +1195,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description Content Too Large */
             413: {
                 headers: {
@@ -1223,6 +1255,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

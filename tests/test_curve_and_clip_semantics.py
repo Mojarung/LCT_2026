@@ -74,3 +74,46 @@ def test_enabled_xclip_crops_the_block_as_cad_shows_it(
         half = math.sqrt(0.5)
         expected = ((15 - 25) * half, (15 + 25) * half) if nested else (15, 25)
         assert (centre.x, centre.y) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("bulge", [1.421e-13, -1.421e-13, 1e-10])
+def test_numerically_zero_bulge_reads_as_a_straight_segment(tmp_path: Path, bulge: float) -> None:
+    """Олимпийская деревня: у борта выпуклость -1,421e-13 - в CAD это прямая. Дуга радиусом
+    10^14 м расходилась концами на точности float, и улица останавливалась как нечитаемая."""
+    doc = ezdxf.new("R2018")
+    doc.layers.add("Борт")
+    doc.modelspace().add_lwpolyline(
+        [(-2577.858787, 514.084025, 0), (-2585.776897, 505.235108, bulge), (-2578.905, 498.179, 0)],
+        format="xyb",
+        dxfattribs={"layer": "Борт", "const_width": 0.15},
+    )
+    path = tmp_path / "bulge.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    line = scene.features[0].geometry
+    assert line.geom_type == "LineString"
+    assert tuple(line.coords[-1]) == pytest.approx((-2578.905, 498.179))
+    assert line.length == pytest.approx(
+        math.dist((-2577.858787, 514.084025), (-2585.776897, 505.235108))
+        + math.dist((-2585.776897, 505.235108), (-2578.905, 498.179)),
+        abs=1e-6,
+    )
+
+
+def test_numerically_zero_bulge_in_a_2d_polyline(tmp_path: Path) -> None:
+    doc = ezdxf.new("R2018")
+    doc.layers.add("Борт")
+    doc.modelspace().add_polyline2d(
+        [(0, 0, 0), (10, 0, -1.421e-13), (10, 10, 0.5), (20, 10, 0)],
+        format="xyb",
+        dxfattribs={"layer": "Борт"},
+    )
+    path = tmp_path / "bulge2d.dxf"
+    doc.saveas(path)
+    scene = EzdxfSceneReader().read(path, unit="m")
+    require_complete_geometry(scene)
+    line = scene.features[0].geometry
+    # Прямые 10 + 10 м и настоящая дуга с выпуклостью 0,5 на хорде 10 м - она длиннее хорды.
+    assert line.length > 30
+    assert tuple(line.coords[-1]) == pytest.approx((20, 10))

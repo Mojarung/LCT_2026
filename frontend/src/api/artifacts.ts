@@ -130,9 +130,52 @@ export interface QualityTerm {
   measure: Record<string, unknown>;
 }
 
+/** Баланс «было - стало» по улице (application/effect.py): блок effect в quality.json. */
+export interface EffectMeasure {
+  key: string;
+  title: string;
+  unit: string;
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  basis: string;
+  kind: string;
+  note: string;
+}
+
+export interface PlantingKindJson {
+  key: string;
+  title: string;
+  planting_type: string;
+  count: number;
+  length_m: number | null;
+  area_m2: number | null;
+  basis: string;
+  places: Record<string, number>;
+}
+
+export interface EffectJson {
+  stock_source: string;
+  area_m2: number;
+  curb_m: number;
+  length_m: number | null;
+  measures: EffectMeasure[];
+  kinds: PlantingKindJson[];
+  noise: {
+    width: string;
+    dba: string;
+    dba_sp276: string;
+    curb_before_m: number;
+    curb_after_m: number;
+  }[];
+  notes: string[];
+}
+
 export interface QualityJson {
   index: number | null;
   gate: string;
+  /** Нет у прогонов, посчитанных до баланса «было - стало». */
+  effect?: EffectJson | null;
   summary?: string[];
   terms?: QualityTerm[];
   penalty?: number;

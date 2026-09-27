@@ -75,6 +75,22 @@
             "description": "Перечётная ведомость .xls или .xlsx: существующие деревья в квотах",
             "title": "Inventory"
           },
+          "layers": {
+            "anyOf": [
+              {
+                "items": {
+                  "contentMediaType": "application/octet-stream",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Слои ГИС: GeoJSON (.geojson, .json) или SHP в .zip (.shp, .shx, .dbf, .prj) - охранные зоны, здания и границы data.mos.ru, кадастр. Класс объектов - по config/geo_layers.yaml или атрибуту green_class; WGS 84 пересчитывается в систему чертежа",
+            "title": "Layers"
+          },
           "overrides": {
             "anyOf": [
               {
@@ -1436,6 +1452,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -1507,6 +1533,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -1591,6 +1627,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -1663,6 +1709,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "413": {
             "content": {

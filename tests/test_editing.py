@@ -273,3 +273,31 @@ def test_evicted_run_is_reopened_from_disk(client: TestClient, work: Path, run_i
     after = response.json()
     assert after["verdict"] == before["verdict"]
     assert [c["rule_id"] for c in after["checks"]] == [c["rule_id"] for c in before["checks"]]
+
+
+def test_edit_recomputes_the_street_effect(client: TestClient, run_id: str) -> None:
+    def trees(effect: dict) -> float:
+        return next(m for m in effect["measures"] if m["key"] == "trees")["after"]
+
+    before = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["quality"]["effect"]
+    placements = _plan(client, run_id)["placements"]
+    tree = next(p for p in placements if p["planting_type"] == "tree")
+    client.post(
+        f"{API_PREFIX}/runs/{run_id}/edits",
+        json={"edits": [{"kind": "delete", "placement_id": tree["id"]}]},
+    )
+    after = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["quality"]["effect"]
+    assert trees(after) == trees(before) - 1
+
+
+def test_edited_plantings_get_a_place(client: TestClient, run_id: str) -> None:
+    placements = _plan(client, run_id)["placements"]
+    tree = next(p for p in placements if p["planting_type"] == "tree")
+    client.post(
+        f"{API_PREFIX}/runs/{run_id}/edits",
+        json={
+            "edits": [{"kind": "add", "x": 100.0, "y": 40.0, "species": tree["species"]["code"]}]
+        },
+    )
+    draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
+    assert all(p["place"] for p in draft)

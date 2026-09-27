@@ -24,6 +24,7 @@ from green.infrastructure.config.repositories import (
 )
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
+from green.infrastructure.gis.layers import YamlGisLayerSource
 from green.infrastructure.inventory import read_inventory
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
@@ -78,6 +79,7 @@ def build_container(settings: Settings | None = None) -> Container:
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
         merger=EzdxfDrawingMerger(),
+        gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
     )
     audit = AuditSite(
         reader=reader,
@@ -89,7 +91,10 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         merger=EzdxfDrawingMerger(),
     )
-    store = FileSystemRunStore(settings.runs_dir)
+    store = FileSystemRunStore(
+        settings.runs_dir,
+        max_bytes=round(settings.runs_max_gb * 2**30) if settings.runs_max_gb else None,
+    )
     streets = JsonStreetCatalog(settings.streets_dir)
     contexts = RunContextCache(
         settings.edit_contexts,

@@ -22,12 +22,16 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/runs", tags=["runs"], responses=PROBLEM_RESPONSES)
 # Артефакты, которые читает браузер: их нужно провести через сжатие, см. get_artifact.
-COMPRESSIBLE = frozenset({".json", ".geojson", ".csv", ".md", ".txt"})
+COMPRESSIBLE = frozenset({".json", ".geojson", ".csv", ".md", ".txt", ".html"})
+# Открывается в браузере, а не скачивается: отчёт интерпретаций печатается в PDF из вкладки.
+INLINE = frozenset({".html"})
 MEDIA_TYPES = {
     ".dxf": "image/vnd.dxf",
     ".json": "application/json",
     ".geojson": "application/geo+json",
     ".csv": "text/csv; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
 }
 
 
@@ -74,6 +78,17 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
         list[UploadFile] | None,
         File(description="Остальные чертежи комплекта (DXF или DWG): склеиваются с основным"),
     ] = None,
+    layers: Annotated[
+        list[UploadFile] | None,
+        File(
+            description=(
+                "Слои ГИС: GeoJSON (.geojson, .json) или SHP в .zip (.shp, .shx, .dbf, .prj) -"
+                " охранные зоны, здания и границы data.mos.ru, кадастр. Класс объектов - по"
+                " config/geo_layers.yaml или атрибуту green_class; WGS 84 пересчитывается в"
+                " систему чертежа"
+            )
+        ),
+    ] = None,
 ) -> RunOut:
     """Принять чертёж или улицу из каталога и поставить прогон в очередь.
 
@@ -96,6 +111,7 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
             profile=profile,
             overrides=overrides,
             inventory=inventory,
+            layers=layers,
         )
     elif file is not None and has_file:
         record = await accept_run(
@@ -106,6 +122,7 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
             overrides=overrides,
             inventory=inventory,
             extra=extra,
+            layers=layers,
         )
     else:
         raise InputError("Выберите улицу пилотного проекта или свой чертёж")
@@ -164,9 +181,10 @@ def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
         or "application/octet-stream"
     )
     if path.suffix in COMPRESSIBLE:
+        disposition = "inline" if path.suffix in INLINE else f'attachment; filename="{name}"'
         return Response(
             path.read_bytes(),
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+            headers={"Content-Disposition": disposition},
         )
     return FileResponse(path, media_type=media_type, filename=name)

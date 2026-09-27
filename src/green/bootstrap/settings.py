@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     runs_dir: Path = Path("var/runs")
     # Каталог улиц пилотного проекта, подготовленный tools/prepare_streets.py.
     # Датасета на стенде может не быть: тогда каталог просто пуст.
-    streets_dir: Path = Path("dataset/streets_dxf")
+    streets_dir: Path = Path("dataset/streets_oda")
     # Собранный веб-интерфейс (frontend/, npm run build). В образе - /app/web.
     web_dir: Path = Path("frontend/dist")
     default_profile: str = "strict"
@@ -34,5 +34,8 @@ class Settings(BaseSettings):
     # сервиса и новый прогон (десятки-сотни МБ на прогон; false - только в памяти).
     edit_contexts_saved: bool = True
     max_parallel_runs: int = Field(default=2, ge=1, le=64)
+    # Предел объёма каталога прогонов, ГБ: перед новым прогоном самые старые законченные
+    # удаляются, пока каталог не уложится (0 - без предела). Прогон тяжёлой улицы - до 5 ГБ.
+    runs_max_gb: float = Field(default=20.0, ge=0)
     log_json: bool = False
     log_level: str = "INFO"

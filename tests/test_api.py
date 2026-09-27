@@ -121,6 +121,22 @@ def test_run_succeeds_and_lists_artifacts(finished: dict[str, object]) -> None:
     } <= names
 
 
+def test_readable_report_opens_in_the_browser(
+    client: TestClient, finished: dict[str, object]
+) -> None:
+    """Отчёт интерпретаций открывается вкладкой и печатается в PDF, а не скачивается файлом."""
+    run_id = finished["id"]
+    names = {a["name"] for a in finished["artifacts"]}  # type: ignore[union-attr]
+    assert {"interpretations.md", "report.html", "plantings.csv"} <= names
+
+    page = client.get(f"{API_PREFIX}/runs/{run_id}/artifacts/report.html")
+
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/html")
+    assert page.headers["content-disposition"] == "inline"
+    assert "<table>" in page.text
+
+
 def test_artifacts_download_and_match_the_summary(
     client: TestClient, finished: dict[str, object], work: Path
 ) -> None:

@@ -18,6 +18,7 @@ from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components, dijkstra
 
 from green.application.constraints import work_boundary
+from green.application.stock import EMPTY_STOCK, EXISTING_CROWN_M, Stock, stock_of
 from green.application.surfaces import Material
 from green.domain.objects import ObjectClass
 
@@ -67,6 +68,9 @@ class Site:
     # Для каждого отрезка борта: есть ли грунт в полосе SOIL_STRIP_M у его середины по карте
     # покрытий. None - карты покрытий нет, и различить борта нечем.
     curb_soil: NDArray[np.bool_] | None = None
+    # Существующие насаждения (application/stock): тень, пылезащита и ярусность улицы - их
+    # кроны вместе с новыми; план оценивается по приросту.
+    stock: Stock = EMPTY_STOCK
 
     @property
     def area_m2(self) -> float:
@@ -77,16 +81,23 @@ class Site:
         return street_length(self.boundary) if self.boundary is not None else None
 
 
-def site_of(features: Sequence[Feature], surface: SurfaceMap | None = None) -> Site:
+def site_of(
+    features: Sequence[Feature],
+    surface: SurfaceMap | None = None,
+    *,
+    crown_m: float = EXISTING_CROWN_M,
+) -> Site:
     boundary = work_boundary(features)
     segments = curb_segments(features, boundary)
+    stock = stock_of(features, boundary, crown_m=crown_m)
     if surface is None:
-        return Site(boundary=boundary, curb_segments=segments)
+        return Site(boundary=boundary, curb_segments=segments, stock=stock)
     segments = split_segments(segments, CURB_STEP_M)
     return Site(
         boundary=boundary,
         curb_segments=segments,
         curb_soil=curb_soil(segments.mean(axis=1), surface),
+        stock=stock,
     )
 
 

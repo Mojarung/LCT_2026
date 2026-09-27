@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import re
+import shutil
 import threading
 import uuid
 from dataclasses import replace
@@ -26,6 +28,7 @@ ALLOWED_SUFFIXES = frozenset({".dxf", ".dwg"})
 MAX_NAME = 120
 STATUS = "status.json"
 LEASE = "lease"
+LOGGER = logging.getLogger(__name__)
 _ACTIVE = frozenset({RunState.QUEUED, RunState.RUNNING})
 INTERRUPTED = (
     "Прогон прерван: процесс сервиса остановился до конца расчёта. Запустите прогон заново."
@@ -33,14 +36,18 @@ INTERRUPTED = (
 
 
 class FileSystemRunStore:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, max_bytes: int | None = None) -> None:
         self._root = root
         self._root.mkdir(parents=True, exist_ok=True)
+        # Предел объёма каталога прогонов: стенд по ТЗ - 10-20 ГБ SSD, а прогон тяжёлой улицы
+        # занимал до 5 ГБ (Нижние Поля, 26.09.2026). None - без предела.
+        self._max_bytes = max_bytes
         # Блокировки прогонов, которые ведёт этот экземпляр: от постановки в очередь до конца.
         self._leases: dict[str, IO[bytes]] = {}
         self._guard = threading.Lock()
 
     def create(self, source_name: str, profile: str, overrides: Mapping[str, object]) -> RunRecord:
+        self.prune()
         safe = _safe_name(source_name)
         run_id = str(uuid.uuid7())
         (self._root / run_id / "input").mkdir(parents=True)
@@ -126,6 +133,45 @@ class FileSystemRunStore:
             self.get(run_id) for run_id in ids[:limit] if (self._root / run_id / STATUS).is_file()
         ]
 
+    def prune(self) -> list[str]:
+        """Удалить самые старые законченные прогоны, пока каталог не уложится в предел.
+
+        Идущий прогон (живая блокировка) и каталог без статуса (прогон как раз создаётся) не
+        удаляются никогда. Id - uuid7, поэтому порядок имён - порядок создания.
+        """
+        if not self._max_bytes:
+            return []
+        ids = sorted(p.name for p in self._root.iterdir() if _RUN_ID.fullmatch(p.name))
+        sizes = {run_id: _tree_size(self._root / run_id) for run_id in ids}
+        total = sum(sizes.values())
+        removed: list[str] = []
+        for run_id in ids:
+            if total <= self._max_bytes:
+                break
+            if self._busy(run_id):
+                continue
+            shutil.rmtree(self._root / run_id, ignore_errors=True)
+            total -= sizes[run_id]
+            removed.append(run_id)
+        if removed:
+            LOGGER.info(
+                "Удалено старых прогонов: %d, каталог теперь %.1f ГБ (предел %.1f ГБ)",
+                len(removed),
+                total / 2**30,
+                self._max_bytes / 2**30,
+            )
+        return removed
+
+    def _busy(self, run_id: str) -> bool:
+        path = self._dir(run_id) / STATUS
+        if not path.is_file():
+            return True
+        try:
+            state = RunState(orjson.loads(path.read_bytes())["state"])
+        except orjson.JSONDecodeError, KeyError, ValueError:
+            return True
+        return state in _ACTIVE and not self._orphaned(run_id)
+
     def _hold(self, run_id: str) -> None:
         with self._guard:
             if run_id in self._leases:
@@ -163,6 +209,10 @@ class FileSystemRunStore:
         if not _RUN_ID.fullmatch(run_id):
             raise NotFoundError(f"Прогон {run_id} не найден")
         return self._root / run_id
+
+
+def _tree_size(path: Path) -> int:
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
 
 def _progress_payload(progress: RunProgress | None) -> dict[str, object] | None:

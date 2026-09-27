@@ -3,7 +3,7 @@ import { humanSize } from '../../lib/format';
 
 /** Файлы, ради которых прогон и запускали. Что внутри - в подсказке у кнопки: абзац под
  *  кнопками съедал строки списка видов на высоте проектора. */
-const HEADLINE: { name: string; label: string; what: string }[] = [
+const HEADLINE: { name: string; label: string; what: string; open?: boolean }[] = [
   {
     name: 'result.dxf',
     label: 'Скачать DXF',
@@ -13,6 +13,12 @@ const HEADLINE: { name: string; label: string; what: string }[] = [
     name: 'interpretations.csv',
     label: 'Интерпретации, CSV',
     what: 'По строке на проверенную норму: посадка, правило, акт, пункт',
+  },
+  {
+    name: 'report.html',
+    label: 'Отчёт интерпретаций',
+    what: 'По каждой посадке определяющая норма, запас и пункт акта; печатается в PDF',
+    open: true,
   },
 ];
 
@@ -44,10 +50,10 @@ export function Downloads({
             return (
               <a
                 key={file.name}
-                className={`dl ${index === 0 ? 'primary' : 'ghost'}`}
+                className={`dl ${index === 0 ? 'primary' : 'ghost'}${index > 1 ? ' wide' : ''}`}
                 href={artifact?.url}
                 title={file.what}
-                download
+                {...(file.open ? { target: '_blank', rel: 'noopener' } : { download: true })}
               >
                 <span>{file.label}</span>
                 <span className="size">{size(artifact)}</span>

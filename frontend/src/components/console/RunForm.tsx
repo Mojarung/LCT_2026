@@ -46,6 +46,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
   const [files, setFiles] = useState<File[]>([]);
   const [extra, setExtra] = useState<File[]>([]);
   const [inventory, setInventory] = useState<File[]>([]);
+  const [layers, setLayers] = useState<File[]>([]);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [edited, setEdited] = useState<{ profile: string; values: RunFormValues } | null>(null);
   const [advanced, setAdvanced] = useState('');
@@ -102,6 +103,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
       for (const item of extra) form.append('extra', item);
     }
     if (inventory[0]) form.set('inventory', inventory[0]);
+    for (const item of layers) form.append('layers', item);
     if (profileChosen) form.set('profile', profileChosen);
     if (Object.keys(overrides).length) form.set('overrides', JSON.stringify(overrides));
 
@@ -268,6 +270,15 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
           hint="Растущие деревья входят в квоты разнообразия."
           files={inventory}
           onChange={setInventory}
+        />
+        <FileField
+          id={`${ids}-layers`}
+          label="Слои ГИС"
+          accept=".geojson,.json,.zip"
+          hint="GeoJSON или SHP в .zip: охранные зоны, здания и границы data.mos.ru, кадастр. Координаты WGS 84 пересчитываются в систему чертежа."
+          multiple
+          files={layers}
+          onChange={setLayers}
         />
         <div className="field">
           <label htmlFor={`${ids}-overrides`}>Параметры поверх профиля, JSON</label>

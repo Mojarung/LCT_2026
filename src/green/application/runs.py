@@ -100,13 +100,15 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
-    def execute(
+    def execute(  # noqa: PLR0913 - комплект прогона приходит отдельными частями
         self,
         run_id: str,
         inventory_path: Path | None = None,
         extra_sources: tuple[Path, ...] = (),
         source_names: tuple[str, ...] = (),
         absent_references: tuple[tuple[str, str], ...] = (),
+        *,
+        gis_layers: tuple[Path, ...] = (),
     ) -> RunRecord:
         """Синхронный прогон: вызывается из пула потоков, CPU-работа не блокирует event loop."""
         record = self._store.get(run_id)
@@ -144,6 +146,7 @@ class RunService:
                         source_names=source_names
                         or (record.source_name, *(str(path) for path in extra_sources)),
                         absent_references=absent_references,
+                        gis_layers=gis_layers,
                     ),
                     reporter,
                 )

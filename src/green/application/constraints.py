@@ -14,6 +14,7 @@ import shapely
 from shapely import STRtree
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
+from green.application.places import forget_places
 from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, RuleCheck, Verdict
@@ -124,6 +125,7 @@ def forget_drawings() -> None:
     """Забыть индексы чертежей и память проверок: прогон закончен."""
     with _DRAWINGS_LOCK:
         _DRAWINGS.clear()
+    forget_places()
 
 
 def _points_key(points: NDArray[np.object_]) -> tuple[int, bytes]:
@@ -392,16 +394,54 @@ class ConstraintIndex:
         return codes.astype(np.int8)
 
 
+# Граница работ, чьи концы разошлись не больше чем на 5 м и на 1% длины, замыкается хордой:
+# это погрешность черчения, а не другой контур (Нижние Поля: «Граница Заказа» 4,9 км с разрывом
+# 3,4 м). Шире - граница не достраивается, прогон пишет, что границы нет.
+_BOUNDARY_GAP_M = 5.0
+_BOUNDARY_GAP_SHARE = 0.01
+
+
 def work_boundary(features: Sequence[Feature]) -> BaseGeometry | None:
     """Граница работ чертежа - та же, что ограничивает размещение посадок."""
     return _boundary([f for f in features if f.object_class is ObjectClass.WORK_BOUNDARY])
+
+
+def boundary_gaps(features: Sequence[Feature]) -> list[tuple[str, float]]:
+    """Слои и разрывы, м, линий границы работ, которые граница замкнула хордой."""
+    return [
+        (f.layer, gap)
+        for f in features
+        if f.object_class is ObjectClass.WORK_BOUNDARY
+        for part in shapely.get_parts(f.geometry)
+        if (gap := _bridgeable_gap(part)) is not None
+    ]
+
+
+def _bridgeable_gap(line: BaseGeometry) -> float | None:
+    if line.geom_type != "LineString" or line.is_ring or len(line.coords) < 3:  # noqa: PLR2004 - loop needs three vertices
+        return None
+    first, last = line.coords[0], line.coords[-1]
+    gap = float(shapely.Point(first).distance(shapely.Point(last)))
+    if 0 < gap <= min(_BOUNDARY_GAP_M, _BOUNDARY_GAP_SHARE * line.length):
+        return gap
+    return None
+
+
+def _closed(line: BaseGeometry) -> BaseGeometry:
+    parts = [
+        shapely.LineString([*part.coords, part.coords[0]])
+        if _bridgeable_gap(part) is not None
+        else part
+        for part in shapely.get_parts(line)
+    ]
+    return parts[0] if len(parts) == 1 else shapely.MultiLineString(parts)
 
 
 def _boundary(features: Sequence[Feature]) -> BaseGeometry | None:
     """Граница работ из полигонов или из замкнутых линий (как «Граница заказа» Геотреста)."""
     areas = [inner_area(f) for f in features if f.geometry.geom_type in _AREA_TYPES]
     line_features = [f for f in features if f.geometry.geom_type in _LINE_TYPES]
-    lines = [f.geometry for f in line_features]
+    lines = [_closed(f.geometry) for f in line_features]
     if lines:
         reserve = max(error_bound(f) for f in line_features)
         areas.extend(
@@ -425,12 +465,37 @@ def _index(features: tuple[Feature, ...]) -> _ClassIndex:
     errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
     if not np.isfinite(errors).all() or (errors < 0).any():
         raise ValueError("Unbounded or invalid input geometry error")
-    return _ClassIndex(STRtree([_occupied(f) for f in features]), features, halves, errors)
+    return _ClassIndex(STRtree([occupied_geometry(f) for f in features]), features, halves, errors)
 
 
-def _occupied(feature: Feature) -> BaseGeometry:
-    """Место, которое объект занимает на земле: у замкнутого контура - вместе с площадью."""
+# Полуширина самого широкого сооружения сети, которое рисуют площадью (тепловая камера,
+# канал): шире - не сооружение. Параметр проекта.
+_NETWORK_STRUCTURE_M = 10.0
+
+
+def _inradius(geometry: BaseGeometry) -> float:
+    """Радиус наибольшего вписанного круга (с точностью 0,5 м) по всем частям фигуры."""
+    return max(
+        float(shapely.length(shapely.maximum_inscribed_circle(part, 0.5)))
+        for part in shapely.get_parts(geometry)
+    )
+
+
+def occupied_geometry(feature: Feature) -> BaseGeometry:
+    """Место, которое объект занимает на земле: у замкнутого контура - вместе с площадью.
+
+    Площадная фигура сети занимает свою площадь, пока она не шире сооружения сети: камера,
+    канал, колодец. Фигура, в которую вписывается круг радиусом больше 10 м, - зона действия
+    или петля линии, а не сооружение: она мерится по контуру, иначе любая точка внутри
+    оказалась бы «на кабеле» (Харьковский проезд: окружности радиусом 150 м на слое «ЭН_ЗУ»).
+    """
     geometry = feature.geometry
+    if (
+        feature.object_class.is_utility
+        and geometry.geom_type in {"Polygon", "MultiPolygon"}
+        and _inradius(geometry) > _NETWORK_STRUCTURE_M
+    ):
+        return geometry.boundary
     if not (
         feature.object_class.occupies_interior
         and geometry.geom_type == "LineString"

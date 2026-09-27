@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from shapely.geometry.base import BaseGeometry
 
+    from green.domain.effect import StreetEffect
     from green.domain.norms import LawnKind
     from green.domain.objects import ObjectClass, SourceRef
     from green.domain.portfolio import PortfolioReport
@@ -208,6 +209,9 @@ class Placement:
     checks: tuple[RuleCheck, ...]
     notes: tuple[str, ...] = field(default=())
     assortment: AssortmentInfo | None = None
+    # Место посадки (application/places): roadside, street, yard, square, park, unknown;
+    # пусто - ещё не определялось.
+    place: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +296,8 @@ class Plan:
     portfolio: PortfolioReport | None = None
     # Травянистое покрытие на грунте, который посадки оставили свободным (application/lawns).
     lawns: tuple[Lawn, ...] = field(default=())
+    # Что план даёт улице: баланс «было - стало», виды посадок, шумозащита (application/effect).
+    effect: StreetEffect | None = None
 
     @property
     def allowed_count(self) -> int:

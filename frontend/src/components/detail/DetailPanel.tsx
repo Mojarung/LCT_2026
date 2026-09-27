@@ -9,6 +9,7 @@ import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
 import { ChecksBlock } from './ChecksBlock';
 import { Composition } from './Composition';
+import { EffectBlock } from './EffectBlock';
 import { QualityBlock } from './QualityBlock';
 import { SpeciesBlock } from './SpeciesBlock';
 import { BarrierBlock, ValueBlock } from './ValueBlock';
@@ -115,6 +116,7 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
       ) : (
         <>
           <QualityBlock quality={quality} />
+          <EffectBlock effect={quality?.effect} />
           <Composition placements={placements} />
         </>
       )}

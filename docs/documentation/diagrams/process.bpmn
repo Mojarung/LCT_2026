@@ -1,0 +1,363 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="green_definitions" targetNamespace="https://github.com/Mojarung/LCT_2026">
+  <process id="green_run" name="Прогон green: DXF -&gt; план посадок -&gt; DXF" isExecutable="false">
+    <startEvent id="start" name="Чертёж DXF или DWG, комплект, слои ГИС, профиль" />
+    <exclusiveGateway id="g_dwg" name="DWG?" />
+    <task id="t_convert" name="Конвертация DWG в DXF (ODA или LibreDWG)" />
+    <exclusiveGateway id="g_dwg_join" />
+    <task id="t_assemble" name="Сборка комплекта: внешние ссылки, склейка, единицы" />
+    <task id="t_read" name="Чтение без потерь: единицы, учёт каждого примитива, геометрия, подписи" />
+    <exclusiveGateway id="g_read" name="Единицы ясны, геометрия прочитана полностью?" />
+    <endEvent id="e_read" name="Остановка: отчёт о единицах или потерях чтения" />
+    <task id="t_classify" name="Классификация: знаки, слои, блоки, словарь имён" />
+    <exclusiveGateway id="g_classify" name="Классы определены?" />
+    <endEvent id="e_classify" name="Остановка: карта уточнения классов" />
+    <task id="t_gis" name="Слои ГИС: координаты в МСК, классы, совмещение по зданиям" />
+    <task id="t_surface" name="Карта покрытий: грунт и твёрдое по замкнутым граням" />
+    <task id="t_index" name="Индекс ограничений: нормы как данные (config/rules.yaml)" />
+    <task id="t_candidates" name="Кандидаты: аллея вдоль борта, сетка по газону, добор зоны" />
+    <task id="t_select" name="Отбор мест: жадный или MILP, шаг и посадочные места" />
+    <task id="t_species" name="Подбор вида: фильтры норм, оценка пригодности, MILP квот" />
+    <task id="t_shrubs" name="Кустарник: ряд у борта, изгородь, подлесок, группы на газоне" />
+    <task id="t_validate" name="Независимая проверка варианта (validate_plan)" />
+    <exclusiveGateway id="g_portfolio" name="Варианты или бюджет исчерпаны?" />
+    <task id="t_choose" name="Выбор прошедшего проверку плана по индексу качества (нет такого - остановка)" />
+    <task id="t_refine" name="Сдвиг посадок от сетей с повторной проверкой" />
+    <task id="t_lawns" name="Газоны на свободном грунте" />
+    <task id="t_explain" name="Объяснения из трассы правил: акт, пункт, цитата" />
+    <task id="t_write" name="Запись слоёв GREEN_* в копию исходника" />
+    <task id="t_verify" name="Сверка исходных сущностей и соответствия DXF плану" />
+    <exclusiveGateway id="g_verify" name="Обе проверки пройдены?" />
+    <endEvent id="e_verify" name="Экспорт отклонён, прежний результат сохранён" />
+    <task id="t_artifacts" name="Артефакты: result.dxf, интерпретации JSON, CSV, MD, HTML" />
+    <endEvent id="e_done" name="DXF с результатом и интерпретации" />
+    <sequenceFlow id="f1" sourceRef="start" targetRef="g_dwg" />
+    <sequenceFlow id="f2" name="да" sourceRef="g_dwg" targetRef="t_convert" />
+    <sequenceFlow id="f3" name="нет" sourceRef="g_dwg" targetRef="g_dwg_join" />
+    <sequenceFlow id="f4" sourceRef="t_convert" targetRef="g_dwg_join" />
+    <sequenceFlow id="f5" sourceRef="g_dwg_join" targetRef="t_assemble" />
+    <sequenceFlow id="f6" sourceRef="t_assemble" targetRef="t_read" />
+    <sequenceFlow id="f7" sourceRef="t_read" targetRef="g_read" />
+    <sequenceFlow id="f8" name="нет" sourceRef="g_read" targetRef="e_read" />
+    <sequenceFlow id="f9" name="да" sourceRef="g_read" targetRef="t_classify" />
+    <sequenceFlow id="f10" sourceRef="t_classify" targetRef="g_classify" />
+    <sequenceFlow id="f11" name="нет" sourceRef="g_classify" targetRef="e_classify" />
+    <sequenceFlow id="f12" name="да" sourceRef="g_classify" targetRef="t_gis" />
+    <sequenceFlow id="f13" sourceRef="t_gis" targetRef="t_surface" />
+    <sequenceFlow id="f14" sourceRef="t_surface" targetRef="t_index" />
+    <sequenceFlow id="f15" sourceRef="t_index" targetRef="t_candidates" />
+    <sequenceFlow id="f16" sourceRef="t_candidates" targetRef="t_select" />
+    <sequenceFlow id="f17" sourceRef="t_select" targetRef="t_species" />
+    <sequenceFlow id="f18" sourceRef="t_species" targetRef="t_shrubs" />
+    <sequenceFlow id="f19" sourceRef="t_shrubs" targetRef="t_validate" />
+    <sequenceFlow id="f20" sourceRef="t_validate" targetRef="g_portfolio" />
+    <sequenceFlow id="f21" name="нет: следующий вариант" sourceRef="g_portfolio" targetRef="t_candidates" />
+    <sequenceFlow id="f22" name="да" sourceRef="g_portfolio" targetRef="t_choose" />
+    <sequenceFlow id="f23" sourceRef="t_choose" targetRef="t_refine" />
+    <sequenceFlow id="f24" sourceRef="t_refine" targetRef="t_lawns" />
+    <sequenceFlow id="f25" sourceRef="t_lawns" targetRef="t_explain" />
+    <sequenceFlow id="f26" sourceRef="t_explain" targetRef="t_write" />
+    <sequenceFlow id="f27" sourceRef="t_write" targetRef="t_verify" />
+    <sequenceFlow id="f28" sourceRef="t_verify" targetRef="g_verify" />
+    <sequenceFlow id="f29" name="нет" sourceRef="g_verify" targetRef="e_verify" />
+    <sequenceFlow id="f30" name="да" sourceRef="g_verify" targetRef="t_artifacts" />
+    <sequenceFlow id="f31" sourceRef="t_artifacts" targetRef="e_done" />
+  </process>
+  <bpmndi:BPMNDiagram id="process_diagram">
+    <bpmndi:BPMNPlane id="process_plane" bpmnElement="green_run">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="182" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="115" y="122" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_dwg_di" bpmnElement="g_dwg" isMarkerVisible="true">
+        <dc:Bounds x="389" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="329" y="44" width="170" height="23" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_convert_di" bpmnElement="t_convert">
+        <dc:Bounds x="538" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_dwg_join_di" bpmnElement="g_dwg_join" isMarkerVisible="true">
+        <dc:Bounds x="817" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="757" y="44" width="170" height="23" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_assemble_di" bpmnElement="t_assemble">
+        <dc:Bounds x="966" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_read_di" bpmnElement="t_read">
+        <dc:Bounds x="1180" y="48" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_read_di" bpmnElement="g_read" isMarkerVisible="true">
+        <dc:Bounds x="175" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="-5" y="370" width="170" height="80" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_read_di" bpmnElement="e_read">
+        <dc:Bounds x="182" y="517" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="115" y="557" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_classify_di" bpmnElement="t_classify">
+        <dc:Bounds x="324" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_classify_di" bpmnElement="g_classify" isMarkerVisible="true">
+        <dc:Bounds x="603" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="543" y="354" width="170" height="23" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_classify_di" bpmnElement="e_classify">
+        <dc:Bounds x="610" y="517" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="543" y="557" width="170" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_gis_di" bpmnElement="t_gis">
+        <dc:Bounds x="752" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_surface_di" bpmnElement="t_surface">
+        <dc:Bounds x="966" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_index_di" bpmnElement="t_index">
+        <dc:Bounds x="1180" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_candidates_di" bpmnElement="t_candidates">
+        <dc:Bounds x="110" y="668" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_select_di" bpmnElement="t_select">
+        <dc:Bounds x="324" y="668" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_species_di" bpmnElement="t_species">
+        <dc:Bounds x="538" y="668" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_shrubs_di" bpmnElement="t_shrubs">
+        <dc:Bounds x="752" y="668" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_validate_di" bpmnElement="t_validate">
+        <dc:Bounds x="966" y="668" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_portfolio_di" bpmnElement="g_portfolio" isMarkerVisible="true">
+        <dc:Bounds x="1245" y="695" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1156" y="728" width="83" height="80" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_choose_di" bpmnElement="t_choose">
+        <dc:Bounds x="110" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_refine_di" bpmnElement="t_refine">
+        <dc:Bounds x="324" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_lawns_di" bpmnElement="t_lawns">
+        <dc:Bounds x="538" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_explain_di" bpmnElement="t_explain">
+        <dc:Bounds x="752" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_write_di" bpmnElement="t_write">
+        <dc:Bounds x="966" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_verify_di" bpmnElement="t_verify">
+        <dc:Bounds x="1180" y="978" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="g_verify_di" bpmnElement="g_verify" isMarkerVisible="true">
+        <dc:Bounds x="175" y="1315" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="-5" y="1319" width="170" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_verify_di" bpmnElement="e_verify">
+        <dc:Bounds x="182" y="1447" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="115" y="1487" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_artifacts_di" bpmnElement="t_artifacts">
+        <dc:Bounds x="324" y="1288" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_done_di" bpmnElement="e_done">
+        <dc:Bounds x="610" y="1322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="543" y="1362" width="170" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="f1_di" bpmnElement="f1">
+        <di:waypoint x="218" y="100" />
+        <di:waypoint x="389" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f2_di" bpmnElement="f2">
+        <di:waypoint x="439" y="100" />
+        <di:waypoint x="538" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="443" y="76" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f3_di" bpmnElement="f3">
+        <di:waypoint x="414" y="125" />
+        <di:waypoint x="414" y="160" />
+        <di:waypoint x="842" y="160" />
+        <di:waypoint x="842" y="125" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="420" y="131" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f4_di" bpmnElement="f4">
+        <di:waypoint x="718" y="100" />
+        <di:waypoint x="817" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f5_di" bpmnElement="f5">
+        <di:waypoint x="867" y="100" />
+        <di:waypoint x="966" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f6_di" bpmnElement="f6">
+        <di:waypoint x="1146" y="100" />
+        <di:waypoint x="1180" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f7_di" bpmnElement="f7">
+        <di:waypoint x="1360" y="100" />
+        <di:waypoint x="1385" y="100" />
+        <di:waypoint x="1385" y="325" />
+        <di:waypoint x="200" y="325" />
+        <di:waypoint x="200" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f8_di" bpmnElement="f8">
+        <di:waypoint x="200" y="435" />
+        <di:waypoint x="200" y="517" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="206" y="441" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f9_di" bpmnElement="f9">
+        <di:waypoint x="225" y="410" />
+        <di:waypoint x="324" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="229" y="386" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f10_di" bpmnElement="f10">
+        <di:waypoint x="504" y="410" />
+        <di:waypoint x="603" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f11_di" bpmnElement="f11">
+        <di:waypoint x="628" y="435" />
+        <di:waypoint x="628" y="517" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="634" y="441" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f12_di" bpmnElement="f12">
+        <di:waypoint x="653" y="410" />
+        <di:waypoint x="752" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="657" y="386" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f13_di" bpmnElement="f13">
+        <di:waypoint x="932" y="410" />
+        <di:waypoint x="966" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f14_di" bpmnElement="f14">
+        <di:waypoint x="1146" y="410" />
+        <di:waypoint x="1180" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f15_di" bpmnElement="f15">
+        <di:waypoint x="1360" y="410" />
+        <di:waypoint x="1385" y="410" />
+        <di:waypoint x="1385" y="635" />
+        <di:waypoint x="200" y="635" />
+        <di:waypoint x="200" y="668" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f16_di" bpmnElement="f16">
+        <di:waypoint x="290" y="720" />
+        <di:waypoint x="324" y="720" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f17_di" bpmnElement="f17">
+        <di:waypoint x="504" y="720" />
+        <di:waypoint x="538" y="720" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f18_di" bpmnElement="f18">
+        <di:waypoint x="718" y="720" />
+        <di:waypoint x="752" y="720" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f19_di" bpmnElement="f19">
+        <di:waypoint x="932" y="720" />
+        <di:waypoint x="966" y="720" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f20_di" bpmnElement="f20">
+        <di:waypoint x="1146" y="720" />
+        <di:waypoint x="1245" y="720" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f21_di" bpmnElement="f21">
+        <di:waypoint x="1270" y="745" />
+        <di:waypoint x="1270" y="820" />
+        <di:waypoint x="200" y="820" />
+        <di:waypoint x="200" y="772" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1054" y="824" width="208" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f22_di" bpmnElement="f22">
+        <di:waypoint x="1295" y="720" />
+        <di:waypoint x="1320" y="720" />
+        <di:waypoint x="1320" y="945" />
+        <di:waypoint x="200" y="945" />
+        <di:waypoint x="200" y="978" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1299" y="696" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f23_di" bpmnElement="f23">
+        <di:waypoint x="290" y="1030" />
+        <di:waypoint x="324" y="1030" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f24_di" bpmnElement="f24">
+        <di:waypoint x="504" y="1030" />
+        <di:waypoint x="538" y="1030" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f25_di" bpmnElement="f25">
+        <di:waypoint x="718" y="1030" />
+        <di:waypoint x="752" y="1030" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f26_di" bpmnElement="f26">
+        <di:waypoint x="932" y="1030" />
+        <di:waypoint x="966" y="1030" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f27_di" bpmnElement="f27">
+        <di:waypoint x="1146" y="1030" />
+        <di:waypoint x="1180" y="1030" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f28_di" bpmnElement="f28">
+        <di:waypoint x="1360" y="1030" />
+        <di:waypoint x="1385" y="1030" />
+        <di:waypoint x="1385" y="1255" />
+        <di:waypoint x="200" y="1255" />
+        <di:waypoint x="200" y="1315" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f29_di" bpmnElement="f29">
+        <di:waypoint x="200" y="1365" />
+        <di:waypoint x="200" y="1447" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="206" y="1371" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f30_di" bpmnElement="f30">
+        <di:waypoint x="225" y="1340" />
+        <di:waypoint x="324" y="1340" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="229" y="1316" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="f31_di" bpmnElement="f31">
+        <di:waypoint x="504" y="1340" />
+        <di:waypoint x="610" y="1340" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

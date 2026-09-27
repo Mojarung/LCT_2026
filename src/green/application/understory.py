@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
+from scipy.spatial import KDTree
 
 from green.application.assortment.context import site_context
 from green.application.assortment.scoring import percent, score_species
@@ -34,7 +35,8 @@ from green.application.params import active_distance_rules
 from green.application.placement import MODE_ALLEY, MODE_LABELS, MODE_UNDERSTORY, planting_index
 from green.application.quality.site import site_length
 from green.application.shrub_rows import Blockers, ranked_species
-from green.application.wording import counted
+from green.application.stock import EMPTY_STOCK, Stock, stock_of
+from green.application.wording import counted, decimal
 from green.domain.norms import PlantingType
 from green.domain.planting import SHRUB_FORMS, AssortmentInfo, Placement, Reason, Verdict
 
@@ -92,7 +94,12 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
     )
     budget = _shrub_budget(plan, features, params)
     species = understory_species(catalog, params.planting_category)
-    if not trees or not species:
+    stock = (
+        stock_of(features, work_boundary(features), crown_m=params.existing_crown_m)
+        if params.understory_existing
+        else EMPTY_STOCK
+    )
+    if not (trees or stock.trees) or not species:
         return plan
     shrub_params = replace(params, planting_type=PlantingType.SHRUB)
     index = planting_index(
@@ -105,7 +112,15 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
     planter = _Planter(
         plan, features, index=index, species=species, rulebook=rulebook, params=shrub_params
     )
-    for tree in trees:
+    # Порядок при потолке кустарника: аллея (ряды под кронами на улице), затем существующие
+    # деревья (их взрослые кроны уже дают тень нижнему ярусу), затем остальные новые.
+    alley = [t for t in trees if ALLEY_LABEL in t.notes]
+    for tree in alley:
+        if budget is not None and len(planter.added) >= budget:
+            break
+        planter.under(tree)
+    planter.under_existing(stock, budget)
+    for tree in trees[len(alley) :]:
         if budget is not None and len(planter.added) >= budget:
             break
         planter.under(tree)
@@ -117,8 +132,15 @@ def fill_understory(  # noqa: PLR0913 - сценарий передаёт всё
         "Кустарник под кронами: "
         f"{counted(planter.groups, 'группа', 'группы', 'групп')}, "
         f"{counted(len(added), 'куст', 'куста', 'кустов')} под деревьями без "
-        "нижнего яруса (МГСН 1.02-02, п. 4.2.9.2)."
+        "нижнего яруса (МГСН 1.02-02, п. 4.2.9.2)"
     )
+    if planter.existing_groups:
+        summary += (
+            f", из них {counted(planter.existing_groups, 'группа', 'группы', 'групп')} под "
+            f"существующими деревьями не ближе {decimal(params.understory_existing_gap_m)} м "
+            "к стволу (743-ПП, п. 9.8, по аналогии)"
+        )
+    summary += "."
     return replace(plan, placements=(*plan.placements, *added), warnings=(*plan.warnings, summary))
 
 
@@ -198,35 +220,87 @@ class _Planter:
         self._taken = _Taken(_SHRUB_GAP_M)
         self.added: list[Placement] = []
         self.groups = 0
+        self.existing_groups = 0
 
     def under(self, tree: Placement) -> None:
         radius = max(tree.species.crown_mature_m or tree.species.crown_diameter_m, 0.0) / 2
-        trunk = shapely.Point(tree.x, tree.y)
-        if self._covered is not None and len(
-            self._covered.query(trunk, predicate="dwithin", distance=radius)
-        ):
-            return
         # Ямы не перекрываются: куст не ближе к стволу, чем сумма радиусов посадочных мест
         # дерева и кустарника - та же сумма, что у проверки плана (validation).
         params = self._params
         pits = params.planting_radius_m + params.shrub_planting_radius_m + _PIT_RESERVE_M
         rings = [r for r in params.understory_radii_m if pits <= r < radius]
+        self._under_at(
+            (tree.x, tree.y),
+            radius,
+            rings,
+            key=tree.placement_id,
+            why="второй ярус под кроной: малая группа из {n}, 1,5-2,5 м от ствола",
+        )
+
+    def under_existing(self, stock: Stock, budget: int | None) -> None:
+        """Группы под кронами существующих деревьев в границе, у которых кустарника нет."""
+        gap = self._params.understory_existing_gap_m
+        radius = stock.crown_radius
+        start = gap + _PIT_RESERVE_M  # округление до мм не подводит куст ближе gap
+        rings = [r for r in (start, start + 0.5, start + 1.0) if r < radius]
+        own = KDTree(stock.shrubs_xy) if len(stock.shrubs_xy) else None
+        # Не ближе gap к любому стволу, а не только к своему: соседняя метка может быть
+        # настоящим стволом того же или соседнего дерева.
+        trunks = KDTree(stock.trees_xy) if len(stock.trees_xy) else None
+        why = (
+            "второй ярус под кроной существующего дерева: малая группа из {n}, не ближе "
+            f"{decimal(gap)} м от ствола (743-ПП, п. 9.8, по аналогии)"
+        )
+        for n, (x, y) in enumerate(stock.crown_xy[stock.crown_inside].tolist(), 1):
+            if budget is not None and len(self.added) >= budget:
+                break
+            if own is not None and own.query_ball_point((x, y), radius):
+                continue
+            if self._under_at(
+                (x, y), radius, rings, key=f"existing-{n}", why=why, away=(trunks, start)
+            ):
+                self.existing_groups += 1
+
+    def _under_at(  # noqa: PLR0913 - ствол, крона, кольца, имя группы, основание, запрет
+        self,
+        trunk_xy: tuple[float, float],
+        radius: float,
+        rings: Sequence[float],
+        *,
+        key: str,
+        why: str,
+        away: tuple[KDTree | None, float] | None = None,
+    ) -> bool:
+        trunk = shapely.Point(trunk_xy)
+        if self._covered is not None and len(
+            self._covered.query(trunk, predicate="dwithin", distance=radius)
+        ):
+            return False
+        # Кусты, поставленные этим этапом раньше: под этой кроной ярус уже есть.
+        if self.added and np.min(np.hypot(*(self._added_xy() - np.array(trunk_xy)).T)) < radius:
+            return False
         if not rings:
-            return
-        xy = np.vstack([np.array([tree.x, tree.y]) + r * self._ring for r in rings])
+            return False
+        xy = np.vstack([np.array(trunk_xy) + r * self._ring for r in rings])
         points = shapely.points(xy)
         clear = self._index.plantable(points) & self._blockers.clear(points)
+        if away is not None and away[0] is not None:
+            clear &= away[0].query(xy)[0] >= away[1]
         if not clear.any():
-            return
+            return False
         batch = self._index.evaluate(points)
         chosen = self._spread(xy, clear, batch)
-        group = self._group(tree, xy, chosen, batch) if chosen else []
+        group = self._group(key, why, xy, chosen, batch) if chosen else []
         if not group:
-            return
+            return False
         self.groups += 1
         self.added.extend(group)
         for shrub in group:
             self._taken.add(shrub.x, shrub.y)
+        return True
+
+    def _added_xy(self) -> NDArray[np.float64]:
+        return np.array([(p.x, p.y) for p in self.added], dtype=np.float64)
 
     def _spread(
         self, xy: NDArray[np.float64], clear: NDArray[np.bool_], batch: EvaluationBatch
@@ -248,15 +322,16 @@ class _Planter:
 
     def _group(
         self,
-        tree: Placement,
+        key: str,
+        why: str,
         xy: NDArray[np.float64],
         chosen: Sequence[int],
         batch: EvaluationBatch,
     ) -> list[Placement]:
-        structure = f"under-{tree.placement_id}"
+        structure = f"under-{key}"
         drafts = [
             Placement(
-                placement_id=f"U{tree.placement_id}-{i}",
+                placement_id=f"U{key}-{i}",
                 number=0,
                 planting_type=PlantingType.SHRUB,
                 species=self._species[0],
@@ -273,11 +348,7 @@ class _Planter:
         if not ranked:
             return []
         kind, verdicts, _ = ranked[self.groups % min(len(ranked), _ROTATE)]
-        reason = Reason(
-            "reference",
-            f"второй ярус под кроной: малая группа из {len(drafts)}, 1,5-2,5 м от ствола",
-            source=_BASIS,
-        )
+        reason = Reason("reference", why.format(n=len(drafts)), source=_BASIS)
         planted = []
         for draft, verdict, ctx in zip(drafts, verdicts, contexts, strict=True):
             detail = score_species(kind, ctx, self._params)

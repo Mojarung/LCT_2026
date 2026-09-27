@@ -28,6 +28,11 @@ def decimal(value: float, digits: int = 1) -> str:
     return f"{value:.{digits}f}".replace(".", ",")
 
 
+def decimal_g(value: float) -> str:
+    """Число без лишних нулей, с запятой: 1 -> «1», 0.5 -> «0,5»."""
+    return format(value, "g").replace(".", ",")
+
+
 def index_change(before: float, after: float) -> str:
     """Изменение индекса качества: сотых хватает, пока они различаются, иначе тысячные."""
     digits = 2 if decimal(before, 2) != decimal(after, 2) else 3

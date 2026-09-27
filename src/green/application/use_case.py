@@ -21,8 +21,10 @@ from green.application.classification import (
 from green.application.constraints import work_boundary
 from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
+from green.application.effect import street_effect
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
 from green.application.lawns import plan_lawns
 from green.application.placement import (
@@ -32,6 +34,7 @@ from green.application.placement import (
     MODE_SHRUB_ROW,
     MODE_UNDERSTORY,
 )
+from green.application.places import place_map, with_places
 from green.application.portfolio import choose_plan
 from green.application.quality import assess, site_of
 from green.application.refine import refine_weak
@@ -39,6 +42,7 @@ from green.application.results import RunReport, StageTiming
 from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
 from green.application.shrub_rows import fill_shrub_rows
+from green.application.species_traces import with_species_traces
 from green.application.surfaces import build_surface_map
 from green.application.understory import fill_understory
 from green.application.validation import (
@@ -58,6 +62,7 @@ if TYPE_CHECKING:
     from green.application.ports import (
         DrawingConverter,
         DrawingMerger,
+        GisLayerSource,
         IntegrityChecker,
         InventoryCounts,
         LayerMapSource,
@@ -68,6 +73,7 @@ if TYPE_CHECKING:
         SpeciesCatalog,
     )
     from green.application.results import IntegrityReport, PlanExportReport
+    from green.domain.objects import Scene
     from green.domain.planting import Placement, Plan
 
 RESULT_DXF = "result.dxf"
@@ -111,6 +117,8 @@ class PlanRequest:
     source_names: tuple[str, ...] = ()
     # Внешние ссылки (файл комплекта, путь), файлов которых нет в исходных данных заказчика.
     absent_references: tuple[tuple[str, str], ...] = ()
+    # Дополнительные слои ГИС (GeoJSON, SHP): кадастр, зонирование, охранные зоны, data.mos.ru.
+    gis_layers: tuple[Path, ...] = ()
 
 
 @dataclass(slots=True)
@@ -144,7 +152,9 @@ class PlanSite:
         writer: PlanWriter,
         integrity: IntegrityChecker,
         merger: DrawingMerger | None = None,
+        gis: GisLayerSource | None = None,
     ) -> None:
+        self._gis = gis
         self._reader = reader
         self._converters = tuple(converters)
         self._rules = rules
@@ -176,6 +186,7 @@ class PlanSite:
                 for path in request.extra_sources
             ]
         merge_notes: tuple[str, ...] = ()
+        gis_notes: tuple[str, ...] = ()
         assembly = None
         merge_warnings: tuple[str, ...] = ()
         if extras:
@@ -194,7 +205,7 @@ class PlanSite:
                 assembly = merged.assembly
                 merge_warnings = merged.warnings
         with watch.stage("load_config"):
-            rulebook = self._rules.load()
+            rulebook = self._rules.load().for_sp42_edition(params.sp42_edition)
             layer_map = self._layers.load()
             species = self._species.get(params.species_code)
         with watch.stage("read"):
@@ -228,6 +239,8 @@ class PlanSite:
                 )
             if params.unknown_lines_as_utility:
                 scene = promote_unknown_lines(scene)
+            if request.gis_layers:
+                scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
@@ -257,7 +270,8 @@ class PlanSite:
                 if params.require_soil
                 else None
             )
-        site = site_of(features, surface)
+        site = site_of(features, surface, crown_m=params.existing_crown_m)
+        places = place_map(features)
         inventory = request.inventory
         existing = inventory.matched if inventory else None
 
@@ -266,6 +280,8 @@ class PlanSite:
                 plan = self._strategy.plan(
                     features, scene.labels, rulebook, species, params, surface=surface
                 )
+                # Место посадки до подбора вида: категория В.6 у двора и улицы своя.
+                plan = with_places(plan, places)
             with watch.stage("assort"):
                 plan = assign_species(plan, rulebook, self._species.all(), params, existing)
                 if inventory is not None:
@@ -330,6 +346,7 @@ class PlanSite:
                     # Номера посадок идут подряд: снятые кусты не оставляют дыр в ведомости.
                     renumbered = tuple(replace(p, number=i) for i, p in enumerate(kept, 1))
                     plan = replace(plan, placements=renumbered)
+            plan = with_places(plan, places)
             with watch.stage("validate_plan"):
                 validation = validate_plan(
                     plan,
@@ -391,8 +408,16 @@ class PlanSite:
                 rulebook=rulebook,
                 params=params,
             )
+        # Что план даёт улице: было - существующие насаждения, стало - вместе с планом.
+        with watch.stage("effect"):
+            plan = replace(
+                plan,
+                effect=street_effect(
+                    plan, site, params, inventory, surface=surface, catalog=self._species.all()
+                ),
+            )
         with watch.stage("explain"):
-            plan = explain(plan, rulebook)
+            plan = explain(with_species_traces(plan, features, rulebook, params), rulebook)
         output = request.work_dir / RESULT_DXF
         pending = request.work_dir / PENDING_DXF
         with watch.stage("write_dxf"):
@@ -430,7 +455,7 @@ class PlanSite:
             # (на улице из каталога - около сорока строк аудита планшетов). Предупреждения
             # чтения и классификации остаются в сводке: они о допустимости посадок.
             warnings=(*merge_warnings, *scene.warnings, *plan.warnings, *integrity_notes),
-            load_notes=merge_notes,
+            load_notes=(*merge_notes, *gis_notes),
             basemap=basemap,
             surface=surface,
             volumes=volumes,
@@ -453,11 +478,28 @@ class PlanSite:
             source=source,
             unit_m=scene.unit_m,
             report=report,
+            inventory=inventory,
             _site=site,
             _surface=surface,
             _surface_built=params.require_soil,
         )
         return replace(report, context=context)
+
+    def _with_gis_layers(
+        self, scene: Scene, paths: tuple[Path, ...]
+    ) -> tuple[Scene, tuple[str, ...]]:
+        """Объекты слоёв ГИС встают в сцену после классификации чертежа: размещение, итоговая
+        проверка плана и правка на карте видят их так же, как объекты подосновы."""
+        if self._gis is None:
+            raise InputError("Слои ГИС не подключены к сервису")
+        layers = self._gis.read(paths)
+        notes, warnings = alignment_notes(layers.features, scene.features)
+        scene = replace(
+            scene,
+            features=(*scene.features, *layers.features),
+            warnings=(*scene.warnings, *layers.warnings, *warnings),
+        )
+        return scene, (*layers.notes, *notes)
 
     def rebuild(self, context: RunContext, plan: Plan, work_dir: Path) -> RunReport:
         """Переписать DXF и отчёт по исправленному плану, не перечитывая чертёж.

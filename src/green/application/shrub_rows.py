@@ -54,7 +54,7 @@ from green.application.placement import (
     planting_index,
 )
 from green.application.quality.site import WIDE_STREET_M, site_length
-from green.application.wording import counted, decimal
+from green.application.wording import counted, decimal, decimal_g
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import (
@@ -216,8 +216,9 @@ def _curb_hedges(  # noqa: PLR0913 - этап получает всё, что у
         "Живая изгородь вдоль бортов: "
         f"{counted(len(segments) - skipped, 'участок', 'участка', 'участков')}, "
         f"{counted(len(planted), 'куст', 'куста', 'кустов')}, "
-        f"{length:.0f} м (СП 82.13330.2016, п. 9.38; шаг {params.curb_hedge_spacing_m:g} м - "
-        "743-ПП, табл. 3.6.2, высокие кустарники)."
+        f"{length:.0f} м (СП 82.13330.2016, п. 9.38; "
+        f"шаг {decimal_g(params.curb_hedge_spacing_m)} м - 743-ПП, табл. 3.6.2, "
+        "высокие кустарники)."
     ).replace(".0 м", " м")
     if capped:
         summary += (

@@ -42,6 +42,8 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.EXISTING_SHRUB: "существующего кустарника",
     ObjectClass.EXISTING_WOODLAND: "существующего древесного массива",
     ObjectClass.OBSTACLE: "наземного препятствия",
+    ObjectClass.ZONE_POWER: "охранной зоны воздушной линии",
+    ObjectClass.ZONE_GAS: "охранной зоны газопровода",
 }
 
 _FACTOR_LABELS = {
@@ -109,13 +111,14 @@ def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
         )
     if check.measured_m is None:
         return f"{target} в чертеже нет ({cite(check, rulebook)})"
-    sign = ">=" if check.outcome is CheckOutcome.PASS else "<"
+    sign = "≥" if check.outcome is CheckOutcome.PASS else "<"
     barrier = ", допустимо с прикорневым барьером" if check.outcome is CheckOutcome.BARRIER else ""
     measure = ""
     if isinstance(rule, DistanceRule) and rule.measure_to.value == "outer_wall":
         measure = " до наружной стенки"
+    norm = f" {sign} {_metres(check.threshold_m)} м" if check.threshold_m is not None else ""
     return (
-        f"до {target}{measure} {check.measured_m:.2f} м {sign} {check.threshold_m:.2f} м"
+        f"до {target}{measure} {_metres(check.measured_m)} м{norm}"
         f"{barrier} ({cite(check, rulebook)})"
     )
 

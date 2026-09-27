@@ -23,7 +23,7 @@ if TYPE_CHECKING:
         SourceSnapshot,
     )
     from green.domain.norms import RuleBook
-    from green.domain.objects import Scene
+    from green.domain.objects import Feature, Scene
     from green.domain.planting import Plan, Species
 
 
@@ -94,6 +94,7 @@ class InventoryCounts:
     approximate: Mapping[str, str] = field(default_factory=dict)  # название -> код по роду
     rows_read: int = 0
     rows_removed: int = 0  # заключение «вырубить»: этих деревьев после работ не будет
+    removed: int = 0  # сколько растений в строках «вырубить» (по графе количества)
     rows_matched: int = 0
     rows_unmatched: int = 0
     rows_without_count: int = 0  # количество не указано, принято за одно дерево
@@ -205,6 +206,21 @@ class ProgressSink(Protocol):
     def stage(self, name: str) -> None: ...
 
     def basemap(self, basemap: Basemap) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class GisLayers:
+    """Объекты дополнительных слоёв ГИС в координатах чертежа и журнал их приёма."""
+
+    features: tuple[Feature, ...] = ()
+    notes: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
+class GisLayerSource(Protocol):
+    """GeoJSON и SHP: класс объекта по конфигу, координаты - в систему чертежа."""
+
+    def read(self, paths: Sequence[Path]) -> GisLayers: ...
 
 
 class RunContextStore(Protocol):

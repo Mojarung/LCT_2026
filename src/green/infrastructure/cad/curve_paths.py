@@ -10,6 +10,8 @@ from ezdxf.entities import Arc, Circle, LWPolyline
 from ezdxf.math import arc_segment_count
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ezdxf.entities import Ellipse, Polyline, Spline
     from ezdxf.math import ConstructionArc, ConstructionEllipse, Vec2, Vec3
     from numpy.typing import NDArray
@@ -83,6 +85,12 @@ def ellipse_tool_vertices(
     return points, closed
 
 
+# Стрелка дуги (отклонение от хорды) меньше этого - прямой отрезок, в единицах чертежа. Выпуклость
+# 1e-13 у борта Олимпийской деревни ezdxf превращает в дугу радиусом 10^14, её концы расходятся
+# с вершинами на точности float. Микрометр на порядки меньше любого допуска чтения.
+_STRAIGHT_SAGITTA = 1e-6
+
+
 def polyline_vertices(
     entity: LWPolyline | Polyline, distance: float
 ) -> tuple[list[tuple[float, float]], float]:
@@ -94,7 +102,7 @@ def polyline_vertices(
         return [], 0.0
     points = [anchors[0]]
     error = 0.0
-    for edge in entity.virtual_entities():
+    for edge in _straightened(entity).virtual_entities():
         if isinstance(edge, Circle):
             vertices, tolerance = circle_vertices(edge, distance)
             error = max(error, tolerance)
@@ -113,6 +121,43 @@ def polyline_vertices(
         if len(points) > MAX_VERTICES:
             raise ValueError("Curve vertex budget exceeded")
     return [(v.x, v.y) for v in points], error
+
+
+def _straightened(entity: LWPolyline | Polyline) -> LWPolyline | Polyline:
+    """Копия без выпуклостей, чья дуга неотличима от хорды; исходник не меняется."""
+    if isinstance(entity, LWPolyline):
+        rows = list(entity.get_points("xyseb"))
+        count = len(rows)
+        noise = [
+            i
+            for i, (x, y, _, _, bulge) in enumerate(rows)
+            if bulge and _sagitta(bulge, (x, y), rows[(i + 1) % count][:2]) < _STRAIGHT_SAGITTA
+        ]
+        if not noise:
+            return entity
+        copy = entity.copy()
+        copy.set_points([(*row[:4], 0.0 if i in noise else row[4]) for i, row in enumerate(rows)])
+        return copy
+    vertices = list(entity.vertices)
+    count = len(vertices)
+    noise = [
+        i
+        for i, vertex in enumerate(vertices)
+        if vertex.dxf.bulge
+        and _sagitta(vertex.dxf.bulge, vertex.dxf.location, vertices[(i + 1) % count].dxf.location)
+        < _STRAIGHT_SAGITTA
+    ]
+    if not noise:
+        return entity
+    copy = entity.copy()
+    for i in noise:
+        copy.vertices[i].dxf.bulge = 0.0
+    return copy
+
+
+def _sagitta(bulge: float, start: Sequence[float], end: Sequence[float]) -> float:
+    """Стрелка дуги: выпуклость - тангенс четверти угла, стрелка = выпуклость * хорда / 2."""
+    return abs(bulge) * math.dist((start[0], start[1]), (end[0], end[1])) / 2
 
 
 # Предел деления одной кривой Безье: 2**24 кусков дальше любого бюджета вершин.

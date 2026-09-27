@@ -18,6 +18,11 @@ from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
+from green.infrastructure.reports.interpretation_report import (
+    write_html,
+    write_markdown,
+    write_plantings_csv,
+)
 from green.infrastructure.reports.png import encode_rgba
 from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
@@ -31,6 +36,7 @@ if TYPE_CHECKING:
     from green.application.classification import ClassificationReport
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
+    from green.domain.effect import StreetEffect
     from green.domain.norms import RuleBook
     from green.domain.objects import Scene
     from green.domain.planting import (
@@ -87,6 +93,9 @@ class FileArtifactSink:
             "plan.json": _write_json(directory / "plan.json", _plan(report)),
             "interpretations.json": _write_json(directory / "interpretations.json", rows),
             "interpretations.csv": _write_csv(directory / "interpretations.csv", rows),
+            "interpretations.md": write_markdown(directory / "interpretations.md", report),
+            "report.html": write_html(directory / "report.html", report),
+            "plantings.csv": write_plantings_csv(directory / "plantings.csv", report),
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "export_validation.json": _write_json(
@@ -132,7 +141,8 @@ class FileArtifactSink:
                 _assortment_summary(report.plan.shrub_assortment_summary),
             ),
             "quality.json": _write_json(
-                directory / "quality.json", quality_payload(report.plan.quality)
+                directory / "quality.json",
+                quality_payload(report.plan.quality, report.plan.effect),
             ),
             "selection.json": _write_json(
                 directory / "selection.json",
@@ -421,12 +431,16 @@ def _value(value: PlantingValue | None) -> dict[str, Any] | None:
     }
 
 
-def quality_payload(quality: PlanQuality | None) -> dict[str, Any]:
-    """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки."""
+def quality_payload(
+    quality: PlanQuality | None, effect: StreetEffect | None = None
+) -> dict[str, Any]:
+    """Индекс качества плана: слагаемые с основаниями, штрафы, сводка и лучшие посадки; рядом -
+    отдельным блоком - что план даёт улице (effect), с индексом не смешивается."""
     if quality is None:
-        return {"index": None, "gate": "индекс не считался"}
+        return {"index": None, "gate": "индекс не считался", "effect": effect_payload(effect)}
     ranked = sorted(quality.values.values(), key=lambda v: -v.delta)
     return {
+        "effect": effect_payload(effect),
         "index": quality.index,
         "gate": quality.gate,
         "summary": list(quality.summary),
@@ -453,6 +467,47 @@ def quality_payload(quality: PlanQuality | None) -> dict[str, Any]:
             for v in reversed(ranked)
             if v.delta < 0
         ][:50],
+    }
+
+
+def effect_payload(effect: StreetEffect | None) -> dict[str, Any] | None:
+    """Баланс озеленения «было - стало», виды посадок и шумозащита (application/effect)."""
+    if effect is None:
+        return None
+    return {
+        "stock_source": effect.stock_source,
+        "area_m2": effect.area_m2,
+        "curb_m": effect.curb_m,
+        "length_m": effect.length_m,
+        "measures": [
+            {
+                "key": m.key,
+                "title": m.title,
+                "unit": m.unit,
+                "before": m.before,
+                "after": m.after,
+                "delta": m.delta,
+                "basis": m.basis,
+                "kind": m.kind,
+                "note": m.note,
+            }
+            for m in effect.measures
+        ],
+        "kinds": [
+            {
+                "key": k.key,
+                "title": k.title,
+                "planting_type": k.planting_type,
+                "count": k.count,
+                "length_m": k.length_m,
+                "area_m2": k.area_m2,
+                "basis": k.basis,
+                "places": dict(k.places),
+            }
+            for k in effect.kinds
+        ],
+        "noise": [asdict(b) for b in effect.noise],
+        "notes": list(effect.notes),
     }
 
 
@@ -502,6 +557,7 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
                 "y": p.y,
                 "verdict": p.verdict.value,
                 "notes": list(p.notes),
+                "place": p.place,
                 "explanation": texts.get(p.placement_id, ""),
                 "assortment": _assortment(p.assortment),
                 "value": _value(values.get(p.placement_id)),

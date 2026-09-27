@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -138,6 +138,9 @@ class DistanceRule:
     genera: frozenset[str] = field(default_factory=frozenset)
     min_crown_m: float | None = None
     traits: frozenset[str] = field(default_factory=frozenset)
+    # Редакция СП 42.13330, в которой действует правило: None - в любой. Нужна строкам, у
+    # которых значения разошлись (табл. 9.1 ред. 2016 против табл. 6.3 ред. 2026).
+    sp42_edition: str | None = None
 
     @property
     def is_species_specific(self) -> bool:
@@ -239,6 +242,15 @@ class RuleBook:
     invasive_groups: tuple[InvasiveGroupRule, ...] = ()
     species_restrictions: tuple[SpeciesRestriction, ...] = ()
     lawn_rules: tuple[LawnRule, ...] = ()
+
+    def for_sp42_edition(self, edition: str) -> RuleBook:
+        """Свод для прогона в выбранной редакции СП 42.13330: правила другой редакции уходят."""
+        return replace(
+            self,
+            distance_rules=tuple(
+                r for r in self.distance_rules if r.sp42_edition in (None, edition)
+            ),
+        )
 
     @property
     def all_rules(self) -> tuple[AnyRule, ...]:

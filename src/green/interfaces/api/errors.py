@@ -103,3 +103,8 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
     status: {"model": Problem, "description": HTTPStatus(status).phrase}
     for status in (404, 413, 422, 500)
 }
+
+
+def conflict_response() -> dict[int | str, dict[str, object]]:
+    """409 у методов правки: контекст прогона не сохранён, прогон нужно запустить заново."""
+    return {409: {"model": Problem, "description": HTTPStatus.CONFLICT.phrase}}

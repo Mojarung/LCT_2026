@@ -100,3 +100,21 @@ def test_real_berzarina_survey_is_read() -> None:
     # Отброшенное видно: без этого числа разбор неотличим от полного.
     assert counts.rows_unmatched > 0
     assert counts.balanced
+
+
+def test_removed_trees_are_counted_and_service_rows_are_not_species(tmp_path: Path) -> None:
+    rows = (
+        HEADER,
+        (1, "Клен ясенелистный", 3, 16, "Вырубить"),
+        (2, "Липа мелколистная", 2, 30, "Сохранить"),
+        (3, "Инженер-дендролог:", "", "", ""),
+        (4, "из них:", 16, "", ""),
+        (5, "аварийное", 4, "", ""),
+        (6, "без компенсац.", 16, "", ""),
+        (7, "неудовлетв.", 2, "", ""),
+    )
+    counts = read_inventory(_book(tmp_path / "survey.xlsx", rows), CATALOG)
+    assert counts.removed == 3
+    assert counts.rows_removed == 1
+    assert counts.matched == {"tilia_cordata": 2}
+    assert counts.unmatched == {}

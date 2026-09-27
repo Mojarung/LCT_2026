@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
 
 CHUNK = 1024 * 1024
 DRAWING_SUFFIXES = frozenset({".dxf", ".dwg"})
+# Слой ГИС через форму: GeoJSON или SHP одним архивом (.shp без .shx и .dbf не читается).
+UPLOAD_LAYER_SUFFIXES = frozenset({".geojson", ".json", ".zip"})
+_UNSAFE = re.compile(r"[^\w.\- ]", re.UNICODE)
 
 
 def parse_overrides(raw: str | None) -> dict[str, object]:
@@ -62,6 +66,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
     overrides: str | None = None,
     inventory: UploadFile | None = None,
     extra: Sequence[UploadFile] | None = None,
+    layers: Sequence[UploadFile] | None = None,
 ) -> RunRecord:
     """Сохранить комплект, зарегистрировать прогон и поставить его в фоновую очередь."""
     settings = container.settings
@@ -78,6 +83,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         raise
 
     inventory_path = await _store_inventory(container, record.run_id, inventory)
+    layer_paths = await _store_layers(container, record.run_id, layers)
 
     extra_paths: list[Path] = []
     source_names = [file.filename or "drawing.dxf"]
@@ -103,8 +109,38 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         inventory_path,
         tuple(extra_paths),
         tuple(source_names),
+        gis_layers=layer_paths,
     )
     return record
+
+
+async def _store_layers(
+    container: Container, run_id: str, layers: Sequence[UploadFile] | None
+) -> tuple[Path, ...]:
+    """Слои ГИС - под исходными именами: по имени файла конфиг выбирает класс объектов."""
+    paths: list[Path] = []
+    folder = container.store.input_path(run_id).parent / "gis"
+    for upload in layers or ():
+        if not upload.filename:
+            continue
+        name = _UNSAFE.sub("_", Path(upload.filename).name)[:120] or "layer.geojson"
+        suffix = Path(name).suffix.lower()
+        if suffix not in UPLOAD_LAYER_SUFFIXES:
+            message = (
+                "layers: ожидается GeoJSON (.geojson, .json) или SHP в .zip, получен "
+                f"{suffix or 'файл без типа'}"
+            )
+            container.runs.reject(run_id, message)
+            raise InputError(message)
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / name
+        try:
+            await store_upload(upload, target, container.settings.max_upload_mb * CHUNK)
+        except PayloadTooLargeError as error:
+            container.runs.reject(run_id, str(error))
+            raise
+        paths.append(target)
+    return tuple(paths)
 
 
 async def _store_inventory(
@@ -124,7 +160,11 @@ async def _store_inventory(
 
 
 def _copy_and_execute(
-    container: Container, run_id: str, street: StreetSource, inventory: Path | None = None
+    container: Container,
+    run_id: str,
+    street: StreetSource,
+    inventory: Path | None = None,
+    gis_layers: tuple[Path, ...] = (),
 ) -> None:
     """Скопировать комплект улицы в прогон и посчитать его.
 
@@ -143,7 +183,14 @@ def _copy_and_execute(
         container.runs.reject(run_id, f"комплект улицы не скопирован: {error}")
         return
     names = street.sources or tuple(str(path) for path in (street.main, *street.extra))
-    container.runs.execute(run_id, inventory, tuple(extra_paths), names, street.absent_references)
+    container.runs.execute(
+        run_id,
+        inventory,
+        tuple(extra_paths),
+        names,
+        street.absent_references,
+        gis_layers=gis_layers,
+    )
 
 
 async def accept_street_run(  # noqa: PLR0913 - те же поля, что у прогона своего чертежа
@@ -154,6 +201,7 @@ async def accept_street_run(  # noqa: PLR0913 - те же поля, что у п
     profile: str | None = None,
     overrides: str | None = None,
     inventory: UploadFile | None = None,
+    layers: Sequence[UploadFile] | None = None,
 ) -> RunRecord:
     """Поставить в очередь прогон по улице из каталога.
 
@@ -175,5 +223,8 @@ async def accept_street_run(  # noqa: PLR0913 - те же поля, что у п
         values,
     )
     inventory_path = await _store_inventory(container, record.run_id, inventory)
-    background.add_task(_copy_and_execute, container, record.run_id, street, inventory_path)
+    layer_paths = await _store_layers(container, record.run_id, layers)
+    background.add_task(
+        _copy_and_execute, container, record.run_id, street, inventory_path, layer_paths
+    )
     return record

@@ -86,13 +86,14 @@ def _inventory(container: Container, path: Path | None) -> InventoryCounts | Non
 
 
 @app.command
-def run(
+def run(  # noqa: PLR0913 - опции команды - отдельные параметры cyclopts
     source: Path,
     /,
     *more: Path,
     profile: str | None = None,
     out: Path | None = None,
     inventory: Path | None = None,
+    layer: tuple[Path, ...] = (),
     set_: Annotated[tuple[str, ...], Parameter(name="--set")] = (),
 ) -> None:
     """Прогнать чертёж: план на слоях GREEN_*, объяснения и проверка целостности.
@@ -111,6 +112,9 @@ def run(
     inventory
         Перечётная ведомость (.xls или .xlsx): существующие деревья входят в квоты
         разнообразия при подборе ассортимента.
+    layer
+        Слой ГИС (GeoJSON или SHP в .zip): охранные зоны, здания и границы из data.mos.ru,
+        кадастр. Класс объектов - config/geo_layers.yaml; можно указать несколько раз.
     set_
         Переопределение параметра профиля, например --set spacing_m=6.
     """
@@ -122,7 +126,16 @@ def run(
     existing = _inventory(container, inventory)
     with _save_review(container, work_dir):
         report = container.use_case.execute(
-            PlanRequest(run_id, source, work_dir, profile_name, params, existing, tuple(more))
+            PlanRequest(
+                run_id,
+                source,
+                work_dir,
+                profile_name,
+                params,
+                existing,
+                tuple(more),
+                gis_layers=tuple(layer),
+            )
         )
     files = container.artifacts.save(work_dir, report)
     _print(

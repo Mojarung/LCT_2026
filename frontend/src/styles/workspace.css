@@ -365,6 +365,42 @@ body.shell-map .topbar {
 .quality {
   margin-bottom: 18px;
 }
+
+/* Было - стало: строка «показатель - значение», значение моноширинным справа. */
+.effect {
+  margin-bottom: 18px;
+}
+.effect-rows {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.effect-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+}
+.effect-rows li + li {
+  border-top: 1px solid var(--hair);
+}
+.effect-name {
+  color: var(--bone-2);
+}
+.effect-note {
+  grid-column: 1 / -1;
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+  color: var(--bone-3);
+}
+.effect-value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--bone);
+  text-align: right;
+}
 .quality-index {
   margin: 0 0 4px;
   font-size: var(--fs-small);
@@ -894,6 +930,9 @@ body.shell-map .topbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
+}
+.dl.wide {
+  grid-column: 1 / -1;
 }
 .dl {
   display: flex;

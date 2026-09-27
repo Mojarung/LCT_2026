@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Response
 from green.application.editing import Edit, EditKind, apply_edits, check_point
 from green.infrastructure.reports.artifacts import plan_payload, quality_payload
 from green.interfaces.api.dependencies import ContainerDep
-from green.interfaces.api.errors import PROBLEM_RESPONSES, EditContextLostError
+from green.interfaces.api.errors import PROBLEM_RESPONSES, EditContextLostError, conflict_response
 from green.interfaces.api.schemas import (
     CheckIn,
     CheckOut,
@@ -28,7 +28,12 @@ if TYPE_CHECKING:
     from green.application.editing import RunContext
     from green.bootstrap.container import Container
 
-router = APIRouter(prefix="/runs", tags=["edits"], responses=PROBLEM_RESPONSES)
+# 409: контекст правки прогона не сохранён (прогон не закончен, сделан прежней версией, удалён).
+router = APIRouter(
+    prefix="/runs",
+    tags=["edits"],
+    responses={**PROBLEM_RESPONSES, **conflict_response()},
+)
 
 
 def _context(container: Container, run_id: str) -> RunContext:
@@ -49,7 +54,7 @@ def draft(run_id: str, response: Response, container: ContainerDep) -> DraftOut:
     response.headers["Cache-Control"] = "no-store"
     return DraftOut(
         plan=plan_payload(plan),
-        quality=quality_payload(plan.quality),
+        quality=quality_payload(plan.quality, plan.effect),
         stale=context.report is None or plan is not context.report.plan,
     )
 

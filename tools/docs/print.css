@@ -1,0 +1,392 @@
+/* Печать технической документации на A4. Цвета - из токенов интерфейса «бумага»
+   (frontend/src/styles/tokens.css): чернила, волосяные линии, один акцент - зелень. */
+@page {
+  size: A4;
+  margin: 20mm 16mm 17mm 20mm;
+  @top-left {
+    content: 'green: озеленение улиц по DXF. Техническая документация';
+    font: 7.4pt 'IBM Plex Sans', Arial, sans-serif;
+    color: #665d4f;
+    vertical-align: bottom;
+    padding-bottom: 5mm;
+  }
+  @bottom-right {
+    content: counter(page) ' из ' counter(pages);
+    font: 7.4pt 'IBM Plex Sans', Arial, sans-serif;
+    color: #665d4f;
+    vertical-align: top;
+    padding-top: 5mm;
+  }
+}
+/* Титул: без полей и колонтитулов, в общую нумерацию входит, номер не ставится. */
+@page :first {
+  margin: 0;
+  @top-left {
+    content: none;
+  }
+  @bottom-right {
+    content: none;
+  }
+}
+
+:root {
+  --ink: #2b2620;
+  --ink-2: #564e43;
+  --ink-3: #665d4f;
+  --hair: #ddd1b8;
+  --hair-2: #bcae92;
+  --tint: #f5f0e4;
+  --accent: #3d7a4e;
+  --accent-tint: #e9f0e3;
+}
+
+html {
+  font-family: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  font-size: 9.4pt;
+  line-height: 1.46;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+body {
+  margin: 0;
+  background: #fff;
+  font-kerning: normal;
+  font-variant-numeric: lining-nums;
+}
+
+/* --- Титул --- */
+.cover {
+  box-sizing: border-box;
+  height: 297mm;
+  padding: 26mm 22mm 24mm 26mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-left: 7mm solid var(--accent);
+  break-after: page;
+}
+.cover .case {
+  margin: 0;
+  max-width: 125mm;
+  font-size: 9pt;
+  color: var(--ink-3);
+}
+.cover h1 {
+  margin: 0 0 6mm;
+  font-size: 44pt;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.cover .subtitle {
+  margin: 0 0 12mm;
+  max-width: 135mm;
+  font-size: 16pt;
+  line-height: 1.3;
+  font-weight: 500;
+}
+.cover .doc-kind {
+  margin: 0;
+  padding-top: 4mm;
+  border-top: 1.2pt solid var(--ink);
+  max-width: 135mm;
+  font-size: 11pt;
+  font-weight: 600;
+}
+.cover-meta {
+  margin: 0;
+  display: grid;
+  gap: 2.4mm;
+  font-size: 8.6pt;
+}
+.cover-meta div {
+  display: grid;
+  grid-template-columns: 34mm 1fr;
+}
+.cover-meta dt {
+  color: var(--ink-3);
+}
+.cover-meta dd {
+  margin: 0;
+}
+
+/* --- Оглавление --- */
+.toc {
+  break-after: page;
+}
+.toc-title {
+  margin: 0 0 7mm;
+  font-size: 17pt;
+  font-weight: 600;
+}
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.toc li a {
+  display: flex;
+  align-items: baseline;
+  color: inherit;
+  text-decoration: none;
+}
+.toc li.l2 {
+  margin-top: 2.6mm;
+  font-weight: 600;
+}
+.toc li.l3 {
+  padding-left: 7mm;
+  font-size: 8.8pt;
+  color: var(--ink-2);
+}
+.toc .fill {
+  flex: 1;
+  margin: 0 1.6mm;
+  border-bottom: 0.6pt dotted var(--hair-2);
+  transform: translateY(-0.9mm);
+}
+.toc .pg {
+  min-width: 6mm;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Заголовки --- */
+/* Раздел, который целиком помещается на новой странице (таблица без переноса). */
+h3.newpage {
+  break-before: page;
+}
+
+h2 {
+  break-before: page;
+  margin: 0 0 6mm;
+  padding-bottom: 3mm;
+  border-bottom: 1.2pt solid var(--ink);
+  font-size: 16pt;
+  font-weight: 600;
+  line-height: 1.2;
+}
+h3 {
+  margin: 7mm 0 2.5mm;
+  font-size: 11.5pt;
+  font-weight: 600;
+  line-height: 1.25;
+  break-after: avoid;
+}
+h4 {
+  margin: 5mm 0 2mm;
+  font-size: 9.8pt;
+  font-weight: 600;
+  break-after: avoid;
+}
+h3 + p,
+h4 + p {
+  break-before: avoid;
+}
+
+p {
+  margin: 0 0 2.4mm;
+  orphans: 3;
+  widows: 3;
+}
+ul,
+ol {
+  margin: 0 0 2.6mm;
+  padding-left: 5.5mm;
+}
+li {
+  margin: 0 0 0.9mm;
+}
+li > ul,
+li > ol {
+  margin-top: 0.9mm;
+}
+strong,
+b {
+  font-weight: 600;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0 0.22em;
+  border-radius: 1.5pt;
+  background: var(--tint);
+  overflow-wrap: break-word;
+}
+pre {
+  margin: 0 0 3mm;
+  padding: 2.6mm 3.2mm;
+  border-left: 1.5pt solid var(--hair-2);
+  background: var(--tint);
+  font-size: 7.9pt;
+  line-height: 1.42;
+  white-space: pre-wrap;
+  break-inside: avoid;
+}
+pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+blockquote {
+  margin: 0 0 3mm;
+  padding: 1.6mm 0 1.6mm 4mm;
+  border-left: 1.5pt solid var(--accent);
+  color: var(--ink-2);
+  break-inside: avoid;
+}
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Таблицы --- */
+table {
+  width: 100%;
+  margin: 1mm 0 4mm;
+  border-collapse: collapse;
+  font-size: 8.1pt;
+  line-height: 1.36;
+}
+thead {
+  display: table-header-group;
+}
+th {
+  padding: 1.3mm 2mm 1.3mm 0;
+  border-bottom: 0.9pt solid var(--ink);
+  text-align: left;
+  vertical-align: bottom;
+  font-weight: 600;
+}
+td {
+  padding: 1.2mm 2mm 1.2mm 0;
+  border-bottom: 0.4pt solid var(--hair);
+  vertical-align: top;
+}
+tr {
+  break-inside: avoid;
+}
+td:first-child,
+th:first-child {
+  padding-left: 0;
+}
+
+/* Приложения: широкие таблицы мельче, заголовки подразделов не с новой страницы. */
+.annex table {
+  font-size: 7.3pt;
+}
+.annex td,
+.annex th {
+  padding-right: 1.6mm;
+}
+.annex h4 {
+  margin-top: 4mm;
+}
+.annex blockquote {
+  font-size: 8.2pt;
+}
+/* Идентификаторы и имена параметров не рвутся посреди слова; прочий код - только по пробелам. */
+.annex code {
+  overflow-wrap: normal;
+}
+.annex td:first-child code {
+  white-space: nowrap;
+}
+/* A.3 «Акты»: название и редакция - основной текст, источник - узкий столбец адреса. */
+.annex[data-source='A-rules.md'] table:nth-of-type(3) td:nth-child(1) {
+  width: 30%;
+}
+.annex[data-source='A-rules.md'] table:nth-of-type(3) td:nth-child(2) {
+  width: 42%;
+}
+.annex[data-source='A-rules.md'] table:nth-of-type(3) td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+
+/* --- Рисунки --- */
+figure {
+  margin: 2mm 0 5mm;
+  break-inside: avoid;
+}
+figcaption {
+  margin-top: 2mm;
+  font-size: 8.2pt;
+  color: var(--ink-2);
+}
+figure.wide img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Рис. 2.1: слои кода полосами, зависимости сверху вниз. Имя слоя - слева, состав - списком. */
+figure.layers .layer {
+  position: relative;
+  padding: 2mm 2.4mm 2mm 31mm;
+  border: 0.6pt solid var(--hair-2);
+  border-bottom: none;
+  font-size: 7.9pt;
+  line-height: 1.5;
+}
+figure.layers .layer:last-of-type {
+  border-bottom: 0.6pt solid var(--hair-2);
+}
+figure.layers .layer b {
+  position: absolute;
+  left: 2.4mm;
+  top: 2mm;
+  font-size: 8.6pt;
+}
+figure.layers .layer span {
+  display: block;
+}
+figure.layers .layer.core {
+  background: var(--accent-tint);
+}
+
+/* Рис. 2.2: вложенные рамки хоста, контейнера и томов. */
+figure.deploy .box {
+  display: block;
+  padding: 2.4mm 2.8mm;
+  border: 0.6pt solid var(--hair-2);
+  font-size: 7.9pt;
+}
+figure.deploy .box > b {
+  display: block;
+  font-size: 8.4pt;
+  margin-bottom: 1mm;
+}
+figure.deploy .box > span {
+  display: block;
+  margin-bottom: 0.6mm;
+}
+figure.deploy .box > .box {
+  margin-top: 1.4mm;
+}
+figure.deploy .host {
+  border: 0.9pt solid var(--ink);
+}
+figure.deploy .container {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+figure.deploy .row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2mm;
+  margin-top: 2mm;
+}
+figure.deploy .vol {
+  border-style: dashed;
+}
+figure.deploy .ext {
+  background: var(--tint);
+  border: none;
+}

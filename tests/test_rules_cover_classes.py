@@ -31,6 +31,11 @@ NOT_OBSTACLES = frozenset(
         ObjectClass.LAWN,
         ObjectClass.WORK_BOUNDARY,
         ObjectClass.EXISTING_WOODLAND,
+        # Вид территории из слоя зонирования - признак места посадки, не предмет на земле.
+        ObjectClass.TERRITORY_STREET,
+        ObjectClass.TERRITORY_YARD,
+        ObjectClass.TERRITORY_SQUARE,
+        ObjectClass.TERRITORY_PARK,
     }
 )
 # СП 42.13330.2016, табл. 9.1: у кустарника прочерк - расстояние до подземной линейной сети

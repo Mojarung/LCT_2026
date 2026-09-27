@@ -47,6 +47,16 @@ class ObjectClass(StrEnum):
     EXISTING_WOODLAND = "existing_woodland"
     # Наземное препятствие в точке, не сеть и не опора: афишная тумба, шлагбаум, колонка.
     OBSTACLE = "obstacle"
+    # Охранные зоны из слоёв ГИС (GeoJSON, SHP): полигон зоны, а не линия сети. Посадка, яма
+    # которой заходит в зону, требует согласования (ПП РФ N 160, п. 10; N 878, п. 16).
+    ZONE_POWER = "zone.power_line"
+    ZONE_GAS = "zone.gas"
+    # Вид территории из слоя функционального зонирования (ГИС): где улица, где двор, где сквер.
+    # Отступа не дают; задают место посадки и категорию по МГСН 1.02-02, табл. В.6.
+    TERRITORY_STREET = "territory.street"
+    TERRITORY_YARD = "territory.yard"
+    TERRITORY_SQUARE = "territory.square"
+    TERRITORY_PARK = "territory.park"
     LAWN = "lawn"
     # Линия или контур без известного смысла на незнакомом чертеже (задача 14): разделяет
     # покрытия, как граница, но отступа не даёт - материал внутри решают подписи.
@@ -68,7 +78,7 @@ class ObjectClass(StrEnum):
     def occupies_interior(self) -> bool:
         """Замкнутый контур занимает площадь внутри: в середине фонтана или памятника посадки нет,
         хотя до линии контура оттуда дальше нормы."""
-        return self is ObjectClass.OBSTACLE
+        return self in {ObjectClass.OBSTACLE, ObjectClass.ZONE_POWER, ObjectClass.ZONE_GAS}
 
     @property
     def is_hard_surface(self) -> bool:

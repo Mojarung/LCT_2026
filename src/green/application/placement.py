@@ -21,13 +21,14 @@ import shapely
 from green.application.approximation import reserved_buffer
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.candidate_selection import SelectionProblem, select_candidates
-from green.application.constraints import ConstraintIndex, EvaluationBatch
+from green.application.constraints import ConstraintIndex, EvaluationBatch, boundary_gaps
 from green.application.errors import InputError
 from green.application.params import (
     active_distance_rules,
     species_distance_rules,
     step_with_tolerance,
 )
+from green.application.places import Place, place_map
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.zones import CAPACITY_STAT, MAX_ZONE_POINTS, build_zones, pack_count
@@ -110,6 +111,16 @@ class _Candidate:
     offset: float = 0.0
 
 
+def _outside_yards(candidates: list[_Candidate], features: Sequence[Feature]) -> list[_Candidate]:
+    """Во дворе аллей нет (заказчик, docs/notes/15, вопрос 15): места аллеи, которые по
+    зонированию или полигонам проезжей части во дворе, не предлагаются."""
+    places = place_map(features)
+    if places.source == "none" or not candidates:
+        return candidates
+    found = places.of(np.array([(c.x, c.y) for c in candidates]))
+    return [c for c, place in zip(candidates, found, strict=True) if place is not Place.YARD]
+
+
 class GreedyPlantingStrategy:
     """Аллея вдоль борта, затем заполнение газона; первый допустимый вариант на станции."""
 
@@ -165,7 +176,7 @@ class GreedyPlantingStrategy:
         if MODE_ALLEY in params.modes:
             reach = max((abs(offset) for offset in params.curb_offsets_m), default=0.0)
             lines = _curb_lines(features, index.boundary, reach + _ROUNDING_PAIR_RESERVE_M)
-            candidates = _curb_candidates(lines, params)
+            candidates = _outside_yards(_curb_candidates(lines, params), features)
             stats["alley_candidates"] = len(candidates)
             stats["alley_plantable"] = _offer(index, selector, candidates)
         if MODE_LAWN in params.modes and index.surface is not None:
@@ -791,6 +802,11 @@ def _warnings(
             if params.require_work_boundary
             else "Граница работ не найдена: профиль явно разрешает размещение по всему чертежу."
         )
+    warnings.extend(
+        f"Граница работ на слое «{layer}» не сомкнута: разрыв "
+        f"{f'{gap:.2f}'.replace('.', ',')} м замкнут хордой."
+        for layer, gap in boundary_gaps(features)
+    )
     if len(plan_rejections) >= max_rejections:
         warnings.append(
             f"Отметок отказов больше лимита {max_rejections}: показаны только первые, "

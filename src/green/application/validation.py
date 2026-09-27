@@ -17,8 +17,9 @@ import numpy as np
 import shapely
 
 from green.application.barriers import BARRIER_CONDITION, BARRIER_NOTE, barrier_distance
-from green.application.constraints import ConstraintIndex
+from green.application.constraints import ConstraintIndex, occupied_geometry
 from green.application.params import active_distance_rules, step_with_tolerance
+from green.application.places import category_of
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
 from green.domain.norms import MeasureTo, PlantingType, Severity
@@ -74,7 +75,7 @@ class PlanValidation:
 
 class _Objects:
     def __init__(self, features: Sequence[Feature]) -> None:
-        self.tree = shapely.STRtree([f.geometry for f in features])
+        self.tree = shapely.STRtree([occupied_geometry(f) for f in features])
         self.radii = np.array([(f.diameter_m or 0.0) / 2 for f in features])
         self.errors = np.array([f.geometry_error_m for f in features], dtype=np.float64)
         if not np.isfinite(self.errors).all() or (self.errors < 0).any():
@@ -201,16 +202,20 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
                     "No recognised utility data",
                 )
             )
-        norms = species_norms(species, rulebook, params.territory, params.planting_category)
-        if norms.blocking:
-            issues.append(
-                ValidationIssue(
-                    "species_rule",
-                    tuple(p.placement_id for p in placements),
-                    norms.blocking.text,
-                    norms.blocking.rule_id,
+        by_category: dict[str, list[Placement]] = {}
+        for p in placements:
+            by_category.setdefault(category_of(p.place, params.planting_category), []).append(p)
+        for category, members in by_category.items():
+            norms = species_norms(species, rulebook, params.territory, category)
+            if norms.blocking:
+                issues.append(
+                    ValidationIssue(
+                        "species_rule",
+                        tuple(p.placement_id for p in members),
+                        norms.blocking.text,
+                        norms.blocking.rule_id,
+                    )
                 )
-            )
         _check_distances(placements, points, objects, rulebook, local, issues=issues)
         issues.extend(_site_conditions(placements, points, objects, local))
     finite = [p for group in groups.values() for p in group]

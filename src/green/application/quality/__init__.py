@@ -145,7 +145,7 @@ def evaluate(plan: Plan, site: Site, params: PlanParams, *, values: bool = True)
         "fit": fit(layout, params, targets),
         "diversity": diversity(layout, params, targets),
         "rows": rows(layout, params, targets, exact=values),
-        "tiers": tiers(layout, targets),
+        "tiers": tiers(layout, site, targets),
         "category": category(layout, params, targets),
         "canopy": canopy(layout, site, params, targets, exact=values),
         "dust": dust(layout, site, params),

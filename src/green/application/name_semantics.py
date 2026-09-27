@@ -80,6 +80,7 @@ class Vocabulary:
     existing: frozenset[str] = frozenset()
     annotation: frozenset[str] = frozenset()
     annotation_phrases: Sequence[str] = ()
+    annotation_patterns: Sequence[re.Pattern[str]] = ()
     fingerprint: str = ""
 
     def __bool__(self) -> bool:
@@ -127,6 +128,9 @@ class Vocabulary:
         for phrase in self.annotation_phrases:
             if _has_phrase(text, phrase):
                 return phrase
+        for pattern in self.annotation_patterns:
+            if found := pattern.search(text):
+                return found.group()
         for token in _aliases(tokens):
             if (word := _match(token, self.annotation)) is not None:
                 return word
@@ -274,5 +278,6 @@ def build_vocabulary(data: Mapping[str, object], fingerprint: str = "") -> Vocab
         existing=listed("existing"),
         annotation=frozenset(normalize(str(w)) for w in annotation.get("words", ())),
         annotation_phrases=tuple(normalize(str(p)) for p in annotation.get("phrases", ())),
+        annotation_patterns=tuple(re.compile(str(p)) for p in annotation.get("patterns", ())),
         fingerprint=fingerprint,
     )

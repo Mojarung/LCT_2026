@@ -66,6 +66,7 @@ class DistanceRuleModel(_Strict):
     genera: list[str] = Field(default_factory=list)
     min_crown_m: float | None = Field(default=None, gt=0, le=40)
     traits: list[Literal["thorny", "toxic"]] = Field(default_factory=list)
+    sp42_edition: Literal["2016", "2026"] | None = None
     citation: CitationModel
 
 
@@ -177,6 +178,14 @@ class VocabularyClassModel(_Strict):
 class VocabularyAnnotationModel(_Strict):
     words: list[str] = Field(default_factory=list)
     phrases: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("patterns")
+    @classmethod
+    def _compiles(cls, value: list[str]) -> list[str]:
+        for pattern in value:
+            re.compile(pattern)
+        return value
 
 
 class VocabularyFile(_Strict):
@@ -340,6 +349,7 @@ class ProfileModel(_Strict):
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
     allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
+    sp42_edition: Literal["2016", "2026"] = "2016"
     root_barriers: bool = False
     shrub_groups: bool = True
     shrub_group_spacing_m: float = Field(default=1.0, ge=0.3, le=3.0)
@@ -361,6 +371,8 @@ class ProfileModel(_Strict):
     understory_trees: Literal["alley", "all"] = "all"
     understory_size: int = Field(default=3, ge=1, le=7)
     understory_radii_m: tuple[float, ...] = Field(default=(2.2, 2.6, 3.0), min_length=1)
+    understory_existing: bool = True
+    understory_existing_gap_m: float = Field(default=3.0, ge=1, le=10)
     shrub_fill: bool = True
     shrub_fill_tree_gap_m: float = Field(default=3.0, ge=0, le=20)
     shrub_fill_shrub_gap_m: float = Field(default=2.0, ge=0, le=20)
@@ -390,6 +402,7 @@ class ProfileModel(_Strict):
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
     canopy_target: float = Field(default=0.75, gt=0, le=5)
     canopy_crown_m: float = Field(default=8.5, gt=0, le=40)
+    existing_crown_m: float = Field(default=8.5, gt=0, le=40)
     street_length_m: float | None = Field(default=None, gt=0, le=100_000)
     dust_target: float = Field(default=0.50, gt=0, le=1)
     dust_strip_m: float = Field(default=2.0, ge=0, le=10)
@@ -417,6 +430,12 @@ class ProfileModel(_Strict):
         if any(weight < 0 for weight in value.values()):
             raise ValueError("quality_weights: вес не может быть отрицательным")
         return value
+
+    @field_validator("sp42_edition", mode="before")
+    @classmethod
+    def _edition(cls, value: object) -> object:
+        """Год редакции числом (--set sp42_edition=2026 разбирается как YAML) - та же редакция."""
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
     @field_validator("disabled_rules")
     @classmethod

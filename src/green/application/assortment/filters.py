@@ -89,7 +89,7 @@ def _given(
 
 def _species_norms(
     species: Species,
-    _ctx: SiteContext,
+    ctx: SiteContext,
     rulebook: RuleBook,
     params: PlanParams,
     reasons: list[Reason],
@@ -99,7 +99,7 @@ def _species_norms(
         species,
         rulebook,
         params.territory,
-        params.planting_category,
+        ctx.category or params.planting_category,
         allergen_act_priority=params.allergen_act_priority,
     )
     reasons.extend(verdict.reasons)

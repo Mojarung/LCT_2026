@@ -184,6 +184,23 @@ def test_species_are_assigned_and_explained(run: dict[str, object]) -> None:
         assert sum(shrubs.counts.values()) == sum(p.species.is_shrub for p in plan.placements)
 
 
+def test_every_trace_uses_the_rules_of_the_planted_species(run: dict[str, object]) -> None:
+    """Трасса объяснения - правила посаженного вида, как у проверки плана, а не вида профиля."""
+    from dataclasses import replace  # noqa: PLC0415 - нужен только здесь
+
+    from green.application.params import PlanParams, species_distance_rules  # noqa: PLC0415
+    from green.infrastructure.config.repositories import YamlRuleBookSource  # noqa: PLC0415
+
+    rulebook = YamlRuleBookSource(ROOT / "config" / "acts.yaml", ROOT / "config" / "rules.yaml")
+    book = rulebook.load().for_sp42_edition("2016")
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    for placement in plan.placements:
+        params = replace(PlanParams(), planting_type=placement.planting_type)
+        allowed = {r.rule_id for r in species_distance_rules(book, params, placement.species)}
+        traced = {c.rule_id for c in placement.checks}
+        assert traced <= allowed, (placement.species.code, traced - allowed)
+
+
 def test_assortment_artifacts_are_written(run: dict[str, object]) -> None:
     artifacts = run["artifacts"]  # type: ignore[assignment]
     path = artifacts["assortment.json"]  # type: ignore[index]
@@ -224,6 +241,34 @@ def test_explanation_is_written_once_per_decision(run: dict[str, object]) -> Non
     texts = {e.subject_id for e in plan.explanations if e.text}
     assert set(explained.values()) == {1}
     assert all(explained[key] == 1 for key in subjects if key[1] in texts)
+
+
+def test_readable_report_names_the_governing_norm_of_every_planting(
+    run: dict[str, object],
+) -> None:
+    """Отчёт для эксперта: по каждой посадке - определяющая норма, расстояние, норма, запас и
+    пункт акта; HTML печатается в PDF; CSV - одна строка на посадку с текстом объяснения."""
+    plan = run["report"].plan  # type: ignore[attr-defined]
+    artifacts = run["artifacts"]
+    md = artifacts["interpretations.md"].read_text(encoding="utf-8")  # type: ignore[index]
+    section = md.split("## Посадки")[1].split("## Отказы")[0]
+    rows = [line for line in section.splitlines() if line.startswith("| ") and "---" not in line]
+
+    assert "## Нормативная база" in md
+    assert "СП 42.13330.2016" in md
+    assert len(rows) - 1 == len(plan.placements)  # строка заголовка
+    assert all(line.count(" | ") == 10 for line in rows)
+    assert all("п. " in line for line in rows[1:])
+
+    page = artifacts["report.html"].read_text(encoding="utf-8")  # type: ignore[index]
+    assert "@page" in page
+    assert page.count("<tr>") >= len(plan.placements)
+
+    text = artifacts["plantings.csv"].read_text(encoding="utf-8-sig")  # type: ignore[index]
+    table = list(csv.DictReader(io.StringIO(text), delimiter=";"))
+    assert len(table) == len(plan.placements)
+    assert all(row["explanation"] and row["governing_rule"] for row in table)
+    assert all(row["place"] == "место не определено" for row in table)
 
 
 def test_zones_and_integrity(run: dict[str, object]) -> None:

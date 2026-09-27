@@ -126,6 +126,11 @@ class SurfaceMap:
         result = np.full(len(points), int(Material.UNKNOWN), dtype=np.int8)
         grid = self.grid if self.inferred_grid is None else self.inferred_grid
         result[inside] = grid[rows[inside], cols[inside]]
+        # Подготовка shapely при pickle теряется (контекст правки после перезапуска): без неё
+        # проверка точек на большой карте идёт на порядок дольше.
+        for area in (self.soil_area, self.paved_area, self.uncertainty_area):
+            if area is not None and not shapely.is_prepared(area):
+                shapely.prepare(area)
         if self.soil_area is not None:
             result[shapely.contains(self.soil_area, points)] = int(Material.SOIL)
         if self.paved_area is not None:

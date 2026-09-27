@@ -30,9 +30,10 @@ from scipy.spatial import KDTree
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.explain import OBJECT_LABELS
-from green.application.quality.coverage import measure_crowns
+from green.application.places import category_of
+from green.application.quality.coverage import FixedCrowns, fixed_crowns, measure_crowns
 from green.application.quality.site import WIDE_STREET_M, site_length
-from green.application.wording import decimal
+from green.application.wording import decimal, decimal_g
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
@@ -265,38 +266,75 @@ def _count_phrase(what: str, count: float, target: float) -> str:
 # --- Ярусность ---------------------------------------------------------------------------
 
 
-def tiers(layout: Layout, targets: Targets | None) -> TermResult:
-    """Деревья с кустарником под кроной против цели по деревьям (МГСН 1.02-02, п. 4.2.9.2)."""
+def tiers(layout: Layout, site: Site, targets: Targets | None) -> TermResult:
+    """Деревья с кустарником под кроной против цели по деревьям (МГСН 1.02-02, п. 4.2.9.2).
+
+    Существующее дерево, под крону которого план посадил кустарник, - тоже второй ярус,
+    созданный планом; дерево, у которого кустарник уже был, в счёт не идёт.
+    """
     trees = np.flatnonzero(layout.is_tree)
     covering = _under_crowns(layout, trees)
-    covered = sum(1 for i in trees.tolist() if covering.get(i))
+    existing = _under_existing(layout, site)
+    covered = sum(1 for i in trees.tolist() if covering.get(i)) + len(existing)
     goal = targets.trees if targets is not None else float(max(len(trees), 1))
     score = min(1.0, covered / goal)
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
-    sole: Counter[int] = Counter()
-    under: Counter[int] = Counter()
+    groups = [covering[i] for i in trees.tolist() if covering.get(i)]
     for i in trees.tolist():
-        shrubs = covering.get(i, [])
-        if not shrubs:
-            continue
-        deltas[i] = score - min(1.0, (covered - 1) / goal)
-        details[i] = "под кроной есть кустарник: второй ярус"
-        if len(shrubs) == 1:
-            sole[shrubs[0]] += 1
-        for s in shrubs:
-            under[s] += 1
+        if covering.get(i):
+            deltas[i] = score - min(1.0, (covered - 1) / goal)
+            details[i] = "под кроной есть кустарник: второй ярус"
+    sole, under = _shrub_tallies([*groups, *existing])
     for s, count in sole.items():
         deltas[s] = score - min(1.0, (covered - count) / goal)
     for s, count in under.items():
         details[s] = f"нижний ярус под кронами деревьев: {count}"
     if targets is None:
         deltas[:] = 0.0
-    note = f"деревьев с кустарником под кроной: {covered} из {len(trees)}"
+    note = f"деревьев с кустарником под кроной: {covered} из {len(trees) + site.stock.trees}"
+    if existing:
+        note += f", из них существующих {len(existing)}"
     if targets is not None:
         note += f", цель - {targets.trees:.0f}"
-    measure = {"trees": len(trees), "covered": covered, "goal": round(goal, 1)}
+    measure = {
+        "trees": len(trees),
+        "covered": covered,
+        "goal": round(goal, 1),
+        "existing": len(existing),
+    }
     return TermResult(score, note, deltas, details, measure)
+
+
+def _shrub_tallies(groups: list[list[int]]) -> tuple[Counter[int], Counter[int]]:
+    """Сколько деревьев держится только на этом кусте (sole) и под скольким он стоит (under)."""
+    sole: Counter[int] = Counter()
+    under: Counter[int] = Counter()
+    for shrubs in groups:
+        if len(shrubs) == 1:
+            sole[shrubs[0]] += 1
+        for s in shrubs:
+            under[s] += 1
+    return sole, under
+
+
+def _under_existing(layout: Layout, site: Site) -> list[list[int]]:
+    """Новые кусты под кроной каждого существующего дерева в границе без своего куста."""
+    stock = site.stock
+    shrub_index = np.flatnonzero(layout.is_shrub)
+    if not len(shrub_index) or not stock.crown_inside.any():
+        return []
+    trunks = stock.crown_xy[stock.crown_inside]
+    tree = KDTree(layout.xy[shrub_index])
+    own = KDTree(stock.shrubs_xy) if len(stock.shrubs_xy) else None
+    result = []
+    for xy in trunks:
+        if own is not None and own.query_ball_point(xy, stock.crown_radius):
+            continue
+        hits = tree.query_ball_point(xy, stock.crown_radius)
+        if hits:
+            result.append([int(shrub_index[h]) for h in hits])
+    return result
 
 
 def _under_crowns(layout: Layout, trees: NDArray[np.intp]) -> dict[int, list[int]]:
@@ -424,9 +462,10 @@ def _row_details(
         shown = " и ".join(f"{steps[k]:.1f}" for k in near).replace(".", ",")
         good = any(band[0] <= steps[k] <= band[1] for k in near)
         verdict = "держит шаг ряда" if good else "шаг ряда вне нормы"
+        fork = "-".join(decimal_g(value) for value in fork_m)
         text = (
             f"{verdict}: {position + 1}-я в ряду из {len(ordered)}, шаг {shown} м при норме "
-            f"{fork_m[0]:g}-{fork_m[1]:g} м (743-ПП, табл. 3.6.2)"
+            f"{fork} м (743-ПП, табл. 3.6.2)"
         )
         neighbours = [codes[k + (1 if k == position else 0)] for k in near]
         if neighbours and codes[position] not in neighbours:
@@ -584,25 +623,35 @@ def category(layout: Layout, params: PlanParams, targets: Targets | None) -> Ter
     слабее на 0,25 в факторе «категория» оценки пригодности - это пригодность, а здесь -
     рекомендация акта.
     """
-    key = params.planting_category
-    where = _CATEGORY_WHERE.get(key, key)
-    marks = [p.species.categories.get(key, "") for p in layout.placements]
+    # Категория - по месту посадки (application/places): у двора и улицы она своя; место
+    # не определено - категория профиля.
+    keys = [category_of(p.place, params.planting_category) for p in layout.placements]
+    marks = [p.species.categories.get(k, "") for p, k in zip(layout.placements, keys, strict=True)]
     values = np.array([_CATEGORY.get(mark, CATEGORY_SILENT) for mark in marks], dtype=np.float64)
     score, deltas, _ = _sums(layout, values, targets)
     tally = Counter(mark if mark in _CATEGORY else "silent" for mark in marks)
-    phrases = {
-        "plus": f"рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
-        "limited": f"для {where} с ограничением (МГСН 1.02-02, табл. В.6)",
-        "minus": f"не рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
-    }
-    details = [phrases.get(mark, "в табл. В.6 МГСН 1.02-02 вида нет") for mark in marks]
+    details = [
+        _category_phrase(mark, _CATEGORY_WHERE.get(k, k))
+        for mark, k in zip(marks, keys, strict=True)
+    ]
+    wheres = sorted({_CATEGORY_WHERE.get(k, k) for k in keys}) or [
+        _CATEGORY_WHERE.get(params.planting_category, params.planting_category)
+    ]
     note = (
-        f"для {where} рекомендованы {tally['plus']} посадок, с ограничением {tally['limited']}, "
-        f"не рекомендованы {tally['minus']}, вне табл. В.6 {tally['silent']} (засчитаны "
-        "половиной)"
+        f"для {' и '.join(wheres)} рекомендованы {tally['plus']} посадок, с ограничением "
+        f"{tally['limited']}, не рекомендованы {tally['minus']}, вне табл. В.6 "
+        f"{tally['silent']} (засчитаны половиной)"
     )
     measure = {name: float(tally[name]) for name in ("plus", "limited", "minus", "silent")}
     return TermResult(score, note, deltas, details, measure)
+
+
+def _category_phrase(mark: str, where: str) -> str:
+    return {
+        "plus": f"рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
+        "limited": f"для {where} с ограничением (МГСН 1.02-02, табл. В.6)",
+        "minus": f"не рекомендован для {where} (МГСН 1.02-02, табл. В.6)",
+    }.get(mark, "в табл. В.6 МГСН 1.02-02 вида нет")
 
 
 def _m(value: float) -> str:
@@ -688,13 +737,27 @@ def canopy(
     trees = np.flatnonzero(layout.is_tree)
     deltas = np.zeros(layout.size)
     details = [""] * layout.size
+    # Существующие кроны: тень улицы - их и новых вместе, новая крона поверх существующей
+    # ничего не добавляет. Они одинаковы во всех вариантах, выбор решает прирост.
+    existing = site.stock.canopy
+    existing_m2 = float(existing.area) if existing is not None else 0.0
     if not len(trees):
-        return TermResult(0.0, "деревьев нет", deltas, details, {"m2": 0.0, "goal_m2": goal})
+        return TermResult(
+            min(1.0, existing_m2 / goal),
+            "деревьев нет" + (f"; существующие кроны {existing_m2:.0f} м²" if existing_m2 else ""),
+            deltas,
+            details,
+            {"m2": round(existing_m2), "goal_m2": goal, "existing_m2": round(existing_m2)},
+        )
     circles = shapely.buffer(
         shapely.points(layout.xy[trees]), layout.radius[trees], quad_segs=_CIRCLE_SEGMENTS
     )
     shapely.prepare(boundary)
-    covered = float(shapely.intersection(shapely.union_all(circles), boundary).area)
+    planted = shapely.intersection(shapely.union_all(circles), boundary)
+    if existing is not None:
+        shapely.prepare(existing)
+        planted = shapely.union(planted, existing)
+    covered = float(planted.area)
     score = min(1.0, covered / goal)
     index = shapely.STRtree(circles)
     for k, i in enumerate(trees.tolist() if exact else ()):
@@ -702,6 +765,8 @@ def canopy(
         near = [j for j in index.query(own, predicate="intersects").tolist() if j != k]
         if near:
             own = shapely.difference(own, shapely.union_all(circles[near]))
+        if existing is not None and shapely.intersects(existing, own):
+            own = shapely.difference(own, existing)
         unique = (
             float(own.area)
             if shapely.contains(boundary, own)
@@ -717,6 +782,8 @@ def canopy(
         f"{targets.trees:.0f} деревьев с кроной {decimal(crown)} м (медиана каталога), "
         f"{goal:.0f} м²"
     )
+    if existing_m2:
+        note += f"; из них существующие кроны {existing_m2:.0f} м²"
     # Сумма кругов крон без перекрытий: отношение m2 / sum_m2 - перекрытие крон этого участка;
     # по нему оценивается тень плана, у которого есть состав, но нет координат (проектировщик).
     total = float(np.sum(math.pi * layout.radius[trees] ** 2))
@@ -725,6 +792,7 @@ def canopy(
         "goal_m2": round(goal),
         "share": round(covered / goal, 4),
         "sum_m2": round(total),
+        "existing_m2": round(existing_m2),
     }
     return TermResult(score, note, deltas, details, measure)
 
@@ -751,30 +819,83 @@ def dust(layout: Layout, site: Site, params: PlanParams) -> TermResult:
     # Кустарник закрывает борт, если стоит в полосе у борта (полоса, закрытая для деревьев);
     # дерево - только кроной над бортом. Длина считается точно по отрезкам (coverage.py).
     cover = np.where(layout.is_shrub, np.maximum(layout.radius, params.dust_strip_m), layout.radius)
-    coverage = measure_crowns(segments, layout.xy, cover, weight)
+    # Существующие кроны и кусты тоже закрывают борт: вид неизвестен, газоустойчивость средняя
+    # (1 из 2). Вклад новой посадки - только то, чего они не закрывают.
+    fixed = _fixed_cover(site, params, segments)
+    coverage = measure_crowns(segments, layout.xy, cover, weight, fixed=fixed)
+    loss, reach = coverage.loss_m, coverage.reach_m
     total, count = coverage.weighted_m, coverage.length_m
     share = total / count
     score = min(1.0, share / target)
-    deltas = score - np.minimum(1.0, (total - coverage.loss_m) / count / target)
+    deltas = score - np.minimum(1.0, (total - loss) / count / target)
     covered = coverage.covered_m
+    existing_covered = fixed.covered_m
     details = [
         (
             f"{'нижний ярус у борта' if layout.is_shrub[i] else 'крона над бортом'}: "
-            f"{coverage.reach_m[i]:.1f} м, газоустойчивость {p.species.gas_tolerance} из 2"
+            f"{decimal(reach[i])} м, газоустойчивость {p.species.gas_tolerance} из 2"
         )
-        if coverage.reach_m[i]
+        if reach[i]
         else ""
         for i, p in enumerate(layout.placements)
     ]
     note = (
-        f"под кронами {covered:.1f} м бортов из {count:.1f} ({covered / count:.0%}), "
+        f"под кронами {decimal(covered)} м бортов из {decimal(count)} ({covered / count:.0%}), "
         f"с поправкой на газоустойчивость {share:.0%} при цели {target:.0%}"
     )
-    measure = {"curb_m": count, "covered_m": covered, "share": round(share, 4)}
+    if existing_covered:
+        note += f"; существующие кроны и кусты закрывают {decimal(existing_covered)} м"
+    measure = {
+        "curb_m": count,
+        "covered_m": covered,
+        "share": round(share, 4),
+        "existing_covered_m": existing_covered,
+    }
     if count < total_curb - _LENGTH_EPS_M:
         note += f"; в счёт только борта с грунтом рядом, {count:.0f} м из {total_curb:.0f}"
         measure["curb_total_m"] = total_curb
     return TermResult(score, note, deltas, details, measure)
+
+
+# Газоустойчивость существующего насаждения, вид которого чертёж не называет: средняя, 1 из 2.
+EXISTING_GAS_WEIGHT = 0.5
+
+
+# Существующие кроны одинаковы во всех оценках прогона: их покрытие бортов считается один раз
+# на участок (сдвиг слабых мест оценивает сотни пробных планов). Ключ - сами массивы участка:
+# запись хранит ссылки на них, поэтому чужой участок с тем же id её не получит.
+_FIXED: list[tuple[tuple[tuple[object, ...], tuple[object, ...]], FixedCrowns]] = []
+_FIXED_SIZE = 4
+
+
+def _fixed_cover(site: Site, params: PlanParams, segments: NDArray[np.float64]) -> FixedCrowns:
+    arrays = (site.stock, site.curb_segments, site.curb_soil)
+    values = (params.dust_strip_m, params.dust_crown_factor, params.dust_admissible)
+    for (held, same), fixed in _FIXED:
+        if all(a is b for a, b in zip(held, arrays, strict=True)) and same == values:
+            return fixed
+    fixed = fixed_crowns(segments, *_existing_cover(site, params))
+    _FIXED.insert(0, ((arrays, values), fixed))
+    del _FIXED[_FIXED_SIZE:]
+    return fixed
+
+
+def _existing_cover(
+    site: Site, params: PlanParams
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """Существующие кроны и кусты для покрытия бортов: центры, радиусы, веса."""
+    crowns, radii = site.stock.crowns()
+    shrubs = site.stock.shrubs_xy
+    return (
+        np.vstack([crowns, shrubs]),
+        np.concatenate([radii, np.full(len(shrubs), params.dust_strip_m)]),
+        np.concatenate(
+            [
+                np.full(len(crowns), params.dust_crown_factor * EXISTING_GAS_WEIGHT),
+                np.full(len(shrubs), EXISTING_GAS_WEIGHT),
+            ]
+        ),
+    )
 
 
 # Разница длин бортов меньше этого - округление, а не отсеянные борта без грунта.
