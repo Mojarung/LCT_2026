@@ -95,7 +95,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
   const barrierPlaces = num(stats.barrier_places);
   const warnings = Array.isArray(summary.warnings) ? summary.warnings.map(String) : [];
   const notices = keyNotices(warnings);
-  // Строгий прогон тиммейта: объекты не уточнены или грунт выведен по расстоянию - план
+  const unconfirmed = num(summary.surface_unconfirmed_placements);
+  // Объекты не уточнены или яма опирается на предположение о грунте - план
   // посчитан эскизом, и это говорится рядом с числом, а не в журнале.
   const sketch =
     summary.semantic_assignments_complete === false ||
@@ -108,6 +109,8 @@ export function RunMetrics({ run }: { run: RunOut }) {
           {plural(total, 'посадка', 'посадки', 'посадок')} в плане
           {approval ? (
             `, ${integer(approval)} на согласование`
+          ) : sketch ? (
+            ', требуется проверка'
           ) : (
             <>
               , <em>все без ограничений</em>
@@ -135,6 +138,12 @@ export function RunMetrics({ run }: { run: RunOut }) {
             Исследовательский эскиз: требуется уточнить объекты или границы покрытий. Допустимость
             посадок не подтверждена.
           </p>
+          {unconfirmed > 0 ? (
+            <p>
+              Грунт под всей посадочной ямой не подтверждён замкнутыми контурами у{' '}
+              {integer(unconfirmed)} из {integer(total)} посадок. Проверьте границы покрытия.
+            </p>
+          ) : null}
           <ReviewLinks run={run} />
         </div>
       ) : null}

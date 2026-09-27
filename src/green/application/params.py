@@ -85,6 +85,9 @@ class PlanParams:
     # имени и осторожная замена по геометрии вместо остановки; сеть неизвестного типа получает
     # наибольший отступ сетей и прогон не останавливает. False - поведение проверки тиммейта.
     infer_unknown: bool = True
+    # False keeps vocabulary inference but requires review of unmatched spatial
+    # objects. True preserves the main profile's geometric assumptions.
+    assume_unknown_geometry: bool = True
     # Generated review assignments are pinned to the exact computational DXF.
     semantic_source_sha256: str | None = None
     layer_classes: Mapping[str, str] = field(default_factory=dict)

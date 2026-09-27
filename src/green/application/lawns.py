@@ -84,8 +84,11 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         return _warn(plan, ["не выделены, в чертеже нет границы работ."])
     if boundary is not None:
         soil = soil.intersection(boundary)
-    if surface.woodland_area is not None:
-        soil = soil.difference(surface.woodland_area)
+    # Explicit soil contours can overlap uncertain material (e.g. an open
+    # HATCH). Trees use SurfaceMap.material/fits_soil; lawns must honour the
+    # same exclusion instead of treating the raw soil polygon as proof.
+    if surface.uncertainty_area is not None or surface.woodland_area is not None:
+        soil = soil.difference(shapely.union_all([surface.uncertainty_area, surface.woodland_area]))
     pits, is_tree = _pits(plan.placements, params)
     free = soil.difference(shapely.union_all(pits)) if len(pits) else soil
     drawn, flowerbeds = _drawn(features, labels, soil)

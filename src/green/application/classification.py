@@ -131,6 +131,8 @@ def classify_scene(
     Порядок: словарь знаков, правила слоёв, затем для незнакомого (задача 14) вывод по словам
     имени блока и слоя и осторожная замена по геометрии; параметр infer_unknown=False
     оставляет незнакомое неизвестным, и строгий прогон остановится, как задумано проверкой.
+    assume_unknown_geometry=False отключает только замену по геометрии, сохраняя вывод
+    по словам имени и явные уточнения пользователя.
     """
     if (
         params
@@ -161,7 +163,11 @@ def classify_scene(
                 if infer and cache[key][0] is ObjectClass.UNKNOWN:
                     cache[key] = _inferred(feature, layer_map.vocabulary, cache[key][1])
             decided = cache[key]
-            if infer and decided[0] is ObjectClass.UNKNOWN:
+            if (
+                infer
+                and (params is None or params.assume_unknown_geometry)
+                and decided[0] is ObjectClass.UNKNOWN
+            ):
                 decided = _assumed(feature, decided[1])
         kind, evidence = decided
         explicit = overrides.decide(feature)

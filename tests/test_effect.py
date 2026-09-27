@@ -10,6 +10,7 @@ import shapely
 from shapely.geometry import LineString, MultiPoint, Point, box
 from test_quality import LAWN, LIME, SPIREA, _place
 
+from green.application import effect as module
 from green.application.effect import street_effect
 from green.application.params import PlanParams
 from green.application.placement import MODE_LABELS
@@ -108,7 +109,7 @@ def test_wide_belt_along_the_curb_is_a_noise_screen() -> None:
     effect = street_effect(_plan(), _site(*trunks), PARAMS)
     band = next(b for b in effect.noise if b.width == "10-15")
     assert band.curb_before_m == pytest.approx(band.curb_after_m)
-    assert 40.0 <= band.curb_before_m <= 70.0  # noqa: PLR2004 - 50 м борта с краями крон
+    assert 40.0 <= band.curb_before_m <= 70.0
     assert band.dba == "4-5"
     assert _m(effect, "noise_curb_m").before == pytest.approx(
         sum(b.curb_before_m for b in effect.noise)
@@ -293,15 +294,13 @@ def test_noise_counts_curbs_with_pavement_on_one_side() -> None:
     site = _site(*trunks)
     road = street_effect(_plan(), site, PARAMS, surface=_surface(paved_below=True))
     park = street_effect(_plan(), site, PARAMS, surface=_surface(paved_below=False))
-    assert _m(road, "noise_curb_m").before > 40.0  # noqa: PLR2004 - полоса вдоль 50 м борта
+    assert _m(road, "noise_curb_m").before > 40.0  # полоса вдоль 50 м борта
     assert _m(park, "noise_curb_m").before == 0
 
 
 def test_incremental_noise_equals_a_fresh_count() -> None:
     """Правка пересчитывает шумозащиту только у бортов рядом с изменёнными посадками; итог тот
     же, что у счёта с нуля."""
-    from green.application import effect as module
-
     trunks = [(x, y) for x in range(20, 71, 4) for y in (4.0, 9.0)]
     site = _site(*trunks)
     belt = [

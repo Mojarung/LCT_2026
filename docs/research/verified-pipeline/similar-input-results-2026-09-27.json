@@ -1,0 +1,1176 @@
+{
+  "date": "2026-09-27",
+  "algorithm_revision": "7f4ece9",
+  "runtime_code_changed": false,
+  "organizer_scope_source": "User-relayed organizer message; original conversation not independently inspected",
+  "conversion": "Local LibreDWG DWG-to-DXF; converted files are not organizer-provided final DXF",
+  "real_sheet_selection": "similar-input-selection-2026-09-27.json",
+  "real_package_selection": "similar-package-selection-2026-09-27.json",
+  "real_sheets": [
+    {
+      "case": "sireneviy",
+      "read": {
+        "variant": "sireneviy",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/sireneviy/3ДЖКХпр-25_02294_Сиреневый бульвар.dxf",
+        "source_bytes": 3043612,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "efba715635959c5cf0b1385ecee89291a546d0bb8140209378c2defa494cdbfc",
+        "features": 9426,
+        "labels": 731,
+        "symbols": 0,
+        "visited": 10157,
+        "skipped": 0,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "pass",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "ignore": 2312,
+          "work_boundary": 5,
+          "utility.access": 79,
+          "building": 60,
+          "fence": 56,
+          "pavement_edge": 938,
+          "existing_tree": 263,
+          "lawn": 782,
+          "structure": 70,
+          "curb": 589,
+          "pole": 533,
+          "obstacle": 87,
+          "power_line_overhead": 120,
+          "utility.telecom": 533,
+          "utility.power_cable": 1533,
+          "utility.water": 231,
+          "utility.heat": 206,
+          "utility.gas": 328,
+          "utility.unknown": 20,
+          "utility.drain": 430,
+          "utility.storm": 254
+        },
+        "classification_methods": {
+          "name_rule": 9369,
+          "tree_strip_member:efba7156:00000000:2DDD+strip": 15,
+          "tree_strip_member:efba7156:00000000:3476+strip": 29,
+          "tree_strip_member:efba7156:00000000:3848+strip": 13,
+          "tree_strip": 3
+        },
+        "elapsed_s": 0.698,
+        "peak_rss_mib_macos": 164.2
+      },
+      "plan": {
+        "variant": "sireneviy",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/sireneviy/3ДЖКХпр-25_02294_Сиреневый бульвар.dxf",
+        "source_bytes": 3043612,
+        "overrides": {},
+        "stage": "plan",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "efba715635959c5cf0b1385ecee89291a546d0bb8140209378c2defa494cdbfc",
+        "summary": {
+          "placements": 0,
+          "lawns": 0,
+          "lawn_m2": 0.0,
+          "lawn_kept_m2": 0.0,
+          "lawn_new_m2": 0.0,
+          "semantic_assignments_complete": true,
+          "surface_inference_review_required": false,
+          "allowed": 0,
+          "needs_approval": 0,
+          "rejections": 0,
+          "integrity_ok": true,
+          "plan_valid": true,
+          "export_matches_plan": true,
+          "total_ms": 2870.8,
+          "stats": {
+            "alley_candidates": 2862,
+            "alley_plantable": 0,
+            "lawn_candidates": 74,
+            "lawn_plantable": 0,
+            "fill_candidates": 0,
+            "fill_planted": 0,
+            "capacity_trees": 0,
+            "surface_cell_m": 0.5,
+            "surface_seeds_paved": 27,
+            "surface_seeds_soil": 12,
+            "surface_max_distance_m": 30.0,
+            "surface_ambiguity_m": 1.0,
+            "surface_tree_distance_m": 2.0,
+            "surface_closed_faces_mode": 1,
+            "surface_closed_faces": 173,
+            "surface_conflicting_faces": 0,
+            "surface_unassigned_labels": 39,
+            "surface_open_edges": 2509,
+            "surface_unsupported_boundary_faces": 16,
+            "surface_cells_unknown": 20277,
+            "surface_cells_paved": 22085,
+            "surface_cells_soil": 7006,
+            "surface_cells_barrier": 3024,
+            "site_capacity_trees": 0,
+            "barrier_places": 0
+          },
+          "warnings": [
+            "3ДЖКХпр-25_02294_Сиреневый бульвар.dxf: аудит исправил записей: 4, ошибок: 0",
+            "Грунт по близости подписи: газон 1 751 м², покрытие 5 521 м² не дальше 30 м от 39 подписей вне замкнутых контуров.",
+            "Профиль не применяет: ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы куста 0,5 м); ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы дерева 1,24 м).",
+            "Граница работ не найдена: автоматическое размещение заблокировано.",
+            "Газоны: не выделены, в чертеже нет границы работ."
+          ],
+          "load_notes": []
+        },
+        "quality_index": null,
+        "unresolved_features": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "elapsed_s": 2.945,
+        "peak_rss_mib_macos": 214.8,
+        "trees": 0,
+        "shrubs": 0
+      }
+    },
+    {
+      "case": "kurganskaya",
+      "read": {
+        "variant": "kurganskaya",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/kurganskaya/XREF_ИГДИ_Курганская.dxf",
+        "source_bytes": 10563902,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "6651f22127b9f1190c0224241481781c471a493a71c71c19f356c4fc8af359f8",
+        "features": 26852,
+        "labels": 2887,
+        "symbols": 0,
+        "visited": 31313,
+        "skipped": 1574,
+        "bounded_uncertainty": 1,
+        "geometry_gaps": 5,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "reject",
+        "geometry_error": "Чертёж прочитан не полностью: у 1574 объектов нет геометрии. Расчёт остановлен: замените неподдерживаемые объекты полилиниями или штриховками и сохраните DXF. Наличие других сетей не заменяет потерянные данные. Подробности: REGION, слой 'Столбы', блок None: 6 (missing-acis-data), примеры 6651f221:00000000:1F107, 6651f221:00000000:1FA44; REGION, слой 'Леса и газоны', блок None: 15 (missing-acis-data), примеры 6651f221:00000000:1F12A, 6651f221:00000000:1F204; REGION, слой 'Лестницы набережных', блок None: 160 (missing-acis-data), примеры 6651f221:00000000:1F181, 6651f221:00000000:1F183; REGION, слой 'Граница растительности и грунта', блок None: 1 (missing-acis-data), примеры 6651f221:00000000:207D8; REGION, слой 'Красные линии', блок None: 1392 (missing-acis-data), примеры 6651f221:00000000:24596, 6651f221:00000000:24598.",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "work_boundary": 1,
+          "power_line_overhead": 291,
+          "ignore": 2848,
+          "building": 554,
+          "obstacle": 322,
+          "pavement_edge": 4824,
+          "fence": 2073,
+          "structure": 115,
+          "utility.access": 123,
+          "utility.heat": 51,
+          "utility.sewer": 250,
+          "utility.water": 1016,
+          "utility.storm": 552,
+          "utility.unknown": 61,
+          "lawn": 4781,
+          "existing_tree": 387,
+          "pole": 436,
+          "slope": 2512,
+          "curb": 665,
+          "utility.power_cable": 4252,
+          "utility.telecom": 415,
+          "utility.drain": 324
+        },
+        "classification_methods": {
+          "name_rule": 26827,
+          "tree_strip_member:6651f221:00000000:1FE38+strip": 25,
+          "tree_strip": 1
+        },
+        "elapsed_s": 2.364,
+        "peak_rss_mib_macos": 238.7
+      },
+      "plan": {
+        "variant": "kurganskaya",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/kurganskaya/XREF_ИГДИ_Курганская.dxf",
+        "source_bytes": 10563902,
+        "overrides": {},
+        "stage": "plan",
+        "status": "error",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "error_type": "InputError",
+        "error": "Чертёж прочитан не полностью: у 1574 объектов нет геометрии. Расчёт остановлен: замените неподдерживаемые объекты полилиниями или штриховками и сохраните DXF. Наличие других сетей не заменяет потерянные данные. Подробности: REGION, слой 'Столбы', блок None: 6 (missing-acis-data), примеры 6651f221:00000000:1F107, 6651f221:00000000:1FA44; REGION, слой 'Леса и газоны', блок None: 15 (missing-acis-data), примеры 6651f221:00000000:1F12A, 6651f221:00000000:1F204; REGION, слой 'Лестницы набережных', блок None: 160 (missing-acis-data), примеры 6651f221:00000000:1F181, 6651f221:00000000:1F183; REGION, слой 'Граница растительности и грунта', блок None: 1 (missing-acis-data), примеры 6651f221:00000000:207D8; REGION, слой 'Красные линии', блок None: 1392 (missing-acis-data), примеры 6651f221:00000000:24596, 6651f221:00000000:24598.",
+        "elapsed_s": 2.113,
+        "peak_rss_mib_macos": 230.2,
+        "trees": 0,
+        "shrubs": 0
+      }
+    },
+    {
+      "case": "bagritskogo_sheet",
+      "read": {
+        "variant": "bagritskogo_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_sheet/output[1]_3_ДЖКХ-25_05352_1tp.dxf",
+        "source_bytes": 414792,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "ca31b1d4f87cfdc0008a75a6362c01ae568dce34703ffdb3d80d6c184af0d090",
+        "features": 481,
+        "labels": 61,
+        "symbols": 0,
+        "visited": 542,
+        "skipped": 0,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "pass",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "ignore": 48,
+          "obstacle": 26,
+          "building": 53,
+          "existing_tree": 86,
+          "utility.access": 4,
+          "pavement_edge": 64,
+          "lawn": 128,
+          "pole": 6,
+          "curb": 67
+        },
+        "classification_methods": {
+          "name_rule": 472,
+          "tree_strip_member:ca31b1d4:00000000:573+strip": 9,
+          "tree_strip": 1
+        },
+        "elapsed_s": 0.162,
+        "peak_rss_mib_macos": 136.8
+      },
+      "plan": {
+        "variant": "bagritskogo_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_sheet/output[1]_3_ДЖКХ-25_05352_1tp.dxf",
+        "source_bytes": 414792,
+        "overrides": {},
+        "stage": "plan",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "ca31b1d4f87cfdc0008a75a6362c01ae568dce34703ffdb3d80d6c184af0d090",
+        "summary": {
+          "placements": 0,
+          "lawns": 0,
+          "lawn_m2": 0.0,
+          "lawn_kept_m2": 0.0,
+          "lawn_new_m2": 0.0,
+          "semantic_assignments_complete": true,
+          "surface_inference_review_required": false,
+          "allowed": 0,
+          "needs_approval": 0,
+          "rejections": 0,
+          "integrity_ok": true,
+          "plan_valid": true,
+          "export_matches_plan": true,
+          "total_ms": 402.3,
+          "stats": {
+            "alley_candidates": 402,
+            "alley_plantable": 0,
+            "lawn_candidates": 20,
+            "lawn_plantable": 0,
+            "fill_candidates": 0,
+            "fill_planted": 0,
+            "capacity_trees": 0,
+            "surface_cell_m": 0.5,
+            "surface_seeds_paved": 9,
+            "surface_seeds_soil": 1,
+            "surface_max_distance_m": 30.0,
+            "surface_ambiguity_m": 1.0,
+            "surface_tree_distance_m": 2.0,
+            "surface_closed_faces_mode": 1,
+            "surface_closed_faces": 1,
+            "surface_conflicting_faces": 0,
+            "surface_unassigned_labels": 10,
+            "surface_open_edges": 310,
+            "surface_unsupported_boundary_faces": 1,
+            "surface_cells_unknown": 1615,
+            "surface_cells_paved": 2747,
+            "surface_cells_soil": 2024,
+            "surface_cells_barrier": 632,
+            "site_capacity_trees": 0,
+            "barrier_places": 0
+          },
+          "warnings": [
+            "output[1]_3_ДЖКХ-25_05352_1tp.dxf: аудит исправил записей: 88, ошибок: 0",
+            "Грунт по близости подписи: газон 506 м², покрытие 687 м² не дальше 30 м от 10 подписей вне замкнутых контуров.",
+            "Профиль не применяет: ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы куста 0,5 м); ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы дерева 1,24 м).",
+            "В чертеже нет подземных сетей: отступы от сетей не проверены, посадки не допускаются или помечены 'требует согласования' (по профилю).",
+            "Граница работ не найдена: автоматическое размещение заблокировано.",
+            "Газоны: не выделены, в карте покрытий нет грунта замкнутых контуров."
+          ],
+          "load_notes": []
+        },
+        "quality_index": null,
+        "unresolved_features": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "elapsed_s": 0.426,
+        "peak_rss_mib_macos": 145.0,
+        "trees": 0,
+        "shrubs": 0
+      }
+    },
+    {
+      "case": "pontryagina_sheet",
+      "read": {
+        "variant": "pontryagina_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/pontryagina_sheet/3_ДЖКХ-25_01871tp.dxf",
+        "source_bytes": 436678,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "59f3192d1547c2b4720bfb64ab042b7ea9d50f9f3cadb9a6a4e6a78d48fb46bd",
+        "features": 1017,
+        "labels": 211,
+        "symbols": 0,
+        "visited": 1229,
+        "skipped": 1,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 1,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "reject",
+        "geometry_error": "Чертёж прочитан не полностью: у 1 объекта нет геометрии. Расчёт остановлен: замените неподдерживаемые объекты полилиниями или штриховками и сохраните DXF. Наличие других сетей не заменяет потерянные данные. Подробности: REGION, слой 'Вышки', блок None: 1 (missing-acis-data), примеры 59f3192d:00000000:6BB.",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "building": 44,
+          "utility.access": 44,
+          "ignore": 91,
+          "pavement_edge": 297,
+          "pole": 158,
+          "structure": 1,
+          "obstacle": 24,
+          "power_line_overhead": 28,
+          "curb": 215,
+          "lawn": 112,
+          "existing_tree": 5
+        },
+        "classification_methods": {
+          "name_rule": 1006,
+          "tree_strip_member:59f3192d:00000000:B67+strip": 5,
+          "tree_strip_member:59f3192d:00000000:B94+strip": 6,
+          "tree_strip": 2
+        },
+        "elapsed_s": 0.138,
+        "peak_rss_mib_macos": 137.5
+      },
+      "plan": {
+        "variant": "pontryagina_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/pontryagina_sheet/3_ДЖКХ-25_01871tp.dxf",
+        "source_bytes": 436678,
+        "overrides": {},
+        "stage": "plan",
+        "status": "error",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "error_type": "InputError",
+        "error": "Чертёж прочитан не полностью: у 1 объекта нет геометрии. Расчёт остановлен: замените неподдерживаемые объекты полилиниями или штриховками и сохраните DXF. Наличие других сетей не заменяет потерянные данные. Подробности: REGION, слой 'Вышки', блок None: 1 (missing-acis-data), примеры 59f3192d:00000000:6BB.",
+        "elapsed_s": 0.139,
+        "peak_rss_mib_macos": 137.8,
+        "trees": 0,
+        "shrubs": 0
+      }
+    },
+    {
+      "case": "natashinskiy_sheet",
+      "read": {
+        "variant": "natashinskiy_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_sheet/цвет_output[8]_3_ДЖКХ-25_00694tp.dxf",
+        "source_bytes": 692272,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "82d30d35c76cb363571714d4fc19bf17ce91499a05f802c095ec0446daafe047",
+        "features": 941,
+        "labels": 74,
+        "symbols": 0,
+        "visited": 1015,
+        "skipped": 0,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "pass",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "ignore": 37,
+          "pole": 66,
+          "existing_tree": 42,
+          "utility.access": 11,
+          "pavement_edge": 651,
+          "lawn": 34,
+          "curb": 100
+        },
+        "classification_methods": {
+          "name_rule": 941
+        },
+        "elapsed_s": 0.129,
+        "peak_rss_mib_macos": 137.6
+      },
+      "plan": {
+        "variant": "natashinskiy_sheet",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_sheet/цвет_output[8]_3_ДЖКХ-25_00694tp.dxf",
+        "source_bytes": 692272,
+        "overrides": {},
+        "stage": "plan",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "82d30d35c76cb363571714d4fc19bf17ce91499a05f802c095ec0446daafe047",
+        "summary": {
+          "placements": 0,
+          "lawns": 0,
+          "lawn_m2": 0.0,
+          "lawn_kept_m2": 0.0,
+          "lawn_new_m2": 0.0,
+          "semantic_assignments_complete": true,
+          "surface_inference_review_required": false,
+          "allowed": 0,
+          "needs_approval": 0,
+          "rejections": 0,
+          "integrity_ok": true,
+          "plan_valid": true,
+          "export_matches_plan": true,
+          "total_ms": 421.2,
+          "stats": {
+            "alley_candidates": 426,
+            "alley_plantable": 0,
+            "lawn_candidates": 29,
+            "lawn_plantable": 0,
+            "fill_candidates": 0,
+            "fill_planted": 0,
+            "capacity_trees": 0,
+            "surface_cell_m": 0.5,
+            "surface_seeds_paved": 9,
+            "surface_seeds_soil": 4,
+            "surface_max_distance_m": 30.0,
+            "surface_ambiguity_m": 1.0,
+            "surface_tree_distance_m": 2.0,
+            "surface_closed_faces_mode": 1,
+            "surface_closed_faces": 117,
+            "surface_conflicting_faces": 0,
+            "surface_unassigned_labels": 13,
+            "surface_open_edges": 906,
+            "surface_unsupported_boundary_faces": 0,
+            "surface_cells_unknown": 613,
+            "surface_cells_paved": 5114,
+            "surface_cells_soil": 2618,
+            "surface_cells_barrier": 583,
+            "site_capacity_trees": 0,
+            "barrier_places": 0
+          },
+          "warnings": [
+            "цвет_output[8]_3_ДЖКХ-25_00694tp.dxf: аудит исправил записей: 86, ошибок: 0",
+            "Грунт по близости подписи: газон 654 м², покрытие 1 278 м² не дальше 30 м от 13 подписей вне замкнутых контуров.",
+            "Профиль не применяет: ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы куста 0,5 м); ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы дерева 1,24 м).",
+            "В чертеже нет подземных сетей: отступы от сетей не проверены, посадки не допускаются или помечены 'требует согласования' (по профилю).",
+            "Граница работ не найдена: автоматическое размещение заблокировано.",
+            "Газоны: не выделены, в чертеже нет границы работ."
+          ],
+          "load_notes": []
+        },
+        "quality_index": null,
+        "unresolved_features": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "elapsed_s": 0.446,
+        "peak_rss_mib_macos": 148.1,
+        "trees": 0,
+        "shrubs": 0
+      }
+    }
+  ],
+  "real_packages": [
+    {
+      "case": "bagritskogo_kit1",
+      "read": {
+        "variant": "bagritskogo_kit1",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/merged.dxf",
+        "source_bytes": 379531,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "2e746fa6bdaee3e77f78a54fab9dc2f7d3ffdda6e4bc5b261f4195eb8addee66",
+        "features": 823,
+        "labels": 112,
+        "symbols": 0,
+        "visited": 936,
+        "skipped": 0,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "pass",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "ignore": 99,
+          "obstacle": 26,
+          "building": 53,
+          "existing_tree": 86,
+          "utility.access": 4,
+          "pavement_edge": 64,
+          "lawn": 128,
+          "pole": 6,
+          "curb": 67,
+          "utility.gas": 46,
+          "utility.power_cable": 92,
+          "utility.heat": 91,
+          "utility.sewer": 49,
+          "utility.telecom": 12,
+          "work_boundary": 1
+        },
+        "classification_methods": {
+          "name_rule": 814,
+          "tree_strip_member:2e746fa6:00000000:573+strip": 9,
+          "tree_strip": 1
+        },
+        "elapsed_s": 0.189,
+        "peak_rss_mib_macos": 136.8
+      },
+      "plan": {
+        "variant": "bagritskogo_kit1",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/merged.dxf",
+        "source_bytes": 379531,
+        "overrides": {},
+        "stage": "plan",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "2e746fa6bdaee3e77f78a54fab9dc2f7d3ffdda6e4bc5b261f4195eb8addee66",
+        "summary": {
+          "placements": 40,
+          "lawns": 0,
+          "lawn_m2": 0.0,
+          "lawn_kept_m2": 0.0,
+          "lawn_new_m2": 0.0,
+          "semantic_assignments_complete": true,
+          "surface_inference_review_required": false,
+          "allowed": 40,
+          "needs_approval": 0,
+          "rejections": 14,
+          "integrity_ok": true,
+          "plan_valid": true,
+          "export_matches_plan": true,
+          "total_ms": 1196.8,
+          "stats": {
+            "alley_candidates": 402,
+            "alley_plantable": 30,
+            "lawn_candidates": 19,
+            "lawn_plantable": 14,
+            "fill_candidates": 0,
+            "fill_planted": 0,
+            "capacity_trees": 0,
+            "surface_cell_m": 0.5,
+            "surface_seeds_paved": 9,
+            "surface_seeds_soil": 1,
+            "surface_max_distance_m": 30.0,
+            "surface_ambiguity_m": 1.0,
+            "surface_tree_distance_m": 2.0,
+            "surface_closed_faces_mode": 1,
+            "surface_closed_faces": 1,
+            "surface_conflicting_faces": 0,
+            "surface_unassigned_labels": 10,
+            "surface_open_edges": 310,
+            "surface_unsupported_boundary_faces": 1,
+            "surface_cells_unknown": 3305,
+            "surface_cells_paved": 1157,
+            "surface_cells_soil": 2046,
+            "surface_cells_barrier": 926,
+            "site_capacity_trees": 0,
+            "barrier_places": 0,
+            "quality_index": 0.5215
+          },
+          "warnings": [
+            "Грунт по близости подписи: газон 512 м², покрытие 289 м² не дальше 30 м от 10 подписей вне замкнутых контуров.",
+            "Профиль не применяет: ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы куста 0,5 м); ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы дерева 1,24 м).",
+            "Кустарник под кронами: 5 групп, 9 кустов под деревьями без нижнего яруса (МГСН 1.02-02, п. 4.2.9.2), из них 5 групп под существующими деревьями не ближе 3,0 м к стволу (743-ПП, п. 9.8, по аналогии).",
+            "Группы кустарника на газоне: 10 групп, 31 куст - кустарников было 9, нижняя граница МГСН 1.02-02, табл. В.1 - 42 на эту улицу (600 на 1 км).",
+            "Кустарники: Подбор ассортимента: 1 место допустимо по нормам, но не занято: ни один допустимый вид не укладывается в квоты разнообразия, место перенесено в отказы.",
+            "Газоны: не выделены, в карте покрытий нет грунта замкнутых контуров."
+          ],
+          "load_notes": []
+        },
+        "quality_index": 0.521506,
+        "unresolved_features": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "elapsed_s": 1.245,
+        "peak_rss_mib_macos": 161.6,
+        "trees": 0,
+        "shrubs": 40
+      },
+      "assembly": {
+        "path": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/merged.dxf",
+        "notes": [
+          "output[1]_3_ДЖКХ-25_05352_1tp.dxf: аудит исправил записей: 88, ошибок: 0",
+          "output[1]_3_ДЖКХ-25_05352_1up.dxf: аудит исправил записей: 88, ошибок: 0",
+          "output[1]_3_ДЖКХ-25_05352_1kl.dxf: аудит исправил записей: 85, ошибок: 0",
+          "output[1]_brd.dxf: аудит исправил записей: 88, ошибок: 0",
+          "Склейка: в output[1]_3_ДЖКХ-25_05352_1up.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка: в output[1]_3_ДЖКХ-25_05352_1kl.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка: в output[1]_brd.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка комплекта: output[1]_3_ДЖКХ-25_05352_1tp.dxf: 542, output[1]_3_ДЖКХ-25_05352_1up.dxf: 338, output[1]_3_ДЖКХ-25_05352_1kl.dxf: 1, output[1]_brd.dxf: 53; в объединённом чертеже 934 сущностей"
+        ],
+        "assembly": {
+          "inputs": [
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/converted/output[1]_3_ДЖКХ-25_05352_1tp.dxf",
+              "dxf_sha256": "ca31b1d4f87cfdc0008a75a6362c01ae568dce34703ffdb3d80d6c184af0d090",
+              "role": "base"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/converted/output[1]_3_ДЖКХ-25_05352_1up.dxf",
+              "dxf_sha256": "8490cb7e12f33a18801f621a52aa1112732971f436a325be2d5e42d8ee011902",
+              "role": "overlay"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/converted/output[1]_3_ДЖКХ-25_05352_1kl.dxf",
+              "dxf_sha256": "530405a230b69c54ae409fbe98e09d819b9d64ac3382a85603c07ef1925a468e",
+              "role": "overlay"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/bagritskogo_kit1/converted/output[1]_brd.dxf",
+              "dxf_sha256": "e37b2f85c4d10d94868a83a47761f16c8f6af7c5e44f17c98c434a1a2cd6face",
+              "role": "overlay"
+            }
+          ],
+          "references": [],
+          "coordinate_policy": "XREF uses existing INSERT transforms and source INSBASE, without an extra unit factor; independent overlay drawings are normalised by declared/overridden units.",
+          "scope": "Only explicitly supplied files are resolved; nested overlay XREFs are excluded per CAD semantics. Expanded entity-type counts check import loss, not semantic accuracy."
+        },
+        "warnings": [
+          "Склейка: габариты output[1]_3_ДЖКХ-25_05352_1kl.dxf и уже склеенного комплекта перекрываются на 0% - возможно, это разные листы или разные объекты"
+        ]
+      }
+    },
+    {
+      "case": "bagritskogo_kit2",
+      "failure": {
+        "error": "output[2]_3_ДЖКХ-25_05352_1tp.dxf: 16 исходных сущностей невозможно сохранить: REGION 1377, слой 'Леса и газоны'; REGION 1523, слой 'Вышки'; REGION 17B0, слой 'Леса и газоны'; REGION 1826, слой 'Леса и газоны'; REGION 182F, слой 'Леса и газоны'; REGION 1B20, слой 'Леса и газоны'; REGION 1CD5, слой 'Леса и газоны'; REGION 1CDE, слой 'Леса и газоны'; REGION DB, слой 'Леса и газоны'; REGION 551, слой 'Вышки'. Нужен DXF с полными данными; склейка не должна скрывать их потерю."
+      }
+    },
+    {
+      "case": "natashinskiy_kit8",
+      "read": {
+        "variant": "natashinskiy_kit8",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/merged.dxf",
+        "source_bytes": 652408,
+        "overrides": {},
+        "stage": "read",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "18dfe4238aec14dae9c792cb343e9f50e1f30f2835bc6d139a6b7701d64608b2",
+        "features": 2583,
+        "labels": 107,
+        "symbols": 0,
+        "visited": 2690,
+        "skipped": 0,
+        "bounded_uncertainty": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "max_approximation_error_m": 0.1,
+        "geometry_gate": "pass",
+        "semantic_ready": true,
+        "unresolved_features": 0,
+        "classified_classes": {
+          "ignore": 1028,
+          "pole": 66,
+          "existing_tree": 42,
+          "utility.access": 11,
+          "pavement_edge": 651,
+          "lawn": 34,
+          "curb": 100,
+          "utility.water": 323,
+          "utility.storm": 133,
+          "utility.power_cable": 58,
+          "utility.sewer": 44,
+          "utility.heat": 25,
+          "utility.telecom": 61,
+          "work_boundary": 7
+        },
+        "classification_methods": {
+          "name_rule": 2583
+        },
+        "elapsed_s": 0.272,
+        "peak_rss_mib_macos": 141.3
+      },
+      "plan": {
+        "variant": "natashinskiy_kit8",
+        "source": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/merged.dxf",
+        "source_bytes": 652408,
+        "overrides": {},
+        "stage": "plan",
+        "status": "complete",
+        "effective_params": {
+          "spacing_m": 5.0,
+          "infer_unknown": true,
+          "assume_unknown_geometry": true,
+          "require_known_objects": true,
+          "require_soil": true,
+          "surface_inference_mode": "hybrid",
+          "placement_solver": "portfolio",
+          "zones": true
+        },
+        "source_sha256": "18dfe4238aec14dae9c792cb343e9f50e1f30f2835bc6d139a6b7701d64608b2",
+        "summary": {
+          "placements": 48,
+          "lawns": 0,
+          "lawn_m2": 0.0,
+          "lawn_kept_m2": 0.0,
+          "lawn_new_m2": 0.0,
+          "semantic_assignments_complete": true,
+          "surface_inference_review_required": false,
+          "allowed": 48,
+          "needs_approval": 0,
+          "rejections": 3,
+          "integrity_ok": true,
+          "plan_valid": true,
+          "export_matches_plan": true,
+          "total_ms": 1504.5,
+          "stats": {
+            "alley_candidates": 426,
+            "alley_plantable": 17,
+            "lawn_candidates": 12,
+            "lawn_plantable": 1,
+            "fill_candidates": 0,
+            "fill_planted": 0,
+            "capacity_trees": 0,
+            "surface_cell_m": 0.5,
+            "surface_seeds_paved": 9,
+            "surface_seeds_soil": 4,
+            "surface_max_distance_m": 30.0,
+            "surface_ambiguity_m": 1.0,
+            "surface_tree_distance_m": 2.0,
+            "surface_closed_faces_mode": 1,
+            "surface_closed_faces": 117,
+            "surface_conflicting_faces": 0,
+            "surface_unassigned_labels": 13,
+            "surface_open_edges": 906,
+            "surface_unsupported_boundary_faces": 0,
+            "surface_cells_unknown": 5909,
+            "surface_cells_paved": 3145,
+            "surface_cells_soil": 937,
+            "surface_cells_barrier": 969,
+            "site_capacity_trees": 0,
+            "barrier_places": 0,
+            "quality_index": 0.57,
+            "lawn_small_parts": 1,
+            "lawn_small_m2": 0.5
+          },
+          "warnings": [
+            "Грунт по близости подписи: газон 234 м², покрытие 786 м² не дальше 30 м от 13 подписей вне замкнутых контуров.",
+            "Профиль не применяет: ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы куста 0,5 м); ПП РФ № 878, Правила, п. 7 «а», п. 8, п. 16: охранная зона 2 м от оси газопровода; яма глубже 0,3 м - по письменному разрешению эксплуатационной организации (2 м + радиус ямы дерева 1,24 м).",
+            "Кустарник под кронами: 4 группы, 11 кустов под деревьями без нижнего яруса (МГСН 1.02-02, п. 4.2.9.2), из них 4 группы под существующими деревьями не ближе 3,0 м к стволу (743-ПП, п. 9.8, по аналогии).",
+            "Группы кустарника на газоне: 9 групп, 37 кустов - кустарников было 11, нижняя граница МГСН 1.02-02, табл. В.1 - 48 на эту улицу (600 на 1 км).",
+            "Газоны: 233,8 м² грунта по близости подписи в газон не вошли, нужен замкнутый контур грунта."
+          ],
+          "load_notes": []
+        },
+        "quality_index": 0.569964,
+        "unresolved_features": 0,
+        "geometry_gaps": 0,
+        "unresolved_xrefs": 0,
+        "elapsed_s": 1.563,
+        "peak_rss_mib_macos": 169.8,
+        "trees": 0,
+        "shrubs": 48
+      },
+      "assembly": {
+        "path": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/merged.dxf",
+        "notes": [
+          "цвет_output[8]_3_ДЖКХ-25_00694kl.dxf: аудит исправил записей: 86, ошибок: 0",
+          "цвет_output[8]_3_ДЖКХ-25_00694tp.dxf: аудит исправил записей: 86, ошибок: 0",
+          "цвет_output[8]_3_ДЖКХ-25_00694up.dxf: аудит исправил записей: 86, ошибок: 0",
+          "цвет_output[8]_brd.dxf: аудит исправил записей: 86, ошибок: 0",
+          "цвет_output[8]_3_ДЖКХ-25_00694pp.dxf: аудит исправил записей: 86, ошибок: 0",
+          "Склейка: в цвет_output[8]_3_ДЖКХ-25_00694tp.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка: в цвет_output[8]_3_ДЖКХ-25_00694up.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка: в цвет_output[8]_brd.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка: в цвет_output[8]_3_ДЖКХ-25_00694pp.dxf 1 блоков с именами, которые уже есть в основе; совпавшие ресурсы этого файла получили префикс «$0$»",
+          "Склейка комплекта: цвет_output[8]_3_ДЖКХ-25_00694kl.dxf: 924, цвет_output[8]_3_ДЖКХ-25_00694tp.dxf: 1015, цвет_output[8]_3_ДЖКХ-25_00694up.dxf: 646, цвет_output[8]_brd.dxf: 84, цвет_output[8]_3_ДЖКХ-25_00694pp.dxf: 21; в объединённом чертеже 2690 сущностей"
+        ],
+        "assembly": {
+          "inputs": [
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/converted/цвет_output[8]_3_ДЖКХ-25_00694kl.dxf",
+              "dxf_sha256": "d17f051169fd99cdf790656b3e4d5f2ab3e10e7dab4e06d6a1a727ef09e394d0",
+              "role": "base"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/converted/цвет_output[8]_3_ДЖКХ-25_00694tp.dxf",
+              "dxf_sha256": "82d30d35c76cb363571714d4fc19bf17ce91499a05f802c095ec0446daafe047",
+              "role": "overlay"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/converted/цвет_output[8]_3_ДЖКХ-25_00694up.dxf",
+              "dxf_sha256": "6105ad37d87774b0e32aa67408a9815d35660106d5748d22f710a0e5cb7db116",
+              "role": "overlay"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/converted/цвет_output[8]_brd.dxf",
+              "dxf_sha256": "d71b3dac3bce715e681442d628e725f2937393545dfe1114abcf02bd2f19df36",
+              "role": "overlay"
+            },
+            {
+              "name": "/Users/felicuss/Documents/lct/LCT_pipeline/out/similar-inputs-2026-09-27/natashinskiy_kit8/converted/цвет_output[8]_3_ДЖКХ-25_00694pp.dxf",
+              "dxf_sha256": "14830c5c881b0eaf3d85b7ae1859cc30b367e2554236d2a908e6df49150d992d",
+              "role": "overlay"
+            }
+          ],
+          "references": [],
+          "coordinate_policy": "XREF uses existing INSERT transforms and source INSBASE, without an extra unit factor; independent overlay drawings are normalised by declared/overridden units.",
+          "scope": "Only explicitly supplied files are resolved; nested overlay XREFs are excluded per CAD semantics. Expanded entity-type counts check import loss, not semantic accuracy."
+        },
+        "warnings": [
+          "Склейка: габариты цвет_output[8]_3_ДЖКХ-25_00694tp.dxf и уже склеенного комплекта перекрываются на 16% - возможно, это разные листы или разные объекты",
+          "Склейка: габариты цвет_output[8]_brd.dxf и уже склеенного комплекта перекрываются на 48% - возможно, это разные листы или разные объекты"
+        ]
+      },
+      "failure": {
+        "error": "Склейка: цвет_output[8]_3_ДЖКХ-25_00694kl.dxf имеет более новую версию DXF, чем основа"
+      }
+    },
+    {
+      "case": "natashinskiy_kit3",
+      "failure": {
+        "error": "цвет_output[3]_3_ДЖКХ-24_00379_1kl.dxf: 159 исходных сущностей невозможно сохранить: REGION 239, слой 'Красные линии'; REGION 23B, слой 'Красные линии'; REGION 23D, слой 'Красные линии'; REGION 23F, слой 'Красные линии'; REGION 241, слой 'Красные линии'; REGION 243, слой 'Красные линии'; REGION 245, слой 'Красные линии'; REGION 247, слой 'Красные линии'; REGION 249, слой 'Красные линии'; REGION 24B, слой 'Красные линии'. Нужен DXF с полными данными; склейка не должна скрывать их потерю."
+      }
+    }
+  ],
+  "quality_audit": [
+    {
+      "case": "bagritskogo_kit1",
+      "placements": 40,
+      "trees": 0,
+      "shrubs": 40,
+      "exact_soil_centres": 0,
+      "inferred_soil_centres": 40,
+      "boundary_area_m2": 1467.9993975,
+      "exact_soil_area_m2": 0,
+      "soil_fallback_m2": 511.5,
+      "classification_methods": {
+        "name_rule": 814,
+        "tree_strip_member:2e746fa6:00000000:573+strip": 9,
+        "tree_strip": 1
+      },
+      "explained_placements": 40,
+      "rejection_rules": {
+        "R-HEAT-TREE-001": 10,
+        "R-HEAT-TREE-002": 10,
+        "R-POWER-TREE-001": 9,
+        "R-CURB-TREE-001": 1,
+        "R-EXTREE-TREE-001": 10,
+        "R-BLD-TREE-001": 4,
+        "R-TELECOM-TREE-001": 2,
+        "R-GAS-TREE-001": 2,
+        "R-SEWER-TREE-001": 2
+      },
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      },
+      "review": {
+        "status": "complete",
+        "error": null,
+        "trees": 0,
+        "shrubs": 40
+      },
+      "closed_soil": {
+        "status": "complete",
+        "error": null,
+        "trees": 0,
+        "shrubs": 0
+      }
+    },
+    {
+      "case": "natashinskiy_kit8",
+      "placements": 48,
+      "trees": 0,
+      "shrubs": 48,
+      "exact_soil_centres": 0,
+      "inferred_soil_centres": 48,
+      "boundary_area_m2": 1487.4297255000124,
+      "exact_soil_area_m2": 0.4908404732783382,
+      "soil_fallback_m2": 233.75,
+      "classification_methods": {
+        "name_rule": 2583
+      },
+      "explained_placements": 48,
+      "rejection_rules": {
+        "R-POLE-TREE-001": 1,
+        "R-POWER-TREE-001": 2,
+        "R-TELECOM-TREE-001": 2,
+        "R-ACCESS-TREE-001": 2,
+        "R-SEWER-TREE-001": 1,
+        "R-EXTREE-TREE-001": 1
+      },
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      },
+      "review": {
+        "status": "complete",
+        "error": null,
+        "trees": 0,
+        "shrubs": 48
+      },
+      "closed_soil": {
+        "status": "complete",
+        "error": null,
+        "trees": 0,
+        "shrubs": 0
+      }
+    }
+  ],
+  "controlled": [
+    {
+      "case": "narrow_2.2",
+      "status": "complete",
+      "error": null,
+      "trees": 0,
+      "shrubs": 40,
+      "oracle_violations": [],
+      "tree_step_min_m": null,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "strip_3.6",
+      "status": "complete",
+      "error": null,
+      "trees": 10,
+      "shrubs": 22,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "wide_12",
+      "status": "complete",
+      "error": null,
+      "trees": 29,
+      "shrubs": 51,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "crossing_24",
+      "status": "complete",
+      "error": null,
+      "trees": 41,
+      "shrubs": 55,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "islands_12",
+      "status": "complete",
+      "error": null,
+      "trees": 21,
+      "shrubs": 53,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "wide_mm",
+      "status": "complete",
+      "error": null,
+      "trees": 29,
+      "shrubs": 51,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "wide_rotated",
+      "status": "complete",
+      "error": null,
+      "trees": 20,
+      "shrubs": 52,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    },
+    {
+      "case": "wide_mm_rotated",
+      "status": "complete",
+      "error": null,
+      "trees": 20,
+      "shrubs": 52,
+      "oracle_violations": [],
+      "tree_step_min_m": 5.0,
+      "checks": {
+        "verify": true,
+        "validation": true,
+        "export_validation": true
+      }
+    }
+  ],
+  "limitations": [
+    "No expert ground-truth labels for real CAD; unresolved_features=0 is not semantic accuracy",
+    "All 88 real placements use inferred soil",
+    "Synthetic oracle checks selected distances and pit containment, not every requirement or visual optimality",
+    "Rotated cases also introduce a nested block; factors are confounded",
+    "Candidate source names absent from inspected previous pipeline reports; this does not prove nobody previously processed them"
+  ]
+}

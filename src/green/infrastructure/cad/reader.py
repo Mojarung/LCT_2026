@@ -39,7 +39,8 @@ from green.infrastructure.cad.curve_paths import (
 )
 from green.infrastructure.cad.documents import load_document
 from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
-from green.infrastructure.cad.hatch_geometry import HatchGeometryError, hatch_geometry
+from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
+from green.infrastructure.cad.hatch_geometry import GAP_CLOSED, HatchGeometryError, hatch_geometry
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
@@ -60,6 +61,7 @@ CLIPPED = "clipped:outside"
 # Починка геометрии без переосмысления: расхождение с нарисованным не больше этого (единицы
 # чертежа) - та же линия, а не новая.
 _EXACT_REPAIR = 1e-6
+_HATCH_UNCERTAINTY_MIN_M = 0.002
 # Контейнер, а не знак: обёртки MicroStation, выноски DIMTXT и анонимные блоки AutoCAD
 # (*U, *D, *T), а также пустые, многолюдные и крупные блоки - листы и сборки, не значки.
 CONTAINER_PREFIXES = ("msdelementtype", "dimtxt", "*")
@@ -166,6 +168,9 @@ class EzdxfSceneReader:
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
                 skipped_by_type=dict(walker.skipped),
+                bounded_uncertainty_by_type=(
+                    {"HATCH": walker.bounded_hatches} if walker.bounded_hatches else {}
+                ),
                 unresolved_xrefs=tuple(sorted(walker.unresolved_xrefs)),
                 geometry_gaps=walker.geometry_gaps(),
                 approximation_features=sum(bool(f.geometry_error_m) for f in features),
@@ -187,6 +192,7 @@ class _Walker:
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
+    bounded_hatches: int = 0
     visited: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
@@ -240,9 +246,13 @@ class _Walker:
         kind = entity.dxftype()
         # Починки контура штриховки (чёт-нечет, разрыв замкнут хордой) идут в исход объекта.
         repairs: tuple[str, ...] = ()
+        uncertainty_footprint = None
         try:
             if kind in _AREA_ENTITIES:
                 geometry, error, repairs = hatch_geometry(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+                uncertainty_footprint = (
+                    self._hatch_uncertainty(entity, error, repairs) if kind == "HATCH" else None
+                )
             else:
                 geometry, error = self._geometry(entity)
         except HatchGeometryError as exc:
@@ -259,6 +269,10 @@ class _Walker:
                 return CLIPPED
             clipped = visible is not geometry
             geometry = visible
+            if uncertainty_footprint is not None:
+                uncertainty_footprint = self._clip(uncertainty_footprint)
+                if uncertainty_footprint.is_empty:
+                    uncertainty_footprint = None
         if error is None:
             self._gap(kind, layer, block, "approximation-error-not-bounded", ref)
         # Срезанный рамкой круг - уже не крона и не ствол целиком.
@@ -275,14 +289,26 @@ class _Walker:
                 circle_radius_m=radius,
                 geometry_error_m=error * self.unit_m if error is not None else None,
                 source_entity_type=kind,
+                uncertainty_footprint=uncertainty_footprint,
                 circle_center_m=(center.x * self.unit_m, center.y * self.unit_m)
                 if center is not None
                 else None,
                 symbol=owner,
             )
         )
+        self.bounded_hatches += int(uncertainty_footprint is not None)
         # Починенный контур не молчит: исход несёт вид починки (feature:hatch-even-odd).
         return "feature:" + "+".join(repairs) if repairs else "feature"
+
+    def _hatch_uncertainty(
+        self, entity: DXFGraphic, error: float, repairs: tuple[str, ...]
+    ) -> BaseGeometry | None:
+        if GAP_CLOSED not in repairs or error * self.unit_m <= _HATCH_UNCERTAINTY_MIN_M:
+            return None
+        footprint = bounded_hatch_footprint(entity, self.flatten)  # ty: ignore[invalid-argument-type]
+        if footprint is None:
+            raise HatchGeometryError("hatch-footprint-unbounded")
+        return footprint
 
     def _visible(self, point: Point) -> bool:
         return all(region.covers(point) for region in self.clips)
@@ -689,6 +715,11 @@ class _Walker:
         if self.skipped:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
+        if self.bounded_hatches:
+            messages.append(
+                f"HATCH с большим разрывом контура: {self.bounded_hatches}; "
+                "материал в ограниченной области не подтверждён, посадки там исключены."
+            )
         return messages
 
 
@@ -762,7 +793,15 @@ def _to_metres(
     )
     return (
         tuple(
-            replace(feature, geometry=geometry)
+            replace(
+                feature,
+                geometry=geometry,
+                uncertainty_footprint=(
+                    shapely.transform(feature.uncertainty_footprint, lambda xy: xy * unit_m)
+                    if feature.uncertainty_footprint is not None
+                    else None
+                ),
+            )
             for feature, geometry in zip(features, scaled, strict=True)
         ),
         tuple(replace(label, x=label.x * unit_m, y=label.y * unit_m) for label in labels),

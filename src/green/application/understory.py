@@ -251,7 +251,10 @@ class _Planter:
             "второй ярус под кроной существующего дерева: малая группа из {n}, не ближе "
             f"{decimal(gap)} м от ствола (743-ПП, п. 9.8, по аналогии)"
         )
-        for n, (x, y) in enumerate(stock.crown_xy[stock.crown_inside].tolist(), 1):
+        # Group IDs, species rotation and a limited budget must not depend on
+        # entity order in DXF. Keep the spatial order stable before assigning IDs.
+        crowns = sorted(stock.crown_xy[stock.crown_inside].tolist())
+        for n, (x, y) in enumerate(crowns, 1):
             if budget is not None and len(self.added) >= budget:
                 break
             if own is not None and own.query_ball_point((x, y), radius):

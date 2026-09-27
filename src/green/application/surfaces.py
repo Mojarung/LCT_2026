@@ -184,6 +184,28 @@ class SurfaceMap:
             fits &= distance_at_least(self.uncertainty_area, points, radius_m)
         return fits & on_soil
 
+    def fits_confirmed_soil(
+        self, points: NDArray[np.object_], radius_m: float
+    ) -> NDArray[np.bool_]:
+        """Whole pits supported by closed soil geometry, without raster inference.
+
+        This measures evidence in the interpreted drawing, not physical soil quality.
+        """
+        if self.soil_area is None or not len(points):
+            return np.zeros(len(points), dtype=bool)
+        fits = shapely.contains(self.soil_area, points)
+        fits &= (self.material(points) == Material.SOIL) & self._clear_of_woodland(points, radius_m)
+        if radius_m > 0:
+            edge = self._soil_edge
+            if edge is None:
+                edge = self.soil_area.boundary
+                object.__setattr__(self, "_soil_edge", edge)
+            fits &= distance_at_least(edge, points, radius_m)
+            for exclusion in (self.paved_area, self.uncertainty_area):
+                if exclusion is not None:
+                    fits &= distance_at_least(exclusion, points, radius_m)
+        return fits
+
     def _clear_of_woodland(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
         if self.woodland_area is None or not len(points):
             return np.ones(len(points), dtype=bool)
@@ -259,7 +281,7 @@ class SurfaceMap:
         if self.conflicting_faces:
             notes.append(
                 f"Контуров с противоречивыми подписями покрытий: {self.conflicting_faces}; "
-                "материал в них решён по ближайшей подписи."
+                "посадка в них запрещена до уточнения границ и материала."
             )
         return tuple(notes)
 
@@ -294,8 +316,10 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
     # не берёт: дерево в решётке на тротуаре не открывает тротуар под посадку.
     keep = seed_kind != (_TREE_SEED if faces_mode else _WOODLAND_SEED)
     seed_xy, seed_kind = seed_xy[keep], seed_kind[keep]
-    paved = int((seed_kind == Material.PAVED).sum())
-    soil = int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED, _WOODLAND_SEED]).sum())
+    paved, soil = (
+        int((seed_kind == Material.PAVED).sum()),
+        int(np.isin(seed_kind, [Material.SOIL, _TREE_SEED, _WOODLAND_SEED]).sum()),
+    )
     polygons = [
         f
         for f in features
@@ -326,6 +350,7 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
     fallback = _Fallback()
     if faces_mode:
         faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
+        uncertain = _exclude_conflicts(free, uncertain, faces.conflicting_area, origin, cell)
         if soil_area is not None:
             # A declared material polygon is independent of label propagation:
             # unfinished separators cannot erase its positive area evidence.
@@ -393,6 +418,21 @@ class _Fallback:
     labels: int = 0
     soil_m2: float = 0.0
     paved_m2: float = 0.0
+
+
+def _exclude_conflicts(
+    free: NDArray[np.bool_],
+    uncertain: BaseGeometry | None,
+    conflict: BaseGeometry | None,
+    origin: tuple[float, float],
+    cell: float,
+) -> BaseGeometry | None:
+    if conflict is None or conflict.is_empty:
+        return uncertain
+    # Exclude entire intersecting cells from propagation as well as exact
+    # pit queries. An outside label must not flood through the disputed face.
+    free &= ~_inside(reserved_buffer(conflict, cell / np.sqrt(2)), origin, cell, free.shape)
+    return shapely.union_all([uncertain, conflict])
 
 
 def _label_fallback(  # noqa: PLR0913 - именованные пределы разлива
@@ -538,6 +578,9 @@ def _exact_areas(
 def _uncertainty_area(features: Sequence[Feature]) -> BaseGeometry | None:
     bands = []
     for feature in features:
+        if feature.uncertainty_footprint is not None:
+            bands.append(feature.uncertainty_footprint)
+            continue
         error = error_bound(feature)
         if not error or not feature.object_class.is_surface_barrier:
             continue

@@ -8,6 +8,7 @@ C (40-60) - цветник по подписи: газоном не станов
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -118,6 +119,25 @@ def _pit(placement: Placement) -> float:
 
 def _lawn_warnings(plan: Plan) -> list[str]:
     return [w for w in plan.warnings if w.startswith(WARNING_PREFIX)]
+
+
+def test_uncertain_material_is_excluded_from_lawn_even_inside_explicit_soil() -> None:
+    features, labels, surface = _scene()
+    uncertain = box(2, 2, 5, 5)
+    plan = plan_lawns(
+        PLAN,
+        features=features,
+        labels=labels,
+        surface=replace(surface, uncertainty_area=uncertain),
+        rulebook=BOOK,
+        params=PlanParams(),
+    )
+    assert plan.lawns
+    assert sum(lawn.geometry.intersection(uncertain).area for lawn in plan.lawns) == 0
+    baseline, _ = _lawns()
+    before = sum(lawn.area_m2 for lawn in baseline.lawns)
+    after = sum(lawn.area_m2 for lawn in plan.lawns)
+    assert before - after == pytest.approx(uncertain.area)
 
 
 def test_free_soil_becomes_kept_and_new_lawn() -> None:

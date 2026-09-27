@@ -27,6 +27,8 @@ class FaceMaterials:
     unsupported_boundaries: int
     # Грани со знаком существующего массива, в том числе неразрешённые: сажать нельзя.
     woodland: BaseGeometry | None = None
+    # Contrary labels in one face are not permission for a distance-based split.
+    conflicting_area: BaseGeometry | None = None
 
 
 def closed_face_materials(
@@ -80,6 +82,7 @@ def closed_face_materials(
         open_edges=sum(int(shapely.get_num_geometries(g)) for g in (cuts, dangles, invalid)),
         unsupported_boundaries=int((~supported).sum()),
         woodland=shapely.union_all(faces[woodland]),
+        conflicting_area=shapely.union_all(faces[soil & paved]),
     )
 
 

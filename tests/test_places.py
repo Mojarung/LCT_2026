@@ -6,7 +6,8 @@ import numpy as np
 from shapely.geometry import LineString, box
 from test_quality import LAWN, LIME, _place
 
-from green.application.places import Place, category_of, place_map, with_places
+from green.application.constraints import forget_drawings
+from green.application.places import _LAST, Place, category_of, place_map, with_places
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.domain.planting import Plan
 
@@ -61,9 +62,6 @@ def test_with_places_fills_only_unplaced() -> None:
 
 
 def test_place_map_cache_is_per_drawing_and_forgotten_after_a_run() -> None:
-    from green.application.constraints import forget_drawings
-    from green.application.places import _LAST
-
     first = (ROAD, HOUSE)
     second = (HOUSE,)
     assert place_map(first).source == "road"

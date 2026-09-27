@@ -66,7 +66,7 @@ def _under_existing(plan: Plan) -> list[Placement]:
 
 def test_group_under_the_existing_crown(plans: dict[str, Plan]) -> None:
     group = _under_existing(plans["on"])
-    assert 2 <= len(group) <= 3  # noqa: PLR2004 - малая группа 743-ПП п. 10.8.1
+    assert 2 <= len(group) <= 3
     assert len({s.assortment.structure_id for s in group if s.assortment}) == 1
     for shrub in group:
         for mark in (TRUNK, SECOND):

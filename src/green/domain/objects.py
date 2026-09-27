@@ -156,6 +156,9 @@ class Feature:
     # Distinguish closed linework from explicit fills after semantic mapping.
     # None carries no evidence that a polygon is just a boundary.
     source_entity_type: str | None = None
+    # Area in which an open HATCH boundary does not prove its material. The CAD
+    # fill geometry is retained separately for rendering and source fidelity.
+    uncertainty_footprint: BaseGeometry | None = None
     # Штрих условного знака: строка ref экземпляра SymbolInstance, которому принадлежит.
     symbol: str | None = None
 
@@ -221,6 +224,7 @@ class ReadDiagnostics:
 
     visited_by_type: Mapping[str, int] = field(default_factory=dict)
     skipped_by_type: Mapping[str, int] = field(default_factory=dict)
+    bounded_uncertainty_by_type: Mapping[str, int] = field(default_factory=dict)
     unresolved_xrefs: tuple[str, ...] = ()
     geometry_gaps: tuple[GeometryGap, ...] = ()
     approximation_features: int = 0

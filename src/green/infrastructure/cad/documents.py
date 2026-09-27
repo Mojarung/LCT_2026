@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING
 
 import ezdxf
 from ezdxf import recover
-from ezdxf.audit import AuditError
+from ezdxf.audit import AuditError, ErrorEntry
+from ezdxf.entities import DXFTagStorage
 
 from green.application.errors import InputError
 from green.infrastructure.cad.structure import require_complete_container
@@ -26,6 +27,7 @@ APPID = "LCT_GREEN"
 _BAD_UNICODE_ESCAPE = re.compile(rb"\\U\+(?![0-9A-Fa-f]{4})")
 _GROUP_CODE = re.compile(rb"^\s*-?\d{1,4}\s*$")
 _LONE_CR = re.compile(rb"\r(?!\n)")
+_REMOVED_ACAD_TABLE = re.compile(r"ACAD_TABLE\(#([0-9A-Fa-f]+)\)")
 _SPATIAL_REPAIRS = frozenset(
     {
         AuditError.REMOVED_INVALID_GRAPHIC_ENTITY,
@@ -145,19 +147,51 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
 def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[str]]:
     # Строгий загрузчик не проверяет ссылки. DXF от конвертеров (LibreDWG) содержат висячие
     # handle, например у материалов ByLayer, и без аудита ezdxf падает при сохранении.
+    # LibreDWG can emit a bare ACAD_TABLE tag with no content or owner.
+    # A table with block references, cells or other payload must still block:
+    # absence of a proxy graphic alone does not prove that it is empty.
+    empty_tables = {
+        entity.dxf.handle.upper()
+        for entity in doc.entitydb.values()
+        if entity.dxftype() == "ACAD_TABLE"
+        and isinstance(entity, DXFTagStorage)
+        and entity.dxf.get("owner") is None
+        and not entity.proxy_graphic
+        and all(tag.code in {0, 5} for tag in entity.xtags)
+    }
     auditor = doc.audit()
-    _require_safe_audit(path, auditor)
+    _require_safe_audit(path, auditor, empty_tables=empty_tables)
     fixes = len(auditor.fixes)
     if fixes or auditor.errors:
         notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
+    removed_tables = empty_tables - set(doc.entitydb)
+    if removed_tables:
+        notes.append(
+            f"{path.name}: удалены пустые записи ACAD_TABLE без содержимого: "
+            f"{len(removed_tables)}. "
+            "Таблицы с данными или геометрией этим исключением не покрываются."
+        )
     return doc, notes
 
 
-def _require_safe_audit(path: Path, auditor: Auditor) -> None:
+def _require_safe_audit(
+    path: Path, auditor: Auditor, *, empty_tables: set[str] | None = None
+) -> None:
     # ezdxf can delete an INSERT with a missing definition before the walker ever
     # sees it, or repair a hatch/curve into different geometry. A warning is not
     # enough to certify clearance against that altered scene.
-    problems = [*auditor.errors, *(f for f in auditor.fixes if f.code in _SPATIAL_REPAIRS)]
+    def unsafe(fix: ErrorEntry) -> bool:
+        if fix.code not in _SPATIAL_REPAIRS:
+            return False
+        if fix.code not in {
+            AuditError.REMOVED_INVALID_GRAPHIC_ENTITY,
+            AuditError.REMOVED_ENTITY_WITH_INVALID_OWNER_HANDLE,
+        }:
+            return True
+        match = _REMOVED_ACAD_TABLE.search(fix.message)
+        return match is None or match.group(1).upper() not in (empty_tables or set())
+
+    problems = [*auditor.errors, *(f for f in auditor.fixes if unsafe(f))]
     if problems:
         detail = "; ".join(f"{entry.code}: {entry.message}" for entry in problems[:10])
         raise InputError(

@@ -301,6 +301,7 @@ class ProfileModel(_Strict):
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
     infer_unknown: bool = True
+    assume_unknown_geometry: bool = True
     semantic_source_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     layer_classes: dict[str, ObjectClass] = Field(default_factory=dict)
     block_classes: dict[str, ObjectClass] = Field(default_factory=dict)
