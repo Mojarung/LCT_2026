@@ -106,6 +106,20 @@ flowchart LR
 
 6. Открыть `out/street/result.dxf` в nanoCAD или QCAD: исходные слои на месте, результат на слоях `GREEN_*` (деревья `GREEN_TREES`, кустарники `GREEN_SHRUBS`, отказы `GREEN_REJECT`, зоны `GREEN_ZONE_*`, подписи `GREEN_LABELS`). У каждой посадки атрибуты `NUM`, `SPECIES`, `NPA` и XDATA `LCT_GREEN` с id решения и списком правил; полный текст объяснения по номеру - в `interpretations.csv`.
 
+## Проверка образа 28.09.2026
+
+Образ собран из `main` 03b488c (`docker build -f docker/Dockerfile -t green:latest .`, ezdxf с
+C-расширениями - сборка проверяет их сама) и поднят отдельным контейнером с настройками
+`compose.yaml` на порту 8014:
+
+| Проверка | Итог |
+|---|---|
+| `/api/v1/health`, интерфейс `/`, Swagger `/docs` | ok, 200, 200; `HEALTHCHECK` - healthy |
+| Каталог улиц `/api/v1/streets` | 19 улиц из `streets_oda` |
+| Встроенный фрагмент через API (`POST /api/v1/runs/demo`) | 63 с; 1211 посадок (1192 допустимы, 19 на согласовании), 33 отказа; целостность исходника, проверка плана и сверка экспорта - да; тот же план, что у CLI в образе (`examples/`) |
+| Файлы прогона | 27 артефактов, `result.dxf`, `report.html`, `plantings.csv` скачиваются (200) |
+| Пакет улиц каталога | 18 из 19 посчитаны образом ночной ветки (без изменений 79a152b), `tools/street_runs.py` в контейнере; итоги - приложение B документации |
+
 ## Проверка образа 27.09.2026
 
 Образ собран с нуля (`docker compose build --no-cache`, 860 МБ), сервис поднят `docker compose up -d`:
