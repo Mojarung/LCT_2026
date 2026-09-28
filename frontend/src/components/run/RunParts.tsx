@@ -134,9 +134,12 @@ export function RunMetrics({
       </p>
       <p className="metric-sub">
         <b>{integer(rejected)}</b>{' '}
-        {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}. Подоснова{' '}
-        {/* Цела - обычным текстом: курсив выделял норму как событие (жюри, итерация 7). */}
-        {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
+        {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}
+      </p>
+      {/* Отдельной строкой: отказы и целостность подосновы - два разных факта (жюри, итерация 9).
+          Цела - обычным текстом: курсив выделял норму как событие (итерация 7). */}
+      <p className="metric-sub">
+        Подоснова {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
       </p>
       {barrierPlaces ? (
         <p className="metric-sub quality-line">

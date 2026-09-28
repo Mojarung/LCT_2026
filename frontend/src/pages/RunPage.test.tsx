@@ -181,7 +181,8 @@ describe('RunPage: finished run', () => {
     );
     expect(await within(left).findByText('302')).toBeInTheDocument();
     expect(left).toHaveTextContent('посадки в плане, все без ограничений');
-    expect(left).toHaveTextContent('161 место отклонено. Подоснова цела');
+    expect(left).toHaveTextContent('161 место отклонено');
+    expect(left).toHaveTextContent('Подоснова цела');
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     expect(await within(right).findByText('0,81')).toBeInTheDocument();
