@@ -245,7 +245,7 @@ class Quotas:
             if key == CONIFER_KEY or not self.existing_total:
                 continue
             if self.exhausted(key):
-                found.append(f"{label}: доля на улице уже выбрана, в плане {count}")
+                found.append(f"{label}: доля на улице исчерпана, в плане {count}")
                 continue
             population = planned + self.existing_total
             if count + self.existing[key] > math.floor(share * population + _EPS):
@@ -273,21 +273,21 @@ class Quotas:
         share = self.share(key)
         label = _quota_label(key, share)
         if count >= allowance(share, planned):
-            return f"{label} выбрана"
+            return f"{label} исчерпана"
         if key == CONIFER_KEY or not self.existing_total:
             return ""
         population = planned + self.existing_total
         if self.exhausted(key) or count + self.existing[key] >= math.floor(
             share * population + _EPS
         ):
-            return f"{label} выбрана с существующими деревьями"
+            return f"{label} исчерпана с существующими деревьями"
         return ""
 
     def exhausted_notes(self, codes: Sequence[str]) -> list[str]:
         keys = sorted({k for code in codes for k in self.keys(self.catalog[code])})
         return [
             f"{key[0]} {key[1]}: на улице уже {self.existing[key]} из {self.existing_total} "
-            "растений, доля выбрана, новых посадок нет"
+            "растений, доля исчерпана, новых посадок нет"
             for key in keys
             if key != CONIFER_KEY and self.exhausted(key)
         ]

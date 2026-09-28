@@ -298,3 +298,46 @@ export function inView(pose: Pose, x: number, z: number, framing: Framing): bool
   const half = Math.atan(Math.tan(framing.fov / 2) * framing.aspect);
   return (dx * fx + dz * fz) / d >= Math.cos(half);
 }
+
+/** Где точка окажется на кадре: доли ширины и высоты от левого верхнего угла, null - за
+ *  кадром или за спиной. Та же камера, что у three.js: курс вокруг вертикали, потом наклон. */
+export function project(
+  pose: Pose,
+  point: { x: number; y: number; z: number },
+  framing: Framing,
+): { u: number; v: number } | null {
+  const dx = point.x - pose.x;
+  const dy = point.y - pose.y;
+  const dz = point.z - pose.z;
+  // Поворот мира в систему камеры: сначала обратный курс, затем обратный наклон.
+  const cy = Math.cos(-pose.yaw);
+  const sy = Math.sin(-pose.yaw);
+  const x1 = dx * cy + dz * sy;
+  const z1 = -dx * sy + dz * cy;
+  const cp = Math.cos(-pose.pitch);
+  const sp = Math.sin(-pose.pitch);
+  const y2 = dy * cp - z1 * sp;
+  const z2 = dy * sp + z1 * cp;
+  if (z2 >= -0.1) return null;
+  const f = 1 / Math.tan(framing.fov / 2);
+  const u = 0.5 + ((x1 / -z2) * f) / framing.aspect / 2;
+  const v = 0.5 - ((y2 / -z2) * f) / 2;
+  return u < 0 || u > 1 || v < 0 || v > 1 ? null : { u, v };
+}
+
+const COMPASS = [
+  'с юга',
+  'с юго-востока',
+  'с востока',
+  'с северо-востока',
+  'с севера',
+  'с северо-запада',
+  'с запада',
+  'с юго-запада',
+];
+
+/** Откуда смотрит камера, словами: азимут 0 - камера к югу от объекта, рост - на восток. */
+export function compass(azimuth: number): string {
+  const turn = ((azimuth % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  return COMPASS[Math.round(turn / (Math.PI / 4)) % COMPASS.length] ?? 'с юга';
+}

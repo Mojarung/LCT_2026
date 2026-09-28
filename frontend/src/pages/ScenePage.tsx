@@ -442,12 +442,14 @@ export function ScenePage() {
   useEffect(() => {
     if (!readyToFly || autoOpened.current || (!autoTarget && !autoStreet)) return;
     autoOpened.current = true;
-    const name = world?.plants.find((p) => p.id === autoTarget)?.name;
+    const name = world?.plants.find((p) => p.id === autoTarget)?.name ?? 'посадка';
+    // Номер посадки приходит из ссылки карты: в сцене номеров нет, а эксперт ищет по нему.
+    const number = search.get('n');
     void openGalleryRef.current(
       autoTarget ? { kind: 'plant', id: autoTarget } : { kind: 'street' },
-      autoTarget ? `Кадры: ${name ?? 'посадка'}` : 'Кадры улицы',
+      autoTarget ? `Кадры: ${number ? `№ ${number}. ` : ''}${name}` : 'Кадры улицы',
     );
-  }, [readyToFly, autoTarget, autoStreet, world]);
+  }, [readyToFly, autoTarget, autoStreet, world, search]);
   const counts = world
     ? {
         trees: world.plants.filter((p) => !p.existing && p.type === 'tree').length,
@@ -458,7 +460,11 @@ export function ScenePage() {
     : null;
 
   return (
-    <div className="workspace page-scene" data-hud={hudHidden ? 'hidden' : 'shown'}>
+    <div
+      className="workspace page-scene"
+      data-hud={hudHidden ? 'hidden' : 'shown'}
+      data-gallery={gallery ? 'open' : undefined}
+    >
       <div className="canvas-holder" ref={holder} />
       {flash ? <div key={flash} className="scene-flash" aria-hidden="true" /> : null}
       {cam.locked && readyToFly ? <div className="scene-crosshair" aria-hidden="true" /> : null}
@@ -485,8 +491,7 @@ export function ScenePage() {
                   {count(counts.buildings, 'здание', 'здания', 'зданий')}.
                 </p>
                 <p className="hint">
-                  {`Этажность зданий: по подписи чертежа - ${world.floorsBy.label}, по соседнему корпусу - ${world.floorsBy.neighbor}, по признаку «жилое» - ${world.floorsBy.letter}, по площади - ${world.floorsBy.assumed}.`}{' '}
-                  Фасады условные: в съёмке их нет.
+                  {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
                 </p>
                 {world.fallback ? (
                   <p className="notice">
@@ -625,9 +630,13 @@ export function ScenePage() {
             setGallery(null);
             engine.current?.setView(shot.pose, 'fly');
           }}
-          onStreet={() => {
-            void openGallery({ kind: 'street' }, 'Кадры улицы');
-          }}
+          onStreet={
+            gallery.title === 'Кадры улицы'
+              ? undefined
+              : () => {
+                  void openGallery({ kind: 'street' }, 'Кадры улицы');
+                }
+          }
           onClose={() => {
             setGallery(null);
           }}
@@ -697,4 +706,19 @@ function stageShare(p: { stage: Stage; done: number; total: number }): number {
   const order: Stage[] = ['textures', 'ground', 'buildings', 'plants', 'ready'];
   const base = [0.05, 0.15, 0.25, 0.35, 1][order.indexOf(p.stage)] ?? 0;
   return p.stage === 'plants' ? base + 0.62 * (p.done / Math.max(1, p.total)) : base;
+}
+
+/** Откуда этажность, без нулевых источников: «по соседнему корпусу - 0» ничего не сообщает. */
+function floorsLine(by: Record<'label' | 'neighbor' | 'letter' | 'assumed', number>): string {
+  const parts = (
+    [
+      ['по подписи чертежа', by.label],
+      ['по соседнему корпусу', by.neighbor],
+      ['по признаку «жилое»', by.letter],
+      ['по площади', by.assumed],
+    ] as const
+  )
+    .filter(([, n]) => n > 0)
+    .map(([what, n]) => `${what} - ${String(n)}`);
+  return parts.length ? `Этажность зданий: ${parts.join(', ')}.` : '';
 }

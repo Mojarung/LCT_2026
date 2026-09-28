@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { EYE_M } from './freecam';
 import {
   aim,
+  compass,
+  project,
   bounds,
   fitDistance,
   MIN_SEPARATION,
@@ -177,5 +179,29 @@ describe('inView', () => {
     expect(inView(pose, -50, 0, FRAMING)).toBe(false);
     expect(inView(pose, 0, 50, FRAMING)).toBe(false);
     expect(inView(pose, 500, 0, FRAMING)).toBe(false);
+  });
+});
+
+describe('project and compass', () => {
+  it('puts the aimed point in the frame centre', () => {
+    const eye = { x: 0, y: 10, z: 20 };
+    const target = { x: 3, y: 2, z: -4 };
+    const pose = { ...eye, ...aim(eye, target) };
+    const at = project(pose, target, FRAMING);
+    expect(at?.u).toBeCloseTo(0.5, 5);
+    expect(at?.v).toBeCloseTo(0.5, 5);
+  });
+
+  it('places a point to the right of the view on the right half, behind - nowhere', () => {
+    const pose = { x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 };
+    expect(project(pose, { x: 3, y: 1.7, z: -20 }, FRAMING)?.u).toBeGreaterThan(0.5);
+    expect(project(pose, { x: 0, y: 1.7, z: 20 }, FRAMING)).toBeNull();
+  });
+
+  it('names the side the camera looks from', () => {
+    expect(compass(0)).toBe('с юга');
+    expect(compass(Math.PI / 2)).toBe('с востока');
+    expect(compass(Math.PI)).toBe('с севера');
+    expect(compass(-Math.PI / 4)).toBe('с юго-запада');
   });
 });

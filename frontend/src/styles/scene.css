@@ -282,15 +282,39 @@
   transition: width 0.3s ease-out;
 }
 
-@media (max-width: 760px) {
-  .scene-panel {
-    top: auto;
-    bottom: calc(var(--inset) * 2 + var(--tools));
-    width: calc(100% - var(--inset) * 2);
-    max-height: 42vh;
+/* Узкий экран: рабочее место становится страницей, и шапка сцены ложится на фон страницы, а
+   не на панель. Тёмный фон под ней давал контраст 1,1:1. */
+@media (max-width: 1080px) {
+  .page-scene {
+    background: var(--ground);
   }
   .scene-help {
     display: none;
+  }
+  /* Пульт - полосой под сведениями, как правая панель рабочего места: поверх сцены он
+     закрывал текст сведений. */
+  .scene-panel {
+    position: static;
+    width: auto;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
+    order: 5;
+  }
+}
+
+@media (max-width: 620px) {
+  /* Полоса камеры в 390 px не помещается: прокрутка внутри полосы, а не у всей страницы. */
+  .scene-bar {
+    max-width: calc(100% - var(--inset) * 2);
+    overflow-x: auto;
+  }
+  .scene-bar button,
+  .scene-bar .scene-speed {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 
@@ -304,6 +328,19 @@
   overflow: auto;
   padding: 16px 18px;
   z-index: 5;
+  /* Диалог, а не стекло: сквозь полупрозрачный фон читались подписи пульта. */
+  background: var(--panel);
+  backdrop-filter: none;
+}
+.gallery-head h2:focus {
+  outline: none;
+}
+/* Пока открыта галерея, панели сцены под ней не нужны и не должны просвечивать. */
+.page-scene[data-gallery='open'] .scene-head,
+.page-scene[data-gallery='open'] .scene-panel,
+.page-scene[data-gallery='open'] .scene-help,
+.page-scene[data-gallery='open'] .scene-bar {
+  visibility: hidden;
 }
 .gallery-head {
   display: flex;
@@ -314,7 +351,7 @@
 }
 .gallery-head h2 {
   margin: 0 0 4px;
-  font-size: var(--fs-h3, 18px);
+  font-size: var(--fs-strong);
 }
 .gallery-head .hint {
   margin: 0;
@@ -380,18 +417,7 @@
   align-items: center;
   text-decoration: none;
 }
-.gallery-photo {
-  display: block;
-  margin-top: 6px;
-  color: var(--bone-3);
-  font-family: var(--mono);
-  font-size: var(--fs-micro);
-  text-decoration: none;
-}
-.gallery-photo img {
-  margin-bottom: 3px;
-}
-.gallery-photo:hover img {
+.gallery-photo a:hover img {
   border-color: var(--bone);
 }
 .gallery-sub {
@@ -405,5 +431,45 @@
   }
   .gallery-grid {
     grid-template-columns: 1fr;
+  }
+}
+.gallery-frame {
+  position: relative;
+}
+/* Кольцо на снятой посадке: поверх превью, в самом кадре его нет - модель фото
+   перенесла бы его на снимок. */
+.gallery-mark {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--warn),
+    0 1px 4px rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+.gallery-photo {
+  margin: 6px 0 0;
+}
+.gallery-photo figcaption {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.gallery-photo figcaption a {
+  color: var(--bone);
+}
+
+/* Узкий экран: галерея - во весь экран. Правило стоит после базового, иначе то его перебивает. */
+@media (max-width: 1080px) {
+  .scene-gallery {
+    position: fixed;
+    inset: var(--inset);
+    transform: none;
+    width: auto;
+    max-height: none;
   }
 }

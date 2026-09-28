@@ -3,7 +3,7 @@ import type { Assortment } from '../api/artifacts';
 type Alternative = Assortment['alternatives'][number];
 
 /** Альтернативы подряд с одной причиной - одной группой: «Клён 74%, Вяз 72%: квота вида 10%
- *  выбрана». «Оценка ниже» не печатается, это видно по процентам. */
+ *  исчерпана». «Оценка ниже» не печатается, это видно по процентам. */
 export function runnersText(runners: readonly Alternative[]): string {
   const groups: { why: string; names: string[] }[] = [];
   for (const alt of runners) {

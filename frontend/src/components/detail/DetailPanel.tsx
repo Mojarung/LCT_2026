@@ -83,7 +83,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       {item.kind === 'placement' && runId ? (
         <a
           className="detail-3d"
-          href={`/runs/${encodeURIComponent(runId)}/3d?plant=${encodeURIComponent(item.id)}`}
+          href={`/runs/${encodeURIComponent(runId)}/3d?plant=${encodeURIComponent(item.id)}&n=${String(item.number)}`}
           target="_blank"
           rel="noopener"
           title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"

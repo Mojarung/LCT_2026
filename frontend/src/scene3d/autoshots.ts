@@ -8,6 +8,8 @@
 import type { Pose } from './freecam';
 import {
   bounds,
+  compass,
+  project,
   solid,
   type Framing,
   inView,
@@ -31,6 +33,11 @@ export interface AutoShot {
   trees: string[];
   /** То же для кустарников и изгородей. */
   shrubs: string[];
+  /** Русские названия тех же видов для подписи кадра: латынь - промпту. */
+  names: string[];
+  /** Где на кадре снятая посадка: доли ширины и высоты. Кольцо рисует галерея, а не кадр -
+   *  иначе модель фото перенесла бы его на снимок. */
+  mark?: { u: number; v: number } | null;
 }
 
 /** Кадр для фото: 16:9, стороны кратны 32 - так их ждёт модель. */
@@ -53,26 +60,31 @@ export function obstaclesOf(world: World): ShotObstacle[] {
     });
 }
 
-function ranked(plants: readonly Plant[]): string[] {
+function ranked(plants: readonly Plant[], nameOf: (p: Plant) => string): string[] {
   const counts = new Map<string, number>();
   for (const p of plants) {
-    const name = p.species.name_lat.trim();
+    const name = nameOf(p).trim();
     if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
 }
 
+const latin = (p: Plant) => p.species.name_lat;
+
 /** Виды плана в кадре: деревья и кустарники раздельно, частые - первыми. */
 export function speciesInView(
   bodies: readonly Body3[],
   pose: Pose,
-): { trees: string[]; shrubs: string[] } {
+): { trees: string[]; shrubs: string[]; names: string[] } {
   const seen = bodies
     .filter((b) => !b.plant.existing && inView(pose, b.x, b.z, framing()))
     .map((b) => b.plant);
+  const trees = seen.filter((p) => p.type === 'tree');
+  const shrubs = seen.filter((p) => p.type !== 'tree');
   return {
-    trees: ranked(seen.filter((p) => p.type === 'tree')),
-    shrubs: ranked(seen.filter((p) => p.type !== 'tree')),
+    trees: ranked(trees, latin),
+    shrubs: ranked(shrubs, latin),
+    names: [...ranked(trees, (p) => p.name), ...ranked(shrubs, (p) => p.name)],
   };
 }
 
@@ -91,9 +103,13 @@ export function plantShots(
     key: `${id}-${i}`,
     pose: s.pose,
     viewpoint: s.viewpoint,
-    label:
-      s.viewpoint === 'ground' ? `${body.plant.name}, с тротуара` : `${body.plant.name}, сверху`,
+    label: `${capital(compass(s.azimuth))}, ${s.viewpoint === 'ground' ? 'с тротуара' : 'сверху'}`,
     ...speciesInView(bodies, s.pose),
+    mark: project(
+      s.pose,
+      { x: body.x, y: Math.max(0.5, body.height - body.radius), z: body.z },
+      framing(),
+    ),
   }));
 }
 
@@ -142,4 +158,8 @@ export function streetShots(
     label: poses.length > 1 ? `Участок ${i + 1} из ${poses.length}` : 'Вся улица',
     ...speciesInView(bodies, pose),
   }));
+}
+
+function capital(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -225,7 +225,7 @@ describe('RunPage: finished run', () => {
       'R-UTIL-WATER-001 · норма 2,00 м · СП 42.13330.2016, табл. 9.1',
     );
     expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).toBeVisible();
-    expect(right).toHaveTextContent('Пригодность месту 74%');
+    expect(right).toHaveTextContent('Пригодность места 74%');
 
     // Перенос без перетаскивания: кнопка есть только в режиме правки.
     expect(within(right).queryByRole('button', { name: /новое место/ })).toBeNull();
