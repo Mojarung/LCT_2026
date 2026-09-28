@@ -159,6 +159,8 @@ def _failed(name: str, params: PlanParams, error: str) -> VariantResult:
 _PRIORITY = (
     "baseline",
     "joint",
+    "joint_lawn_6",
+    "joint_lawn_7",
     "soil_frame_joint",
     "aligned_joint",
     "soil_frame",
@@ -178,6 +180,16 @@ def _variants(params: PlanParams, features: Sequence[Feature]) -> list[tuple[str
     variants = [("baseline", base), ("joint", replace(base, placement_solver="milp"))]
     if "lawn" not in params.modes:
         return variants
+    if params.crown_spacing and params.lawn_spacing_m <= 0:
+        # Шаг по кронам (params.tree_pair_step_m): на сетке 5 м крупному виду тесно, и подбор
+        # ставит компактные или оставляет места пустыми. Сетка реже даёт крупным видам место -
+        # что лучше для улицы, решает индекс, как и между остальными вариантами.
+        joint = replace(base, placement_solver="milp")
+        variants.extend(
+            (step_name, replace(joint, lawn_spacing_m=step))
+            for step_name, step in (("joint_lawn_6", 6.0), ("joint_lawn_7", 7.0))
+            if step > params.spacing_m
+        )
     px, py = params.lawn_phase
     variants.extend(
         (

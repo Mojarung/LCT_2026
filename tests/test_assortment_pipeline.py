@@ -135,7 +135,8 @@ def test_summary_counts_add_up_and_the_plan_is_not_a_monoculture() -> None:
     assert not summary.quota_violations
     assert len(summary.counts) > 1
     assert summary.shannon > 0
-    assert abs(sum(summary.genus_shares.values()) - 1.0) < 1e-6
+    # доли округлены до 4 знаков: сумма может отойти от единицы на полшага округления на род
+    assert abs(sum(summary.genus_shares.values()) - 1.0) <= 5e-5 * len(summary.genus_shares)
     assert set(summary.decor_by_month) == set(range(1, 13))
     assert summary.solver in {"milp", "greedy"}
 
@@ -159,7 +160,10 @@ def test_single_mode_keeps_the_profile_species_but_still_scores_it() -> None:
         assert placement.assortment.percent > 0
     summary = plan.assortment_summary
     assert summary is not None
-    assert summary.counts == {DEFAULT.code: 40}
+    assert summary.counts == {DEFAULT.code: len(plan.placements)}
+    # Места газона здесь в 3 м: вид не выбрать, тесное по кронам место уходит в отказы с причиной.
+    assert len(plan.placements) + len(plan.rejections) == 40
+    assert all("шаг по взрослым кронам" in r.note for r in plan.rejections)
 
 
 def test_existing_trees_change_the_outcome() -> None:

@@ -111,6 +111,8 @@ def test_soil_frame_is_additional_and_cannot_replace_a_better_baseline() -> None
     assert [v.name for v in plan.portfolio.variants] == [
         "baseline",
         "joint",
+        "joint_lawn_6",
+        "joint_lawn_7",
         "soil_frame_joint",
         "soil_frame",
         "phase_x",

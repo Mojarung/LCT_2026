@@ -348,8 +348,11 @@ class PlanSite:
                 if len(kept) != len(plan.placements):
                     # Номера посадок идут подряд: снятые кусты не оставляют дыр в ведомости.
                     renumbered = tuple(replace(p, number=i) for i, p in enumerate(kept, 1))
-                    removed = trim_note(plan.placements, kept)
-                    warnings = (*plan.warnings, removed) if removed else plan.warnings
+                    removed = (
+                        trim_note(plan.placements, spaced, reason="Шаг и посадочные ямы соседей"),
+                        trim_note(spaced, kept),
+                    )
+                    warnings = (*plan.warnings, *(note for note in removed if note))
                     plan = replace(plan, placements=renumbered, warnings=warnings)
             plan = with_places(plan, places)
             with watch.stage("validate_plan"):
@@ -403,6 +406,13 @@ class PlanSite:
                 )
                 if recheck.ok:
                     plan, validation = moved, recheck
+                else:
+                    codes = sorted({issue.code for issue in recheck.issues})
+                    note = (
+                        f"Сдвиг слабых мест не применён: план со сдвигами не прошёл проверку "
+                        f"({', '.join(codes)}), оставлены исходные точки"
+                    )
+                    plan = replace(plan, warnings=(*plan.warnings, note))
         # Газон - грунт, который итоговый план оставил свободным: считается после сдвига слабых
         # мест, иначе посадочное место сдвинутой посадки легло бы на газон. Нормы посадок газон
         # не меняет, поэтому проверку плана не повторяет.
