@@ -4197,7 +4197,7 @@ canvas{display:block;cursor:pointer}
     ['Конвертация', 'DWG → DXF: ODA или LibreDWG', 0],
     ['Склейка комплекта', 'XREF между файлами', 0],
     ['Чтение', 'ремонт строк, блоки до 8 уровней', 0],
-    ['Классификация', '66 правил слоёв, 28 классов', 0],
+    ['Классификация', '76 правил слоёв, 37 классов', 0],
     ['Карта покрытий', 'грунт по замкнутым граням', 0],
     ['Кандидаты', 'аллея вдоль борта, сетка по газону', 2],
     ['Проверка норм', '46 отступов, допуск 1 мм', 1],
@@ -4411,7 +4411,7 @@ canvas{display:block;cursor:pointer}
       if (t < DIVE) return;
       G.chapterTitle(ctx, t, '01 · ЧТЕНИЕ', 'Чертёж раскладывается на слои', { t0: DIVE + 0.1, t1: DUR - 0.8 });
       G.caption(ctx, t, DIVE + 0.5, DUR - 0.9, 60, 170, 560, 'Берзарина: 206 860 объектов. Чтение с ремонтом строк LibreDWG заняло 55 с.', { seed: 3 });
-      G.caption(ctx, t, 9.8, DUR - 0.9, 60, 400, 560, '66 правил layer_map.yaml раскладывают слои по 28 классам. Неизвестный объект останавливает прогон до уточнения.', { seed: 5 });
+      G.caption(ctx, t, 9.8, DUR - 0.9, 60, 400, 560, '76 правил layer_map.yaml раскладывают слои по 37 классам. Незнакомое имя слоя разбирается по словарю, а что не разобрано, остаётся на проверку.', { seed: 5 });
       G.caption(ctx, t, 16.2, DUR - 0.9, 60, 690, 560, 'Единицы берутся из . REGION без ACIS и XCLIP останавливают расчёт с причиной в input_read.json.', { seed: 7 });
     },
   });
@@ -4576,7 +4576,7 @@ canvas{display:block;cursor:pointer}
       G.text(ctx, a + ' м', 560, y, { size: 22, weight: 500, family: G.MONO, color: P.lineWhite, align: 'right', alpha: q });
       G.text(ctx, b === '-' ? '-' : b + ' м', 740, y, { size: 22, weight: 500, family: G.MONO, color: P.lavender, align: 'right', alpha: q });
     });
-    G.para(ctx, '76 правил, из них 46 отступов. У 75 основание сверено по тексту акта. 84 дословные цитаты, в текстах заказчика найдена 81 из 81 доступной.', 76, 880, { size: 22, weight: 400, maxW: 670, lh: 30, color: P.lavender, p: G.seg(t, 8.4, 2.0, 'linear') });
+    G.para(ctx, '95 правил, из них 62 отступа. У 78 основание сверено по тексту акта, 15 - проектные параметры с пометкой в объяснении.', 76, 880, { size: 22, weight: 400, maxW: 670, lh: 30, color: P.lavender, p: G.seg(t, 8.4, 2.0, 'linear') });
     ctx.restore();
   }
 
@@ -4720,7 +4720,7 @@ canvas{display:block;cursor:pointer}
       if (bl > 0) G.chapters(ctx, t, 2, { blue: true, dur: DUR, alpha: bl });
       if (q > 0) return;
       G.chapterTitle(ctx, t, '03 · РАЗМЕЩЕНИЕ', 'Место проверяется целиком', { t0: BACK[1], t1: DUR - 0.8 });
-      G.caption(ctx, t, 2.2, 11.2, 1180, 880, 700, 'Станции вдоль борта через 6 м на отступах 2, 2,5 и 3 м и сетка по газону. Яма дерева 2,2 × 2,2 м проверяется по всем 46 отступам сразу, допуск 1 мм.', { size: 23, seed: 9 });
+      G.caption(ctx, t, 2.2, 11.2, 1180, 880, 700, 'Станции вдоль борта через 5 м на отступах 3, 2,5 и 2 м и сетка по газону. Яма дерева 2,2 × 2,2 м проверяется по всем 62 отступам сразу.', { size: 23, seed: 9 });
       G.caption(ctx, t, 11.6, DUR - 0.9, 1180, 850, 700, 'Где под газоном кабель, водопровод или рядом опора, место уходит в отказ: причина и недобор до нормы остаются в объяснении. Берзарина: 68 190 кандидатов у борта, 1 871 на газоне.', { size: 23, seed: 11 });
     },
   });
@@ -4867,7 +4867,7 @@ canvas{display:block;cursor:pointer}
       ctx.globalAlpha *= 1 - G.seg(t, DUR - 1.2, 0.9, 'linear');
       leaves(ctx, t);
       ctx.restore();
-      G.caption(ctx, t, QUOTA - 0.2, SHEET - 0.4, 1100, 150, 760, 'Квота вида 10% от занятых мест: лишний экземпляр не ставится. Место, пустое по квотам, занимает группа кустарника 3 × 3 с шагом 1 м. На Берзарина так посажено 636 кустарников.', { size: 23, seed: 13 });
+      G.caption(ctx, t, QUOTA - 0.2, SHEET - 0.4, 1100, 150, 760, 'Шаг пары деревьев вне аллеи - по взрослым кронам, 5-7 м: боярышник 5 м, ель 6 м, липа 7 м. Доля вида до 40%, рода до 50%: перебор штрафуется. Место без вида занимает группа кустарника 3 × 3 с шагом 1 м.', { size: 23, seed: 13 });
       herbarium(ctx, t);
       G.chapters(ctx, t, 3, { dur: DUR });
       G.chapterTitle(ctx, t, '04 · ВИДЫ', 'Вид подбирается под место', { t0: 0.2, t1: DUR - 0.8 });
@@ -5600,7 +5600,7 @@ canvas{display:block;cursor:pointer}
   function left(ctx, t) {
     UI.panel(ctx, 40, 40, 380, 640, { p: G.seg(t, 0.1, 0.5, 'linear') });
     UI.value(ctx, 'berzarina.dxf', 70, 92);
-    UI.label(ctx, 'strict · шаг 6 м', 70, 124);
+    UI.label(ctx, 'strict · шаг 5 м', 70, 124);
     UI.value(ctx, '608 посадок', 70, 186, { size: 30, weight: 400 });
     UI.label(ctx, '1 734 отклонённых места', 70, 222);
     UI.label(ctx, 'подоснова цела', 70, 262, { color: C.signal });
@@ -5786,8 +5786,8 @@ canvas{display:block;cursor:pointer}
       const x = 110, bone = '#EDE6F6';
       G.text(ctx, 'green', x - 8, 330, { size: 170, weight: 200, color: bone, p: G.seg(t, UP[1] - 0.4, 1.2, 'linear'), tracking: 6 });
       lib.ticks(ctx, x, 366, { length: 500 * G.seg(t, UP[1], 1.0), n: 25, len: 9, major: 5, majorLen: 20, color: bone, alpha: 0.6, width: 1.5 });
-      G.para(ctx, '19 улиц пилота, 29 391 посадка. Исходный чертёж цел на каждой.', x, 440, { size: 32, weight: 400, maxW: 640, lh: 44, color: bone, p: G.seg(t, UP[1] + 0.8, 1.2, 'linear') });
-      G.para(ctx, 'docker compose up --build · Swagger /docs · 1283 теста', x, 570, { size: 21, weight: 500, family: G.MONO, maxW: 700, lh: 30, color: '#C8C1EF', p: G.seg(t, UP[1] + 1.8, 1.0, 'linear') });
+      G.para(ctx, '18 улиц пилота из 19, 33 757 посадок. Исходный чертёж цел на каждой.', x, 440, { size: 32, weight: 400, maxW: 640, lh: 44, color: bone, p: G.seg(t, UP[1] + 0.8, 1.2, 'linear') });
+      G.para(ctx, 'docker compose up --build · Swagger /docs · 2148 тестов', x, 570, { size: 21, weight: 500, family: G.MONO, maxW: 700, lh: 30, color: '#C8C1EF', p: G.seg(t, UP[1] + 1.8, 1.0, 'linear') });
       G.kicker(ctx, 'ДАЛЬШЕ', x, 660, { color: '#C8C1EF', p: G.seg(t, UP[1] + 2.6, 0.5, 'linear') });
       ['кустарниковый ярус под кроной аллеи', 'улучшение раскладки в продукт: индекс рос в 8 сценах из 9', 'CP-SAT для аллеи и C-расширения ezdxf', 'визуализация участка по готовому плану'].forEach((s, i) =>
         G.text(ctx, '· ' + s, x, 706 + i * 36, { size: 22, weight: 400, color: bone, p: G.seg(t, UP[1] + 2.8 + i * 0.3, 0.6, 'linear') }));

@@ -113,7 +113,7 @@
   function left(ctx, t) {
     UI.panel(ctx, 40, 40, 380, 640, { p: G.seg(t, 0.1, 0.5, 'linear') });
     UI.value(ctx, 'berzarina.dxf', 70, 92);
-    UI.label(ctx, 'strict · шаг 6 м', 70, 124);
+    UI.label(ctx, 'strict · шаг 5 м', 70, 124);
     UI.value(ctx, '608 посадок', 70, 186, { size: 30, weight: 400 });
     UI.label(ctx, '1 734 отклонённых места', 70, 222);
     UI.label(ctx, 'подоснова цела', 70, 262, { color: C.signal });

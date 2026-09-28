@@ -57,8 +57,8 @@
       const x = 110, bone = '#EDE6F6';
       G.text(ctx, 'green', x - 8, 330, { size: 170, weight: 200, color: bone, p: G.seg(t, UP[1] - 0.4, 1.2, 'linear'), tracking: 6 });
       lib.ticks(ctx, x, 366, { length: 500 * G.seg(t, UP[1], 1.0), n: 25, len: 9, major: 5, majorLen: 20, color: bone, alpha: 0.6, width: 1.5 });
-      G.para(ctx, '19 улиц пилота, 29 391 посадка. Исходный чертёж цел на каждой.', x, 440, { size: 32, weight: 400, maxW: 640, lh: 44, color: bone, p: G.seg(t, UP[1] + 0.8, 1.2, 'linear') });
-      G.para(ctx, 'docker compose up --build · Swagger /docs · 1283 теста', x, 570, { size: 21, weight: 500, family: G.MONO, maxW: 700, lh: 30, color: '#C8C1EF', p: G.seg(t, UP[1] + 1.8, 1.0, 'linear') });
+      G.para(ctx, '18 улиц пилота из 19, 33 757 посадок. Исходный чертёж цел на каждой.', x, 440, { size: 32, weight: 400, maxW: 640, lh: 44, color: bone, p: G.seg(t, UP[1] + 0.8, 1.2, 'linear') });
+      G.para(ctx, 'docker compose up --build · Swagger /docs · 2148 тестов', x, 570, { size: 21, weight: 500, family: G.MONO, maxW: 700, lh: 30, color: '#C8C1EF', p: G.seg(t, UP[1] + 1.8, 1.0, 'linear') });
       G.kicker(ctx, 'ДАЛЬШЕ', x, 660, { color: '#C8C1EF', p: G.seg(t, UP[1] + 2.6, 0.5, 'linear') });
       ['кустарниковый ярус под кроной аллеи', 'улучшение раскладки в продукт: индекс рос в 8 сценах из 9', 'CP-SAT для аллеи и C-расширения ezdxf', 'визуализация участка по готовому плану'].forEach((s, i) =>
         G.text(ctx, '· ' + s, x, 706 + i * 36, { size: 22, weight: 400, color: bone, p: G.seg(t, UP[1] + 2.8 + i * 0.3, 0.6, 'linear') }));
