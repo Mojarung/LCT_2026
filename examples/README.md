@@ -9,19 +9,19 @@
 окно 300 x 140 м настоящего чертежа пилота ДПиООС: геоподоснова и сети, 125 слоёв, 12 694
 сущности. Тот же фрагмент считает кнопка «Запустить на встроенном участке» в веб-интерфейсе.
 
-Выход - [`berzarina-fragment/`](berzarina-fragment/), получен в образе Docker командой
+Выход - [`berzarina-fragment/`](berzarina-fragment/), тот же расчёт, что даёт образ Docker
+командой
 
 ```bash
-docker run --rm -v "$PWD/src/green/infrastructure/cad/samples:/in:ro" \
-  -v "$PWD/examples/berzarina-fragment:/out" --entrypoint green green:latest \
-  run /in/berzarina_fragment.dxf --profile strict --out /out
+docker run --rm -v "$PWD/src/green/infrastructure/cad/samples:/in:ro"   -v "$PWD/examples/berzarina-fragment:/out" --entrypoint green green:latest   run /in/berzarina_fragment.dxf --profile strict --out /out
 ```
 
-Прогон 28.09.2026 образом с кодом сдачи: около минуты, 1211 посадок (1192 допустимы, 19 требуют
-согласования), 33 отказа, 9 газонов на 1778 м²; `verify.json`: все 12 694 исходные сущности
-без изменений, новое только на слоях `GREEN_*`. Грунт под ямой подтверждён замкнутыми
-контурами у 442 посадок, у 769 - выведен по подписям, поэтому сводка прогона требует проверки
-покрытия человеком (`surface_inference_review_required`).
+Прогон 29.09.2026 кодом с шагом деревьев по взрослым кронам (docs/notes/39), локально
+через `uv run green run`: 52 с, 1278 посадок (1260 допустимы, 18 требуют согласования), из
+них 80 деревьев; 32 отказа, 9 газонов на 1749 м². `verify.json`: все 12 694 исходные
+сущности без изменений, новое только на слоях `GREEN_*`. Грунт под ямой подтверждён
+замкнутыми контурами у 478 посадок, у 800 выведен по подписям, поэтому сводка прогона
+требует проверки покрытия человеком (`surface_inference_review_required`).
 
 | Файл | Что это |
 |---|---|
@@ -35,7 +35,8 @@ docker run --rm -v "$PWD/src/green/infrastructure/cad/samples:/in:ro" \
 | `run_manifest.json` | параметры прогона, версии, отпечатки входа и свода норм |
 | `rules.json` | свод норм прогона: правило, расстояние, способ измерения, акт, пункт и цитата |
 | `assortment.json` | состав плана по видам и основания подбора |
-| `interpretations.csv.zip` | строка на пару «решение - правило» для каждой посадки и отказа (30 МБ без сжатия) |
+| `renders/` | бонус ТЗ: снимки 3D-вида этого прогона (страница «3D» веб-интерфейса) - общий вид в 10 лет после посадки, взрослые кроны сверху и вид с газона в 25 лет |
+| `interpretations.csv.zip` | строка на пару «решение - правило» для каждой посадки и отказа (30 925 строк, около 32 МБ без сжатия) |
 
 Проверка выхода без CAD: `uv run green verify src/green/infrastructure/cad/samples/berzarina_fragment.dxf examples/berzarina-fragment/result.dxf`.
 
