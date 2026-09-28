@@ -16,6 +16,7 @@ from test_pipeline_synthetic import CURB_Y, PIPE_DIAMETER_M, PIPE_Y, ROOT, WATER
 from green.application.use_case import MERGED_DXF, PlanRequest
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
+from green.infrastructure.cad import documents
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -141,8 +142,6 @@ def test_merged_drawing_is_parsed_once_for_reading(tmp_path: Path, monkeypatch) 
     """Склейка перечитывает записанный комплект для проверки; чтение прогона берёт этот же
     документ из кэша, а не разбирает файл ещё раз (на Макеева чтение шло 587 с после склейки
     710 с). Писатель забирает его оттуда же, как и прежде."""
-    import green.infrastructure.cad.documents as documents  # noqa: PLC0415
-
     genplan, utilities = tmp_path / "genplan.dxf", tmp_path / "utilities.dxf"
     _genplan(genplan)
     _utilities(utilities)
