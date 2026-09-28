@@ -21,7 +21,7 @@ from ezdxf.entities import Dictionary, DXFEntity, is_graphic_entity
 
 from green.application.errors import InputError
 from green.application.ports import MergeResult
-from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.documents import DocumentCache, load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 from green.infrastructure.cad.units import decide_units, measure
 from green.infrastructure.cad.xref_package import (
@@ -113,6 +113,12 @@ def _user_blocks(doc: Drawing) -> set[str]:
 
 
 class EzdxfDrawingMerger:
+    def __init__(self, documents: DocumentCache | None = None) -> None:
+        # Записанный комплект склейка перечитывает для проверки; этот документ отдаётся чтению
+        # прогона через кэш, иначе тот же файл разбирался дважды подряд (Макеева: склейка
+        # 710 с, чтение 587 с).
+        self._documents = documents
+
     def merge(
         self,
         sources: Sequence[Path],
@@ -180,7 +186,7 @@ class EzdxfDrawingMerger:
                 "не перенесена. Расчёт на неполном комплекте остановлен."
             )
         target.parent.mkdir(parents=True, exist_ok=True)
-        dropped = _save_package(base, target)
+        dropped = _save_package(base, target, self._documents)
         if dropped:
             notes.append(
                 f"Склейка: удалено {dropped} устаревших записей словарей (ассоциативные связи "
@@ -211,17 +217,19 @@ def _load_overlay(base: Drawing, doc: Drawing, name: str, notes: list[str]) -> N
         )
 
 
-def _save_package(doc: Drawing, target: Path) -> int:
+def _save_package(doc: Drawing, target: Path, documents: DocumentCache | None = None) -> int:
     """Записать склейку и проверить её обратным чтением; число удалённых записей словарей."""
     require_exportable_document(doc, target.name)
     dropped = _drop_stale_dictionary_entries(doc)
     expected = expanded_entity_counts(doc.modelspace())
     pending = target.with_name(f".{target.name}.pending")
     doc.saveas(pending)
-    written, _ = load_document(pending)
+    written, notes = load_document(pending)
     if expanded_entity_counts(written.modelspace()) != expected:
         raise InputError("Склейка: записанный DXF потерял часть структуры объектов")
     pending.replace(target)
+    if documents is not None:
+        documents.put(target, (written, notes))
     return dropped
 
 

@@ -78,7 +78,7 @@ def build_container(settings: Settings | None = None) -> Container:
         strategy=GreedyPlantingStrategy(),
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
-        merger=EzdxfDrawingMerger(),
+        merger=EzdxfDrawingMerger(documents=documents),
         gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
     )
     audit = AuditSite(
@@ -89,7 +89,7 @@ def build_container(settings: Settings | None = None) -> Container:
         species=species,
         writer=EzdxfAuditWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
-        merger=EzdxfDrawingMerger(),
+        merger=EzdxfDrawingMerger(documents=documents),
     )
     store = FileSystemRunStore(
         settings.runs_dir,

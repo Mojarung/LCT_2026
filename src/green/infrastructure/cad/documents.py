@@ -92,6 +92,17 @@ class DocumentCache:
                 self._loaded_handles.pop(id(evicted), None)
         return loaded
 
+    def put(self, path: Path, loaded: Loaded) -> None:
+        """Документ, уже прочитанный с этого файла (склейка перечитывает записанный комплект для
+        проверки): чтение и запись берут его отсюда, а не разбирают файл ещё раз."""
+        key = _key(path)
+        with self._lock:
+            self._items[key] = loaded
+            self._loaded_handles[id(loaded[0])] = frozenset(loaded[0].entitydb.keys())
+            while len(self._items) > self._capacity:
+                _, (evicted, _) = self._items.popitem(last=False)
+                self._loaded_handles.pop(id(evicted), None)
+
     def take(self, path: Path) -> Loaded:
         with self._lock:
             cached = self._items.pop(_key(path), None)

@@ -135,3 +135,29 @@ def test_kit_file_of_a_single_line_inside_the_base_is_not_reported(tmp_path: Pat
         )
     )
     assert not any("перекрываются" in w for w in result.warnings)
+
+
+def test_merged_drawing_is_parsed_once_for_reading(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """Склейка перечитывает записанный комплект для проверки; чтение прогона берёт этот же
+    документ из кэша, а не разбирает файл ещё раз (на Макеева чтение шло 587 с после склейки
+    710 с). Писатель забирает его оттуда же, как и прежде."""
+    import green.infrastructure.cad.documents as documents  # noqa: PLC0415
+
+    genplan, utilities = tmp_path / "genplan.dxf", tmp_path / "utilities.dxf"
+    _genplan(genplan)
+    _utilities(utilities)
+    loads: list[str] = []
+    original = documents.load_document
+
+    def counting(path: Path):  # noqa: ANN202
+        loads.append(path.name)
+        return original(path)
+
+    monkeypatch.setattr(documents, "load_document", counting)
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load("strict", {"placement_solver": "greedy"})
+    report = container.use_case.execute(
+        PlanRequest("kit", genplan, tmp_path / "out", "strict", params, extra_sources=(utilities,))
+    )
+    assert report.integrity.ok
+    assert loads.count(MERGED_DXF) == 0, loads
