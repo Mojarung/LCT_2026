@@ -31,6 +31,54 @@
         "title": "ArtifactOut",
         "type": "object"
       },
+      "Body_create_photo_api_v1_runs__run_id__photos_post": {
+        "properties": {
+          "hour": {
+            "default": 11.0,
+            "maximum": 24.0,
+            "minimum": 0.0,
+            "title": "Hour",
+            "type": "number"
+          },
+          "image": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Кадр 3D-вида, PNG, стороны кратны 32, до 2048 px",
+            "title": "Image",
+            "type": "string"
+          },
+          "scenery": {
+            "default": false,
+            "description": "Разрешить модели дорисовать фон и деревья, которых нет в плане",
+            "title": "Scenery",
+            "type": "boolean"
+          },
+          "season": {
+            "$ref": "#/components/schemas/Season",
+            "default": "summer"
+          },
+          "shrubs": {
+            "default": "",
+            "description": "Латинские названия кустарников в кадре через запятую",
+            "title": "Shrubs",
+            "type": "string"
+          },
+          "species": {
+            "default": "",
+            "description": "Латинские названия деревьев в кадре через запятую",
+            "title": "Species",
+            "type": "string"
+          },
+          "viewpoint": {
+            "$ref": "#/components/schemas/Viewpoint",
+            "default": "aerial"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "Body_create_photo_api_v1_runs__run_id__photos_post",
+        "type": "object"
+      },
       "Body_create_run_api_v1_runs_post": {
         "properties": {
           "extra": {
@@ -404,6 +452,208 @@
           "converters"
         ],
         "title": "MetaOut",
+        "type": "object"
+      },
+      "PhotoListOut": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoOut"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Почему фото делать нельзя, если нельзя",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "photos"
+        ],
+        "title": "PhotoListOut",
+        "type": "object"
+      },
+      "PhotoOut": {
+        "description": "Фото участка по кадру 3D-вида: задание очереди и ссылки на картинки.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "hour": {
+            "title": "Hour",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Увеличенное фото, когда оно готово",
+            "title": "Photo Url"
+          },
+          "raw_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Выход модели размером кадра",
+            "title": "Raw Url"
+          },
+          "scenery": {
+            "description": "Модель дорисовала фон и деревья, которых нет в плане",
+            "title": "Scenery",
+            "type": "boolean"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "shrubs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Shrubs",
+            "type": "array"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "species": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Species",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "upscaled": {
+            "title": "Upscaled",
+            "type": "boolean"
+          },
+          "viewpoint": {
+            "enum": [
+              "aerial",
+              "ground"
+            ],
+            "title": "Viewpoint",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "scenery",
+          "season",
+          "hour",
+          "viewpoint",
+          "species",
+          "shrubs",
+          "width",
+          "height",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "seconds",
+          "error",
+          "upscaled",
+          "source_url",
+          "photo_url",
+          "raw_url"
+        ],
+        "title": "PhotoOut",
         "type": "object"
       },
       "PlanSummaryOut": {
@@ -814,6 +1064,15 @@
         "title": "RunState",
         "type": "string"
       },
+      "Season": {
+        "enum": [
+          "spring",
+          "summer",
+          "autumn",
+          "winter"
+        ],
+        "type": "string"
+      },
       "SpeciesOut": {
         "properties": {
           "code": {
@@ -955,6 +1214,13 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "Viewpoint": {
+        "enum": [
+          "aerial",
+          "ground"
+        ],
+        "type": "string"
       }
     }
   },
@@ -1674,6 +1940,374 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/photos": {
+      "get": {
+        "description": "Фото прогона, новые сверху, и можно ли делать новые на этом сервере.",
+        "operationId": "list_photos_api_v1_runs__run_id__photos_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "List Photos",
+        "tags": [
+          "photos"
+        ]
+      },
+      "post": {
+        "description": "Поставить кадр в очередь модели. Статус: GET по адресу из Location.",
+        "operationId": "create_photo_api_v1_runs__run_id__photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_photo_api_v1_runs__run_id__photos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "Create Photo",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/photos/{photo_id}": {
+      "get": {
+        "operationId": "get_photo_api_v1_runs__run_id__photos__photo_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "title": "Photo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "Get Photo",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/photos/{photo_id}/{kind}": {
+      "get": {
+        "description": "Кадр 3D-вида (source), выход модели (raw) или увеличенное фото (photo).",
+        "operationId": "get_photo_file_api_v1_runs__run_id__photos__photo_id___kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "title": "Photo Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "source",
+                "raw",
+                "photo"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "Get Photo File",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/rebuild": {
       "post": {
         "description": "Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}.",
@@ -1796,6 +2430,10 @@
     {
       "description": "Правка плана на карте: проверка точки, правки, пересборка.",
       "name": "edits"
+    },
+    {
+      "description": "Фото участка по кадру 3D-вида: очередь генеративной модели, статус, файлы.",
+      "name": "photos"
     }
   ]
 }

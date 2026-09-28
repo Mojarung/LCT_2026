@@ -244,3 +244,33 @@ class PlanSummaryOut(BaseModel):
             rejections=len(plan.rejections),
             stale=stale,
         )
+
+
+class PhotoOut(BaseModel):
+    """Фото участка по кадру 3D-вида: задание очереди и ссылки на картинки."""
+
+    id: str
+    state: Literal["queued", "running", "succeeded", "failed"]
+    scenery: bool = Field(description="Модель дорисовала фон и деревья, которых нет в плане")
+    season: str
+    hour: float
+    viewpoint: Literal["aerial", "ground"]
+    species: list[str]
+    shrubs: list[str]
+    width: int
+    height: int
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    seconds: float | None
+    error: str | None
+    upscaled: bool
+    source_url: str
+    photo_url: str | None = Field(description="Увеличенное фото, когда оно готово")
+    raw_url: str | None = Field(description="Выход модели размером кадра")
+
+
+class PhotoListOut(BaseModel):
+    available: bool
+    reason: str | None = Field(description="Почему фото делать нельзя, если нельзя")
+    photos: list[PhotoOut]

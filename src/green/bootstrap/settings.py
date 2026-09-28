@@ -37,5 +37,14 @@ class Settings(BaseSettings):
     # Предел объёма каталога прогонов, ГБ: перед новым прогоном самые старые законченные
     # удаляются, пока каталог не уложится (0 - без предела). Прогон тяжёлой улицы - до 5 ГБ.
     runs_max_gb: float = Field(default=20.0, ge=0)
+    # Фото участка по кадру 3D-вида (Qwen-Image-2.1 через stable-diffusion.cpp): каталог моделей
+    # и программ, docs/notes/40-scene-photos.md. Не задан - кнопка фото в 3D-виде недоступна.
+    photo_models_dir: Path | None = None
+    photo_sd_binary: Path | None = None
+    photo_esrgan_binary: Path | None = None
+    # Модель апскейлера в каталоге models/ программы realesrgan-ncnn-vulkan.
+    photo_upscaler: str = "4xNomos8kSC"
+    photo_max_vram_gb: float = Field(default=6.0, ge=2, le=96)
+    photo_timeout_s: int = Field(default=900, ge=60, le=7200)
     log_json: bool = False
     log_level: str = "INFO"
