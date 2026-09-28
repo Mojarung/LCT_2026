@@ -65,9 +65,15 @@ def closed_face_materials(
     pairs = index.query(incomplete, predicate="intersects")
     affected = np.zeros(len(faces), dtype=bool)
     if pairs.shape[1]:
-        pieces = shapely.intersection(incomplete[pairs[0]], faces[pairs[1]])
-        inside = shapely.difference(pieces, shapely.boundary(faces[pairs[1]]))
-        affected[pairs[1][shapely.length(inside) > 0]] = True
+        # Кусок незавершённой линии лежит внутри грани, а не только на её контуре: внутренности
+        # линии и грани пересекаются по линии (DE-9IM «1********»). Прежде - разность куска с
+        # контуром грани, который строился заново на каждую пару: на улице Академика
+        # Понтрягина 151 тыс. пар дали 2,4 млрд вершин контуров, и прогон падал по памяти
+        # (больше 11 ГБ, 28.09.2026). Ответ тот же (выборка 4000 пар той улицы - 2509
+        # совпавших), все пары - 11,6 с без роста памяти.
+        shapely.prepare(faces)
+        inside = shapely.relate_pattern(faces[pairs[1]], incomplete[pairs[0]], "1********")
+        affected[pairs[1][inside]] = True
     unresolved = (soil & paved) | affected | ~supported
     return FaceMaterials(
         soil=shapely.union_all(faces[soil & ~unresolved]),
