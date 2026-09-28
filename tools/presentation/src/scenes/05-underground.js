@@ -156,7 +156,7 @@
       G.text(ctx, a + ' м', 560, y, { size: 22, weight: 500, family: G.MONO, color: P.lineWhite, align: 'right', alpha: q });
       G.text(ctx, b === '-' ? '-' : b + ' м', 740, y, { size: 22, weight: 500, family: G.MONO, color: P.lavender, align: 'right', alpha: q });
     });
-    G.para(ctx, '76 правил, из них 46 отступов. У 75 основание сверено по тексту акта. 84 дословные цитаты, в текстах заказчика найдена 81 из 81 доступной.', 76, 880, { size: 22, weight: 400, maxW: 670, lh: 30, color: P.lavender, p: G.seg(t, 8.4, 2.0, 'linear') });
+    G.para(ctx, '95 правил, из них 62 отступа. У 78 основание сверено по тексту акта, 15 - проектные параметры с пометкой в объяснении.', 76, 880, { size: 22, weight: 400, maxW: 670, lh: 30, color: P.lavender, p: G.seg(t, 8.4, 2.0, 'linear') });
     ctx.restore();
   }
 

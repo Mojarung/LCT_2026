@@ -2,46 +2,43 @@
   "mode": "auto",
   "solver": "milp",
   "counts": {
-    "acer_ginnala": 9,
+    "acer_ginnala": 10,
     "crataegus_laevigata": 30,
-    "picea_abies": 6,
-    "sorbus_aucuparia": 10,
-    "thuja_occidentalis": 25
+    "sorbus_aucuparia": 21,
+    "thuja_occidentalis": 19
   },
   "genus_shares": {
-    "acer": 0.1125,
+    "acer": 0.125,
     "crataegus": 0.375,
-    "picea": 0.075,
-    "sorbus": 0.125,
-    "thuja": 0.3125
+    "sorbus": 0.2625,
+    "thuja": 0.2375
   },
   "family_shares": {
-    "Cupressaceae": 0.3125,
-    "Pinaceae": 0.075,
-    "Rosaceae": 0.5,
-    "Sapindaceae": 0.1125
+    "Cupressaceae": 0.2375,
+    "Rosaceae": 0.6375,
+    "Sapindaceae": 0.125
   },
-  "conifer_share": 0.3875,
-  "shannon": 1.4313,
+  "conifer_share": 0.2375,
+  "shannon": 1.3203,
   "decor_by_month": {
-    "1": 31,
-    "2": 31,
+    "1": 19,
+    "2": 19,
     "3": 0,
     "4": 0,
-    "5": 40,
-    "6": 39,
+    "5": 51,
+    "6": 40,
     "7": 0,
-    "8": 10,
-    "9": 49,
-    "10": 19,
-    "11": 31,
-    "12": 31
+    "8": 21,
+    "9": 61,
+    "10": 31,
+    "11": 19,
+    "12": 19
   },
   "no_species": 0,
   "quota_violations": [],
   "existing": {},
   "rejected_by_kind": {
-    "norm": 1765,
+    "norm": 1758,
     "reference": 15
   },
   "rejected_by_rule": {
@@ -49,19 +46,19 @@
     "R-PPSEVEN-FLUFF-001": 160,
     "R-HEAT-TREE-001": 133,
     "R-PAVE-TREE-001": 123,
-    "R-CURB-TREE-001": 107,
-    "R-BLD-TREE-001": 106,
+    "R-BLD-TREE-001": 110,
+    "R-CURB-TREE-001": 98,
     "R-POWER-TREE-001": 83,
     "R-INV-ACERNEG-001": 80,
-    "R-BLDCROWN-TREE-001": 63,
-    "R-SEWER-TREE-001": 57,
-    "R-ROAD-TREE-001": 27,
+    "R-SEWER-TREE-001": 54,
+    "R-BLDCROWN-TREE-001": 46,
+    "R-ROAD-TREE-001": 34,
+    "R-GAS-TREE-001": 21,
+    "R-POLE-TREE-001": 20,
+    "R-STRUCT-TREE-001": 20,
     "R-STORM-TREE-001": 19,
     "R-WATER-TREE-001": 19,
-    "R-GAS-TREE-001": 18,
-    "R-STRUCT-TREE-001": 17,
-    "R-POLE-TREE-001": 16,
-    "R-HEAT-TREE-003": 13,
+    "R-HEAT-TREE-003": 14,
     "R-THORNPV-TREE-001": 4
   },
   "notes": []

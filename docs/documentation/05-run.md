@@ -50,6 +50,10 @@ curl -s http://localhost:8000/api/v1/health
 пакет скачивается с сайта ODA; в образе по умолчанию его нет):
 `docker compose build --build-arg WITH_ODA=true`.
 
+Kubernetes вместо Compose (по желанию): образ `green:latest` загружается в реестр или на
+узлы кластера, затем `kubectl apply -k deploy/k8s` и
+`kubectl -n green port-forward svc/green 8000:80`.
+
 Стенд без сети: образ собирается там, где сеть есть, и переносится файлом.
 
 ```bash
@@ -73,7 +77,7 @@ docker compose up -d                                       # без --build
 
 ```bash
 curl -s -F "file=@dataset/улица.dxf" -F "profile=strict" \
-     -F 'overrides={"spacing_m": 5}' http://localhost:8000/api/v1/runs
+     -F 'overrides={"spacing_m": 6}' http://localhost:8000/api/v1/runs
 # 202 и "id"; комплект - поле extra (повторяется), ведомость - inventory, слои ГИС - layers
 curl -s http://localhost:8000/api/v1/runs/<id>            # state: queued -> running -> succeeded
 curl -s -o result.dxf         http://localhost:8000/api/v1/runs/<id>/artifacts/result.dxf
@@ -147,9 +151,9 @@ uv run green run dataset/улица.dxf --profile strict
 
 ### 5.8. Тесты и проверки кода
 
-| Команда | Что проверяет | Итог на 27.09.2026 |
+| Команда | Что проверяет | Итог на 29.09.2026 |
 |---|---|---|
-| `uv run pytest` | бэкенд: правила, чтение, геометрия, размещение, подбор, API, правка, отчёты, слои ГИС | 1758 тестов, 3 пропущены (нужны локальные данные) |
-| `npm test` в `frontend/` | интерфейс: карта, правка, 3D, клиент API | 251 тест |
+| `uv run pytest` | бэкенд: правила, чтение, геометрия, размещение, подбор, API, правка, отчёты, слои ГИС | 1885 тестов, часть пропускается без локальных данных |
+| `npm test` в `frontend/` | интерфейс: карта, правка, 3D, клиент API | 263 теста |
 | `npm run e2e` в `frontend/` | сквозной сценарий в браузере на живом сервере: прогон, правка, пересборка, DXF, 3D-снимок | проходит за 6,1 мин |
 | `uv run ruff check src`, `uv run ty check src`, `uv run lint-imports` | стиль, типы, контракты слоёв | чисто |
