@@ -21,7 +21,8 @@ const BPMN_CSS = require.resolve('bpmn-js/dist/assets/bpmn-js.css');
 const BPMN_FONT_CSS = require.resolve('bpmn-js/dist/assets/bpmn-font/css/bpmn.css');
 
 async function browser() {
-  return chromium.launch();
+  // Свой Chromium Playwright, а если его версии нет - установленный Chrome.
+  return chromium.launch().catch(() => chromium.launch({ channel: 'chrome' }));
 }
 
 async function diagrams(folder) {

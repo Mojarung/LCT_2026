@@ -14,6 +14,8 @@ uv run green serve                  # веб-интерфейс: http://127.0.0.
 docker compose up --build           # то же в контейнере, веб и API на :8000
 ```
 
+Документация для сдачи - [docs/documentation/](docs/documentation/) и её сборка в PDF [green-documentation.pdf](docs/documentation/green-documentation.pdf): назначение и границы ([01](docs/documentation/01-scope.md)), архитектура и развёртывание ([02](docs/documentation/02-architecture.md)), алгоритм, интерпретируемость и BPMN ([03](docs/documentation/03-algorithm.md)), методы и библиотеки ([04](docs/documentation/04-methods.md)), запуск и проверка в Docker ([05](docs/documentation/05-run.md)), способы работы ([06](docs/documentation/06-interaction.md)), API и Swagger ([07](docs/documentation/07-api.md)), ограничения ([08](docs/documentation/08-limitations.md)), приложения: свод правил, итоги по улицам, файлы прогона, параметры ([generated/](docs/documentation/generated/)). Презентация - [docs/presentation.pdf](docs/presentation.pdf) (13 слайдов) и её живая версия с анимацией [docs/presentation.html](docs/presentation.html); сборка - `node tools/presentation/build.mjs` и `node tools/presentation/export-pdf.mjs`. Kubernetes - `kubectl apply -k deploy/k8s`.
+
 Готовый пример входа и выхода без запуска: [examples/](examples/README.md) - фрагмент улицы Берзарина, `result.dxf` со слоями `GREEN_*`, отчёт интерпретаций, CSV посадок и проверка целостности.
 
 Вид для каждой посадки подбирается сервисом: жёсткие фильтры по нормам (369-ПП, 743-ПП п. 3.6.18, отступы по роду, крона шире 5 м, высота под ВЛ) и по справочнику (морозостойкость, реагенты), затем оценка пригодности и назначение видов. В текущем профиле `strict` целевые доли вида/рода/семейства - 40/50/70%; превышение штрафуется, а не запрещает занимать допустимое место. Перечётная ведомость через `--inventory` учитывает уже растущие деревья. База видов - [config/species.yaml](config/species.yaml), её описание - [docs/species.md](docs/species.md).
@@ -44,7 +46,7 @@ docker compose up --build           # то же в контейнере, веб 
 
 Линтеры и тесты: `uv run ruff check src tests`, `uv run ruff format --check src tests`, `uv run ty check src`, `uv run lint-imports`, `uv run pytest`.
 
-Подробности: [docs/architecture.md](docs/architecture.md), развёртывание и запуск под МосТех.ОС: [docs/deploy.md](docs/deploy.md), сценарий показа: [docs/demo.md](docs/demo.md), алгоритм по шагам: [docs/algorithm.md](docs/algorithm.md), база видов: [docs/species.md](docs/species.md), разбор ресерча: [docs/research-review.md](docs/research-review.md), требования к посадке по актам заказчика: [docs/requirements/planting-requirements.md](docs/requirements/planting-requirements.md).
+Рабочие заметки команды (история решений; расходятся с кодом там, где его обновили позже, - действующее описание в docs/documentation): [docs/architecture.md](docs/architecture.md), развёртывание и запуск под МосТех.ОС: [docs/deploy.md](docs/deploy.md), сценарий показа: [docs/demo.md](docs/demo.md), алгоритм по шагам: [docs/algorithm.md](docs/algorithm.md), база видов: [docs/species.md](docs/species.md), разбор ресерча: [docs/research-review.md](docs/research-review.md), требования к посадке по актам заказчика: [docs/requirements/planting-requirements.md](docs/requirements/planting-requirements.md).
 
 ## Журнал правок
 

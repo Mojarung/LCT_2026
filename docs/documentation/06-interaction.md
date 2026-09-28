@@ -14,8 +14,9 @@
 | `green serve [--host] [--port] [--workers]` | HTTP API и веб-интерфейс |
 | `green openapi --out ФАЙЛ` | выгрузка схемы OpenAPI |
 
-Параметры задаются профилем (`--profile strict|barriers|no_utilities|shrubs`) и
-переопределениями `--set`. Например, `--set spacing_m=6`, `--set sp42_edition=2026`,
+Параметры задаются профилем (`--profile strict|barriers|no_utilities|review|shrubs`) и
+переопределениями `--set`. Например, `--set spacing_m=6`, `--set crown_spacing=false`
+(один шаг на все породы вместо шага по взрослым кронам), `--set sp42_edition=2026`,
 `--set 'disabled_rules=[]'` (включает охранную зону газопровода по линии сети). Все параметры -
 приложение D.
 
