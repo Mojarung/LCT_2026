@@ -34,8 +34,8 @@ from green.application.assortment.filters import species_verdict
 from green.application.assortment.scoring import percent, score_species
 from green.application.barriers import BARRIER_NOTE, NEAR_M
 from green.application.constraints import VERDICT_ORDER, ConstraintIndex
-from green.application.params import step_with_tolerance
-from green.application.placement import planting_index
+from green.application.params import tree_pair_min_m
+from green.application.placement import in_alley, planting_index
 from green.application.quality import assess, evaluate
 from green.application.quality.terms import tightest
 from green.application.wording import index_change, plural
@@ -155,7 +155,14 @@ class _Mover:
         self._position = {p.placement_id: i for i, p in enumerate(self.placements)}
         self._xy = np.array([(p.x, p.y) for p in self.placements], dtype=np.float64)
         self._tree = np.array([p.planting_type is PlantingType.TREE for p in self.placements])
-        self._reach = params.spacing_m + 2 * max(STEPS_M) + 0.5
+        # Ямы соседей не перекрываются - так же, как в проверке плана (validation._spacing).
+        self._radius = np.array(
+            [
+                replace(params, planting_type=p.planting_type).footprint_radius_m
+                for p in self.placements
+            ]
+        )
+        self._reach = max(params.spacing_m, params.spacing_group_max_m) + 2 * max(STEPS_M) + 0.5
         self._kd = KDTree(self._xy)
         angles = np.linspace(0.0, 2 * math.pi, DIRECTIONS, endpoint=False)
         self._offsets = np.array(
@@ -229,10 +236,16 @@ class _Mover:
             new = math.dist((x, y), self._xy[j])
             both_trees = self._tree[i] and self._tree[j]
             need = (
-                step_with_tolerance(self._params.spacing_m, PlantingType.TREE)
+                tree_pair_min_m(
+                    self.placements[i].species,
+                    self.placements[j].species,
+                    self._params,
+                    row=in_alley(self.placements[i]) and in_alley(self.placements[j]),
+                )
                 if both_trees
                 else SHRUB_GAP_M
             )
+            need = max(need, float(self._radius[i] + self._radius[j]))
             if new < min(need, old) - 1e-9:
                 return False
         return True

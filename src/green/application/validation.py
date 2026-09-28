@@ -18,7 +18,12 @@ import shapely
 
 from green.application.barriers import BARRIER_CONDITION, BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex, occupied_geometry
-from green.application.params import active_distance_rules, step_with_tolerance
+from green.application.params import (
+    active_distance_rules,
+    step_with_tolerance,
+    tree_pair_min_m,
+)
+from green.application.placement import in_alley
 from green.application.places import category_of
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
@@ -374,6 +379,10 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
         ]
     )
     maximum = max(float(steps.max()), float(radii.max()) * 2)
+    trees = [p.planting_type is PlantingType.TREE and p.species is not None for p in placements]
+    alley = [in_alley(p) for p in placements]
+    if params.crown_spacing and any(trees):
+        maximum = max(maximum, step_with_tolerance(params.spacing_group_max_m, PlantingType.TREE))
     issues = []
     for start in range(0, len(points), 128):
         left, right = tree.query(points[start : start + 128], predicate="dwithin", distance=maximum)
@@ -384,7 +393,15 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
             left, right, shapely.distance(points[left], points[right]), strict=True
         ):
             same = placements[i].planting_type is placements[j].planting_type
-            required = max(radii[i] + radii[j], steps[i] if same else 0.0)
+            step = steps[i] if same else 0.0
+            if trees[i] and trees[j]:
+                step = tree_pair_min_m(
+                    placements[i].species,
+                    placements[j].species,
+                    params,
+                    row=alley[i] and alley[j],
+                )
+            required = max(radii[i] + radii[j], step)
             if distance + EPS_M < required:
                 issues.append(
                     ValidationIssue(
@@ -434,7 +451,9 @@ def _hard_quota(attribute: str, params: PlanParams) -> bool:
     return attribute == "is_conifer" or params.quota_penalty <= 0
 
 
-def trim_note(before: Sequence[Placement], after: Sequence[Placement]) -> str | None:
+def trim_note(
+    before: Sequence[Placement], after: Sequence[Placement], *, reason: str = "Квоты разнообразия"
+) -> str | None:
     """Что сняла обрезка по квотам: строки этапов (ряд у борта, подлесок, группы) пишутся до
     неё, и без этой строки их числа расходились с итогом по видам посадок (жюри по дизайну,
     итерация 8)."""
@@ -447,7 +466,7 @@ def trim_note(before: Sequence[Placement], after: Sequence[Placement]) -> str | 
     what = counted(len(removed), "посадка", "посадки", "посадок")
     verb = plural(len(removed), "снята", "сняты", "снято")
     return (
-        f"Квоты разнообразия: {verb} {what} добавочных этапов ({listed}); "
+        f"{reason}: {verb} {what} добавочных этапов ({listed}); "
         "числа в строках этих этапов выше - до снятия."
     )
 

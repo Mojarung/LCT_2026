@@ -26,6 +26,7 @@ from green.application.constraints import ConstraintIndex, EvaluationBatch, boun
 from green.application.errors import InputError
 from green.application.params import (
     active_distance_rules,
+    lawn_step_m,
     species_distance_rules,
     step_with_tolerance,
 )
@@ -70,6 +71,13 @@ MODE_LABELS = {
     MODE_SHRUB_FILL: "группа кустарников на газоне",
 }
 _TANGENT_STEP_M = 0.5
+
+
+def in_alley(placement: Placement) -> bool:
+    """Дерево ряда вдоль борта: шаг в ряду - spacing_m, а не по кронам (params.tree_pair_step_m)."""
+    return MODE_LABELS[MODE_ALLEY] in placement.notes
+
+
 _Z_ORDER_BITS = 16
 # Two independently rounded XY points can approach by at most sqrt(2) mm.
 # Reserve 2 mm when constructing a rotated group, rather than weaken clearance.
@@ -472,7 +480,7 @@ def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate
         or params.lawn_rotation_deg != 0.0
     ):
         return _oriented_lawn_candidates(surface, params)
-    stride = max(1, round(params.spacing_m / surface.cell))
+    stride = max(1, round(lawn_step_m(params) / surface.cell))
     grid = surface.grid
     candidates: list[_Candidate] = []
     station = 1_000_000  # станции аллеи нумеруются с нуля, здесь свой диапазон
@@ -505,10 +513,11 @@ def _oriented_lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_
         height, width = np.array(surface.grid.shape) * surface.cell
         local_outline = np.array([[0, 0], [width, 0], [width, height], [0, height]]) @ rotation
     low, high = local_outline.min(axis=0), local_outline.max(axis=0)
-    start = low + np.asarray(params.lawn_phase) * params.spacing_m + surface.cell / 2
+    step = lawn_step_m(params)
+    start = low + np.asarray(params.lawn_phase) * step + surface.cell / 2
     candidates = []
-    for row, v in enumerate(np.arange(start[1], high[1], params.spacing_m)):
-        u = np.arange(start[0] + (row % 2) * params.spacing_m / 2, high[0], params.spacing_m)
+    for row, v in enumerate(np.arange(start[1], high[1], step)):
+        u = np.arange(start[0] + (row % 2) * step / 2, high[0], step)
         local = np.column_stack((u, np.full_like(u, v)))
         world = local @ rotation.T + np.asarray(surface.origin)
         soil = surface.material(shapely.points(world)) == Material.SOIL
@@ -541,11 +550,15 @@ def _fill(index: ConstraintIndex, selector: _Selector, params: PlanParams) -> in
         stride *= 2
         soil = surface.grid[::stride, ::stride] == Material.SOIL
     rows, cols = np.nonzero(soil)
-    xy = np.column_stack(
-        [
-            surface.origin[0] + (cols * stride + 0.5) * surface.cell,
-            surface.origin[1] + (rows * stride + 0.5) * surface.cell,
-        ]
+    # Проверяются те же координаты, что попадут в план (_Selector пишет их до миллиметра).
+    xy = np.round(
+        np.column_stack(
+            [
+                surface.origin[0] + (cols * stride + 0.5) * surface.cell,
+                surface.origin[1] + (rows * stride + 0.5) * surface.cell,
+            ]
+        ),
+        3,
     )
     points = shapely.points(xy)
     keep = np.flatnonzero(index.plantable(points))

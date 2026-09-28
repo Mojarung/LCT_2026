@@ -296,6 +296,10 @@ class ProfileModel(_Strict):
     planting_type: PlantingType = PlantingType.TREE
     species_code: str = "tilia_cordata"
     spacing_m: float = Field(default=5.0, ge=0.3, le=50)
+    crown_spacing: bool = True
+    crown_overlap: float = Field(default=0.25, ge=0.0, lt=1.0)
+    spacing_group_max_m: float = Field(default=7.0, ge=0.3, le=50)
+    lawn_spacing_m: float = Field(default=0.0, ge=0.0, le=50)
     curb_offsets_m: tuple[float, ...] = Field(default=(3.0, 2.5, 2.0), min_length=1, max_length=10)
     require_utility_data: bool = True
     unknown_lines_as_utility: bool = True

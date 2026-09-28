@@ -11,16 +11,18 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 from green.application.assortment.assign import Assignment, Candidate, assign
 from green.application.assortment.context import site_context
 from green.application.assortment.filters import COMPOSITION, SpeciesVerdict, species_verdict
 from green.application.assortment.scoring import Score, percent, score_species
+from green.application.assortment.spacing import crowded, enforce_spacing, tree_neighbors
 from green.application.assortment.structures import GROUP, ROW, build_structures
 from green.application.assortment.summary import build_summary
 from green.application.barriers import BARRIER_CONDITION
+from green.application.params import lawn_step_m
 from green.application.wording import counted, plural
 from green.domain.norms import PlantingType
 from green.domain.planting import (
@@ -119,7 +121,7 @@ def _assign_species(
     if params.assortment_mode == SINGLE or not plan.placements:
         return _single_mode(plan, catalog, params, existing, index)
 
-    structures = build_structures(plan.placements, params.spacing_m, params.structure_patch_size)
+    structures = build_structures(plan.placements, lawn_step_m(params), params.structure_patch_size)
     structure_of = {
         placement_id: structure
         for structure in structures
@@ -165,7 +167,8 @@ def _assign_species(
             )
         verdicts[placement.placement_id] = allowed
 
-    assignment = assign(candidates, structures, index, existing, params)
+    neighbors = tree_neighbors(plan.placements, params)
+    assignment = assign(candidates, structures, index, existing, params, neighbors=neighbors)
     status = GIVEN if params.assortment_mode == GIVEN else ASSIGNED
     placements = tuple(
         _apply(
@@ -178,6 +181,7 @@ def _assign_species(
             status=status,
             split=assignment.split_placements,
             used_up=assignment.used_up,
+            crowded=assignment.crowded,
         )
         for placement in plan.placements
     )
@@ -324,12 +328,24 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
     status: str,
     split: frozenset[str] = frozenset(),
     used_up: Mapping[str, str] | None = None,
+    crowded: Mapping[str, Mapping[str, str]] | None = None,
 ) -> Placement:
     ctx = contexts[placement.placement_id]
-    lost = _Lost(used_up or {}, ctx.structure_kind)
+    near = (crowded or {}).get(placement.placement_id, {})
+    lost = _Lost(used_up or {}, ctx.structure_kind, near)
     allowed = verdicts.get(placement.placement_id, [])
     code = chosen.get(placement.placement_id)
     if code is None or code not in index:
+        reason = _no_species_reason(allowed, given=status == GIVEN)
+        if allowed and all(v.species.code in near for v in allowed):
+            best = max(
+                allowed,
+                key=lambda v: (
+                    scores[(placement.placement_id, v.species.code)].total,
+                    v.species.code,
+                ),
+            )
+            reason = Reason(COMPOSITION, f"место оставлено пустым: {near[best.species.code]}")
         return replace(
             placement,
             assortment=AssortmentInfo(
@@ -338,7 +354,7 @@ def _apply(  # noqa: PLR0913 - все части решения нужны, чт
                 factors={},
                 structure_id=ctx.structure_id,
                 structure_kind=ctx.structure_kind,
-                reasons=(_no_species_reason(allowed, given=status == GIVEN),),
+                reasons=(reason,),
                 alternatives=_alternatives(placement.placement_id, allowed, scores, None, lost),
             ),
         )
@@ -383,8 +399,11 @@ class _Lost:
 
     used_up: Mapping[str, str]
     structure_kind: str | None
+    crowded: Mapping[str, str] = field(default_factory=dict)  # вид -> тесно рядом с соседом
 
     def why(self, code: str) -> str:
+        if code in self.crowded:
+            return self.crowded[code]
         if code in self.used_up:
             return self.used_up[code]
         if self.structure_kind == ROW:
@@ -434,7 +453,7 @@ def _single_mode(
     index: Mapping[str, Species],
 ) -> Plan:
     """Режим «один вид на прогон»: вид не меняется, но оценка и структура считаются."""
-    structures = build_structures(plan.placements, params.spacing_m, params.structure_patch_size)
+    structures = build_structures(plan.placements, lawn_step_m(params), params.structure_patch_size)
     structure_of = {
         placement_id: structure
         for structure in structures
@@ -461,6 +480,8 @@ def _single_mode(
                 ),
             )
         )
+    placements = _thin_single(placements, params)
+    placements, unplanted = _drop_unplanted(placements, plan.rejections)
     assignment = Assignment(
         species_by_placement={p.placement_id: p.species.code for p in placements},
         solver=SINGLE,
@@ -470,8 +491,48 @@ def _single_mode(
         index or {s.code: s for s in catalog},
         existing,
         mode=params.assortment_mode,
-        no_species=0,
+        no_species=len(unplanted),
         rejected_by_kind={},
         rejected_by_rule={},
     )
-    return replace(plan, placements=tuple(placements), assortment_summary=summary)
+    return replace(
+        plan,
+        placements=placements,
+        rejections=(*plan.rejections, *unplanted),
+        assortment_summary=summary,
+    )
+
+
+def _thin_single(placements: Sequence[Placement], params: PlanParams) -> list[Placement]:
+    """Один вид на прогон: вид не выбрать, поэтому из тесной по кронам пары место снимается."""
+    neighbors = tree_neighbors(placements, params)
+    if neighbors is None or not neighbors.pairs:
+        return list(placements)
+    by_id = {p.placement_id: p for p in placements}
+    species = {p.species.code: p.species for p in placements}
+    scores = {
+        (p.placement_id, p.species.code): p.assortment.percent if p.assortment else 0
+        for p in placements
+    }
+    chosen = {p.placement_id: p.species.code for p in placements}
+    kept = enforce_spacing(chosen, neighbors, species, scores)
+    reasons = crowded(
+        kept, {pid: [chosen[pid]] for pid in chosen if pid not in kept}, neighbors, species
+    )
+    result = []
+    for pid, placement in by_id.items():
+        if pid in kept or placement.assortment is None:
+            result.append(placement)
+            continue
+        text = next(iter(reasons.get(pid, {}).values()), "шаг по взрослым кронам")
+        result.append(
+            replace(
+                placement,
+                assortment=replace(
+                    placement.assortment,
+                    status=NO_SPECIES,
+                    reasons=(Reason(COMPOSITION, f"место оставлено пустым: {text}"),),
+                ),
+            )
+        )
+    return result

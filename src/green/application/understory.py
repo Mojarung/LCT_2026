@@ -217,7 +217,9 @@ class _Planter:
             self._accepted.add(Verdict.NEEDS_APPROVAL)
         angles = np.linspace(0.0, 2 * math.pi, _DIRECTIONS, endpoint=False)
         self._ring = np.column_stack([np.cos(angles), np.sin(angles)])
-        self._taken = _Taken(_SHRUB_GAP_M)
+        # Ямы кустов не перекрываются, как в проверке плана: не ближе двух радиусов места.
+        self._gap = max(_SHRUB_GAP_M, 2 * params.shrub_planting_radius_m + _PIT_RESERVE_M)
+        self._taken = _Taken(self._gap)
         self.added: list[Placement] = []
         self.groups = 0
         self.existing_groups = 0
@@ -284,7 +286,9 @@ class _Planter:
             return False
         if not rings:
             return False
-        xy = np.vstack([np.array(trunk_xy) + r * self._ring for r in rings])
+        # Проверяются те же координаты, что попадут в план (до миллиметра): иначе куст у края
+        # грунта проходит здесь и не проходит независимую проверку (Понтрягина, 28.09.2026).
+        xy = np.round(np.vstack([np.array(trunk_xy) + r * self._ring for r in rings]), 3)
         points = shapely.points(xy)
         clear = self._index.plantable(points) & self._blockers.clear(points)
         if away is not None and away[0] is not None:
@@ -308,14 +312,14 @@ class _Planter:
     def _spread(
         self, xy: NDArray[np.float64], clear: NDArray[np.bool_], batch: EvaluationBatch
     ) -> list[int]:
-        """До understory_size точек, не ближе _SHRUB_GAP_M друг к другу и к другим группам."""
+        """До understory_size точек, не ближе self._gap друг к другу и к другим группам."""
         chosen: list[int] = []
         for k in np.flatnonzero(clear).tolist():
             if batch.verdict(k) not in self._accepted:
                 continue
             x, y = float(xy[k, 0]), float(xy[k, 1])
             if self._taken.near(x, y) or any(
-                math.hypot(x - xy[c, 0], y - xy[c, 1]) < _SHRUB_GAP_M for c in chosen
+                math.hypot(x - xy[c, 0], y - xy[c, 1]) < self._gap for c in chosen
             ):
                 continue
             chosen.append(k)

@@ -31,18 +31,20 @@ from __future__ import annotations
 
 import math
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
+from green.application.assortment.spacing import crowded, enforce_spacing, spacing_rows
 from green.application.wording import counted
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from green.application.assortment.spacing import Neighbors
     from green.application.assortment.structures import Structure
     from green.application.params import PlanParams
     from green.domain.planting import Species
@@ -89,23 +91,52 @@ class Assignment:
     split_placements: frozenset[str] = frozenset()
     # Вид -> какая квота выбрана до конца (Quotas.used_up): почему не он у альтернатив.
     used_up: Mapping[str, str] = field(default_factory=dict)
+    # Место -> вид -> почему не встал рядом с соседом (шаг по взрослым кронам, spacing.crowded).
+    crowded: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
 
-def assign(
+def assign(  # noqa: PLR0913 - соседство мест - отдельный вход задачи
     candidates: Sequence[Candidate],
     structures: Sequence[Structure],  # noqa: ARG001 - структура уже записана в Candidate
     catalog: Mapping[str, Species],
     existing: Mapping[str, int],
     params: PlanParams,
+    *,
+    neighbors: Neighbors | None = None,
 ) -> Assignment:
     if not candidates:
         return Assignment(species_by_placement={}, solver=MILP)
     if params.assortment_mode == GIVEN_MODE:
         problem = _GivenProblem(candidates, params)
         if params.assortment_solver == GREEDY:
-            return problem.solve_greedy()
-        return problem.solve_milp() or problem.solve_greedy()
-    return _QuotaAssignment(candidates, catalog, existing, params).run()
+            result = problem.solve_greedy()
+        else:
+            result = problem.solve_milp() or problem.solve_greedy()
+    else:
+        result = _QuotaAssignment(candidates, catalog, existing, params, neighbors).run()
+    return _spaced(result, candidates, catalog, neighbors)
+
+
+def _spaced(
+    result: Assignment,
+    candidates: Sequence[Candidate],
+    catalog: Mapping[str, Species],
+    neighbors: Neighbors | None,
+) -> Assignment:
+    """Шаг по кронам после решателя: страховка от тесных пар и объяснения, чему уступил вид."""
+    if neighbors is None or not neighbors.pairs:
+        return result
+    scores = {(c.placement_id, c.species.code): c.score for c in candidates}
+    chosen = enforce_spacing(result.species_by_placement, neighbors, catalog, scores)
+    options: defaultdict[str, list[str]] = defaultdict(list)
+    for candidate in sorted(candidates, key=lambda c: (c.placement_id, -c.score, c.species.code)):
+        if candidate.species.code in catalog:
+            options[candidate.placement_id].append(candidate.species.code)
+    return replace(
+        result,
+        species_by_placement=dict(sorted(chosen.items())),
+        crowded=crowded(chosen, options, neighbors, catalog),
+    )
 
 
 # --- квоты ---
@@ -272,9 +303,11 @@ class _QuotaAssignment:
         catalog: Mapping[str, Species],
         existing: Mapping[str, int],
         params: PlanParams,
+        neighbors: Neighbors | None = None,
     ) -> None:
         self.catalog = catalog
         self.params = params
+        self.neighbors = neighbors
         self.quotas = Quotas(catalog, existing, params)
         usable = [c for c in candidates if c.species.code in catalog]
         self.candidates = sorted(usable, key=lambda c: (c.placement_id, c.species.code))
@@ -291,13 +324,17 @@ class _QuotaAssignment:
         by_structure: defaultdict[str, list[Candidate]] = defaultdict(list)
         for candidate in self.candidates:
             by_structure[candidate.structure_id].append(candidate)
-        whole = _milp(by_structure, {}, self.quotas)
+        whole = _milp(by_structure, {}, self.quotas, self.neighbors)
         singles: defaultdict[str, list[Candidate]] = defaultdict(list)
         if whole is not None:
             for candidate in self.candidates:
                 if candidate.placement_id not in whole:
                     singles[candidate.placement_id].append(candidate)
-        rest = _milp(singles, whole, self.quotas) if whole is not None and singles else {}
+        rest = (
+            _milp(singles, whole, self.quotas, self.neighbors)
+            if whole is not None and singles
+            else {}
+        )
         if whole is None or rest is None:
             notes.append("решатель не справился, виды назначены жадным обходом структур")
             chosen, split = _greedy_plan(self.candidates, self.quotas)
@@ -342,7 +379,10 @@ class _QuotaAssignment:
 
 
 def _milp(
-    groups: Mapping[str, list[Candidate]], fixed: Mapping[str, str], quotas: Quotas
+    groups: Mapping[str, list[Candidate]],
+    fixed: Mapping[str, str],
+    quotas: Quotas,
+    neighbors: Neighbors | None = None,
 ) -> dict[str, str] | None:
     """y - группа занята видом целиком (двоичная), b - ключ взят в одном экземпляре."""
     members: defaultdict[tuple[str, str], list[Candidate]] = defaultdict(list)
@@ -383,6 +423,9 @@ def _milp(
         _share_rows(rows, key, in_key[key], ctx)
     _conifer_floor(rows, in_key.get(CONIFER_KEY, []), ctx, slack)
     cost, upper, integrality = _objective(pairs, members, size, quotas.params)
+    _spacing_rows(
+        rows, upper, pairs, groups=groups, fixed=fixed, catalog=quotas.catalog, neighbors=neighbors
+    )
     cost[slack] = _CONIFER_PENALTY
     upper[slack] = big
     integrality[slack] = 0
@@ -410,6 +453,33 @@ def _milp(
     if not result.success and not over and quotas.violations({**fixed, **chosen}):
         return None
     return chosen
+
+
+def _spacing_rows(  # noqa: PLR0913 - части задачи, в которую добавляются строки
+    rows: _Rows,
+    upper: np.ndarray,
+    pairs: Sequence[tuple[str, str]],
+    *,
+    groups: Mapping[str, list[Candidate]],
+    fixed: Mapping[str, str],
+    catalog: Mapping[str, Species],
+    neighbors: Neighbors | None,
+) -> None:
+    """Тесная пара видов у соседних групп - не вместе; вид, тесный внутри группы, - запрещён."""
+    if neighbors is None or not neighbors.pairs:
+        return
+    column = {pair: position for position, pair in enumerate(pairs)}
+    codes: defaultdict[str, list[str]] = defaultdict(list)
+    for group_id, code in pairs:
+        codes[group_id].append(code)
+    group_of = {c.placement_id: group_id for group_id, members in groups.items() for c in members}
+    found = spacing_rows(neighbors, codes, group_of, fixed, catalog)
+    for pair in found.banned:
+        upper[column[pair]] = 0.0
+    for first, clash in found.rows:
+        entries = {column[first]: 1.0}
+        entries.update({column[other]: 1.0 for other in clash})
+        rows.add(entries, -np.inf, 1.0)
 
 
 def _soft_columns(keys: Sequence[Key], first: int, penalty: float) -> dict[Key, int]:

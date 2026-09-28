@@ -63,6 +63,27 @@ def step_with_tolerance(step_m: float, planting_type: PlantingType) -> float:
     return relaxed
 
 
+def lawn_step_m(params: PlanParams) -> float:
+    return params.lawn_spacing_m if params.lawn_spacing_m > 0 else params.spacing_m
+
+
+def mature_crown_m(species: Species) -> float:
+    return max(species.crown_mature_m or species.crown_diameter_m, 0.0)
+
+
+def tree_pair_step_m(first: Species, second: Species, params: PlanParams, *, row: bool) -> float:
+    """Шаг между двумя деревьями по проекту: в ряду - spacing_m, вне ряда - по кронам пары."""
+    if row or not params.crown_spacing:
+        return params.spacing_m
+    crown = (mature_crown_m(first) + mature_crown_m(second)) / 2 * (1 - params.crown_overlap)
+    return min(max(crown, params.spacing_m), max(params.spacing_group_max_m, params.spacing_m))
+
+
+def tree_pair_min_m(first: Species, second: Species, params: PlanParams, *, row: bool) -> float:
+    """Наименьшее допустимое расстояние пары деревьев: шаг пары с допуском разбивки."""
+    return step_with_tolerance(tree_pair_step_m(first, second, params, row=row), PlantingType.TREE)
+
+
 @dataclass(frozen=True, slots=True)
 class PlanParams:
     planting_type: PlantingType = PlantingType.TREE
@@ -71,6 +92,16 @@ class PlanParams:
     # нижняя граница - ею же меряется расстояние до существующих деревьев (R-EXTREE-TREE-001);
     # эксперименты docs/notes/30 (E05, E31): шаг 5 м даёт больше деревьев и тени без нарушений.
     spacing_m: float = 5.0
+    # Шаг между деревьями вне ряда - по взрослым кронам пары, в вилке групповой посадки 743-ПП
+    # (табл. 3.6.2: 5-7 м): кроны смыкаются не больше чем на crown_overlap. Ель к ели (кроны 8 м)
+    # - 6 м, липа к липе (12 м) - 7 м, боярышник - 5 м. В ряду аллеи шаг - spacing_m: однорядная
+    # посадка 5-6 м, сомкнутый полог аллеи - цель, а не помеха. False - один шаг на все породы.
+    crown_spacing: bool = True
+    crown_overlap: float = 0.25
+    spacing_group_max_m: float = 7.0
+    # Шаг сетки газона; 0 - spacing_m. Портфель пробует и шире (6, 7 м): при шаге по кронам на
+    # сетке 5 м крупному виду тесно, и индекс решает, что лучше - больше компактных или крупные.
+    lawn_spacing_m: float = 0.0
     # Отступы дерева аллеи от борта, по предпочтению: сначала 3 м - перед деревом встаёт живая
     # изгородь в 1 м от борта (ямы не перекрываются: 1 + 1,24 + 0,5 < 3), и дерево дальше от
     # реагентов; где полоса грунта уже, - 2,5 и 2 м (норма 743-ПП, табл. 3.6.1 - от 2 м).
