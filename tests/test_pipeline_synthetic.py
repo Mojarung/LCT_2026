@@ -382,7 +382,11 @@ def test_hybrid_default_plants_by_labels_of_unfinished_contours(tmp_path: Path) 
         PlanRequest("open", source, tmp_path / "out", "strict", params)
     )
     assert report.plan.placements
-    assert any("по близости подписи" in warning for warning in report.warnings)
+    # Одна строка: сколько грунта выведено по подписям и что газоном он не станет. Две
+    # строки об одном (карта покрытий и газоны) жюри по дизайну сочло повтором (итерация 8).
+    by_label = [w for w in report.warnings if "по близости подписи" in w]
+    assert len(by_label) == 1
+    assert "газон" in by_label[0]
     assert report.summary()["surface_inference_review_required"] is True
     assert report.summary()["surface_unconfirmed_placements"] > 0
 

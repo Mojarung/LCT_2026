@@ -13,21 +13,33 @@ const SHOWN = [
   'lawn_m2',
 ];
 
-function title(measure: EffectMeasure): string {
+function fullTitle(measure: EffectMeasure): string {
   return measure.title.replace(/, доля$/, '');
 }
+
+/** В строке - слово до двоеточия («Пылезащита»), расшифровка - в подсказке и для экранного
+ *  диктора: подписи в две строки съедали первый экран прогона (жюри по дизайну, итерация 9). */
+function title(measure: EffectMeasure): string {
+  return fullTitle(measure).split(':')[0] ?? '';
+}
+
+const estimate = (measure: EffectMeasure): boolean => measure.note.includes('оценка');
 
 function value(measure: EffectMeasure): string {
   if (measure.before == null && measure.after == null) return 'не определяется';
   const share = measure.unit === '%';
   const text = (v: number | null) => (v == null ? '-' : share ? plain(v) : integer(v));
   const unit = share ? ' %' : measure.unit === 'шт.' ? '' : ` ${measure.unit}`;
-  return `${text(measure.before)} → ${text(measure.after)}${unit}`;
+  // Оценка - знаком «≈» у значения, а не отдельной строкой пояснения.
+  return `${estimate(measure) ? '≈ ' : ''}${text(measure.before)} → ${text(measure.after)}${unit}`;
 }
 
-function shownNote(measure: EffectMeasure): string {
-  const unknown = measure.before == null && measure.after == null;
-  return unknown || measure.note.includes('оценка') ? measure.note : '';
+/** Строка говорит о плане: «не определяется» и «0 → 0» ничего не сообщают, а на первом экране
+ *  прогона стояли первыми (жюри по дизайну, итерация 8). Почему число не определено - в
+ *  отчёте интерпретаций и в quality.json. */
+function informative(measure: EffectMeasure): boolean {
+  if (measure.before == null && measure.after == null) return false;
+  return !(measure.before === 0 && measure.after === 0);
 }
 
 /** Баланс «было - стало»: существующие насаждения чертежа и они вместе с посадками плана.
@@ -35,24 +47,24 @@ function shownNote(measure: EffectMeasure): string {
 export function EffectBlock({ effect }: { effect: EffectJson | null | undefined }) {
   if (!effect?.measures) return null;
   const rows = SHOWN.map((key) => effect.measures.find((m) => m.key === key)).filter(
-    (m): m is EffectMeasure => m != null,
+    (m): m is EffectMeasure => m != null && informative(m),
   );
   return (
     <section className="effect" aria-labelledby="effect-title">
       <h2 className="detail-heading" id="effect-title">
         Было → стало
       </h2>
-      <p className="term-note">
-        Существующие насаждения и они вместе с посадками плана. Вырубку сервис не назначает.
-      </p>
       <ul className="effect-rows" aria-label="Что план даёт улице">
         {rows.map((m) => (
-          <li key={m.key} title={m.basis}>
-            <span className="effect-name">{title(m)}</span>
+          <li key={m.key} title={[fullTitle(m), m.note, m.basis].filter(Boolean).join('. ')}>
+            <span className="effect-name">
+              {title(m)}
+              {/* Расшифровка слышна диктору и без наведения: подпись короткая только для глаза. */}
+              {title(m) !== fullTitle(m) ? (
+                <span className="visually-hidden">{fullTitle(m).slice(title(m).length)}</span>
+              ) : null}
+            </span>
             <span className="effect-value">{value(m)}</span>
-            {/* Почему «не определяется» и где число - оценка: видно без наведения, с касания и
-                с клавиатуры, а не только во всплывающей подсказке. */}
-            {shownNote(m) ? <span className="effect-note">{shownNote(m)}</span> : null}
           </li>
         ))}
       </ul>

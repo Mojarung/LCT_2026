@@ -127,7 +127,9 @@ describe('уточнение объектов чертежа', () => {
         'Уточнять нечего: неизвестных объектов в этом прогоне сервис не сохранил.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'К прогону' })).toHaveAttribute('href', '/runs/r1');
+    // Одна дорога назад - в шапке; вторая под строкой её повторяла (жюри, итерация 8).
+    expect(screen.getAllByRole('link', { name: /к прогону/i })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'к прогону' })).toHaveAttribute('href', '/runs/r1');
     // Тринадцать отключённых полей с нулями спорили со строкой «уточнять нечего».
     expect(screen.queryByLabelText('Группа')).toBeNull();
     expect(screen.queryByRole('button', { name: /Назначить/ })).toBeNull();
@@ -137,7 +139,7 @@ describe('уточнение объектов чертежа', () => {
     mockApi({});
     renderApp('/runs/nope/review');
     expect(await screen.findByText('Такого прогона нет.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'К консоли запуска' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: '← все прогоны' })).toHaveAttribute('href', '/');
     expect(screen.queryByLabelText('Группа')).toBeNull();
   });
 

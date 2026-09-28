@@ -43,7 +43,7 @@ export function ModelsPage() {
             </p>
           </div>
           <p className="models-back">
-            <Link to="/">к прогонам</Link>
+            <Link to="/">← все прогоны</Link>
           </p>
         </header>
         <div className="models-body">

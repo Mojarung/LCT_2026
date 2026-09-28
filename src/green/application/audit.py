@@ -40,6 +40,7 @@ from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.application.params import active_distance_rules
 from green.application.use_case import MERGED_DXF, Stopwatch, to_dxf
+from green.application.wording import plural
 from green.domain.norms import PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Verdict
@@ -464,7 +465,8 @@ def _scope_notes(
     guessed = sum(1 for p in plantings if "по каталогу" not in p.type_basis)
     if guessed:
         notes.append(
-            f"У {guessed} посадок род в каталоге видов не найден: дерево или кустарник решено по "
+            f"У {guessed} {plural(guessed, 'посадки', 'посадок', 'посадок')} род в каталоге "
+            "видов не найден: дерево или кустарник решено по "
             "кругу кроны или по умолчанию. Точнее: параметры tree_layers и shrub_layers."
         )
     if skipped:

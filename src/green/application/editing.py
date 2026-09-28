@@ -334,7 +334,9 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
         )
         plan = replace(
             plan,
-            quality=replace(plan.quality, index=None, gate=gate, values={}, summary=(gate,)),
+            quality=replace(
+                plan.quality, index=None, gate=gate, values={}, summary=(gate,), analysis=()
+            ),
         )
     return plan
 

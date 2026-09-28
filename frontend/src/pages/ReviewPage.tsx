@@ -177,17 +177,13 @@ export function ReviewPage() {
             <p>{run.data?.source_name ?? runId}</p>
           </div>
           <p className="models-back">
-            <Link to={missing ? '/' : runLink}>{missing ? 'к прогонам' : 'к прогону'}</Link>
+            <Link to={missing ? '/' : runLink}>{missing ? '← все прогоны' : 'к прогону'}</Link>
           </p>
         </header>
         {nothing ? (
+          // Дорога назад уже в шапке: вторая ссылка под той же строкой её повторяла.
           <div className="review-none" role="status">
             <p>{nothing}</p>
-            <p className="hint">
-              <Link to={missing ? '/' : runLink}>
-                {missing ? 'К консоли запуска' : 'К прогону'}
-              </Link>
-            </p>
           </div>
         ) : (
           <div className="review-body">

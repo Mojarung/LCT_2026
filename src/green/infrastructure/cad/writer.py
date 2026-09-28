@@ -10,6 +10,7 @@ from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 from green.application.barriers import BARRIER_NOTE
 from green.application.explain import LAWN_LABELS, citation_text
 from green.application.results import SourceSnapshot
+from green.application.schedule import build_schedule
 from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome, Verdict
 from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
@@ -23,7 +24,15 @@ if TYPE_CHECKING:
     from ezdxf.layouts import Modelspace
 
     from green.domain.norms import RuleBook
-    from green.domain.planting import Lawn, Placement, Plan, Rejection, Species, Zone
+    from green.domain.planting import (
+        Lawn,
+        Placement,
+        Plan,
+        Rejection,
+        RuleCheck,
+        Species,
+        Zone,
+    )
     from green.infrastructure.cad.documents import DocumentCache
 
 TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
@@ -37,6 +46,8 @@ LAYER_LABELS = f"{RESULT_PREFIX}LABELS"
 LAYER_ZONE_ALLOWED = f"{RESULT_PREFIX}ZONE_ALLOWED"
 LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
 LAYER_LAWN = f"{RESULT_PREFIX}LAWN"
+# Ведомость элементов озеленения (ГОСТ 21.508-2020, п. 10.8, форма 9) таблицей рядом с планом.
+LAYER_SCHEDULE = f"{RESULT_PREFIX}SCHEDULE"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 LAYER_COLORS = {
     LAYER_TREES: 3,
@@ -49,6 +60,7 @@ LAYER_COLORS = {
     LAYER_ZONE_ALLOWED: 3,
     LAYER_ZONE_APPROVAL: 30,
     LAYER_LAWN: 82,
+    LAYER_SCHEDULE: 7,
 }
 ZONE_LAYERS = {Verdict.ALLOWED: LAYER_ZONE_ALLOWED, Verdict.NEEDS_APPROVAL: LAYER_ZONE_APPROVAL}
 ZONE_TRANSPARENCY = 0.7
@@ -61,6 +73,14 @@ LAWN_COLORS = {LawnKind.KEPT: 82, LawnKind.NEW: 52}
 XDATA_CHUNK = 240
 XDATA_REAL = 1040
 NPA_REFS = 2
+NPA_MAX = 250  # длиннее значение атрибута старые просмотрщики режут
+# Столбцы ведомости: заголовок и ширина в высотах текста.
+SCHEDULE_COLUMNS = (
+    ("Поз.", 4.0),
+    ("Наименование породы или вида", 26.0),
+    ("Кол-во, шт.", 9.0),
+    ("Примечание", 30.0),
+)
 
 
 class EzdxfPlanWriter:
@@ -104,10 +124,11 @@ class EzdxfPlanWriter:
         for lawn in plan.lawns:
             self._lawn(msp, lawn, scale)
         for placement in plan.placements:
-            self._placement(doc, msp, placement, scale)
+            self._placement(doc, msp, placement, scale, rulebook)
         for rejection in plan.rejections:
             self._rejection(msp, rejection, scale)
         self._legend(msp, plan, rulebook, scale)
+        self._schedule(msp, plan, scale)
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
         return snapshot
@@ -144,7 +165,14 @@ class EzdxfPlanWriter:
             )
         return name
 
-    def _placement(self, doc: Drawing, msp: Modelspace, placement: Placement, scale: float) -> None:
+    def _placement(
+        self,
+        doc: Drawing,
+        msp: Modelspace,
+        placement: Placement,
+        scale: float,
+        rulebook: RuleBook,
+    ) -> None:
         allowed = placement.verdict is Verdict.ALLOWED
         if placement.species.is_shrub:
             layer = LAYER_SHRUBS if allowed else LAYER_SHRUBS_APPROVAL
@@ -165,7 +193,7 @@ class EzdxfPlanWriter:
             {
                 "NUM": str(placement.number),
                 "SPECIES": placement.species.name_ru,
-                "NPA": "; ".join(c.rule_id for c in tightest),
+                "NPA": _npa(tightest, rulebook),
             }
         )
         for attrib in ref.attribs:
@@ -285,6 +313,64 @@ class EzdxfPlanWriter:
             },
         )
         mtext.set_location((min(xs) * scale, (max(ys) + 10 * self._height) * scale))
+
+    def _schedule(self, msp: Modelspace, plan: Plan, scale: float) -> None:
+        """Ведомость элементов озеленения таблицей справа от плана: поз., порода или вид,
+        количество, стандарт посадочного материала (ГОСТ 21.508-2020, п. 10.8, форма 9)."""
+        rows = build_schedule(plan.placements)
+        if not rows:
+            return
+        height = self._height * 2 * scale
+        step = height * 2
+        x0 = (max(p.x for p in plan.placements) * scale) + 20 * height
+        y0 = max(p.y for p in plan.placements) * scale
+        widths = [w * height for _, w in SCHEDULE_COLUMNS]
+        right = x0 + sum(widths)
+        attribs = {"layer": LAYER_SCHEDULE, "style": TEXT_STYLE, "height": height}
+        msp.add_text("Ведомость элементов озеленения", dxfattribs=attribs).set_placement(
+            (x0, y0 + height)
+        )
+        table = [
+            [title for title, _ in SCHEDULE_COLUMNS],
+            *(
+                [
+                    str(row.number),
+                    row.name_ru,
+                    str(row.count),
+                    f"{row.stock.group}, ком {row.stock.ball}",
+                ]
+                for row in rows
+            ),
+        ]
+        y = y0
+        msp.add_line((x0, y), (right, y), dxfattribs={"layer": LAYER_SCHEDULE})
+        for cells in table:
+            x = x0
+            for text, width in zip(cells, widths, strict=True):
+                msp.add_text(text, dxfattribs=attribs).set_placement(
+                    (x + height * 0.4, y - step + height * 0.5)
+                )
+                x += width
+            y -= step
+            msp.add_line((x0, y), (right, y), dxfattribs={"layer": LAYER_SCHEDULE})
+        x = x0
+        for width in (0.0, *widths):
+            x += width
+            msp.add_line((x, y0), (x, y), dxfattribs={"layer": LAYER_SCHEDULE})
+
+
+def _npa(checks: Sequence[RuleCheck], rulebook: RuleBook) -> str:
+    """Определяющие нормы посадки: правило, акт и пункт - без обращения к легенде."""
+    parts = []
+    for check in checks:
+        rule = rulebook.rule(check.rule_id)
+        if rule is None:
+            parts.append(check.rule_id)
+            continue
+        clause = rule.citation.clause.split(":")[0].strip()
+        parts.append(f"{check.rule_id} ({rulebook.label_of(rule.citation.act_id)}, {clause})")
+    text = "; ".join(parts)
+    return text if len(text) <= NPA_MAX else text[: NPA_MAX - 1] + "…"
 
 
 def _insert_scale(scale: float) -> dict[str, float]:

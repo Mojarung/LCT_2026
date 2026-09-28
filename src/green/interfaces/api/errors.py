@@ -43,6 +43,25 @@ class EditContextLostError(GreenError):
     """Состояние прогона для правки не найдено в памяти сервиса."""
 
 
+# Заголовок ошибки (RFC 9457, title) - по-русски, как и подробность: ответ читает эксперт,
+# а не только клиент. Статус без записи получает фразу HTTP.
+TITLES: dict[int, str] = {
+    400: "Некорректный запрос",
+    404: "Не найдено",
+    405: "Метод не поддерживается",
+    409: "Состояние прогона изменилось",
+    413: "Файл слишком большой",
+    415: "Формат не поддерживается",
+    422: "Данные не приняты",
+    500: "Внутренняя ошибка сервиса",
+    503: "Сервис недоступен",
+}
+
+
+def title_of(status: HTTPStatus) -> str:
+    return TITLES.get(status.value, status.phrase)
+
+
 _STATUS: dict[type[GreenError], HTTPStatus] = {
     NotFoundError: HTTPStatus.NOT_FOUND,
     InputError: HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -61,7 +80,11 @@ def problem(
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     body = Problem(
-        title=status.phrase, status=status.value, detail=detail, instance=instance, errors=errors
+        title=title_of(status),
+        status=status.value,
+        detail=detail,
+        instance=instance,
+        errors=errors,
     )
     return JSONResponse(
         body.model_dump(exclude_none=True),
@@ -100,11 +123,11 @@ def install_error_handlers(app: FastAPI) -> None:
 
 
 PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
-    status: {"model": Problem, "description": HTTPStatus(status).phrase}
+    status: {"model": Problem, "description": title_of(HTTPStatus(status))}
     for status in (404, 413, 422, 500)
 }
 
 
 def conflict_response() -> dict[int | str, dict[str, object]]:
     """409 у методов правки: контекст прогона не сохранён, прогон нужно запустить заново."""
-    return {409: {"model": Problem, "description": HTTPStatus.CONFLICT.phrase}}
+    return {409: {"model": Problem, "description": title_of(HTTPStatus.CONFLICT)}}

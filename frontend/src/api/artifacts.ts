@@ -177,6 +177,8 @@ export interface QualityJson {
   /** Нет у прогонов, посчитанных до баланса «было - стало». */
   effect?: EffectJson | null;
   summary?: string[];
+  /** Разбор для файла, в интерфейсе не показывается: резерв слагаемых, отрицательный вклад. */
+  analysis?: string[];
   terms?: QualityTerm[];
   penalty?: number;
   penalties?: Record<string, number>;

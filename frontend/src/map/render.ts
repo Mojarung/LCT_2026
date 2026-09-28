@@ -267,7 +267,8 @@ function drawLabels(
   palette: Palette,
 ): void {
   ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-  ctx.font = `600 11px ${palette.get('--sans')}`;
+  // 12 px - пол шкалы интерфейса: 11 px на канве жюри сочло мелким (итерация 9).
+  ctx.font = `600 12px ${palette.get('--sans')}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
@@ -372,6 +373,18 @@ export function cornerMarks(area: Area): {
     scaleRight: x - NORTH_RADIUS - CORNER_GAP - SCALE_PAD_X,
     scaleY: y + (SCALE_PAD_TOP - SCALE_PAD_BOTTOM) / 2,
   };
+}
+
+/** Ширина свободной области, ниже которой план тянется во всю ширину и его конец уходит под
+ *  знаки в углу. */
+const MARKS_NARROW_PX = 1081;
+
+/** Область вписывания плана без нижней полосы знаков (линейка, север) на узкой карте: на 768
+ *  линейка и диск лежали на посадках (жюри по дизайну, итерация 9). На широкой - как есть. */
+export function fitAreaClearOfMarks(area: Area): Area {
+  if (area.width >= MARKS_NARROW_PX) return area;
+  const band = 2 * NORTH_RADIUS + 2 * CORNER_GAP;
+  return { ...area, height: Math.max(area.height - band, area.height / 2) };
 }
 
 /** Масштабная линейка. На чертеже она есть всегда, а весь спор в этом кейсе - про метры. */

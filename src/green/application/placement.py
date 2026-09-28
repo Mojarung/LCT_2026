@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Protocol
 
@@ -31,6 +32,7 @@ from green.application.params import (
 from green.application.places import Place, place_map
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
+from green.application.wording import counted
 from green.application.zones import CAPACITY_STAT, MAX_ZONE_POINTS, build_zones, pack_count
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
@@ -764,8 +766,44 @@ def disabled_rules_note(rulebook: RuleBook, params: PlanParams) -> str | None:
         # Свой пункт без связанных ссылок и пометки о сверке: в строке-сводке она повторяла
         # оговорку, которая уже стоит в тексте пункта.
         act = rulebook.label_of(rule.citation.act_id)
-        named.append(f"{act}, {rule.citation.clause}")
-    return "Профиль не применяет: " + "; ".join(named) + "."
+        # Хвост в скобках - расчёт для жизненной формы («2 м + радиус ямы дерева 1,24 м»): без
+        # него правила дерева и кустарника с одним пунктом дают одну запись, а не две
+        # одинаковые (жюри по дизайну, итерация 8). Радиус остаётся в объяснении посадки.
+        clause = _TRAILING_NOTE.sub("", rule.citation.clause)
+        named.append(f"{act}, {clause}")
+    return "Профиль не применяет: " + "; ".join(dict.fromkeys(named)) + "."
+
+
+_TRAILING_NOTE = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+# Разрыв границы меньше этого - ниже точности чертежа: хордой замыкается, в тексте не называется.
+HAIRLINE_GAP_M = 0.05
+
+
+def boundary_gap_note(gaps: Sequence[tuple[str, float]]) -> str | None:
+    """Одна строка о разрывах границы работ, замкнутых хордой: сколько и наибольший.
+
+    По строке на разрыв у Берзарина выходило семь предупреждений, пять из них «0,00 м»
+    (жюри по дизайну, итерация 8).
+    """
+    named = [(layer, gap) for layer, gap in gaps if gap >= HAIRLINE_GAP_M]
+    if not named:
+        return None
+    layers = list(dict.fromkeys(layer for layer, _ in named))
+    where = (
+        f"на слое «{layers[0]}»"
+        if len(layers) == 1
+        else "на слоях " + ", ".join(f"«{layer}»" for layer in layers)
+    )
+    widest = f"{max(gap for _, gap in named):.2f}".replace(".", ",")
+    if len(named) == 1:
+        return f"Граница работ {where} не сомкнута: разрыв {widest} м замкнут хордой."
+    places = counted(len(named), "месте", "местах", "местах")
+    return (
+        f"Граница работ {where} не сомкнута в {places}, наибольший разрыв {widest} м: "
+        "замкнута хордой."
+    )
 
 
 def _warnings(
@@ -802,11 +840,9 @@ def _warnings(
             if params.require_work_boundary
             else "Граница работ не найдена: профиль явно разрешает размещение по всему чертежу."
         )
-    warnings.extend(
-        f"Граница работ на слое «{layer}» не сомкнута: разрыв "
-        f"{f'{gap:.2f}'.replace('.', ',')} м замкнут хордой."
-        for layer, gap in boundary_gaps(features)
-    )
+    gaps = boundary_gap_note(boundary_gaps(features))
+    if gaps:
+        warnings.append(gaps)
     if len(plan_rejections) >= max_rejections:
         warnings.append(
             f"Отметок отказов больше лимита {max_rejections}: показаны только первые, "

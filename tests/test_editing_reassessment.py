@@ -146,6 +146,19 @@ def test_added_conditional_shrub_has_documented_obligation() -> None:
     ).ok
 
 
+def test_condition_warning_names_the_act_and_clause_not_the_rule_id() -> None:
+    """Жюри по дизайну (итерация 7): «(R-INVGROUP-THREE-001)» человеку ничего не говорит;
+    в предупреждении - акт и пункт, rule_id остаётся в объяснении посадки."""
+    species = CATALOG.get("sorbaria_sorbifolia")
+    result = apply_edits(
+        _context(()), [Edit(EditKind.ADD, x=10, y=15, species_code=species.code)], (species,)
+    )
+    (warning,) = [w for w in result.warnings if w.startswith("Условие допуска:")]
+    assert "R-INVGROUP" not in warning
+    assert "приложение 2, пп. 5.1-5.3" in warning
+    assert "1 посадка -" in warning
+
+
 def test_deletion_rebuilds_neighbor_structure_and_keeps_species() -> None:
     species = _species(uses=frozenset({"row"}))
     plants = (_plant(species), _plant(species, identity="p2", x=16))

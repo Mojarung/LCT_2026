@@ -107,6 +107,11 @@ docker compose run --rm -v "$PWD/out:/out" api \
 
 3. **Объяснения.** В `interpretations.csv` строка на пару «решение - правило», в
    `report.html` - отчёт с определяющей нормой каждой посадки.
+
+   Готовый пример без запуска лежит в `examples/berzarina-fragment/`: вход - встроенный
+   фрагмент улицы Берзарина, выход - `result.dxf`, `report.html`, `interpretations.md`,
+   `plantings.csv`, `verify.json` и остальные файлы прогона в образе с кодом сдачи
+   (`examples/README.md`).
 4. **Нормоконтроль чужого плана** теми же правилами:
    `green audit "/dataset/план.dxf" --plantings "<шаблон слоя посадок>" --out /out/audit`.
 

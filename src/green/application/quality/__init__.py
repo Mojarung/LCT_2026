@@ -188,7 +188,7 @@ def evaluate(plan: Plan, site: Site, params: PlanParams, *, values: bool = True)
         if index is not None and values
         else {}
     )
-    summary = _summary(index, gate, terms, penalties, worth)
+    summary, analysis = _summary(index, gate, terms, penalties, worth)
     return PlanQuality(
         index=None if index is None else round(index, 6),
         gate=gate,
@@ -196,6 +196,7 @@ def evaluate(plan: Plan, site: Site, params: PlanParams, *, values: bool = True)
         penalty=round(penalty, 4),
         penalties={k: round(v, 4) for k, v in penalties.items()},
         summary=summary,
+        analysis=analysis,
         values=worth,
     )
 
@@ -340,16 +341,20 @@ def _summary(
     terms: tuple[QualityTerm, ...],
     penalties: dict[str, float],
     values: dict[str, PlantingValue],
-) -> tuple[str, ...]:
-    """Сводка плана словами: оценка, что поднимет индекс сильнее всего, штрафы, слабые места.
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Сводка плана словами (оценка, неопределённое, штрафы, слабые места) и разбор для
+    quality.json: резерв слагаемых и число посадок с отрицательным вкладом.
 
-    Сильные и слабые слагаемые не пересказываются: каждое стоит рядом со своей оценкой.
+    Сильные и слабые слагаемые не пересказываются: каждое стоит рядом со своей оценкой. Резерв
+    и отрицательный вклад в сводке для человека спорили с планом (жюри по дизайну, итерация 7):
+    это расчётные величины для разбора, а не вывод о плане.
     """
     lines = [gate] if gate else [f"Индекс качества плана {_num(index or 0.0)} из 1."]
+    analysis: list[str] = []
     scored = [t for t in terms if t.score is not None and t.weight > 0]
     if scored:
         gains = sorted(scored, key=lambda t: -t.weight * (1 - (t.score or 0.0)))[:2]
-        lines.append(
+        analysis.append(
             "Резерв при максимальной оценке отдельного показателя: "
             + "; ".join(
                 f"{t.title.lower()} - до +{_num(t.weight * (1 - (t.score or 0.0)))}" for t in gains
@@ -372,7 +377,7 @@ def _summary(
         lines.append(f"Штрафы -{_num(penalty, 3)}: " + "; ".join(named) + ".")
     harmful = sum(1 for v in values.values() if v.delta < -_EPS)
     if harmful:
-        lines.append(
+        analysis.append(
             f"Посадок с отрицательным вкладом: {harmful}. Удаление каждой по отдельности "
             "повышает расчётный индекс; это не разрешение на удаление. Нужно заново "
             "проверить квоты и остальные ограничения. Эффекты удалений не складываются."
@@ -380,7 +385,7 @@ def _summary(
     weak = sum(1 for v in values.values() if v.flagged)
     if weak:
         lines.append(f"Слабых мест: {weak}, на карте - треугольник.")
-    return tuple(lines)
+    return tuple(lines), tuple(analysis)
 
 
 def _thousandths(parts: dict[str, float], total: float) -> dict[str, int]:

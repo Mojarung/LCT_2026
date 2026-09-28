@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cornerMarks, NORTH_RADIUS } from './render';
+import { cornerMarks, fitAreaClearOfMarks, NORTH_RADIUS } from './render';
 
 describe('знаки в углу карты', () => {
   it.each([
@@ -17,5 +17,17 @@ describe('знаки в углу карты', () => {
     // Плашка линейки (25 над линией, 10 под ней) - по высоте в пределах диска.
     expect(scaleY - 25).toBeGreaterThanOrEqual(north.y - NORTH_RADIUS);
     expect(scaleY + 10).toBeLessThanOrEqual(north.y + NORTH_RADIUS);
+  });
+});
+
+describe('план не ложится под знаки карты', () => {
+  it('на узкой области вписывание отступает от нижней полосы знаков, на широкой - нет', () => {
+    // Жюри по дизайну (итерация 9): на 768 линейка «500 м» и диск севера лежали на посадках.
+    const narrow = { left: 0, top: 0, width: 768, height: 520 };
+    const fitted = fitAreaClearOfMarks(narrow);
+    const { north } = cornerMarks(narrow);
+    expect(fitted.top + fitted.height).toBeLessThanOrEqual(north.y - NORTH_RADIUS);
+    const wide = { left: 326, top: 70, width: 1100, height: 760 };
+    expect(fitAreaClearOfMarks(wide)).toEqual(wide);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   extentOf,
+  FIT_PAD_PX,
   fitView,
   GROUP_MAX_SCALE,
   groupView,
@@ -46,7 +47,22 @@ describe('вид карты', () => {
       0,
     );
     const area = { left: 0, top: 0, width: 1000, height: 500 };
-    expect(fitView(ext, area).scale).toBeCloseTo(1000 / 600, 9);
+    expect(fitView(ext, area).scale).toBeCloseTo((1000 - 2 * FIT_PAD_PX) / 600, 9);
+  });
+
+  it('вписанный план не касается кромки: поле по краям свободной области', () => {
+    const ext = extentOf(
+      { rot: 0 },
+      [
+        { x: 0, y: 0 },
+        { x: 600, y: 100 },
+      ],
+      0,
+    );
+    const area = { left: 0, top: 0, width: 768, height: 400 };
+    const view = { ...fitView(ext, area), rot: 0 };
+    expect(toScreen(view, 0, 0).sx).toBeCloseTo(FIT_PAD_PX, 6);
+    expect(toScreen(view, 600, 0).sx).toBeCloseTo(768 - FIT_PAD_PX, 6);
   });
 
   it('вид при открытии: концы ленты не уходят под панели', () => {

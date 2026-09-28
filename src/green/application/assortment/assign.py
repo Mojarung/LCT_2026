@@ -38,6 +38,8 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import coo_matrix
 
+from green.application.wording import counted
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
@@ -308,7 +310,8 @@ class _QuotaAssignment:
         notes = [*notes, *self.quotas.exhausted_notes(self.codes), *self._conifer_notes(chosen)]
         if split:
             split_note = (
-                f"{len(split)} посадок получили вид вне своей структуры: одним видом структура "
+                f"{counted(len(split), 'посадка получила', 'посадки получили', 'посадок получили')}"
+                " вид вне своей структуры: одним видом структура "
                 "в квоты разнообразия не влезла"
             )
             notes.append(split_note)

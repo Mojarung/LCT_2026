@@ -1,5 +1,5 @@
 import type { Rule, RuleCheck } from '../../api/artifacts';
-import { splitChecks, whatFor } from '../../lib/checks';
+import { groupSameMeasure, splitChecks, whatFor } from '../../lib/checks';
 import { meters, plural } from '../../lib/format';
 import { clauseNumber } from '../../lib/quotes';
 import { QuoteBlock } from './QuoteBlock';
@@ -8,30 +8,48 @@ interface RowProps {
   check: RuleCheck;
   rules: Record<string, Rule>;
   quote?: boolean;
+  /** Другие правила с тем же замером до того же объекта: одна строка, все основания. */
+  also?: readonly RuleCheck[];
 }
 
-/** Строка проверки: до чего мерили, замер против нормы, правило и пункт акта, цитата. */
-export function CheckRow({ check, rules, quote = false }: RowProps) {
+/** Правило, норма и пункт акта одной строкой через «·». */
+function Clause({ check, rules }: { check: RuleCheck; rules: Record<string, Rule> }) {
   const rule = rules[check.rule_id];
-  const measured = check.measured_m == null ? null : meters(check.measured_m);
   const threshold = check.threshold_m == null ? null : meters(check.threshold_m);
-  const failed = check.outcome === 'fail';
+  const norm = threshold ? `норма ${threshold} м` : '';
   const act = [rule?.act_short || rule?.act_id, rule ? clauseNumber(rule) : '']
     .filter(Boolean)
     .join(', ');
-  const norm = threshold ? `норма ${threshold} м` : '';
+  return (
+    // Части через «·»: «норма 2,00 м. параметр проекта» читалось как предложение со строчной
+    // буквы после точки (жюри по дизайну, итерация 8).
+    <p className="check-clause">
+      <span className="check-id">{check.rule_id}</span>
+      {check.measured_m != null && norm ? ` · ${norm}` : ''}
+      {act ? ` · ${act}` : ''}
+    </p>
+  );
+}
+
+/** Строка проверки: до чего мерили, замер против нормы, правило и пункт акта, цитата. */
+export function CheckRow({ check, rules, quote = false, also = [] }: RowProps) {
+  const measured = check.measured_m == null ? null : meters(check.measured_m);
+  const threshold = check.threshold_m == null ? null : meters(check.threshold_m);
+  const failed = [check, ...also].some((c) => c.outcome === 'fail');
   return (
     <li className={`check-item${failed ? ' failed' : ''}`}>
       <div className="check-rule">
         <span className="check-what">до {whatFor(check, rules)}</span>
-        <span className="check-dist">{measured ? `${measured} м` : norm}</span>
+        <span className="check-dist">
+          {measured ? `${measured} м` : threshold ? `норма ${threshold} м` : ''}
+        </span>
       </div>
-      <p className="check-clause">
-        <span className="check-id">{check.rule_id}</span>
-        {measured && norm ? `, ${norm}` : ''}
-        {act ? `. ${act}` : ''}
-      </p>
-      {quote ? <QuoteBlock rule={rule} /> : null}
+      {[check, ...also].map((c) => (
+        <div key={c.rule_id}>
+          <Clause check={c} rules={rules} />
+          {quote ? <QuoteBlock rule={rules[c.rule_id]} /> : null}
+        </div>
+      ))}
     </li>
   );
 }
@@ -58,9 +76,11 @@ export function ChecksBlock({
           относиться к объекту за полсотни метров - важно отношение, а не расстояние. */}
       <h3 className="detail-heading">{failing ? 'Нарушено' : 'Ближе всего к норме'}</h3>
       <ul className="checks">
-        {lead.map((check) => (
-          <CheckRow key={check.rule_id} check={check} rules={rules} quote />
-        ))}
+        {groupSameMeasure(lead).map(([check, ...also]) =>
+          check ? (
+            <CheckRow key={check.rule_id} check={check} also={also} rules={rules} quote />
+          ) : null,
+        )}
       </ul>
       {!failing && hidden.length ? (
         <p className="detail-slack">

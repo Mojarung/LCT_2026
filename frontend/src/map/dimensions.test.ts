@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BasemapFeature, RuleCheck } from '../api/artifacts';
 import { splitChecks } from '../lib/checks';
-import { ClassIndex, dimensionsFor, labelBox, type Rect } from './dimensions';
+import { ClassIndex, dimensionsFor, labelBox, leaderEnd, type Rect, TONES } from './dimensions';
 
 const check = (
   rule_id: string,
@@ -104,5 +104,51 @@ describe('плашка подписи стоит за целью, а не на �
       const nearest = Math.min(...corners.map(([cx, cy]) => (cx - tx) * ux + (cy - ty) * uy));
       expect(nearest).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('выноска читается: одна на объект, контраст AA', () => {
+  it('два правила на один замер до одного объекта - одна плашка', () => {
+    const checks = [
+      check('R-HEAT-TREE-001', 'utility.heat', 2.23, 2),
+      check('R-HEAT-TREE-002', 'utility.heat', 2.23, 2),
+    ];
+    expect(dimensionsFor(at, checks, basemap).map((d) => d.label)).toEqual([
+      'теплосеть 2,23 ≥ 2,00',
+    ]);
+  });
+
+  it('белый текст 12 px на каждой заливке - не ниже 4,5:1', () => {
+    const channel = (v: number) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const part = (hex: string, i: number) => channel(Number.parseInt(hex.slice(i, i + 2), 16));
+    const luminance = (hex: string) =>
+      0.2126 * part(hex, 1) + 0.7152 * part(hex, 3) + 0.0722 * part(hex, 5);
+    const ratio = (a: string, b: string) => {
+      const [x, y] = [luminance(a), luminance(b)];
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    // Контроль пробы: старый бирюзовый давал 4,13 и должен не пройти.
+    expect(ratio('#2f8a82', '#ffffff')).toBeLessThan(4.5);
+    for (const tone of Object.values(TONES)) {
+      expect(ratio(tone.fill, tone.text)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe('сдвинутая плашка связана со своей выноской', () => {
+  it('плашка у цели - без линии; сдвинутая на 46 px - линия к ближнему краю плашки', () => {
+    const near = labelBox(100, 100, 1, 0, 80);
+    expect(leaderEnd(100, 100, near)).toBeNull();
+    const shifted = labelBox(100, 100, 1, 0, 80, 46);
+    const end = leaderEnd(100, 100, shifted);
+    expect(end).not.toBeNull();
+    const [x, y, w, h] = shifted;
+    expect(end?.[0]).toBeGreaterThanOrEqual(x);
+    expect(end?.[0]).toBeLessThanOrEqual(x + w);
+    expect(end?.[1]).toBeGreaterThanOrEqual(y);
+    expect(end?.[1]).toBeLessThanOrEqual(y + h);
   });
 });

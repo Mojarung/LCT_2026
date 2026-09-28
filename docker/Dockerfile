@@ -50,14 +50,30 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_PREFERENCE=only-managed \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv python install "${PYTHON_VERSION}"
+# ezdxf 1.4.4 не публикует колёса с C-расширениями под Python 3.14: из PyPI ставится чистый
+# Python, и векторная математика чтения, склейки и записи DXF идёт без ускорения
+# (docs/notes/23-load-time.md). Собираем ezdxf из исходников (Cython из build-system пакета),
+# компилятор нужен только в этой стадии.
+ARG EZDXF_C_EXT=true
+RUN if [ "${EZDXF_C_EXT}" = "true" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends build-essential \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-dev --no-install-project
+    uv sync --locked --no-dev --no-install-project \
+        $([ "${EZDXF_C_EXT}" = "true" ] && echo --no-binary-package ezdxf)
 COPY pyproject.toml uv.lock README.md .python-version ./
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable \
+        $([ "${EZDXF_C_EXT}" = "true" ] && echo --no-binary-package ezdxf)
+# Расширения в ezdxf необязательные: без компилятора сборка молча даёт чистый Python.
+# Здесь молчание - ошибка сборки.
+RUN if [ "${EZDXF_C_EXT}" = "true" ]; then \
+        /opt/venv/bin/python -c "import ezdxf.acc as acc; assert acc.USE_C_EXT, 'ezdxf: C-расширения не собраны'"; \
+    fi
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 ARG WITH_ODA=false

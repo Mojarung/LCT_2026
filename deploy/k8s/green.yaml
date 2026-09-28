@@ -1,0 +1,113 @@
+# Сервис green в Kubernetes: тот же образ, что в compose.yaml (docker/Dockerfile).
+# ТЗ: Docker обязателен, Kubernetes - по желанию. Манифесты проверены схемой Kubernetes 1.31
+# (kubeconform, docs/deploy.md); в кластере не разворачивались.
+#
+#   kubectl apply -k deploy/k8s
+#   kubectl -n green port-forward svc/green 8000:80
+#
+# Образ собирается и загружается в реестр кластера отдельно:
+#   docker compose build && docker tag green:latest <реестр>/green:<версия>
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: green
+---
+# Прогоны: копия входа, result.dxf, план, интерпретации, контекст правки. Тяжёлая улица -
+# единицы ГБ; сервис сам удаляет старые законченные прогоны сверх GREEN_RUNS_MAX_GB.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: green-runs
+  namespace: green
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: green
+  namespace: green
+  labels:
+    app.kubernetes.io/name: green
+spec:
+  # Прогоны и контексты правки живут в памяти процесса и на томе RWO: одна реплика.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: green
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: green
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: green
+          image: green:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            # Один прогон за раз: самая тяжёлая улица пилота держит несколько ГБ, а лимит
+            # памяти пода ниже - два тяжёлых прогона одновременно в него не помещаются.
+            - name: GREEN_MAX_PARALLEL_RUNS
+              value: "1"
+            - name: GREEN_RUNS_MAX_GB
+              value: "8"
+            # Каталог улиц пилота - если датасет смонтирован (том dataset ниже).
+            - name: GREEN_STREETS_DIR
+              value: /dataset/streets_oda
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+            limits:
+              memory: 12Gi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: runs
+              mountPath: /data/runs
+            - name: dataset
+              mountPath: /dataset
+              readOnly: true
+      volumes:
+        - name: runs
+          persistentVolumeClaim:
+            claimName: green-runs
+        # Датасета может не быть: тогда каталог улиц пуст, а форма принимает свой чертёж.
+        - name: dataset
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: green
+  namespace: green
+spec:
+  selector:
+    app.kubernetes.io/name: green
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

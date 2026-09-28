@@ -8,6 +8,7 @@ import pytest
 from shapely.geometry import LineString
 
 from green.application.constraints import boundary_gaps, work_boundary
+from green.application.placement import boundary_gap_note
 from green.domain.objects import Feature, ObjectClass, SourceRef
 
 
@@ -45,3 +46,18 @@ def test_the_gap_limit_is_relative_on_a_small_contour() -> None:
     small = _line([(3, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
     assert work_boundary([small]) is None
     assert math.isclose(small.geometry.length, 13.0)
+
+
+def test_gaps_are_one_warning_and_hairlines_are_not_named() -> None:
+    """Берзарина: семь строк «Граница работ ... не сомкнута», пять из них «разрыв 0,00 м»
+    (жюри по дизайну, итерация 8). Одна строка: сколько разрывов и наибольший; разрывы меньше
+    5 см - ниже точности чертежа и в тексте не называются."""
+    assert boundary_gap_note([("Граница", 0.0004), ("Граница", 0.001)]) is None
+    note = boundary_gap_note([("Граница", 0.0004), ("Граница", 0.4), ("Граница", 0.12)])
+    assert note == (
+        "Граница работ на слое «Граница» не сомкнута в 2 местах, наибольший разрыв 0,40 м: "
+        "замкнута хордой."
+    )
+    two = boundary_gap_note([("А", 0.3), ("Б", 0.2)])
+    assert two is not None
+    assert "на слоях «А», «Б»" in two

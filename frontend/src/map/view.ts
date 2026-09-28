@@ -107,12 +107,18 @@ export function extentOf(
   };
 }
 
+/** Поле между вписанным планом и краем свободной области, пикселей. */
+export const FIT_PAD_PX = 16;
+
 /** Вписать план целиком в свободную область, по её центру. Это и вид при открытии: крупный
  *  вид, где лента по длине уходила под панели, прятал около трети улицы, а на 768 и 375
  *  обрезал её с обоих концов (жюри дизайна, итерация 7). Приблизить - одно движение колеса
  *  или ползунка; найти спрятанный конец улицы на незнакомом плане - нет. */
 export function fitView(ext: Extent, area: Area): Omit<ViewState, 'rot'> {
-  const scale = Math.min(area.width / ext.w, area.height / ext.h);
+  // Поле внутри свободной области: без него посадки крайнего конца стояли на самой кромке
+  // холста (x = 0 на 768 и 375, жюри дизайна, итерация 8). На маленькой области поле меньше.
+  const pad = Math.min(FIT_PAD_PX, area.width / 8, area.height / 8);
+  const scale = Math.min((area.width - 2 * pad) / ext.w, (area.height - 2 * pad) / ext.h);
   return {
     scale,
     tx: area.left + area.width / 2 - ((ext.minU + ext.maxU) / 2) * scale,

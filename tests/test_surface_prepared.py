@@ -22,7 +22,7 @@ def test_material_prepares_areas_lost_by_pickle() -> None:
         soil_area=box(0, 0, 10, 10),
         paved_area=box(20, 0, 30, 10),
     )
-    back = pickle.loads(pickle.dumps(surface))  # noqa: S301 - trusted local roundtrip
+    back = pickle.loads(pickle.dumps(surface))  # noqa: S301 - свой объект, только что записан
     assert not shapely.is_prepared(back.soil_area)
     found = back.material(shapely.points([(5.0, 5.0), (25.0, 5.0)]))
     assert found.tolist() == [int(Material.SOIL), int(Material.PAVED)]

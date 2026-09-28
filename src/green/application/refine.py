@@ -38,7 +38,7 @@ from green.application.params import step_with_tolerance
 from green.application.placement import planting_index
 from green.application.quality import assess, evaluate
 from green.application.quality.terms import tightest
-from green.application.wording import index_change
+from green.application.wording import index_change, plural
 from green.domain.norms import DistanceRule, PlantingType
 from green.domain.planting import CheckOutcome, Verdict
 
@@ -129,7 +129,9 @@ def refine_weak(  # noqa: PLR0913 - сценарий передаёт всё, ч
         return Refinement(plan, len(weak), 0, quality.index, quality.index, base.surface)
     refined = assess(current, site, params)
     note = (
-        f"Сдвиг от сетей: {moved} из {len(tight)} посадок впритык к сетям сдвинуты на 0,3-1 м от "
+        f"Сдвиг от сетей: {moved} из {len(tight)} "
+        f"{plural(len(tight), 'посадки', 'посадок', 'посадок')} впритык к сетям "
+        f"{plural(moved, 'сдвинута', 'сдвинуты', 'сдвинуты')} на 0,3-1 м от "
         f"ближайшей нормы, индекс качества вырос {index_change(quality.index, index)}."
     )
     refined = replace(refined, warnings=(*refined.warnings, note))

@@ -97,3 +97,13 @@ def test_inside_the_gas_zone_a_planting_needs_approval_beyond_it_is_allowed() ->
     assert _verdict(tree, edge_tree + 0.2) is Verdict.ALLOWED
     assert _verdict(shrub, edge_shrub - 0.2) is Verdict.NEEDS_APPROVAL
     assert _verdict(shrub, edge_shrub + 0.2) is Verdict.ALLOWED
+
+
+def test_one_clause_for_the_tree_and_the_shrub_rule() -> None:
+    """Зона газопровода для дерева и кустарника - один пункт ПП РФ № 878: в строке он стоял
+    дважды (жюри по дизайну, итерация 8)."""
+    note = disabled_rules_note(
+        RULEBOOK, replace(PlanParams(), disabled_rules=(GAS_ZONE, GAS_ZONE_SHRUB))
+    )
+    assert note is not None
+    assert note.count("878") == 1

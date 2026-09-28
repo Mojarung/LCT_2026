@@ -41,6 +41,12 @@ SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
 SOIL_AREAS = frozenset({ObjectClass.LAWN})
 PAVED_AREAS = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})
 MAX_CELLS = 20_000_000
+# Карте покрытий нужны объекты у участка: дальше этого от границы работ они в сетку не попадают,
+# а склейка граней и выборка линий по всему комплекту стоили памяти. Улица Академика
+# Понтрягина (комплект 424 МБ) дважды падала по памяти на этом этапе - 6,6 и 10 ГБ (28.09.2026);
+# на 3-й Парковой, Олимпийской деревне и Наташинском проезде сетка с отбором совпала клетка в
+# клетку. Запас больше предела разлива подписей (surface_max_distance_m, 30 м) с избытком.
+NEAR_EXTENT_M = 200.0
 _LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
 _TREE_SEED = 4
@@ -276,7 +282,8 @@ class SurfaceMap:
             labels = counted(self.fallback_labels, "подписи", "подписей", "подписей")
             notes.append(
                 f"Грунт по близости подписи: газон {soil} м², покрытие {paved} м² не дальше "
-                f"{self.max_distance_m:g} м от {labels} вне замкнутых контуров."
+                f"{self.max_distance_m:g} м от {labels} вне замкнутых контуров; деревья и "
+                "кустарник на нём допустимы, новый газон - только в замкнутом контуре."
             )
         if self.conflicting_faces:
             notes.append(
@@ -291,7 +298,7 @@ class SurfaceMap:
         return rows, cols
 
 
-def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named metric limits
+def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named metric limits
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
@@ -310,6 +317,7 @@ def build_surface_map(  # noqa: PLR0913 - explicit evidence stages and named met
     if inference_mode not in {"closed_faces", "distance", "hybrid"}:
         raise ValueError("Unknown surface inference mode")
     faces_mode = inference_mode != "distance"
+    features = _near_extent(features, extent)
     seed_xy, seed_kind = _seeds(features, labels)
     # Деревья - затравка только для заливки по расстоянию, знаки массивов - только для граней:
     # исключить посадку можно лишь из замкнутого контура массива. Совмещённый режим деревья
@@ -672,6 +680,16 @@ def _barrier_lines(features: Sequence[Feature]) -> NDArray[np.object_]:
         if geometry.geom_type in _LINE_TYPES:
             lines.extend(shapely.get_parts(geometry))
     return np.array(lines, dtype=object)
+
+
+def _near_extent(features: Sequence[Feature], extent: BaseGeometry | None) -> Sequence[Feature]:
+    """Объекты не дальше NEAR_EXTENT_M от границы работ; без границы - все."""
+    if extent is None or extent.is_empty or not features:
+        return features
+    near = extent.buffer(NEAR_EXTENT_M)
+    shapely.prepare(near)
+    keep = shapely.intersects(near, np.array([f.geometry for f in features], dtype=object))
+    return [f for f, inside in zip(features, keep, strict=True) if inside]
 
 
 def _cell_size(bounds: tuple[float, float, float, float], requested: float) -> float:

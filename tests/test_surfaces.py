@@ -7,6 +7,7 @@ import pytest
 import shapely
 from shapely.geometry import LineString, box
 
+from green.application import surfaces
 from green.application.surfaces import Material, build_surface_map, label_material
 from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
 
@@ -72,3 +73,34 @@ def test_a_paved_hatch_seeds_its_own_area() -> None:
     surface = build_surface_map(features, labels, site, 0.5)
     assert surface is not None
     assert surface.material(np.array([shapely.Point(30.0, 20.0)]))[0] == Material.PAVED
+
+
+def test_objects_far_from_the_site_do_not_reach_the_surface_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Понтрягина, 28.09.2026: склейка граней по всему комплекту 424 МБ съедала память. Объекты
+    дальше NEAR_EXTENT_M от границы работ в сетку не попадают - их и не склеиваем."""
+    ref = SourceRef("f", "x", "1")
+    site = box(0, 0, 40, 40)
+    near = [
+        Feature(ref, "Граница улицы", site.exterior, object_class=ObjectClass.PAVEMENT_EDGE),
+        Feature(ref, "борт", LineString([(0, 20), (40, 20)]), object_class=ObjectClass.CURB),
+    ]
+    far = [
+        Feature(
+            ref, "борт", LineString([(1000 + i, 0), (1000 + i, 500)]), object_class=ObjectClass.CURB
+        )
+        for i in range(50)
+    ]
+    labels = [TextLabel(ref, "Леса и газоны", 5.0, 5.0, "ГАЗОН")]
+    seen: list[int] = []
+    original = surfaces._barrier_lines  # noqa: SLF001 - считаем, сколько объектов дошло
+    monkeypatch.setattr(
+        surfaces, "_barrier_lines", lambda fs: (seen.append(len(fs)), original(fs))[1]
+    )
+    with_far = build_surface_map([*near, *far], labels, site, 0.5)
+    assert max(seen) == len(near)
+    alone = build_surface_map(near, labels, site, 0.5)
+    assert with_far is not None
+    assert alone is not None
+    assert (with_far.grid == alone.grid).all()

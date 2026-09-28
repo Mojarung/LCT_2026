@@ -85,7 +85,15 @@ export function RunHeader({ run }: { run: RunOut }) {
  *  следствие того, что участок ничем не ограничен. Индекс качества здесь не повторяется: он
  *  стоит крупно в правой панели на том же экране. Остальные записи прогона - под раскрытием
  *  «Как собран план»: это журнал приёмов и подбора, а не тревоги. */
-export function RunMetrics({ run }: { run: RunOut }) {
+export function RunMetrics({
+  run,
+  trees,
+}: {
+  run: RunOut;
+  /** Деревья среди посадок плана; null - план ещё не загружен. Число деревьев - первое, что
+   *  спрашивает заказчик, а «994 посадки» его не называли (жюри по дизайну, итерация 9). */
+  trees?: { trees: number; planted: number } | null;
+}) {
   const summary = run.summary ?? {};
   const total = num(summary.placements);
   const approval = num(summary.needs_approval);
@@ -107,6 +115,12 @@ export function RunMetrics({ run }: { run: RunOut }) {
         <b>{integer(total)}</b>
         <span>
           {plural(total, 'посадка', 'посадки', 'посадок')} в плане
+          {trees != null && trees.planted === total
+            ? `: ${integer(trees.trees)} ${plural(trees.trees, 'дерево', 'дерева', 'деревьев')}` +
+              (total > trees.trees
+                ? `, ${integer(total - trees.trees)} ${plural(total - trees.trees, 'кустарник', 'кустарника', 'кустарников')}`
+                : '')
+            : ''}
           {approval ? (
             `, ${integer(approval)} на согласование`
           ) : sketch ? (
@@ -214,7 +228,7 @@ export function RunStatus({ run }: { run: RunOut }) {
         <p className="status-action">{failure.action}</p>
         <ReviewLinks run={run} />
         <p className="hint">
-          <Link to="/">К консоли запуска</Link>
+          <Link to="/">← все прогоны</Link>
         </p>
         {failure.details ? (
           <details className="fold status-details">

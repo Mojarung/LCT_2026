@@ -1088,7 +1088,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "413": {
             "content": {
@@ -1098,7 +1098,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1108,7 +1108,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1118,7 +1118,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "List Runs",
@@ -1157,7 +1157,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "413": {
             "content": {
@@ -1167,7 +1167,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1177,7 +1177,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1187,7 +1187,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Create Run",
@@ -1219,7 +1219,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "413": {
             "content": {
@@ -1229,7 +1229,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1239,7 +1239,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1249,7 +1249,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Create Demo Run",
@@ -1292,7 +1292,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "413": {
             "content": {
@@ -1302,7 +1302,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1312,7 +1312,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1322,7 +1322,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Get Run",
@@ -1367,7 +1367,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "413": {
             "content": {
@@ -1377,7 +1377,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1387,7 +1387,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1397,7 +1397,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Get Artifact",
@@ -1450,7 +1450,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "409": {
             "content": {
@@ -1460,7 +1460,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Состояние прогона изменилось"
           },
           "413": {
             "content": {
@@ -1470,7 +1470,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1480,7 +1480,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1490,7 +1490,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Check",
@@ -1532,7 +1532,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "409": {
             "content": {
@@ -1542,7 +1542,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Состояние прогона изменилось"
           },
           "413": {
             "content": {
@@ -1552,7 +1552,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1562,7 +1562,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1572,7 +1572,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Draft",
@@ -1625,7 +1625,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "409": {
             "content": {
@@ -1635,7 +1635,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Состояние прогона изменилось"
           },
           "413": {
             "content": {
@@ -1645,7 +1645,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1655,7 +1655,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1665,7 +1665,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Edit",
@@ -1708,7 +1708,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Не найдено"
           },
           "409": {
             "content": {
@@ -1718,7 +1718,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Состояние прогона изменилось"
           },
           "413": {
             "content": {
@@ -1728,7 +1728,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Файл слишком большой"
           },
           "422": {
             "content": {
@@ -1738,7 +1738,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Данные не приняты"
           },
           "500": {
             "content": {
@@ -1748,7 +1748,7 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Внутренняя ошибка сервиса"
           }
         },
         "summary": "Rebuild",

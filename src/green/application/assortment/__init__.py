@@ -285,20 +285,32 @@ def conditions(placements: Sequence[Placement]) -> list[str]:
             if reason.condition.startswith(BARRIER_CONDITION):
                 # Барьер у каждой посадки свой (кабель, теплосеть, борт): в предупреждениях одна
                 # строка, подробности в объяснении посадки и на слое GREEN_TREES_BARRIER.
-                with_barrier[placement.placement_id] = reason.rule_id
+                with_barrier[placement.placement_id] = _act(reason)
             elif reason.condition:
-                counts[(placement.species.name_ru, reason.condition, reason.rule_id)] += 1
+                counts[(placement.species.name_ru, reason.condition, _act(reason))] += 1
     messages = [
-        f"Условие допуска: {name}, {count} посадок - {condition} ({rule_id})."
-        for (name, condition, rule_id), count in sorted(counts.items())
+        f"Условие допуска: {name}, {counted(count, 'посадка', 'посадки', 'посадок')} - "
+        f"{condition} ({act})."
+        for (name, condition, act), count in sorted(counts.items())
     ]
     if with_barrier:
-        rule_id = next(iter(with_barrier.values()))
+        act = next(iter(with_barrier.values()))
         messages.append(
             f"Условие допуска: {len(with_barrier)} деревьев стоят ближе табличной нормы к сетям "
-            f"или борту и допустимы только с прикорневым барьером ({rule_id})."
+            f"или борту и допустимы только с прикорневым барьером ({act})."
         )
     return messages
+
+
+def _act(reason: Reason) -> str:
+    """Акты и пункты основания без пересказа пунктов: «369-ПП, приложение 1, п. 3.12;
+    369-ПП, приложение 2, пп. 5.1-5.3».
+
+    rule_id человеку ничего не говорит (жюри по дизайну, итерация 7); он остаётся в объяснении
+    посадки. Нет цитаты - остаётся rule_id, чтобы основание не пропало.
+    """
+    heads = [part.split(":")[0].strip() for part in reason.source.split(";")]
+    return "; ".join(dict.fromkeys(h for h in heads if h)) or reason.rule_id
 
 
 def _apply(  # noqa: PLR0913 - все части решения нужны, чтобы собрать карточку посадки

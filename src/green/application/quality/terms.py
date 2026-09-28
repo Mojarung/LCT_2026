@@ -33,7 +33,7 @@ from green.application.explain import OBJECT_LABELS
 from green.application.places import category_of
 from green.application.quality.coverage import FixedCrowns, fixed_crowns, measure_crowns
 from green.application.quality.site import WIDE_STREET_M, site_length
-from green.application.wording import decimal, decimal_g
+from green.application.wording import counted, decimal, decimal_g
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome
 
@@ -393,7 +393,11 @@ def rows(
         _row_details(layout, ids, band, _fork(layout, ids, params), details)
     rows_count = len(groups)
     total = sum(len(ids) for ids in groups)
-    note = f"{rows_count} рядов, {total} посадок; держат ряд (сосед того же вида на шаге нормы): "
+    note = (
+        f"{counted(rows_count, 'ряд', 'ряда', 'рядов')}, "
+        f"{counted(total, 'посадка', 'посадки', 'посадок')}; "
+        "держат ряд (сосед того же вида на шаге нормы): "
+    )
     note += f"{int(holds.sum())}"
     if targets is not None:
         note += (
@@ -638,8 +642,8 @@ def category(layout: Layout, params: PlanParams, targets: Targets | None) -> Ter
         _CATEGORY_WHERE.get(params.planting_category, params.planting_category)
     ]
     note = (
-        f"для {' и '.join(wheres)} рекомендованы {tally['plus']} посадок, с ограничением "
-        f"{tally['limited']}, не рекомендованы {tally['minus']}, вне табл. В.6 "
+        f"для {' и '.join(wheres)}: рекомендованных посадок {tally['plus']}, с ограничением "
+        f"{tally['limited']}, не рекомендованных {tally['minus']}, вне табл. В.6 "
         f"{tally['silent']} (засчитаны половиной)"
     )
     measure = {name: float(tally[name]) for name in ("plus", "limited", "minus", "silent")}

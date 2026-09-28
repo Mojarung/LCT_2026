@@ -270,7 +270,7 @@ export function RunPage() {
             {missing ? `Прогона ${runId} нет в хранилище сервиса.` : run.error.message}
           </p>
           <p className="hint">
-            <Link to="/">К консоли запуска</Link>
+            <Link to="/">← все прогоны</Link>
           </p>
         </div>
       </div>
@@ -326,7 +326,18 @@ export function RunPage() {
           {data ? <RunHeader run={data} /> : null}
           <div className="hud-scroll" ref={leftScroll} hidden={broken}>
             {done && data ? (
-              <RunMetrics run={data} />
+              <RunMetrics
+                run={data}
+                trees={
+                  // Только когда план загружен целиком: число сверяется с числом прогона.
+                  items
+                    ? {
+                        trees: placements.filter((p) => p.planting_type === 'tree').length,
+                        planted: placements.length,
+                      }
+                    : null
+                }
+              />
             ) : broken ? null : (
               <p className="metric">
                 <b>

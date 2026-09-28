@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ezdxf import transform, xref
@@ -32,7 +33,6 @@ from green.infrastructure.cad.xref_package import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from ezdxf.document import Drawing
 
@@ -164,9 +164,14 @@ class EzdxfDrawingMerger:
             base_box = _union(base_box, box)
             _load_overlay(base, doc, path.name, notes)
         merged = len(base.modelspace())
+        # Имена, под которыми файлы пришли, а не имена хранения (extra_2.dxf): человек узнаёт
+        # свой чертёж (жюри по дизайну, итерация 8).
+        names = [
+            Path(source_names[i]).name if i < len(source_names) else sources[i].name
+            for i in range(len(sources))
+        ]
         listed = ", ".join(
-            f"{sources[index].name}: {count}"
-            for index, count in zip(package.roots, counts, strict=True)
+            f"{names[index]}: {count}" for index, count in zip(package.roots, counts, strict=True)
         )
         notes.append(f"Склейка комплекта: {listed}; в объединённом чертеже {merged} сущностей")
         if merged != sum(counts):

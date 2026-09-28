@@ -178,7 +178,10 @@ def test_kit_of_two_drawings_is_merged(client: TestClient, work: Path) -> None:
     assert response.status_code == 202, response.text
     run = client.get(response.headers["Location"]).json()
     assert run["state"] == "succeeded", run
-    assert any("Склейка комплекта" in w for w in run["summary"]["load_notes"])
+    merged = next(w for w in run["summary"]["load_notes"] if "Склейка комплекта" in w)
+    # Имена, под которыми файлы пришли, а не имена хранения на диске (extra_1.dxf).
+    assert "utilities.dxf" in merged
+    assert "extra_" not in merged
 
 
 @pytest.mark.parametrize(
@@ -303,3 +306,11 @@ def test_unknown_profile_is_not_found(client: TestClient) -> None:
     body = _assert_problem(client.get(f"{API_PREFIX}/profiles/no_such_profile"), 404)
     assert "no_such_profile" in str(body["detail"])
     assert "strict" in str(body["detail"])
+
+
+def test_problem_titles_are_russian(client: TestClient) -> None:
+    """Заголовок ошибки RFC 9457 - по-русски, как и её подробность: читатель - эксперт."""
+    missing = _assert_problem(client.get(f"{API_PREFIX}/runs/нет-такого"), 404)
+    assert missing["title"] == "Не найдено"
+    wrong = _assert_problem(client.put(f"{API_PREFIX}/health"), 405)
+    assert wrong["title"] == "Метод не поддерживается"

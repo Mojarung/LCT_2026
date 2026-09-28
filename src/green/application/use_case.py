@@ -34,7 +34,7 @@ from green.application.placement import (
     MODE_SHRUB_ROW,
     MODE_UNDERSTORY,
 )
-from green.application.places import place_map, with_places
+from green.application.places import place_map, replace_moved_places, with_places
 from green.application.portfolio import choose_plan
 from green.application.quality import assess, site_of
 from green.application.refine import refine_weak
@@ -48,6 +48,7 @@ from green.application.understory import fill_understory
 from green.application.validation import (
     PlanValidation,
     drop_spacing_conflicts,
+    trim_note,
     trim_to_quotas,
     validate_plan,
 )
@@ -282,6 +283,8 @@ class PlanSite:
                 )
                 # Место посадки до подбора вида: категория В.6 у двора и улицы своя.
                 plan = with_places(plan, places)
+                if places.note:
+                    plan = replace(plan, warnings=(*plan.warnings, places.note))
             with watch.stage("assort"):
                 plan = assign_species(plan, rulebook, self._species.all(), params, existing)
                 if inventory is not None:
@@ -345,7 +348,9 @@ class PlanSite:
                 if len(kept) != len(plan.placements):
                     # Номера посадок идут подряд: снятые кусты не оставляют дыр в ведомости.
                     renumbered = tuple(replace(p, number=i) for i, p in enumerate(kept, 1))
-                    plan = replace(plan, placements=renumbered)
+                    removed = trim_note(plan.placements, kept)
+                    warnings = (*plan.warnings, removed) if removed else plan.warnings
+                    plan = replace(plan, placements=renumbered, warnings=warnings)
             plan = with_places(plan, places)
             with watch.stage("validate_plan"):
                 validation = validate_plan(
@@ -384,8 +389,10 @@ class PlanSite:
                 surface=surface,
             )
             if refined.moved:
+                # Сдвинутая посадка - в новой точке: место и категория В.6 для проверки заново.
+                moved = replace_moved_places(plan, refined.plan, places)
                 recheck = validate_plan(
-                    refined.plan,
+                    moved,
                     features,
                     scene.labels,
                     rulebook,
@@ -395,7 +402,7 @@ class PlanSite:
                     surface=surface,
                 )
                 if recheck.ok:
-                    plan, validation = refined.plan, recheck
+                    plan, validation = moved, recheck
         # Газон - грунт, который итоговый план оставил свободным: считается после сдвига слабых
         # мест, иначе посадочное место сдвинутой посадки легло бы на газон. Нормы посадок газон
         # не меняет, поэтому проверку плана не повторяет.

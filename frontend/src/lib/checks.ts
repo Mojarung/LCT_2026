@@ -92,3 +92,19 @@ export function splitChecks(checks: readonly RuleCheck[]): {
   const first = tail[0];
   return { lead, hidden, restSlack: first ? ratio(first) : null };
 }
+
+/** Строки с одним объектом и одним замером (теплосеть: СП 42 и 623-ПП) склеиваются: две
+ *  строки «до теплосети 2,23 м» читались как два объекта (жюри по дизайну, итерация 8). */
+export function groupSameMeasure(checks: readonly RuleCheck[]): RuleCheck[][] {
+  const groups = new Map<string, RuleCheck[]>();
+  for (const check of checks) {
+    const key =
+      check.measured_m == null
+        ? `rule:${check.rule_id}`
+        : `${check.object_class ?? ''}:${String(Math.round(check.measured_m * 100))}`;
+    const group = groups.get(key);
+    if (group) group.push(check);
+    else groups.set(key, [check]);
+  }
+  return [...groups.values()];
+}

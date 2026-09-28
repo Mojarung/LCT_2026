@@ -45,10 +45,12 @@ const SHORT: Record<string, string> = {
 
 /** Цвета подписей со слайда: покрытия и борт - синие, сети - бирюзовые, здания и прочее -
  *  янтарные, нарушение нормы - малиновое. Одинаковые в обеих темах: это чертёжные выноски,
- *  а не элементы интерфейса. */
-const TONES = {
-  surface: { fill: '#3b7dd8', text: '#ffffff' },
-  utility: { fill: '#2f8a82', text: '#ffffff' },
+ *  а не элементы интерфейса. Белый текст 12 px на заливке - не ниже 4,5:1 (WCAG AA): синий
+ *  #3b7dd8 и бирюзовый #2f8a82 давали 4,1:1 (жюри по дизайну, итерация 8), сейчас 5,6 и 5,9;
+ *  проверка - dimensions.test.ts. */
+export const TONES = {
+  surface: { fill: '#2d68b8', text: '#ffffff' },
+  utility: { fill: '#256f69', text: '#ffffff' },
   other: { fill: '#e8b33c', text: '#2b2620' },
   fail: { fill: '#d6336c', text: '#ffffff' },
 } as const;
@@ -170,11 +172,17 @@ export function dimensionsFor(
   index: ClassIndex,
 ): Dimension[] {
   const dimensions: Dimension[] = [];
+  // Два правила на один замер до одного объекта (теплосеть: СП 42 и 743-ПП) - одна плашка:
+  // вторая с тем же числом ложилась рядом и читалась как второй объект.
+  const seen = new Set<string>();
   for (const check of splitChecks(checks).lead) {
     const measured = check.measured_m;
     const threshold = check.threshold_m;
     if (measured == null || threshold == null || threshold <= 0) continue;
     const cls = check.object_class ?? '';
+    const key = `${cls}:${Math.round(measured * 100)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     // Нарушение - всегда малиновым и со знаком «<»: цвет и знак говорят одно и то же.
     const broken = check.outcome === 'fail' || measured < threshold;
     // Сервис мерит до стенки сети, подоснова - это ось: ищем с запасом на половину диаметра.
@@ -215,6 +223,15 @@ export function labelBox(
   const cx = tx + ux * reach - uy * shift;
   const cy = ty + uy * reach + ux * shift;
   return [Math.round(cx - width / 2), Math.round(cy - LABEL_HEIGHT / 2), width, LABEL_HEIGHT];
+}
+
+/** Ближайшая к цели точка плашки: к ней ведёт тонкая линия, когда плашка сдвинута от своей
+ *  выноски, - иначе она висела в 40-70 px от стрелки и читалась как чужая (жюри, итерация 8).
+ *  null - плашка у самой цели, линия не нужна. */
+export function leaderEnd(tx: number, ty: number, [x, y, w, h]: Rect): [number, number] | null {
+  const nx = Math.min(Math.max(tx, x), x + w);
+  const ny = Math.min(Math.max(ty, y), y + h);
+  return Math.hypot(nx - tx, ny - ty) > LABEL_GAP + 4 ? [nx, ny] : null;
 }
 
 const overlaps = ([x0, y0, w0, h0]: Rect, [x1, y1, w1, h1]: Rect): boolean =>
@@ -298,6 +315,15 @@ export function drawDimensions(
       ) ?? labelBox(tx, ty, ux, uy, width);
     boxes.push(box);
     const [bx, by] = box;
+    const end = leaderEnd(tx, ty, box);
+    if (end) {
+      ctx.strokeStyle = tone.fill;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(end[0], end[1]);
+      ctx.stroke();
+    }
     ctx.fillStyle = tone.fill;
     ctx.beginPath();
     ctx.roundRect(bx, by, width, LABEL_HEIGHT, 3);

@@ -755,7 +755,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunListOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -764,7 +764,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -773,7 +773,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -782,7 +782,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -815,7 +815,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -824,7 +824,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -833,7 +833,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -842,7 +842,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -871,7 +871,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -880,7 +880,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -889,7 +889,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -898,7 +898,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -929,7 +929,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -938,7 +938,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -947,7 +947,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -956,7 +956,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -986,7 +986,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -995,7 +995,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1004,7 +1004,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1013,7 +1013,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -1048,7 +1048,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1057,7 +1057,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Conflict */
+            /** @description Состояние прогона изменилось */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1066,7 +1066,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1075,7 +1075,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1084,7 +1084,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -1115,7 +1115,7 @@ export interface operations {
                     "application/json": components["schemas"]["DraftOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1124,7 +1124,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Conflict */
+            /** @description Состояние прогона изменилось */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1133,7 +1133,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1142,7 +1142,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1151,7 +1151,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -1186,7 +1186,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanSummaryOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1195,7 +1195,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Conflict */
+            /** @description Состояние прогона изменилось */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1204,7 +1204,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1213,7 +1213,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1222,7 +1222,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -1253,7 +1253,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanSummaryOut"];
                 };
             };
-            /** @description Not Found */
+            /** @description Не найдено */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1262,7 +1262,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Conflict */
+            /** @description Состояние прогона изменилось */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1271,7 +1271,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Content Too Large */
+            /** @description Файл слишком большой */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -1280,7 +1280,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Данные не приняты */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1289,7 +1289,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description Внутренняя ошибка сервиса */
             500: {
                 headers: {
                     [name: string]: unknown;

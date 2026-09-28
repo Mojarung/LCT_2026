@@ -40,7 +40,7 @@
   /* На узком экране обозначения остаются плавающей карточкой поверх плана: в потоке
      страницы они уехали бы под карту, где их никто не найдёт. */
   .hud-legend {
-    width: min(300px, calc(100% - var(--inset) * 2));
+    width: min(var(--hud-left-w), calc(100% - var(--inset) * 2));
     max-height: min(300px, 46%);
   }
   .hud.collapsed {

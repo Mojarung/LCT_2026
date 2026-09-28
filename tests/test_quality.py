@@ -33,6 +33,7 @@ from green.domain.planting import (
     Species,
     Verdict,
 )
+from green.domain.quality import PlantingValue, QualityTerm
 
 ALLEY = MODE_LABELS["alley"]
 LAWN = MODE_LABELS["lawn"]
@@ -471,8 +472,19 @@ def test_penalty_parts_add_up_to_the_total_shown() -> None:
     читалось как ошибка счёта."""
     shares = _thousandths({"a": 0.0024, "b": 0.0024, "c": 0.0012}, 0.006)
     assert sum(shares.values()) == 6
-    lines = _summary(0.9, "", (), {"lost": 0.0012}, {})
+    lines, _ = _summary(0.9, "", (), {"lost": 0.0012}, {})
     assert any(line.startswith("Штрафы -0,001") for line in lines)
+
+
+def test_reserve_and_harmful_count_go_to_the_analysis_not_the_summary() -> None:
+    """Жюри по дизайну (итерация 7): «Резерв» и «Посадок с отрицательным вкладом: 906» в
+    разборе спорят с планом; им место в quality.json, а не в сводке для человека."""
+    term = QualityTerm("shade", "Тень", 0.5, 0.4, "основание", "замер")
+    values = {"p1": PlantingValue("p1", -0.01, {}), "p2": PlantingValue("p2", 0.02, {})}
+    summary, analysis = _summary(0.7, "", (term,), {}, values)
+    assert not any(line.startswith(("Резерв", "Посадок с отрицательным")) for line in summary)
+    assert any(line.startswith("Резерв при максимальной оценке") for line in analysis)
+    assert any(line.startswith("Посадок с отрицательным вкладом: 1.") for line in analysis)
 
 
 # --- Монотонность и точная ценность --------------------------------------------------------

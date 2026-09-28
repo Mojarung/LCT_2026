@@ -76,7 +76,7 @@ body.shell-map .topbar {
 .hud-left {
   left: var(--inset);
   top: var(--inset);
-  width: 296px;
+  width: var(--hud-left-w);
   max-height: calc(100% - var(--inset) * 2 - var(--tools));
 }
 .hud-right {
@@ -302,6 +302,11 @@ body.shell-map .topbar {
   padding: 13px 15px 15px;
   border-top: 1px solid var(--hair);
   background: var(--panel);
+  /* Раскрытые «Файлы прогона» и «Чтение чертежа» сжимали содержимое панели до двух строк
+     (жюри по дизайну, итерация 8): подвал не выше 40% окна, дальше - своя прокрутка; процент
+     от панели не работает - у неё задана только max-height. */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 /* Сводка: одно число крупно, остальное строкой под ним. Пять равных плиток превращали
@@ -591,7 +596,7 @@ body.shell-map .topbar {
 .hud-legend {
   left: var(--inset);
   bottom: calc(var(--inset) * 2 + var(--tools));
-  width: 300px;
+  width: var(--hud-left-w);
   max-height: min(420px, calc(100% - var(--inset) * 4 - var(--tools) - 110px));
   display: flex;
   flex-direction: column;

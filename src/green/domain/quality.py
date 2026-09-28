@@ -78,3 +78,5 @@ class PlanQuality:
     penalties: Mapping[str, float]
     summary: tuple[str, ...]
     values: Mapping[str, PlantingValue] = field(default_factory=dict, compare=False)
+    # Разбор для quality.json: резерв слагаемых, число посадок с отрицательным вкладом.
+    analysis: tuple[str, ...] = ()

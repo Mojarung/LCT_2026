@@ -220,7 +220,9 @@ describe('RunPage: finished run', () => {
     expect(within(right).getByRole('heading', { name: '№ 1. Липа мелколистная' })).toBeVisible();
     expect(within(right).getByText('допускается')).toBeVisible();
     expect(within(right).getByText('Ближе всего к норме')).toBeVisible();
-    expect(right).toHaveTextContent('R-UTIL-WATER-001, норма 2,00 м. СП 42.13330.2016, табл. 9.1');
+    expect(right).toHaveTextContent(
+      'R-UTIL-WATER-001 · норма 2,00 м · СП 42.13330.2016, табл. 9.1',
+    );
     expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).toBeVisible();
     expect(right).toHaveTextContent('Пригодность месту 74%');
 
@@ -386,7 +388,11 @@ describe('RunPage: failures', () => {
 
     expect(await screen.findByRole('heading', { name: 'Прогон не удался' })).toBeVisible();
     expect(screen.getByText('Чертёж не читается: файл обрезан.')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'К консоли запуска' })).toHaveAttribute('href', '/');
+    // Одно имя у ссылки на консоль по всему интерфейсу (жюри, итерация 9): в шапке панели и
+    // в карточке неудавшегося прогона она одна и та же.
+    const back = screen.getAllByRole('link', { name: '← все прогоны' });
+    expect(back.length).toBeGreaterThan(0);
+    for (const link of back) expect(link).toHaveAttribute('href', '/');
     // Причина и есть весь текст сервиса: раскрывать нечего.
     expect(screen.queryByText('Подробности')).toBeNull();
   });

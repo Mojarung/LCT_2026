@@ -1,0 +1,68 @@
+{
+  "mode": "auto",
+  "solver": "milp",
+  "counts": {
+    "acer_ginnala": 9,
+    "crataegus_laevigata": 30,
+    "picea_abies": 6,
+    "sorbus_aucuparia": 10,
+    "thuja_occidentalis": 25
+  },
+  "genus_shares": {
+    "acer": 0.1125,
+    "crataegus": 0.375,
+    "picea": 0.075,
+    "sorbus": 0.125,
+    "thuja": 0.3125
+  },
+  "family_shares": {
+    "Cupressaceae": 0.3125,
+    "Pinaceae": 0.075,
+    "Rosaceae": 0.5,
+    "Sapindaceae": 0.1125
+  },
+  "conifer_share": 0.3875,
+  "shannon": 1.4313,
+  "decor_by_month": {
+    "1": 31,
+    "2": 31,
+    "3": 0,
+    "4": 0,
+    "5": 40,
+    "6": 39,
+    "7": 0,
+    "8": 10,
+    "9": 49,
+    "10": 19,
+    "11": 31,
+    "12": 31
+  },
+  "no_species": 0,
+  "quota_violations": [],
+  "existing": {},
+  "rejected_by_kind": {
+    "norm": 1765,
+    "reference": 15
+  },
+  "rejected_by_rule": {
+    "R-MGSN-CATEGORY-001": 720,
+    "R-PPSEVEN-FLUFF-001": 160,
+    "R-HEAT-TREE-001": 133,
+    "R-PAVE-TREE-001": 123,
+    "R-CURB-TREE-001": 107,
+    "R-BLD-TREE-001": 106,
+    "R-POWER-TREE-001": 83,
+    "R-INV-ACERNEG-001": 80,
+    "R-BLDCROWN-TREE-001": 63,
+    "R-SEWER-TREE-001": 57,
+    "R-ROAD-TREE-001": 27,
+    "R-STORM-TREE-001": 19,
+    "R-WATER-TREE-001": 19,
+    "R-GAS-TREE-001": 18,
+    "R-STRUCT-TREE-001": 17,
+    "R-POLE-TREE-001": 16,
+    "R-HEAT-TREE-003": 13,
+    "R-THORNPV-TREE-001": 4
+  },
+  "notes": []
+}

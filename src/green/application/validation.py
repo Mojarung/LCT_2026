@@ -22,6 +22,7 @@ from green.application.params import active_distance_rules, step_with_tolerance
 from green.application.places import category_of
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
+from green.application.wording import counted, plural
 from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import Verdict
@@ -206,7 +207,13 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
         for p in placements:
             by_category.setdefault(category_of(p.place, params.planting_category), []).append(p)
         for category, members in by_category.items():
-            norms = species_norms(species, rulebook, params.territory, category)
+            norms = species_norms(
+                species,
+                rulebook,
+                params.territory,
+                category,
+                allergen_act_priority=params.allergen_act_priority,
+            )
             if norms.blocking:
                 issues.append(
                     ValidationIssue(
@@ -425,6 +432,24 @@ def _hard_quota(attribute: str, params: PlanParams) -> bool:
     рода и семейства - штраф в подборе и в индексе, а не нарушение: место, прошедшее нормы, не
     пустеет (notes/34). Потолок хвойных и в мягком режиме жёсткий, как в задаче подбора."""
     return attribute == "is_conifer" or params.quota_penalty <= 0
+
+
+def trim_note(before: Sequence[Placement], after: Sequence[Placement]) -> str | None:
+    """Что сняла обрезка по квотам: строки этапов (ряд у борта, подлесок, группы) пишутся до
+    неё, и без этой строки их числа расходились с итогом по видам посадок (жюри по дизайну,
+    итерация 8)."""
+    kept = {p.placement_id for p in after}
+    removed = [p for p in before if p.placement_id not in kept]
+    if not removed:
+        return None
+    kinds = Counter(p.notes[0] if p.notes else "без приёма" for p in removed)
+    listed = ", ".join(f"{kind} - {count}" for kind, count in sorted(kinds.items()))
+    what = counted(len(removed), "посадка", "посадки", "посадок")
+    verb = plural(len(removed), "снята", "сняты", "снято")
+    return (
+        f"Квоты разнообразия: {verb} {what} добавочных этапов ({listed}); "
+        "числа в строках этих этапов выше - до снятия."
+    )
 
 
 def trim_to_quotas(

@@ -34,6 +34,7 @@ import {
   drawPlan,
   drawScaleBar,
   drawSelection,
+  fitAreaClearOfMarks,
   type Marks,
   PAD,
   PENDING_DASH,
@@ -365,7 +366,7 @@ export class PlanEngine {
     if (!this.bbox) return;
     const ext = extentOf(this.view, this.extentPoints());
     const area = this.clearArea();
-    const fitted = fitView(ext, area);
+    const fitted = fitView(ext, fitAreaClearOfMarks(area));
     this.fitScale = fitted.scale;
     Object.assign(this.view, fitted);
     this.touched = false;

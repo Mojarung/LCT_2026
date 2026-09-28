@@ -126,11 +126,8 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         )
         for number, (kind, geometry, rule_ids) in enumerate(chosen, 1)
     )
-    if surface.fallback_soil_m2:
-        notes.append(
-            f"{_m2(surface.fallback_soil_m2)} м² грунта по близости подписи в газон не вошли, "
-            "нужен замкнутый контур грунта."
-        )
+    # Что грунт по близости подписи в газон не входит, говорит заметка карты покрытий: вторая
+    # строка о том же повторяла её (жюри по дизайну, итерация 8).
     if not flowerbeds.is_empty:
         notes.append(
             f"цветники по чертежу, {_m2(flowerbeds.area)} м², сохраняются и в газон не входят."

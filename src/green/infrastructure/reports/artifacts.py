@@ -444,6 +444,7 @@ def quality_payload(
         "index": quality.index,
         "gate": quality.gate,
         "summary": list(quality.summary),
+        "analysis": list(quality.analysis),
         "terms": [
             {
                 "key": t.key,

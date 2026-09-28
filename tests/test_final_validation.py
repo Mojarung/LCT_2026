@@ -12,7 +12,7 @@ from test_pipeline_synthetic import ROOT, _street
 
 from green.application.params import PlanParams, step_with_tolerance
 from green.application.use_case import PlanRequest
-from green.application.validation import trim_to_quotas, validate_plan
+from green.application.validation import trim_note, trim_to_quotas, validate_plan
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.domain.norms import (
@@ -275,3 +275,20 @@ def test_distance_certificate_agrees_with_exhaustive_wall_oracle(seed: int) -> N
         < 2
     }
     assert actual == expected
+
+
+def test_trim_note_names_what_was_removed_and_says_counts_above_are_before() -> None:
+    """Жюри по дизайну (итерация 8): «Как собран план» - 39 кустов в ряду, «Виды посадок» -
+    38. Строки этапов пишутся до квот, поэтому снятое называется отдельной строкой."""
+    base = [placement(i * 10, identity=f"base-{i}") for i in range(3)]
+    extra = [
+        replace(placement(100 + i * 10, identity=f"st-{i}"), notes=(note,))
+        for i, note in enumerate(
+            ["кустарник под кроной дерева"] * 2 + ["живая изгородь вдоль борта"]
+        )
+    ]
+    assert trim_note((*base, *extra), (*base, extra[0])) == (
+        "Квоты разнообразия: сняты 2 посадки добавочных этапов (живая изгородь вдоль борта - 1, "
+        "кустарник под кроной дерева - 1); числа в строках этих этапов выше - до снятия."
+    )
+    assert trim_note(base, base) is None
