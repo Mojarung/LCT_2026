@@ -1,10 +1,18 @@
 /* Данные сервера для страниц. Справочники не устаревают за сессию, прогон опрашивается,
  * пока идёт, артефакты прогона неизменны до пересборки. */
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { artifactUrl, getJson, runPollInterval } from './client';
-import type { MetaOut, ProfileOut, RunListOut, RunOut, StreetOut } from './types';
+import { artifactUrl, getJson, postForm, runPollInterval } from './client';
+import type {
+  MetaOut,
+  PhotoListOut,
+  PhotoOut,
+  ProfileOut,
+  RunListOut,
+  RunOut,
+  StreetOut,
+} from './types';
 
 export const keys = {
   meta: ['meta'] as const,
@@ -14,6 +22,7 @@ export const keys = {
   run: (id: string) => ['run', id] as const,
   artifacts: (id: string) => ['artifact', id] as const,
   artifact: (id: string, name: string) => ['artifact', id, name] as const,
+  photos: (id: string) => ['photos', id] as const,
 };
 
 export function useMeta() {
@@ -67,5 +76,52 @@ export function useArtifact<T>(runId: string, name: string, enabled: boolean) {
     queryFn: () => getJson<T>(artifactUrl(runId, name)),
     enabled,
     staleTime: Infinity,
+  });
+}
+
+/** Опрос фото, пока модель рисует: кадр считается минуту-две. */
+export const PHOTO_POLL_MS = 3000;
+
+const photosUrl = (runId: string) => `/api/v1/runs/${encodeURIComponent(runId)}/photos`;
+
+/** Фото прогона и можно ли их делать на этом сервере. Опрос - пока есть незаконченные. */
+export function usePhotos(runId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.photos(runId),
+    queryFn: () => getJson<PhotoListOut>(photosUrl(runId), { cache: 'no-store' }),
+    enabled,
+    refetchInterval: (query) =>
+      query.state.data?.photos.some((p) => p.state === 'queued' || p.state === 'running')
+        ? PHOTO_POLL_MS
+        : false,
+  });
+}
+
+export interface PhotoRequest {
+  image: Blob;
+  scenery: boolean;
+  season: string;
+  hour: number;
+  viewpoint: 'aerial' | 'ground';
+  species: string[];
+  shrubs: string[];
+}
+
+/** Поставить кадр в очередь модели. */
+export function useCreatePhoto(runId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (req: PhotoRequest) => {
+      const form = new FormData();
+      form.append('image', req.image, 'shot.png');
+      form.append('scenery', String(req.scenery));
+      form.append('season', req.season);
+      form.append('hour', String(req.hour));
+      form.append('viewpoint', req.viewpoint);
+      form.append('species', req.species.join(','));
+      form.append('shrubs', req.shrubs.join(','));
+      return postForm<PhotoOut>(photosUrl(runId), form);
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.photos(runId) }),
   });
 }

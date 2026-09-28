@@ -72,9 +72,20 @@ export function RunHeader({ run }: { run: RunOut }) {
         ))}
       </p>
       {run.state === 'succeeded' ? (
-        <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-          3D-вид участка и снимки →
-        </Link>
+        <p className="scene-links">
+          <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
+            3D-вид участка и снимки →
+          </Link>
+          <a
+            className="scene-link"
+            href={`/runs/${encodeURIComponent(run.id)}/3d?shots=street`}
+            target="_blank"
+            rel="noopener"
+            title="Кадры улицы с автоматических ракурсов и фото по ним, в новой вкладке"
+          >
+            кадры улицы ↗
+          </a>
+        </p>
       ) : null}
     </div>
   );

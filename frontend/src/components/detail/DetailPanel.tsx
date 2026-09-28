@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useParams } from 'react-router';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
 import { useOverflowMark } from '../../hooks/useOverflowMark';
@@ -52,6 +53,7 @@ function MoveByClick({ item }: { item: MapItem }) {
 function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string, Rule> }) {
   const select = useWorkspace((s) => s.select);
   const editing = useWorkspace((s) => s.editing);
+  const { runId = '' } = useParams();
   const kind = KIND_RU[item.planting_type] ?? '';
   const title =
     item.kind === 'placement'
@@ -78,6 +80,17 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <p className="hint mono">
         {kind ? `${kind}, ` : ''}x {meters(item.x)}, y {meters(item.y)}
       </p>
+      {item.kind === 'placement' && runId ? (
+        <a
+          className="detail-3d"
+          href={`/runs/${encodeURIComponent(runId)}/3d?plant=${encodeURIComponent(item.id)}`}
+          target="_blank"
+          rel="noopener"
+          title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"
+        >
+          как это выглядит: кадры в 3D ↗
+        </a>
+      ) : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
       {item.note ? <p className="detail-explain">{item.note}</p> : null}
       {/* Норма - первым: это ответ на вопрос «можно ли здесь сажать», ценность и вид - после. */}

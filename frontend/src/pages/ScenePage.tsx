@@ -6,12 +6,14 @@
 import '../styles/scene.css';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 
 import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
 import { artifactUrl } from '../api/client';
-import { useArtifact, useRun } from '../api/queries';
+import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
 import { ScenePanel, type Shot } from '../components/scene/ScenePanel';
+import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
+import { SHOT_HEIGHT, SHOT_WIDTH, type ShotTarget } from '../scene3d/autoshots';
 import {
   type CameraState,
   DEFAULT_SETTINGS,
@@ -189,6 +191,18 @@ export function ScenePage() {
   const [hudHidden, setHudHidden] = useState(false);
   const [flash, setFlash] = useState(0);
   const [everLocked, setEverLocked] = useState(false);
+  const [search] = useSearchParams();
+  const [gallery, setGallery] = useState<{
+    title: string;
+    shots: GalleryShot[];
+    busy: boolean;
+    error: string | null;
+  } | null>(null);
+  const [scenery, setScenery] = useState(false);
+  const [requested, setRequested] = useState<Record<string, string>>({});
+  const lastPlant = useRef<{ id: string; name: string } | null>(null);
+  const photos = usePhotos(runId, done);
+  const createPhoto = useCreatePhoto(runId);
   const settingsRef = useRef(settings);
   useEffect(() => {
     settingsRef.current = settings;
@@ -211,7 +225,9 @@ export function ScenePage() {
         if (alive) setProgress({ stage, done: n, total });
       },
       hover: (h) => {
-        if (alive) setHover(h);
+        if (!alive) return;
+        setHover(h);
+        if (h) lastPlant.current = { id: h.plant.id, name: h.plant.name };
       },
       camera: (state) => {
         if (!alive) return;
@@ -283,6 +299,81 @@ export function ScenePage() {
       setShooting(false);
     }
   };
+  const galleryUrls = useRef<string[]>([]);
+  const openGallery = async (target: ShotTarget, title: string) => {
+    const e = engine.current;
+    if (!e) return;
+    setGallery({ title, shots: [], busy: true, error: null });
+    try {
+      const planned = e.planShots(target);
+      if (!planned.length) {
+        setGallery({
+          title,
+          shots: [],
+          busy: false,
+          error: 'Снимать нечего: в сцене нет посадок.',
+        });
+        return;
+      }
+      const blobs = await e.renderViews(
+        planned.map((p) => p.pose),
+        SHOT_WIDTH,
+        SHOT_HEIGHT,
+      );
+      for (const url of galleryUrls.current) URL.revokeObjectURL(url);
+      const shots = planned.slice(0, blobs.length).map((p, i) => {
+        const blob = blobs[i] as Blob;
+        return { ...p, blob, url: URL.createObjectURL(blob) };
+      });
+      galleryUrls.current = shots.map((s) => s.url);
+      setGallery({ title, shots, busy: false, error: null });
+    } catch (error: unknown) {
+      setGallery({
+        title,
+        shots: [],
+        busy: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  // Пока открыта галерея, сцена не рисуется: видеокарта нужна модели фото, а не кадру за панелью.
+  const galleryOpen = gallery !== null;
+  useEffect(() => {
+    engine.current?.setPaused(galleryOpen);
+  }, [galleryOpen]);
+  const openGalleryRef = useRef(openGallery);
+  useEffect(() => {
+    openGalleryRef.current = openGallery;
+  });
+  useEffect(
+    () => () => {
+      for (const url of galleryUrls.current) URL.revokeObjectURL(url);
+    },
+    [],
+  );
+
+  const orderPhoto = (shot: GalleryShot) => {
+    createPhoto.mutate(
+      {
+        image: shot.blob,
+        scenery,
+        season: settings.season,
+        hour: settings.hour,
+        viewpoint: shot.viewpoint,
+        species: shot.trees,
+        shrubs: shot.shrubs,
+      },
+      {
+        onSuccess: (photo) => {
+          setRequested((r) => ({ ...r, [shot.key]: photo.id }));
+        },
+        onError: (error) => {
+          setGallery((g) => (g ? { ...g, error: error.message } : g));
+        },
+      },
+    );
+  };
+
   const shootRef = useRef(shoot);
   useEffect(() => {
     shootRef.current = shoot;
@@ -305,7 +396,14 @@ export function ScenePage() {
       if (isTyping(event.target) || event.repeat) return;
       const e = engine.current;
       if (!e) return;
-      if (event.code === 'KeyP') void shootRef.current(1);
+      if (event.code === 'Escape') setGallery(null);
+      else if (event.code === 'KeyK') {
+        const plant = lastPlant.current;
+        void openGalleryRef.current(
+          plant ? { kind: 'plant', id: plant.id } : { kind: 'street' },
+          plant ? `Кадры: ${plant.name}` : 'Кадры улицы',
+        );
+      } else if (event.code === 'KeyP') void shootRef.current(1);
       else if (event.code === 'KeyH') setHudHidden((v) => !v);
       else if (event.code === 'KeyG') e.setMode(e.freecam.mode === 'walk' ? 'fly' : 'walk');
       else if (event.code === 'KeyR') e.resetView();
@@ -334,6 +432,19 @@ export function ScenePage() {
   const live = data?.state === 'queued' || data?.state === 'running';
   const title = data?.source_name.replace(/\.(dxf|dwg)$/i, '') ?? 'Прогон';
   const readyToFly = progress.stage === 'ready' && !failure;
+  // Ссылка с карты открывает кадры сразу, до свободного полёта: ?plant=<id> или ?shots=street.
+  const autoTarget = search.get('plant');
+  const autoStreet = search.get('shots') === 'street';
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (!readyToFly || autoOpened.current || (!autoTarget && !autoStreet)) return;
+    autoOpened.current = true;
+    const name = world?.plants.find((p) => p.id === autoTarget)?.name;
+    void openGalleryRef.current(
+      autoTarget ? { kind: 'plant', id: autoTarget } : { kind: 'street' },
+      autoTarget ? `Кадры: ${name ?? 'посадка'}` : 'Кадры улицы',
+    );
+  }, [readyToFly, autoTarget, autoStreet, world]);
   const counts = world
     ? {
         trees: world.plants.filter((p) => !p.existing && p.type === 'tree').length,
@@ -435,6 +546,15 @@ export function ScenePage() {
               </button>
               <button
                 type="button"
+                title="Кадры с автоматических ракурсов и фото по ним; K - кадры растения под курсором"
+                onClick={() => {
+                  void openGallery({ kind: 'street' }, 'Кадры улицы');
+                }}
+              >
+                кадры
+              </button>
+              <button
+                type="button"
                 title="Скрыть панели для чистого кадра, клавиша H"
                 onClick={() => {
                   setHudHidden(true);
@@ -483,7 +603,32 @@ export function ScenePage() {
           панели · H
         </button>
       )}
-      {hover && readyToFly ? (
+      {gallery && readyToFly ? (
+        <ShotGallery
+          title={gallery.title}
+          shots={gallery.shots}
+          busy={gallery.busy}
+          error={gallery.error}
+          photos={photos.data?.photos ?? []}
+          requested={requested}
+          available={photos.data?.available ?? false}
+          reason={photos.data?.reason ?? null}
+          scenery={scenery}
+          onScenery={setScenery}
+          onPhoto={orderPhoto}
+          onOpen={(shot) => {
+            setGallery(null);
+            engine.current?.setView(shot.pose, 'fly');
+          }}
+          onStreet={() => {
+            void openGallery({ kind: 'street' }, 'Кадры улицы');
+          }}
+          onClose={() => {
+            setGallery(null);
+          }}
+        />
+      ) : null}
+      {hover && readyToFly && !gallery ? (
         <div
           className="hud scene-hover"
           role="status"
@@ -499,6 +644,7 @@ export function ScenePage() {
             {hover.plant.existing ? ' (по съёмке)' : ` в возрасте ${settings.age} лет`},{' '}
             {metres(hover.distance)} м от вас
           </span>
+          <span className="hint">K - кадры этого растения со всех сторон</span>
         </div>
       ) : null}
       {!readyToFly ? (

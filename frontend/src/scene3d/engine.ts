@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 
+import { type AutoShot, obstaclesOf, plantShots, type ShotTarget, streetShots } from './autoshots';
 import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
 import { Walls } from './collide';
 import { Freecam, type Mode, type Pose } from './freecam';
@@ -171,6 +172,8 @@ export class SceneEngine {
   private lastPoseAt = 0;
   private lastPose = '';
   private running = false;
+  /** Цикл кадра остановлен: галерея поверх сцены, видеокарта отдана модели фото. */
+  private paused = false;
 
   private constructor(
     readonly canvas: HTMLCanvasElement,
@@ -256,9 +259,7 @@ export class SceneEngine {
     this.apply(this.settings);
     this.events.progress?.('ready', 1, 1);
     this.running = true;
-    this.renderer.setAnimationLoop(() => {
-      this.frame();
-    });
+    this.startLoop();
     this.emitCamera();
   }
 
@@ -443,6 +444,15 @@ export class SceneEngine {
     if (this.tour) this.stepTour(dt);
     else this.freecam.update(dt);
     this.applyPose();
+    this.prepare(t);
+    this.renderer.render(this.scene, this.camera);
+    this.tickStats();
+    this.tickHover();
+    this.tickPose();
+  }
+
+  /** Всё, что зависит от положения камеры: тени, небо, детализация крон, трава, погода. */
+  private prepare(t: number): void {
     this.atmosphere.center(this.camera);
     const focus = new THREE.Vector3(0, 0, -Math.min(60, 20 + this.camera.position.y)).applyMatrix4(
       this.camera.matrixWorld,
@@ -457,10 +467,6 @@ export class SceneEngine {
     this.grassField?.update(this.camera, t);
     this.people?.update(t);
     this.weather.update(this.camera, t, this.particleLight);
-    this.renderer.render(this.scene, this.camera);
-    this.tickStats();
-    this.tickHover();
-    this.tickPose();
   }
 
   private tickPose(): void {
@@ -602,6 +608,57 @@ export class SceneEngine {
     this.freecam.setPose({ ...pose, yaw: tour.yaw });
   }
 
+  /** Ракурсы для галереи: улица отрезками или посадка по кругу. Солнце ночью не учитывается. */
+  planShots(target: ShotTarget): AutoShot[] {
+    const state = this.atmosphere.state;
+    const sun = state.night > 0.5 ? null : { x: state.direction.x, z: state.direction.z };
+    const obstacles = obstaclesOf(this.world);
+    const bodies = this.forest.bodies();
+    return target.kind === 'street'
+      ? streetShots(bodies, obstacles, sun)
+      : plantShots(bodies, target.id, obstacles, sun);
+  }
+
+  /** Кадры заданных поз в PNG заданного размера, без панелей и без сдвига камеры человека.
+   *  Кроны в кадре - в полной детализации до края: на снимке нет спешки кадра в секунду. */
+  async renderViews(poses: readonly Pose[], width: number, height: number): Promise<Blob[]> {
+    if (!this.running) throw new Error('3D-вид закрыт: снимать нечего');
+    this.freecam.releaseKeys();
+    this.renderer.setAnimationLoop(null);
+    const ratio = this.renderer.getPixelRatio();
+    const lod = QUALITY[this.settings.quality].lodDistance;
+    const out: Blob[] = [];
+    try {
+      this.forest.apply({ lodDistance: QUALITY.high.lodDistance * 2 });
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      const t = this.clock.getElapsed();
+      for (const pose of poses) {
+        this.camera.position.set(pose.x, pose.y, pose.z);
+        this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        this.camera.updateMatrixWorld();
+        this.prepare(t);
+        this.renderer.render(this.scene, this.camera);
+        const blob = await new Promise<Blob | null>((resolve) => {
+          this.canvas.toBlob(resolve, 'image/png');
+        });
+        if (!blob) throw new Error('Браузер не отдал кадр: снимок не получился');
+        out.push(blob);
+        if (!this.isRunning()) break;
+      }
+      return out;
+    } finally {
+      if (this.isRunning()) {
+        this.forest.apply({ lodDistance: lod });
+        this.renderer.setPixelRatio(ratio);
+        this.resize();
+        this.startLoop();
+      }
+    }
+  }
+
   /** Снимок кадра в PNG. scale 2 - вдвое больше пикселей, чем на экране: для слайда. */
   private isRunning(): boolean {
     return this.running;
@@ -620,7 +677,7 @@ export class SceneEngine {
       if (target !== before) this.renderer.setPixelRatio(target);
       this.resize();
       this.applyPose();
-      this.forest.update(this.camera, this.clock.getElapsed());
+      this.prepare(this.clock.getElapsed());
       this.renderer.render(this.scene, this.camera);
       const blob = await new Promise<Blob | null>((resolve) => {
         this.canvas.toBlob(resolve, 'image/png');
@@ -632,11 +689,34 @@ export class SceneEngine {
       if (this.isRunning()) {
         if (target !== before) this.renderer.setPixelRatio(before);
         this.resize();
-        this.renderer.setAnimationLoop(() => {
-          this.frame();
-        });
+        this.startLoop();
       }
     }
+  }
+
+  private startLoop(): void {
+    if (this.paused) {
+      // Смена размера холста стирает кадр: на паузе под галереей остаётся один неподвижный.
+      this.applyPose();
+      this.prepare(this.clock.getElapsed());
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    this.clock.update();
+    this.renderer.setAnimationLoop(() => {
+      this.frame();
+    });
+  }
+
+  /** Остановить или продолжить цикл кадра. Остановленная сцена держит последний кадр. */
+  setPaused(paused: boolean): void {
+    if (paused === this.paused || !this.running) {
+      this.paused = paused;
+      return;
+    }
+    this.paused = paused;
+    if (paused) this.renderer.setAnimationLoop(null);
+    else this.startLoop();
   }
 
   dispose(): void {
