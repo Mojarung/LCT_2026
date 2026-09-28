@@ -326,17 +326,22 @@
   flex-shrink: 0;
 }
 .gallery-scenery {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
   margin: 4px 0 12px;
+}
+.gallery-scenery label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
   font-size: var(--fs-small);
-  color: var(--bone-2);
+  color: var(--bone);
   cursor: pointer;
 }
 .gallery-scenery input {
-  margin-top: 3px;
+  margin: 0;
   accent-color: var(--bone);
+}
+.gallery-scenery .hint {
+  margin: 2px 0 0 21px;
 }
 .gallery-grid {
   display: grid;

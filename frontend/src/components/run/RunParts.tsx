@@ -74,7 +74,7 @@ export function RunHeader({ run }: { run: RunOut }) {
       {run.state === 'succeeded' ? (
         <p className="scene-links">
           <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-            3D-вид участка и снимки →
+            3D-вид участка →
           </Link>
           <a
             className="scene-link"
@@ -155,21 +155,26 @@ export function RunMetrics({
       {barrierPlaces ? (
         <p className="metric-sub quality-line">
           <b>{integer(barrierPlaces)}</b>{' '}
-          {plural(barrierPlaces, 'место станет', 'места станут', 'мест станут')} допустимыми с
-          прикорневым барьером
+          {plural(
+            barrierPlaces,
+            'место станет допустимым',
+            'места станут допустимыми',
+            'мест станут допустимыми',
+          )}{' '}
+          с прикорневым барьером
         </p>
       ) : null}
       <LawnLine summary={summary} />
       {sketch ? (
         <div className="notice">
           <p>
-            Исследовательский эскиз: требуется уточнить объекты или границы покрытий. Допустимость
-            посадок не подтверждена.
+            Исследовательский эскиз: уточните объекты или границы покрытий. Допустимость посадок не
+            подтверждена.
           </p>
           {unconfirmed > 0 ? (
             <p>
-              Грунт под всей посадочной ямой не подтверждён замкнутыми контурами у{' '}
-              {integer(unconfirmed)} из {integer(total)} посадок. Проверьте границы покрытия.
+              У {integer(unconfirmed)} из {integer(total)} посадок грунт под всей ямой не
+              подтверждён замкнутыми контурами. Проверьте границы покрытий.
             </p>
           ) : null}
           <ReviewLinks run={run} />
@@ -224,9 +229,7 @@ export function RunStatus({ run }: { run: RunOut }) {
         <span className="spinner" aria-hidden="true" />
         <div>
           <p className="status-title">{title}</p>
-          <p className="hint">
-            Чертёж появится здесь, как только будет прочитан. Ход расчёта показан в полосе внизу.
-          </p>
+          <p className="hint">Чертёж появится здесь после чтения. Ход расчёта - в полосе внизу.</p>
         </div>
       </div>
     );

@@ -237,7 +237,7 @@ export function Legend({
         <LayerCheck layer="buildings">
           <i className="key swatch-building" /> Здания
         </LayerCheck>
-        <LayerCheck layer="existing">Уже растёт на участке</LayerCheck>
+        <LayerCheck layer="existing">Существующие насаждения</LayerCheck>
         <div className="legend legend-models">
           <span>
             <ModelSwatch

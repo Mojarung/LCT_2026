@@ -42,8 +42,8 @@ function MoveByClick({ item }: { item: MapItem }) {
       </button>
       {placing ? (
         <p className="hint">
-          Кликните точку на карте: посадка № {item.number} переедет туда. Повторное нажатие кнопки
-          или Esc на карте отменяет.
+          Кликните точку на карте: посадка № {item.number} переедет туда. Отмена - та же кнопка или
+          Esc.
         </p>
       ) : null}
     </div>
@@ -88,7 +88,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
           rel="noopener"
           title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"
         >
-          как это выглядит: кадры в 3D ↗
+          кадры посадки в 3D ↗
         </a>
       ) : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}

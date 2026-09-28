@@ -104,7 +104,7 @@ test('демо: от консоли до пересобранного DXF', asyn
   }
   await page.mouse.up();
   const bar = page.locator('#edit-bar');
-  await expect(bar).toContainText('перенесена. Нормы пересчитаны.');
+  await expect(bar).toContainText('перенесена и проверена по нормам.');
   await expect(bar).toHaveAttribute('data-stale', '1');
   await expect.poll(() => edits).toBe(1);
 

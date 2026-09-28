@@ -13,6 +13,7 @@ import { artifactUrl } from '../api/client';
 import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
 import { ScenePanel, type Shot } from '../components/scene/ScenePanel';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
+import { plural } from '../lib/format';
 import { SHOT_HEIGHT, SHOT_WIDTH, type ShotTarget } from '../scene3d/autoshots';
 import {
   type CameraState,
@@ -51,6 +52,8 @@ const TYPE_TITLES: Record<string, string> = {
 const MAX_SHOTS = 12;
 
 const metres = (value: number) => value.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+const count = (n: number, one: string, few: string, many: string) =>
+  `${n} ${plural(n, one, few, many)}`;
 
 function stamp(date: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -311,7 +314,7 @@ export function ScenePage() {
           title,
           shots: [],
           busy: false,
-          error: 'Снимать нечего: в сцене нет посадок.',
+          error: 'В сцене нет посадок.',
         });
         return;
       }
@@ -475,18 +478,20 @@ export function ScenePage() {
             {counts && world ? (
               <div className="hud-scroll scene-facts">
                 <p>
-                  {counts.trees} деревьев и {counts.shrubs} кустарников плана, {counts.existing}{' '}
-                  существующих насаждений, {counts.buildings} зданий.
+                  {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
+                  {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}
+                  {count(counts.existing, 'существующее', 'существующих', 'существующих')}{' '}
+                  {plural(counts.existing, 'насаждение', 'насаждения', 'насаждений')},{' '}
+                  {count(counts.buildings, 'здание', 'здания', 'зданий')}.
                 </p>
                 <p className="hint">
-                  Этажность: по подписи чертежа у {world.floorsBy.label}, от соседнего корпуса у{' '}
-                  {world.floorsBy.neighbor}, по признаку «жилое» у {world.floorsBy.letter}, по
-                  площади у {world.floorsBy.assumed}. Фасады условные: съёмка их не несёт.
+                  {`Этажность зданий: по подписи чертежа - ${world.floorsBy.label}, по соседнему корпусу - ${world.floorsBy.neighbor}, по признаку «жилое» - ${world.floorsBy.letter}, по площади - ${world.floorsBy.assumed}.`}{' '}
+                  Фасады условные: в съёмке их нет.
                 </p>
                 {world.fallback ? (
                   <p className="notice">
-                    Прогон записан до появления scene.json: здания только замкнутые, этажность по
-                    площади, размеры видов - по жизненной форме. Перезапустите прогон для точной
+                    Прогон сделан прежней версией сервиса: здания только замкнутые, этажность по
+                    площади, размеры растений по жизненной форме. Перезапустите прогон для точной
                     сцены.
                   </p>
                 ) : null}
@@ -546,7 +551,7 @@ export function ScenePage() {
               </button>
               <button
                 type="button"
-                title="Кадры с автоматических ракурсов и фото по ним; K - кадры растения под курсором"
+                title="Кадры улицы и фото по ним; K - кадры растения под курсором"
                 onClick={() => {
                   void openGallery({ kind: 'street' }, 'Кадры улицы');
                 }}
@@ -566,7 +571,7 @@ export function ScenePage() {
                 {cam.mode === 'fly' ? `${Math.round(cam.speed)} м/с` : 'шаг'}
               </span>
               {stats ? (
-                <span className="scene-speed" title="Кадров в секунду и вызовов отрисовки">
+                <span className="scene-speed" title="Кадров в секунду">
                   {stats.fps} к/с
                 </span>
               ) : null}
@@ -586,8 +591,8 @@ export function ScenePage() {
                 <kbd>S</kbd>
                 <kbd>D</kbd> движение · <kbd>E</kbd>/<kbd>Q</kbd> вверх и вниз · <kbd>Shift</kbd>{' '}
                 быстрее · колесо - скорость · <kbd>G</kbd> пешеход · <kbd>P</kbd> снимок ·{' '}
-                <kbd>H</kbd> панели · <kbd>R</kbd> общий вид · <kbd>T</kbd> облёт. Правой кнопкой
-                можно осматриваться без захвата мыши.
+                <kbd>K</kbd> кадры · <kbd>H</kbd> панели · <kbd>R</kbd> общий вид · <kbd>T</kbd>{' '}
+                облёт · правая кнопка - обзор без захвата мыши.
               </p>
             </div>
           ) : null}
@@ -640,21 +645,23 @@ export function ScenePage() {
             {hover.plant.species.name_lat ? `, ${hover.plant.species.name_lat}` : ''}
           </span>
           <span>
-            высота {metres(hover.height)} м, крона {metres(hover.crown)} м
-            {hover.plant.existing ? ' (по съёмке)' : ` в возрасте ${settings.age} лет`},{' '}
-            {metres(hover.distance)} м от вас
+            высота {metres(hover.height)} м, крона {metres(hover.crown)} м{' '}
+            {hover.plant.existing
+              ? '(по съёмке)'
+              : settings.age
+                ? `в возрасте ${settings.age} лет`
+                : 'при посадке'}
+            {`, ${metres(hover.distance)} м от вас`}
           </span>
-          <span className="hint">K - кадры этого растения со всех сторон</span>
+          <span className="hint">K - кадры этого растения</span>
         </div>
       ) : null}
       {!readyToFly ? (
         <div className="scene-loading" role="status" aria-live="polite">
           {!supported ? (
-            <p className="notice">
-              Браузер не дал WebGL 2: 3D-вид недоступен. План и выгрузки - на странице прогона.
-            </p>
+            <p className="notice">В браузере нет WebGL 2, 3D-вид недоступен.</p>
           ) : loadError ? (
-            <p className="notice">Не загрузился {loadError}: сцену строить не из чего.</p>
+            <p className="notice">Не загрузился {loadError}, сцену не построить.</p>
           ) : failure ? (
             <p className="notice">3D-вид не собрался: {failure}</p>
           ) : run.isError ? (

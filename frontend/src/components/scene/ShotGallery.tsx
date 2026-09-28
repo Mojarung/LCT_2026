@@ -14,10 +14,10 @@ export interface GalleryShot extends AutoShot {
 }
 
 const STATE_RU: Record<PhotoOut['state'], string> = {
-  queued: 'в очереди модели',
-  running: 'модель рисует, около полутора минут',
+  queued: 'в очереди',
+  running: 'модель рисует, около 1,5 мин',
   succeeded: 'готово',
-  failed: 'не получилось',
+  failed: 'не удалось',
 };
 
 function PhotoStatus({ photo }: { photo: PhotoOut }) {
@@ -85,8 +85,7 @@ export function ShotGallery({
         <div>
           <h2>{title}</h2>
           <p className="hint">
-            Ракурсы подобраны автоматически: объект целиком в кадре, дома не заслоняют, солнце за
-            спиной. «В 3D» открывает свободный полёт с того же места.
+            Ракурсы подобраны автоматически: объект виден целиком, солнце за спиной.
           </p>
         </div>
         <div className="gallery-tools">
@@ -99,19 +98,22 @@ export function ShotGallery({
         </div>
       </header>
       {available ? (
-        <label className="gallery-scenery">
-          <input
-            type="checkbox"
-            checked={scenery}
-            onChange={(e) => {
-              onScenery(e.target.checked);
-            }}
-          />
-          <span>
-            Фон и дополнительные деревья: модель дорисует город у горизонта и зелень на пустых
-            газонах. Живее, но на фото появится то, чего нет в плане.
-          </span>
-        </label>
+        <div className="gallery-scenery">
+          <label>
+            <input
+              type="checkbox"
+              checked={scenery}
+              aria-describedby="gallery-scenery-note"
+              onChange={(e) => {
+                onScenery(e.target.checked);
+              }}
+            />
+            Дорисовать фон и деревья
+          </label>
+          <p className="hint" id="gallery-scenery-note">
+            Модель добавит город у горизонта и деревья, которых нет в плане.
+          </p>
+        </div>
       ) : (
         <p className="hint">Фото недоступно: {reason ?? 'генерация на сервере не настроена'}.</p>
       )}
@@ -133,13 +135,19 @@ export function ShotGallery({
                 <button
                   type="button"
                   className="ghost small"
+                  title="Свободный полёт с этого ракурса"
                   onClick={() => {
                     onOpen(shot);
                   }}
                 >
                   в 3D
                 </button>
-                <a className="ghost small button" href={shot.url} download={`${shot.key}.png`}>
+                <a
+                  className="ghost small button"
+                  href={shot.url}
+                  download={`${shot.key}.png`}
+                  title="Скачать кадр"
+                >
                   PNG
                 </a>
                 {available ? (
@@ -147,7 +155,7 @@ export function ShotGallery({
                     type="button"
                     className="small"
                     disabled={photo?.state === 'queued' || photo?.state === 'running'}
-                    title="Отправить кадр модели Qwen-Image-2.1: фото с той же расстановкой"
+                    title="Фото по кадру от Qwen-Image-2.1, расстановка та же"
                     onClick={() => {
                       onPhoto(shot);
                     }}
@@ -163,7 +171,7 @@ export function ShotGallery({
       </ul>
       {earlier.length ? (
         <>
-          <h3 className="gallery-sub">Фото прогона</h3>
+          <h3 className="gallery-sub">Прежние фото прогона</h3>
           <ul className="gallery-grid">
             {earlier.map((photo) => (
               <li key={photo.id} className="gallery-card">

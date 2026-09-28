@@ -49,7 +49,7 @@ describe('SpeciesBlock', () => {
   it('names the runners-up and says why not only when it is not just a lower score', () => {
     render(<SpeciesBlock assortment={assortment} />);
 
-    const runners = screen.getByText(/Рядом по оценке/);
+    const runners = screen.getByText(/Альтернативы/);
     expect(runners).toHaveTextContent('Клён Гиннала 45%');
     expect(runners).toHaveTextContent('Берёза повислая 60%: массовый аллерген');
     expect(runners).not.toHaveTextContent('оценка ниже');

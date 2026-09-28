@@ -15,7 +15,7 @@ export function ServiceFacts() {
       </div>
       <section className="stamp-facts" aria-labelledby="facts-title">
         <h2 className="visually-hidden" id="facts-title">
-          Что применяется
+          Нормы и каталог видов
         </h2>
         <dl className="facts">
           <div>

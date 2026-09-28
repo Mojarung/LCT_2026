@@ -84,7 +84,7 @@ export const CLASS_NAMES: Record<string, string> = {
   fence: 'Ограда',
   road: 'Проезжая часть',
   sidewalk: 'Тротуар',
-  tram: 'Трамвай',
+  tram: 'Трамвайные пути',
   railway: 'Железная дорога',
   building: 'Здание',
   structure: 'Сооружение',
@@ -95,8 +95,8 @@ export const CLASS_NAMES: Record<string, string> = {
   existing_woodland: 'Древесный массив',
   obstacle: 'Препятствие',
   lawn: 'Газон / грунт для выбранной стадии',
-  contour: 'Контур без смысла: разделяет покрытия',
-  ignore: 'Оформление: исключить из расчёта',
+  contour: 'Контур между покрытиями',
+  ignore: 'Оформление, вне расчёта',
   unknown: 'Неизвестно',
 };
 
@@ -108,8 +108,8 @@ export const className = (kind: string): string => CLASS_NAMES[kind] ?? kind;
 
 const EVIDENCE_NAMES: Record<string, string> = {
   unmatched: 'имя не распознано',
-  conflict: 'правила противоречат друг другу',
-  material_context: 'требуется уточнить материал и стадию работ',
+  conflict: 'правила противоречат',
+  material_context: 'нужно уточнить материал и стадию работ',
   name_rule: 'совпало правило имени',
   explicit_feature: 'объект уточнён',
   explicit_layer: 'слой уточнён',

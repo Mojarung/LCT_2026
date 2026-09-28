@@ -270,7 +270,7 @@ export function ScenePanel({
               type="button"
               className="ghost small"
               disabled={busy}
-              title="Вдвое больше пикселей, для слайда"
+              title="Вдвое больше по каждой стороне, для слайда"
               onClick={() => {
                 onShot(2);
               }}

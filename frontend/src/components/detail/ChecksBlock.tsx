@@ -111,7 +111,7 @@ export function ChecksBlock({
               спорят друг с другом. */}
           {absent ? (
             <p className="detail-slack">
-              Из них {absent}: такого объекта в чертеже нет, норма проверена, ограничивать нечему.
+              Из них {absent}: объекта нет в чертеже, ограничивать нечему.
             </p>
           ) : null}
         </details>

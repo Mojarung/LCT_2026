@@ -29,7 +29,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
 
   const rebuild = async () => {
     setBusy(true);
-    say('Пересобираем DXF и объяснения, это занимает до минуты…');
+    say('Пересобираем DXF и объяснения, до минуты…');
     try {
       await editor.rebuild();
       setStale(false);

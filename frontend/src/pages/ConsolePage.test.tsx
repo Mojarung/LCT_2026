@@ -77,7 +77,7 @@ describe('консоль запуска', () => {
 
     const summary = await screen.findByText(/^Параметры: strict, шаг 5 м$/);
     expect(summary.closest('details')).not.toHaveAttribute('open');
-    await user.click(screen.getByRole('checkbox', { name: /Добор зоны/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Добор узких полос/ }));
     expect(summary).toHaveTextContent('Параметры: strict, шаг 5 м, изменены');
   });
 
@@ -93,7 +93,7 @@ describe('консоль запуска', () => {
       await screen.findByLabelText('Улица пилотного проекта'),
       '07-test-street',
     );
-    const fill = await screen.findByRole('checkbox', { name: /Добор зоны/ });
+    const fill = await screen.findByRole('checkbox', { name: /Добор узких полос/ });
     await waitFor(() => {
       expect(fill).toBeChecked();
     });
@@ -116,7 +116,7 @@ describe('консоль запуска', () => {
     await user.selectOptions(screen.getByLabelText('Профиль норм'), 'shrubs');
 
     expect(await screen.findByDisplayValue('1')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /Добор зоны/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Добор узких полос/ })).not.toBeChecked();
   });
 
   it('пока форма уходит, кнопка занята и говорит, что происходит', async () => {
@@ -190,7 +190,7 @@ describe('консоль запуска', () => {
     mockApi(consoleRoutes());
     renderApp('/');
 
-    const facts = await screen.findByRole('region', { name: 'Что применяется' });
+    const facts = await screen.findByRole('region', { name: 'Нормы и каталог видов' });
     await waitFor(() => {
       expect(within(facts).getByText('76')).toBeInTheDocument();
     });

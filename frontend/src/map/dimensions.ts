@@ -30,7 +30,7 @@ const SHORT: Record<string, string> = {
   obstacle: 'препятствие',
   'utility.water': 'водопровод',
   'utility.sewer': 'канализация',
-  'utility.storm': 'ливнёвка',
+  'utility.storm': 'ливневая',
   'utility.drain': 'дренаж',
   'utility.heat': 'теплосеть',
   'utility.gas': 'газ',

@@ -61,7 +61,7 @@ describe('уточнение объектов чертежа', () => {
     expect(
       screen.getByText('Объектов: 4. Не уточнено: 0. Ваших назначений: 2.'),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Показать JSON для повторного прогона' }));
+    await user.click(screen.getByRole('button', { name: 'Показать JSON' }));
     const values = JSON.parse(
       screen.getByLabelText<HTMLTextAreaElement>('JSON уточнений').value,
     ) as Record<string, unknown>;
@@ -83,11 +83,11 @@ describe('уточнение объектов чертежа', () => {
     const object = screen.getByLabelText('Объект в группе (0 - вся группа)');
     await user.clear(object);
     await user.type(object, '2');
-    expect(screen.getByText(/Резерв геометрии, м: 0.01/)).toBeInTheDocument();
+    expect(screen.getByText(/Погрешность геометрии, м: 0.01/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Класс по исходнику'), 'fence');
     await user.click(screen.getByRole('button', { name: 'Назначить класс (1 объект)' }));
     expect(screen.getByText(/Не уточнено: 1\. Ваших назначений: 1\./)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Отменить своё назначение' }));
+    await user.click(screen.getByRole('button', { name: 'Отменить назначение' }));
     expect(screen.getByText(/Не уточнено: 2\. Ваших назначений: 0\./)).toBeInTheDocument();
   });
 
@@ -102,9 +102,9 @@ describe('уточнение объектов чертежа', () => {
     await user.type(number, '1');
     expect(screen.getByText(/ГАЗОН/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Роль выбранной подписи'), 'paved');
-    await user.click(screen.getByRole('button', { name: 'Назначить роль подписи' }));
+    await user.click(screen.getByRole('button', { name: 'Назначить роль' }));
     expect(screen.getByText(/Основание: назначено вами/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Показать JSON для повторного прогона' }));
+    await user.click(screen.getByRole('button', { name: 'Показать JSON' }));
     const values = JSON.parse(
       screen.getByLabelText<HTMLTextAreaElement>('JSON уточнений').value,
     ) as { label_roles: Record<string, string> };
@@ -129,7 +129,7 @@ describe('уточнение объектов чертежа', () => {
     ).toBeInTheDocument();
     // Одна дорога назад - в шапке; вторая под строкой её повторяла (жюри, итерация 8).
     expect(screen.getAllByRole('link', { name: /к прогону/i })).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'к прогону' })).toHaveAttribute('href', '/runs/r1');
+    expect(screen.getByRole('link', { name: '← к прогону' })).toHaveAttribute('href', '/runs/r1');
     // Тринадцать отключённых полей с нулями спорили со строкой «уточнять нечего».
     expect(screen.queryByLabelText('Группа')).toBeNull();
     expect(screen.queryByRole('button', { name: /Назначить/ })).toBeNull();

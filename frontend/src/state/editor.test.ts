@@ -92,7 +92,7 @@ describe('PlanEditor.move', () => {
     const state = useWorkspace.getState();
     expect(state.stale).toBe(true);
     expect(state.message).toEqual({
-      text: 'Посадка № 7 перенесена. Нормы пересчитаны.',
+      text: 'Посадка № 7 перенесена и проверена по нормам.',
       kind: 'info',
     });
     expect(host.pending.mock.calls).toEqual([
@@ -126,7 +126,9 @@ describe('PlanEditor.move', () => {
       [moved, true],
       [moved, false],
     ]);
-    expect(useWorkspace.getState().message.text).toBe('Посадка № 7 перенесена. Нормы пересчитаны.');
+    expect(useWorkspace.getState().message.text).toBe(
+      'Посадка № 7 перенесена и проверена по нормам.',
+    );
   });
 
   it('drops the waiting ring when the service refuses the move', async () => {

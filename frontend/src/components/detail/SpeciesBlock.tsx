@@ -53,7 +53,7 @@ export function SpeciesBlock({ assortment }: { assortment: Assortment | null | u
         </details>
       ) : null}
       {runners.length ? (
-        <p className="detail-slack">Рядом по оценке: {runnersText(runners)}.</p>
+        <p className="detail-slack">Альтернативы: {runnersText(runners)}.</p>
       ) : null}
     </>
   );

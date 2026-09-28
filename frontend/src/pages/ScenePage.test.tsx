@@ -19,7 +19,7 @@ describe('3D-вид прогона', () => {
       renderApp('/runs/r1/3d');
       // Страница - ленивый чанк с three.js: под нагрузкой всего набора он грузится секунды.
       expect(
-        await screen.findByText(/Браузер не дал WebGL 2/, undefined, { timeout: 20_000 }),
+        await screen.findByText(/нет WebGL 2/, undefined, { timeout: 20_000 }),
       ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: '← к плану прогона' })).toHaveAttribute(
         'href',
