@@ -162,8 +162,10 @@
         "type": "object"
       },
       "CheckOut": {
+        "description": "Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы.",
         "properties": {
           "checks": {
+            "description": "Проверка каждого правила отступа: норма, замер, итог",
             "items": {
               "$ref": "#/components/schemas/RuleCheckOut"
             },
@@ -171,19 +173,23 @@
             "type": "array"
           },
           "needs_barrier": {
+            "description": "Место допустимо только с корнезащитным (прикорневым) барьером",
             "title": "Needs Barrier",
             "type": "boolean"
           },
           "note": {
             "default": "",
+            "description": "Причина по-русски, если место непригодно или вид здесь запрещён; нарушения отступов - в checks",
             "title": "Note",
             "type": "string"
           },
           "plantable": {
+            "description": "Посадочное место целиком на пригодном грунте внутри границы работ и не задевает препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict forbidden при plantable true - точка на грунте, но ближе нормы к объекту",
             "title": "Plantable",
             "type": "boolean"
           },
           "verdict": {
+            "description": "Итог по нормам: allowed - посадка допустима, needs_approval - допустима при согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно или вид здесь запрещён)",
             "title": "Verdict",
             "type": "string"
           }
@@ -981,7 +987,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Health",
+        "summary": "Проверка работоспособности",
         "tags": [
           "system"
         ]
@@ -1002,7 +1008,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Meta",
+        "summary": "Сведения о сервисе: профили, нормы, виды",
         "tags": [
           "system"
         ]
@@ -1045,7 +1051,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Profile",
+        "summary": "Параметры профиля",
         "tags": [
           "system"
         ]
@@ -1121,7 +1127,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "List Runs",
+        "summary": "Список прогонов",
         "tags": [
           "runs"
         ]
@@ -1190,7 +1196,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Create Run",
+        "summary": "Запустить прогон",
         "tags": [
           "runs"
         ]
@@ -1252,7 +1258,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Create Demo Run",
+        "summary": "Запустить демонстрационный прогон",
         "tags": [
           "runs"
         ]
@@ -1325,7 +1331,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Get Run",
+        "summary": "Статус прогона",
         "tags": [
           "runs"
         ]
@@ -1400,7 +1406,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Get Artifact",
+        "summary": "Скачать артефакт прогона",
         "tags": [
           "runs"
         ]
@@ -1493,7 +1499,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Check",
+        "summary": "Проверить точку посадки по нормам",
         "tags": [
           "edits"
         ]
@@ -1575,7 +1581,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Draft",
+        "summary": "Текущий план с правками",
         "tags": [
           "edits"
         ]
@@ -1668,7 +1674,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Edit",
+        "summary": "Применить правки плана",
         "tags": [
           "edits"
         ]
@@ -1751,7 +1757,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Rebuild",
+        "summary": "Пересобрать DXF и отчёты по правкам",
         "tags": [
           "edits"
         ]
@@ -1777,7 +1783,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Streets",
+        "summary": "Улицы пилотного проекта",
         "tags": [
           "system"
         ]

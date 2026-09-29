@@ -27,7 +27,7 @@ from green.application.placement import in_alley
 from green.application.places import category_of
 from green.application.species_norms import species_norms
 from green.application.surfaces import build_surface_map
-from green.application.wording import counted, plural
+from green.application.wording import counted, decimal_g, plural
 from green.domain.norms import MeasureTo, PlantingType, Severity
 from green.domain.objects import ObjectClass
 from green.domain.planting import Verdict
@@ -44,6 +44,26 @@ if TYPE_CHECKING:
     from green.domain.planting import Placement, Plan, Species
 
 EPS_M = 1e-3
+VERDICT_RU = {
+    Verdict.ALLOWED: "допустимо",
+    Verdict.FORBIDDEN: "запрещено",
+    Verdict.NEEDS_APPROVAL: "требует согласования",
+    Verdict.UNKNOWN: "не определён",
+}
+# Код нарушения отступа -> текст: код - контракт validation.json, текст читает человек.
+DISTANCE_MESSAGES = {
+    "distance": "Итоговое место или вид посадки не выдерживает нормативного отступа",
+    "approval_not_marked": (
+        "Отступ меньше нормы, а посадка не отмечена как требующая согласования"
+    ),
+    "barrier_not_documented": (
+        "Отступ допустим только с корнезащитным барьером, а барьер у посадки не указан"
+    ),
+}
+QUOTA_SUBJECTS = {"code": "вид", "genus": "род", "family": "семейство"}
+# Причина отказа варианта портфеля: сколько разных сообщений и примеров посадок показать.
+SUMMARY_GROUPS = 6
+SUMMARY_EXAMPLES = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,17 +81,17 @@ class PlanValidation:
     checked_placements: int
     issues: tuple[ValidationIssue, ...]
     scope: str = (
-        "Final coordinates, species, configured distances, footprints, "
-        "pair spacing and composition limits"
+        "Итоговые координаты и виды посадок, нормативные отступы, посадочные места, "
+        "шаг между посадками и ограничения состава"
     )
     assumptions: tuple[str, ...] = (
-        "Input units, object classes, survey completeness and surface evidence must be correct",
+        "Единицы чертежа, классы объектов, полнота съёмки и признаки покрытий считаются верными",
         (
-            "Surface and rule applicability policies are shared with generation; "
-            "distance and composition checks are recomputed"
+            "Правила покрытий и применимости норм общие с генерацией; "
+            "отступы и состав пересчитываются заново"
         ),
-        "No certificate of physical soil quality, legal completeness, or global optimum",
-        "Conifer lower share is a soft preference, not a hard feasibility constraint",
+        "Проверка не удостоверяет качество грунта, юридическую полноту и глобальный оптимум",
+        "Нижняя доля хвойных - мягкое предпочтение, а не жёсткое условие допустимости",
     )
 
     @property
@@ -111,13 +131,15 @@ def _group_placements(
     for identity, count in ids.items():
         if count > 1:
             issues.append(
-                ValidationIssue("duplicate_id", (identity,), "Placement id is not unique")
+                ValidationIssue("duplicate_id", (identity,), "Идентификатор посадки повторяется")
             )
     for placement in placements:
         if not math.isfinite(placement.x) or not math.isfinite(placement.y):
             issues.append(
                 ValidationIssue(
-                    "nonfinite_coordinate", (placement.placement_id,), "Coordinate is not finite"
+                    "nonfinite_coordinate",
+                    (placement.placement_id,),
+                    "Координата посадки - не конечное число",
                 )
             )
             continue
@@ -130,13 +152,19 @@ def _group_placements(
         if placement.verdict not in accepted:
             issues.append(
                 ValidationIssue(
-                    "unaccepted_verdict", (placement.placement_id,), str(placement.verdict)
+                    "unaccepted_verdict",
+                    (placement.placement_id,),
+                    f"Итог по нормам «{VERDICT_RU.get(placement.verdict, placement.verdict.value)}»"
+                    f" ({placement.verdict.value})"
+                    " профиль не принимает",
                 )
             )
         if (placement.planting_type is PlantingType.TREE) != placement.species.is_tree:
             issues.append(
                 ValidationIssue(
-                    "life_form", (placement.placement_id,), "Species and planting type disagree"
+                    "life_form",
+                    (placement.placement_id,),
+                    "Вид не соответствует типу посадки: дерево или кустарник",
                 )
             )
     return groups
@@ -196,7 +224,8 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             ValidationIssue(
                 "footprint",
                 (placements[position].placement_id,),
-                "Planting footprint lacks permitted ground or crosses boundary/obstacle",
+                "Посадочное место не целиком на пригодном грунте: выходит за границу работ,"
+                " на покрытие или задевает препятствие",
             )
             for position in np.flatnonzero(~index.plantable(points))
         )
@@ -205,7 +234,7 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
                 ValidationIssue(
                     "missing_utilities",
                     tuple(p.placement_id for p in placements),
-                    "No recognised utility data",
+                    "В чертеже не распознано данных о подземных сетях",
                 )
             )
         by_category: dict[str, list[Placement]] = {}
@@ -263,7 +292,8 @@ def _check_distances(  # noqa: PLR0913 - validation context
                 ValidationIssue(
                     "overhead_height",
                     (placements[int(i)].placement_id,),
-                    "Species exceeds configured height under overhead lines",
+                    f"Вид высотой {decimal_g(species.height_m)} м под воздушной линией, а"
+                    f" допустимо не выше {decimal_g(params.max_height_under_lines_m)} м",
                     rule.rule_id,
                 )
                 for i in np.flatnonzero(clearances + EPS_M < threshold)
@@ -293,7 +323,7 @@ def _check_distances(  # noqa: PLR0913 - validation context
                 ValidationIssue(
                     code,
                     (placement.placement_id,),
-                    "Final species/coordinate does not meet the recorded condition",
+                    DISTANCE_MESSAGES[code],
                     rule.rule_id,
                     measured,
                     threshold,
@@ -326,7 +356,9 @@ def _site_conditions(
             ValidationIssue(
                 "hardiness",
                 tuple(p.placement_id for p in placements),
-                "Species exceeds configured hardiness zone",
+                # Зона вида - самая холодная зона USDA, которую вид переносит.
+                f"Вид зимостоек только в зоне {species.hardiness_zone} и теплее (зоны USDA), а"
+                f" участок в зоне {params.region_hardiness_zone}",
             )
         )
     if species.salt_tolerance == 0:
@@ -342,7 +374,8 @@ def _site_conditions(
             ValidationIssue(
                 "salt",
                 (placements[int(i)].placement_id,),
-                "Salt-intolerant species in configured salt strip",
+                f"Вид не солеустойчив, а место ближе {decimal_g(params.salt_zone_m)} м к"
+                " проезжей части или борту",
             )
             for i in np.flatnonzero(affected)
         )
@@ -407,7 +440,7 @@ def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[Valida
                     ValidationIssue(
                         "spacing",
                         (placements[i].placement_id, placements[j].placement_id),
-                        "Planting footprints or required spacing overlap",
+                        "Посадочные места пересекаются или шаг между посадками меньше требуемого",
                         measured_m=float(distance),
                         required_m=float(required),
                     )
@@ -429,7 +462,12 @@ def composition_issues(
         for code, count in Counter(p.species.code for p in placements).items():
             if count > params.given_assortment.get(code, 0):
                 issues.append(
-                    ValidationIssue("given_count", (), f"{code}: {count} exceeds given assortment")
+                    ValidationIssue(
+                        "given_count",
+                        (),
+                        f"Вид {code}: {count} шт., а в заданном ассортименте"
+                        f" {params.given_assortment.get(code, 0)}",
+                    )
                 )
         return issues
     species_by_code = {s.code: s for s in catalog} | {p.species.code: p.species for p in placements}
@@ -437,11 +475,46 @@ def composition_issues(
         part = [p for p in placements if p.species.is_tree is trees]
         grown, shares = _quota_terms(trees, params, existing, species_by_code)
         issues.extend(
-            ValidationIssue("quota", (), f"{attribute} {key}: {count} > {limit}")
+            ValidationIssue(
+                "quota",
+                (),
+                f"Превышена квота разнообразия: {_quota_subject(attribute, key)} - {count}"
+                f" при пределе {limit}",
+            )
             for attribute, key, count, limit in _quota_excess(part, grown, shares, species_by_code)
             if _hard_quota(attribute, params)
         )
     return issues
+
+
+def summarize_issues(issues: Sequence[ValidationIssue]) -> str:
+    """Причина отказа варианта одной строкой: одинаковые сообщения вместе - фраза, число
+    посадок и до двух примеров, а не одна и та же фраза подряд без посадок."""
+    groups: dict[str, dict[str, None]] = {}
+    for issue in issues:
+        groups.setdefault(issue.message, {}).update(dict.fromkeys(issue.placements))
+    parts = [_issue_group(message, list(ids)) for message, ids in groups.items()]
+    shown, rest = parts[:SUMMARY_GROUPS], len(parts) - SUMMARY_GROUPS
+    if rest > 0:
+        shown.append(f"и ещё {counted(rest, 'вид нарушений', 'вида нарушений', 'видов нарушений')}")
+    return "; ".join(shown)
+
+
+def _issue_group(message: str, ids: list[str]) -> str:
+    if not ids:
+        return message
+    count = counted(len(ids), "посадка", "посадки", "посадок")
+    examples = ", ".join(ids[:SUMMARY_EXAMPLES])
+    if len(ids) > SUMMARY_EXAMPLES:
+        return f"{message}: {count}, например {examples}"
+    return f"{message}: {count} ({examples})"
+
+
+def _quota_subject(attribute: str, key: object) -> str:
+    """Что превысило квоту, словами: вид, род, семейство или хвойные в целом."""
+    if attribute == "is_conifer":
+        return "хвойные"
+    return f"{QUOTA_SUBJECTS.get(attribute, attribute)} {key}"
 
 
 def _hard_quota(attribute: str, params: PlanParams) -> bool:

@@ -27,6 +27,7 @@ from green.domain.norms import (
     SpeciesRestriction,
 )
 from green.domain.planting import LifeForm, Species
+from green.infrastructure.config.errors_ru import describe_validation_error
 from green.infrastructure.config.schemas import (
     ActsFile,
     CitationModel,
@@ -61,7 +62,7 @@ def _validate[T: BaseModel](model: type[T], data: object, path: Path) -> T:
     try:
         return model.model_validate(data)
     except ValidationError as error:
-        raise ConfigurationError(f"{path.name}: {error}") from error
+        raise ConfigurationError(f"{path.name}: {describe_validation_error(error)}") from error
 
 
 def _species(model: SpeciesModel) -> Species:
@@ -284,6 +285,7 @@ class YamlProfileSource:
         try:
             profile = ProfileModel.model_validate({**(data or {}), **(overrides or {})})
         except ValidationError as error:
-            raise InputError(f"Параметры профиля '{name}' некорректны: {error}") from error
+            detail = describe_validation_error(error)
+            raise InputError(f"Параметры профиля '{name}' некорректны: {detail}") from error
         values = profile.model_dump()
         return PlanParams(**{f.name: values[f.name] for f in fields(PlanParams)})

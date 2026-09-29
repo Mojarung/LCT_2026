@@ -138,6 +138,24 @@ def test_api_refuses_unknown_street(client: TestClient) -> None:
     assert "нет в каталоге" in response.json()["detail"]
 
 
+def test_api_street_with_bad_overrides_is_refused_before_the_queue(client: TestClient) -> None:
+    """Улица из каталога идёт мимо загрузки файла - параметры проверяются и здесь до
+    регистрации прогона, ответ 422 по-русски с обоими неверными полями."""
+    before = len(client.get("/api/v1/runs", params={"limit": 200}).json()["items"])
+
+    response = client.post(
+        "/api/v1/runs",
+        data={"street": "07-test-street", "overrides": '{"spacing_m": -3, "bogus": 1}'},
+    )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert "spacing_m: должно быть не меньше 0.3 (получено -3)" in detail
+    assert "bogus: такого параметра нет (получено 1)" in detail
+    assert "pydantic" not in detail
+    assert len(client.get("/api/v1/runs", params={"limit": 200}).json()["items"]) == before
+
+
 def test_api_run_needs_a_source(client: TestClient) -> None:
     response = client.post("/api/v1/runs", data={"profile": "strict"})
 

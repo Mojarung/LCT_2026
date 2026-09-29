@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /** Проверка работоспособности */
         get: operations["health_api_v1_health_get"];
         put?: never;
         post?: never;
@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Meta */
+        /** Сведения о сервисе: профили, нормы, виды */
         get: operations["meta_api_v1_meta_get"];
         put?: never;
         post?: never;
@@ -46,7 +46,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Profile
+         * Параметры профиля
          * @description Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов.
          */
         get: operations["profile_api_v1_profiles__name__get"];
@@ -66,13 +66,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Runs
+         * Список прогонов
          * @description Последние прогоны, новые первыми.
          */
         get: operations["list_runs_api_v1_runs_get"];
         put?: never;
         /**
-         * Create Run
+         * Запустить прогон
          * @description Принять чертёж или улицу из каталога и поставить прогон в очередь.
          *
          *     Источник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного
@@ -95,7 +95,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Demo Run
+         * Запустить демонстрационный прогон
          * @description Прогон встроенного фрагмента улицы Берзарина с профилем по умолчанию.
          *
          *     Фрагмент лежит в пакете: на стенде жюри датасета нет, а показывать сервис надо с
@@ -116,7 +116,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Run
+         * Статус прогона
          * @description Статус прогона, сводка и ссылки на артефакты.
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
@@ -136,7 +136,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Artifact
+         * Скачать артефакт прогона
          * @description Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
          *
          *     Текстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian
@@ -163,7 +163,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check
+         * Проверить точку посадки по нормам
          * @description Проверить точку по нормам: тем же индексом ограничений, что и сам прогон.
          */
         post: operations["check_api_v1_runs__run_id__check_post"];
@@ -180,7 +180,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Draft */
+        /** Текущий план с правками */
         get: operations["draft_api_v1_runs__run_id__draft_get"];
         put?: never;
         post?: never;
@@ -200,7 +200,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Edit
+         * Применить правки плана
          * @description Применить правки к плану прогона. DXF при этом не переписывается.
          */
         post: operations["edit_api_v1_runs__run_id__edits_post"];
@@ -220,7 +220,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Rebuild
+         * Пересобрать DXF и отчёты по правкам
          * @description Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}.
          */
         post: operations["rebuild_api_v1_runs__run_id__rebuild_post"];
@@ -238,7 +238,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Streets
+         * Улицы пилотного проекта
          * @description Улицы пилотного проекта, готовые к прогону.
          *
          *     Пустой список - обычное дело: каталог собирается из датасета, а датасет монтируется
@@ -319,20 +319,36 @@ export interface components {
             /** Y */
             y: number;
         };
-        /** CheckOut */
+        /**
+         * CheckOut
+         * @description Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы.
+         */
         CheckOut: {
-            /** Checks */
+            /**
+             * Checks
+             * @description Проверка каждого правила отступа: норма, замер, итог
+             */
             checks?: components["schemas"]["RuleCheckOut"][];
-            /** Needs Barrier */
+            /**
+             * Needs Barrier
+             * @description Место допустимо только с корнезащитным (прикорневым) барьером
+             */
             needs_barrier: boolean;
             /**
              * Note
+             * @description Причина по-русски, если место непригодно или вид здесь запрещён; нарушения отступов - в checks
              * @default
              */
             note: string;
-            /** Plantable */
+            /**
+             * Plantable
+             * @description Посадочное место целиком на пригодном грунте внутри границы работ и не задевает препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict forbidden при plantable true - точка на грунте, но ближе нормы к объекту
+             */
             plantable: boolean;
-            /** Verdict */
+            /**
+             * Verdict
+             * @description Итог по нормам: allowed - посадка допустима, needs_approval - допустима при согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно или вид здесь запрещён)
+             */
             verdict: string;
         };
         /** ConverterOut */

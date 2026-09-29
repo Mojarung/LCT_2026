@@ -53,7 +53,7 @@ def _artifact_size(container: Container) -> Callable[[str, str], int | None]:
     return size
 
 
-@router.post("", status_code=202)
+@router.post("", status_code=202, summary="Запустить прогон")
 async def create_run(  # noqa: PLR0913 - form fields are separate parameters by design
     *,
     request: Request,
@@ -130,7 +130,7 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
     return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
 
 
-@router.post("/demo", status_code=202)
+@router.post("/demo", status_code=202, summary="Запустить демонстрационный прогон")
 def create_demo_run(
     request: Request, response: Response, background: BackgroundTasks, container: ContainerDep
 ) -> RunOut:
@@ -146,7 +146,7 @@ def create_demo_run(
     return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
 
 
-@router.get("")
+@router.get("", summary="Список прогонов")
 def list_runs(
     request: Request, container: ContainerDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
 ) -> RunListOut:
@@ -157,7 +157,7 @@ def list_runs(
     )
 
 
-@router.get("/{run_id}", name="get_run")
+@router.get("/{run_id}", name="get_run", summary="Статус прогона")
 def get_run(run_id: str, request: Request, container: ContainerDep) -> RunOut:
     """Статус прогона, сводка и ссылки на артефакты."""
     return RunOut.from_record(
@@ -165,7 +165,12 @@ def get_run(run_id: str, request: Request, container: ContainerDep) -> RunOut:
     )
 
 
-@router.get("/{run_id}/artifacts/{name}", name="get_artifact", response_class=FileResponse)
+@router.get(
+    "/{run_id}/artifacts/{name}",
+    name="get_artifact",
+    response_class=FileResponse,
+    summary="Скачать артефакт прогона",
+)
 def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
     """Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
 

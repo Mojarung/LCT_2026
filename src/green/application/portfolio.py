@@ -12,6 +12,7 @@ import numpy as np
 from green.application.constraints import work_boundary
 from green.application.errors import InputError
 from green.application.quality.site import curb_segments
+from green.application.validation import summarize_issues
 from green.application.zones import CAPACITY_STAT, SITE_CAPACITY_STAT
 from green.domain.portfolio import PortfolioReport, VariantResult
 
@@ -114,8 +115,7 @@ def _build_all(
         finally:
             slowest = max(slowest, time.perf_counter() - clock)
         if not validation.ok:
-            message = "; ".join(issue.message for issue in validation.issues[:8])
-            outcomes.append((name, variant, message))
+            outcomes.append((name, variant, summarize_issues(validation.issues)))
             continue
         outcomes.append((name, variant, (plan, validation)))
     return outcomes

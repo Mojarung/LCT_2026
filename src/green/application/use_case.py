@@ -53,6 +53,7 @@ from green.application.validation import (
     validate_plan,
 )
 from green.application.volumes import build_volumes
+from green.application.wording import counted, decimal_g
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -74,6 +75,7 @@ if TYPE_CHECKING:
         SpeciesCatalog,
     )
     from green.application.results import IntegrityReport, PlanExportReport
+    from green.application.validation import ValidationIssue
     from green.domain.objects import Scene
     from green.domain.planting import Placement, Plan
 
@@ -579,12 +581,22 @@ def require_valid_export(integrity: IntegrityReport, exported: PlanExportReport)
 
 def require_valid_plan(result: PlanValidation) -> None:
     if not result.ok:
-        detail = "; ".join(
-            f"{i.code} {','.join(i.placements[:2])} {i.rule_id}: {i.message} "
-            f"({i.measured_m}/{i.required_m})"
-            for i in result.issues[:8]
-        )
-        raise InputError(f"Финальная проверка плана: {len(result.issues)} нарушений. {detail}")
+        detail = "; ".join(_issue_line(issue) for issue in result.issues[:8])
+        count = counted(len(result.issues), "нарушение", "нарушения", "нарушений")
+        raise InputError(f"Финальная проверка плана: {count}. {detail}")
+
+
+def _issue_line(issue: ValidationIssue) -> str:
+    """Код, посадки и правило - только непустые; замер и норма - только когда измерены."""
+    head = " ".join(
+        part for part in (issue.code, ", ".join(issue.placements[:2]), issue.rule_id) if part
+    )
+    line = f"{head}: {issue.message}"
+    if issue.measured_m is not None and issue.required_m is not None:
+        measured = decimal_g(round(issue.measured_m, 2))
+        required = decimal_g(round(issue.required_m, 2))
+        line += f" (замер {measured} м при норме {required} м)"
+    return line
 
 
 def to_dxf(

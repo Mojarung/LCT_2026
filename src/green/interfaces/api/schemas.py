@@ -195,11 +195,36 @@ class CheckIn(BaseModel):
 
 
 class CheckOut(BaseModel):
-    verdict: str
-    plantable: bool
-    needs_barrier: bool
-    note: str = ""
-    checks: list[RuleCheckOut] = Field(default_factory=list)
+    """Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы."""
+
+    verdict: str = Field(
+        description=(
+            "Итог по нормам: allowed - посадка допустима, needs_approval - допустима при"
+            " согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно"
+            " или вид здесь запрещён)"
+        )
+    )
+    plantable: bool = Field(
+        description=(
+            "Посадочное место целиком на пригодном грунте внутри границы работ и не задевает"
+            " препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict"
+            " forbidden при plantable true - точка на грунте, но ближе нормы к объекту"
+        )
+    )
+    needs_barrier: bool = Field(
+        description="Место допустимо только с корнезащитным (прикорневым) барьером"
+    )
+    note: str = Field(
+        default="",
+        description=(
+            "Причина по-русски, если место непригодно или вид здесь запрещён; нарушения"
+            " отступов - в checks"
+        ),
+    )
+    checks: list[RuleCheckOut] = Field(
+        default_factory=list,
+        description="Проверка каждого правила отступа: норма, замер, итог",
+    )
 
 
 class EditIn(BaseModel):

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import io
+import re
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -92,6 +93,32 @@ def test_openapi_documents_every_route(client: TestClient) -> None:
     assert "$ref" in form["schema"]
     assert "422" in paths[f"{API_PREFIX}/runs"]["post"]["responses"]
     assert client.get("/docs").status_code == 200
+
+
+def test_every_operation_has_russian_summary(client: TestClient) -> None:
+    """Swagger показывает summary названием метода: без него FastAPI берёт имя функции
+    («Create Run»), а интерфейс сервиса для заказчика - русский."""
+    schema = client.get(f"{API_PREFIX}/openapi.json").json()
+    operations = [
+        (method.upper(), path, operation.get("summary", ""))
+        for path, methods in schema["paths"].items()
+        for method, operation in methods.items()
+    ]
+    assert len(operations) >= 13  # все маршруты /api/v1 на 29.09.2026
+    english = [row for row in operations if not re.search("[А-Яа-яЁё]", row[2])]
+    assert not english, english
+
+
+def test_point_check_fields_are_documented(client: TestClient) -> None:
+    """verdict forbidden при plantable true выглядит противоречием, пока не сказано, что
+    plantable - только грунт и граница работ, без отступов от сетей."""
+    fields = client.get(f"{API_PREFIX}/openapi.json").json()["components"]["schemas"]["CheckOut"]
+    described = fields["properties"]
+    for name in ("verdict", "plantable", "needs_barrier", "note"):
+        assert re.search("[а-я]", described[name].get("description", "")), name
+    for value in ("allowed", "needs_approval", "forbidden"):
+        assert value in described["verdict"]["description"]
+    assert "без учёта отступов" in described["plantable"]["description"]
 
 
 def test_committed_openapi_file_matches_the_code(client: TestClient) -> None:
@@ -205,6 +232,26 @@ def test_bad_parameters_are_refused_before_the_run(
     assert fragment in str(body["detail"])
     after = len(client.get(f"{API_PREFIX}/runs", params={"limit": 200}).json()["items"])
     assert after == before  # прогон не создан
+
+
+def test_bad_overrides_are_explained_in_russian_before_the_run(
+    client: TestClient, street: bytes
+) -> None:
+    """Пример жюри: отрицательный шаг и лишнее поле - 422 по-русски с обоими полями, прогон
+    не создан."""
+    before = len(client.get(f"{API_PREFIX}/runs", params={"limit": 200}).json()["items"])
+    response = client.post(
+        f"{API_PREFIX}/runs",
+        files={"file": ("street.dxf", street, "image/vnd.dxf")},
+        data={"overrides": '{"spacing_m": -3, "bogus": 1}'},
+    )
+    detail = str(_assert_problem(response, 422)["detail"])
+    assert "spacing_m: должно быть не меньше 0.3 (получено -3)" in detail
+    assert "bogus: такого параметра нет (получено 1)" in detail
+    assert "pydantic" not in detail
+    assert "Input should" not in detail
+    after = len(client.get(f"{API_PREFIX}/runs", params={"limit": 200}).json()["items"])
+    assert after == before
 
 
 def test_framework_errors_use_the_same_format(client: TestClient) -> None:

@@ -47,7 +47,7 @@ def _context(container: Container, run_id: str) -> RunContext:
     return context
 
 
-@router.get("/{run_id}/draft")
+@router.get("/{run_id}/draft", summary="Текущий план с правками")
 def draft(run_id: str, response: Response, container: ContainerDep) -> DraftOut:
     context = _context(container, run_id)
     plan = context.plan
@@ -59,7 +59,7 @@ def draft(run_id: str, response: Response, container: ContainerDep) -> DraftOut:
     )
 
 
-@router.post("/{run_id}/check")
+@router.post("/{run_id}/check", summary="Проверить точку посадки по нормам")
 def check(run_id: str, payload: CheckIn, container: ContainerDep) -> CheckOut:
     """Проверить точку по нормам: тем же индексом ограничений, что и сам прогон."""
     context = _context(container, run_id)
@@ -74,7 +74,7 @@ def check(run_id: str, payload: CheckIn, container: ContainerDep) -> CheckOut:
     )
 
 
-@router.post("/{run_id}/edits")
+@router.post("/{run_id}/edits", summary="Применить правки плана")
 def edit(run_id: str, payload: EditsIn, container: ContainerDep) -> PlanSummaryOut:
     """Применить правки к плану прогона. DXF при этом не переписывается."""
     context = _context(container, run_id)
@@ -92,7 +92,7 @@ def edit(run_id: str, payload: EditsIn, container: ContainerDep) -> PlanSummaryO
     return PlanSummaryOut.from_plan(context.plan, stale=True)
 
 
-@router.post("/{run_id}/rebuild", status_code=202)
+@router.post("/{run_id}/rebuild", status_code=202, summary="Пересобрать DXF и отчёты по правкам")
 def rebuild(
     run_id: str, response: Response, background: BackgroundTasks, container: ContainerDep
 ) -> PlanSummaryOut:

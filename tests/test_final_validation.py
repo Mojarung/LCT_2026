@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -10,9 +11,17 @@ import pytest
 from shapely.geometry import LineString
 from test_pipeline_synthetic import ROOT, _street
 
+from green.application.errors import InputError
 from green.application.params import PlanParams, step_with_tolerance
-from green.application.use_case import PlanRequest
-from green.application.validation import trim_note, trim_to_quotas, validate_plan
+from green.application.use_case import PlanRequest, require_valid_plan
+from green.application.validation import (
+    PlanValidation,
+    ValidationIssue,
+    summarize_issues,
+    trim_note,
+    trim_to_quotas,
+    validate_plan,
+)
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.domain.norms import (
@@ -176,7 +185,167 @@ def test_conifer_ceiling_stays_hard_with_soft_quotas() -> None:
     soft = replace(PARAMS, assortment_mode="auto", quota_penalty=5.0, conifer_share=(0.0, 0.5))
     issues = [i for i in verify(points, params=soft).issues if i.code == "quota"]
     assert issues
-    assert all("is_conifer" in issue.message for issue in issues)
+    assert all("хвойные" in issue.message for issue in issues)
+
+
+# Сообщения проверки до перевода: ни одно не должно вернуться в validation.json и в реестр.
+OLD_ENGLISH = (
+    "Placement id is not unique",
+    "Coordinate is not finite",
+    "Species and planting type disagree",
+    "Planting footprint lacks permitted ground",
+    "No recognised utility data",
+    "exceeds configured",
+    "does not meet the recorded condition",
+    "required spacing overlap",
+    "exceeds given assortment",
+    "Salt-intolerant",
+)
+OVERHEAD = replace(pipe(0, 0), object_class=ObjectClass.POWER_LINE_OVERHEAD)
+SHRUB_SPECIES = replace(TREE, code="shrub", life_form=LifeForm.SHRUB_LOW)
+FRAGILE = replace(TREE, hardiness_zone=8, salt_tolerance=0)
+
+
+@pytest.mark.parametrize(
+    ("code", "build"),
+    [
+        (
+            "duplicate_id",
+            lambda: verify([placement(10, identity="same"), placement(40, identity="same")]),
+        ),
+        ("nonfinite_coordinate", lambda: verify([placement(float("nan"))])),
+        ("unaccepted_verdict", lambda: verify([replace(placement(1), verdict=Verdict.FORBIDDEN)])),
+        ("life_form", lambda: verify([replace(placement(1), species=SHRUB_SPECIES)])),
+        (
+            "footprint",
+            lambda: verify([placement(1)], params=replace(PARAMS, require_work_boundary=True)),
+        ),
+        (
+            "missing_utilities",
+            lambda: verify([placement(1)], params=replace(PARAMS, require_utility_data=True)),
+        ),
+        ("distance", lambda: verify([placement(2.1)], [pipe(0, 1)], [rule()])),
+        (
+            "barrier_not_documented",
+            lambda: verify(
+                [placement(1)], [pipe(0, 0)], [rule()], replace(PARAMS, root_barriers=True)
+            ),
+        ),
+        (
+            "approval_not_marked",
+            lambda: verify([placement(1)], [pipe(0, 0)], [rule(severity=Severity.NEEDS_APPROVAL)]),
+        ),
+        (
+            "overhead_height",
+            lambda: verify(
+                [
+                    replace(
+                        placement(1),
+                        verdict=Verdict.NEEDS_APPROVAL,
+                        species=replace(TREE, height_m=10),
+                    )
+                ],
+                [OVERHEAD],
+                [
+                    replace(
+                        rule(severity=Severity.NEEDS_APPROVAL),
+                        object_class=ObjectClass.POWER_LINE_OVERHEAD,
+                    )
+                ],
+            ),
+        ),
+        (
+            "hardiness",
+            lambda: verify([replace(placement(1), species=FRAGILE)]),
+        ),
+        (
+            "salt",
+            lambda: verify(
+                [replace(placement(1), species=FRAGILE)],
+                [replace(pipe(0, 0), object_class=ObjectClass.CURB)],
+            ),
+        ),
+        ("spacing", lambda: verify([placement(0, identity="a"), placement(1, identity="b")])),
+        (
+            "quota",
+            lambda: verify(
+                [placement(i * 10, identity=str(i)) for i in range(10)],
+                params=replace(PARAMS, assortment_mode="auto"),
+            ),
+        ),
+        (
+            "given_count",
+            lambda: verify([placement(1)], params=replace(PARAMS, assortment_mode="given")),
+        ),
+    ],
+)
+def test_every_check_explains_itself_in_russian(code: str, build) -> None:  # noqa: ANN001
+    """Код проверки - контракт и остаётся латиницей; текст читает человек (жюри, этап 23)."""
+    issues = [issue for issue in build().issues if issue.code == code]
+    assert issues, code
+    for issue in issues:
+        assert re.search("[а-яё]", issue.message, re.IGNORECASE), issue
+        assert not any(old in issue.message for old in OLD_ENGLISH), issue
+
+
+def test_validation_scope_and_assumptions_are_russian() -> None:
+    result = verify([placement(1)])
+    for text in (result.scope, *result.assumptions):
+        assert re.search("[а-яё]", text, re.IGNORECASE), text
+        assert not re.search("[A-Za-z]{3,}", text), text
+
+
+def test_hardiness_message_says_which_way_the_zones_compare() -> None:
+    """Зона вида - самая холодная зона USDA, которую он переносит: чем больше номер, тем
+    теплолюбивее вид, поэтому вид зоны 8 в районе зоны 4 не перезимует."""
+    issue = next(
+        i for i in verify([replace(placement(1), species=FRAGILE)]).issues if i.code == "hardiness"
+    )
+    assert issue.message == (
+        "Вид зимостоек только в зоне 8 и теплее (зоны USDA), а участок в зоне 4"
+    )
+
+
+MEASURED = ValidationIssue(
+    "distance", ("p-1",), "Отступ меньше нормы", "R-WATER-TREE-001", 1.85, 2.0
+)
+BARE = ValidationIssue("footprint", ("p-0",), "Место не на грунте")
+
+
+@pytest.mark.parametrize(
+    ("issues", "expected"),
+    [
+        pytest.param(
+            (MEASURED,),
+            "Финальная проверка плана: 1 нарушение. distance p-1 R-WATER-TREE-001:"
+            " Отступ меньше нормы (замер 1,85 м при норме 2 м)",
+            id="one-measured",
+        ),
+        pytest.param(
+            tuple(replace(BARE, placements=(f"p-{i}",)) for i in range(5)),
+            "Финальная проверка плана: 5 нарушений. "
+            + "; ".join(f"footprint p-{i}: Место не на грунте" for i in range(5)),
+            id="five-without-measurement",
+        ),
+    ],
+)
+def test_registry_text_counts_violations_and_shows_only_real_measurements(
+    issues: tuple[ValidationIssue, ...], expected: str
+) -> None:
+    """Текст уходит в реестр ошибкой прогона: число со словом, замер и норма с единицами и
+    только когда они есть, без «None/None» и двойных пробелов на пустом rule_id."""
+    with pytest.raises(InputError) as caught:
+        require_valid_plan(PlanValidation(len(issues), issues))
+
+    assert str(caught.value) == expected
+
+
+def test_rejection_summary_names_how_many_kinds_of_violation_are_not_shown() -> None:
+    issues = [ValidationIssue("quota", (), f"Квота {i}") for i in range(8)]
+
+    assert summarize_issues(issues) == (
+        "Квота 0; Квота 1; Квота 2; Квота 3; Квота 4; Квота 5; и ещё 2 вида нарушений"
+    )
 
 
 def test_tree_step_never_drops_below_the_743pp_minimum() -> None:
