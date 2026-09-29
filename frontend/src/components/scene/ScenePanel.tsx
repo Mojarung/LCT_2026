@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { Quality, ViewSettings } from '../../scene3d/engine';
 import { FLY_SPEED_MAX, FLY_SPEED_MIN } from '../../scene3d/freecam';
 import { PLAN_YEAR } from '../../scene3d/growth';
-import { clock, type Season } from '../../scene3d/solar';
+import { clock, showcaseHour, type Season } from '../../scene3d/solar';
 import { useSideCollapsed } from '../../hooks/useSideCollapsed';
 import { SideToggle } from './SideToggle';
 
@@ -206,6 +206,13 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 }}
               />
             </div>
+            <button
+              className="scene-light-preset"
+              type="button"
+              onClick={() => onChange({ hour: showcaseHour(settings.season), clouds: 0.2 })}
+            >
+              Мягкий вечерний свет
+            </button>
             <Segmented
               label="Сезон"
               options={SEASONS}

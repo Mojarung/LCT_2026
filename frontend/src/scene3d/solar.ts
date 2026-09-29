@@ -74,6 +74,25 @@ export const SEASON_DAY: Record<Season, number> = {
   winter: 15,
 };
 
+/** Поздний дневной свет без провала улицы в тень; ищем по высоте солнца, а не по часам. */
+export function showcaseHour(season: Season): number {
+  const day = SEASON_DAY[season];
+  const noon = sunPosition(day, 13).elevation;
+  const target = Math.min(22, noon * 0.58);
+  let best = 14;
+  let difference = Infinity;
+  for (let hour = 13.25; hour <= 21; hour += 0.25) {
+    const elevation = sunPosition(day, hour).elevation;
+    if (elevation <= 0) continue;
+    const delta = Math.abs(elevation - target);
+    if (delta < difference) {
+      best = hour;
+      difference = delta;
+    }
+  }
+  return best;
+}
+
 /** Час сцены как на часах: 13.25 -> «13:15». */
 export function clock(hour: number): string {
   const h = Math.floor(hour);

@@ -59,6 +59,22 @@
   accent-color: var(--bone);
 }
 
+.scene-light-preset {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+  background: var(--panel-2);
+  color: var(--bone);
+  font-size: var(--fs-micro);
+  text-align: left;
+}
+.scene-light-preset:hover,
+.scene-light-preset:focus-visible {
+  border-color: var(--bone);
+}
+
 /* Переключатель из нескольких значений: одна полоса, выбранное залито. */
 .segmented {
   display: flex;

@@ -17,7 +17,7 @@ import {
   type ShotTarget,
   streetShots,
 } from './autoshots';
-import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
+import { buildingGeometry, facadeAccentsGeometry, facadeMaterial, roofMaterial } from './buildings';
 import { Walls } from './collide';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
@@ -407,6 +407,19 @@ export class SceneEngine {
     }
     wallMesh.name = 'walls';
     roofMesh.name = 'roofs';
+    const accents = facadeAccentsGeometry(this.world.buildings);
+    if (accents.getAttribute('position').count) {
+      const mesh = new THREE.Mesh(
+        accents,
+        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.77, metalness: 0.08 }),
+      );
+      mesh.name = 'facade-accents';
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.add(mesh);
+    } else {
+      accents.dispose();
+    }
   }
 
   apply(settings: Partial<ViewSettings>): void {

@@ -36,7 +36,7 @@ export interface SunState {
 
 /** Цвет солнца по высоте: у горизонта свет проходит толщу воздуха и краснеет. */
 export function sunColor(elevation: number): THREE.Color {
-  const t = THREE.MathUtils.clamp(elevation / 40, 0, 1);
+  const t = Math.pow(THREE.MathUtils.clamp(elevation / 45, 0, 1), 1.3);
   const warm = new THREE.Color(1.0, 0.62, 0.36);
   const noon = new THREE.Color(1.0, 0.97, 0.92);
   return warm.lerp(noon, Math.sqrt(t));
@@ -124,6 +124,7 @@ export class Atmosphere {
     setUniform(u, 'cloudSpeed', 0.00001 + 0.00008 * s.wind);
     const elevation = pos.elevation;
     const day = THREE.MathUtils.smoothstep(elevation, -6, 6);
+    const lowSun = day * (1 - THREE.MathUtils.smoothstep(elevation, 12, 32));
     // Ночь - по гражданским сумеркам: солнце ниже 6 градусов под горизонтом.
     this.state.night = 1 - THREE.MathUtils.smoothstep(elevation, -8, 2);
     const moon = moonState(sceneTime(SEASON_DAY[s.season], s.hour));
@@ -156,17 +157,18 @@ export class Atmosphere {
     this.sun.color.copy(this.state.color);
     // Selected ACES look: stronger direct light and a quieter diffuse fill.
     this.sun.intensity = this.state.intensity * (1 - 0.15 * day) * (1 + 0.08 * day);
-    this.hemi.intensity = 0.14 - 0.02 * day;
+    // The sky still fills shaded streets in late daylight; without this they turn black.
+    this.hemi.intensity = 0.14 - 0.02 * day + 0.3 * lowSun;
     this.hemi.color.set(day > 0.5 ? 0xc8dcff : 0x6f7fa8);
     const haze = new THREE.Color(0.74, 0.8, 0.87).lerp(
       new THREE.Color(0.95, 0.72, 0.52),
-      1 - THREE.MathUtils.smoothstep(elevation, 2, 22),
+      1 - THREE.MathUtils.smoothstep(elevation, 8, 35),
     );
     haze.lerp(new THREE.Color(0.05, 0.07, 0.12), this.state.night);
     haze.lerp(new THREE.Color(0.78, 0.8, 0.82), s.clouds * 0.4 * day);
     this.fog.color.copy(haze);
     this.fog.density = 0.0006 + s.clouds * 0.0005 + s.fog;
-    this.renderer.toneMappingExposure = 0.42 + 0.22 * day;
+    this.renderer.toneMappingExposure = 0.42 + 0.22 * day + 0.11 * lowSun;
     this.environment();
   }
 
@@ -187,7 +189,11 @@ export class Atmosphere {
     this.envTarget = target;
     this.scene.environment = target.texture;
     this.scene.environmentIntensity =
-      0.12 + 0.11 * THREE.MathUtils.smoothstep(this.state.elevation, -4, 20);
+      0.12 +
+      0.11 * THREE.MathUtils.smoothstep(this.state.elevation, -4, 20) +
+      0.13 *
+        THREE.MathUtils.smoothstep(this.state.elevation, 0, 8) *
+        (1 - THREE.MathUtils.smoothstep(this.state.elevation, 12, 32));
   }
 
   /** Небо и светила вокруг камеры: коробка неба конечна, и в стороне от начала сцены

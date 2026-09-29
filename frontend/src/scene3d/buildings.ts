@@ -142,6 +142,151 @@ export interface BuildingMeshes {
   roofs: THREE.BufferGeometry;
 }
 
+interface AccentBuffers {
+  pos: number[];
+  nor: number[];
+  color: number[];
+}
+
+type AccentColor = readonly [number, number, number];
+
+function accentColor(hex: number): AccentColor {
+  const color = new THREE.Color(hex);
+  return [color.r, color.g, color.b];
+}
+
+const STONE = accentColor(0xb8b5ac);
+const SHADOW = accentColor(0x414748);
+const RAIL = accentColor(0x26323a);
+const GLASS = accentColor(0x526575);
+
+/** A few real projections break the flat building silhouette without one draw call per window. */
+export function facadeAccentsGeometry(buildings: readonly Building[]): THREE.BufferGeometry {
+  const out: AccentBuffers = { pos: [], nor: [], color: [] };
+  let balconies = 0;
+  const balconyLimit = 1800;
+  for (const building of buildings) {
+    const style = styleOf(building);
+    if (building.floors < 3 || (style !== STYLE.panel && style !== STYLE.brick)) continue;
+    const residential = building.use !== 'non_residential';
+    const storey = (building.height - 1.2) / building.floors;
+    const plinth = 0.9;
+    building.rings.forEach((ring, index) => {
+      const clockwise = ringArea(ring) > 0;
+      const hole = index > 0;
+      const outwardSign = clockwise !== hole ? 1 : -1;
+      let along = 0;
+      for (let segment = 0; segment < ring.length; segment++) {
+        const a = ring[segment];
+        const b = ring[(segment + 1) % ring.length];
+        if (!a || !b) continue;
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const length = Math.hypot(dx, dz);
+        if (length < 0.05) continue;
+        const wallStart = along;
+        along += length;
+        if (length < 7) continue;
+        const tangent = new THREE.Vector3(dx / length, 0, dz / length);
+        const normal = new THREE.Vector3(
+          (dz / length) * outwardSign,
+          0,
+          (-dx / length) * outwardSign,
+        );
+        const point = (u: number, y: number, depth: number) =>
+          new THREE.Vector3(
+            a.x + tangent.x * u + normal.x * depth,
+            y,
+            a.z + tangent.z * u + normal.z * depth,
+          );
+        const face = (corners: THREE.Vector3[], wanted: THREE.Vector3, color: AccentColor) => {
+          const cross = new THREE.Vector3()
+            .subVectors(corners[1]!, corners[0]!)
+            .cross(new THREE.Vector3().subVectors(corners[2]!, corners[0]!));
+          const order = cross.dot(wanted) >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+          for (const i of order) {
+            const p = corners[i];
+            if (!p) continue;
+            out.pos.push(p.x, p.y, p.z);
+            out.nor.push(wanted.x, wanted.y, wanted.z);
+            out.color.push(...color);
+          }
+        };
+        const box = (
+          u0: number,
+          u1: number,
+          y0: number,
+          y1: number,
+          n0: number,
+          n1: number,
+          color: AccentColor,
+        ) => {
+          face(
+            [point(u0, y0, n1), point(u1, y0, n1), point(u1, y1, n1), point(u0, y1, n1)],
+            normal,
+            color,
+          );
+          face(
+            [point(u1, y0, n0), point(u0, y0, n0), point(u0, y1, n0), point(u1, y1, n0)],
+            normal.clone().negate(),
+            color,
+          );
+          face(
+            [point(u0, y1, n0), point(u0, y1, n1), point(u1, y1, n1), point(u1, y1, n0)],
+            new THREE.Vector3(0, 1, 0),
+            color,
+          );
+          face(
+            [point(u0, y0, n1), point(u0, y0, n0), point(u1, y0, n0), point(u1, y0, n1)],
+            new THREE.Vector3(0, -1, 0),
+            color,
+          );
+          face(
+            [point(u0, y0, n0), point(u0, y0, n1), point(u0, y1, n1), point(u0, y1, n0)],
+            tangent.clone().negate(),
+            color,
+          );
+          face(
+            [point(u1, y0, n1), point(u1, y0, n0), point(u1, y1, n0), point(u1, y1, n1)],
+            tangent,
+            color,
+          );
+        };
+
+        // Horizontal cornices catch the low sun and make floor groups legible at street scale.
+        for (let floor = 3; floor < building.floors; floor += 3) {
+          const y = plinth + floor * storey;
+          box(0.1, length - 0.1, y - 0.07, y + 0.02, 0.015, 0.11, STONE);
+        }
+        if (!residential || length < 12 || balconies >= balconyLimit) continue;
+        const bayWidth = style === STYLE.panel ? 3 : 2.8;
+        const firstBay = Math.ceil(wallStart / bayWidth);
+        const lastBay = Math.floor((wallStart + length) / bayWidth);
+        for (let floor = 2; floor < building.floors && balconies < balconyLimit; floor++) {
+          for (let bay = firstBay; bay < lastBay && balconies < balconyLimit; bay++) {
+            if ((bay * 17 + floor * 11 + building.seed + segment * 7) % 7 !== 0) continue;
+            const u = (bay + 0.5) * bayWidth - wallStart;
+            if (u - 1.15 < 0.35 || u + 1.15 > length - 0.35) continue;
+            const y = plinth + floor * storey + 0.1;
+            box(u - 1.1, u + 1.1, y - 0.14, y, 0.01, 0.82, STONE);
+            box(u - 1.04, u + 1.04, y + 0.03, y + 0.75, 0.76, 0.8, GLASS);
+            box(u - 1.1, u + 1.1, y + 0.74, y + 0.79, 0.73, 0.84, RAIL);
+            box(u - 1.09, u - 1.04, y, y + 0.79, 0.72, 0.84, SHADOW);
+            box(u + 1.04, u + 1.09, y, y + 0.79, 0.72, 0.84, SHADOW);
+            balconies++;
+          }
+        }
+      }
+    });
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(out.nor, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(out.color, 3));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 export function buildingGeometry(buildings: readonly Building[]): BuildingMeshes {
   const walls: Buffers = { pos: [], nor: [], uv: [], info: [] };
   const roofs: Buffers = { pos: [], nor: [], uv: [], info: [] };
@@ -233,7 +378,13 @@ const FACADE_MAP = /* glsl */ `
   float cell = floor(u / bay);
   float lu = fract(u / bay);
   vec3 wall;
-  if (style == 0) wall = mix(vec3(0.72, 0.71, 0.67), vec3(0.80, 0.76, 0.66), tint);
+  if (style == 0) {
+    float block = mod(floor(cell / 3.0 + tint * 2.0), 4.0);
+    float darkCladding = step(2.0, block);
+    wall = mix(vec3(0.43, 0.39, 0.34), vec3(0.045, 0.055, 0.065), darkCladding);
+    wall = mix(wall, vec3(0.55, 0.47, 0.38), tint * (1.0 - darkCladding) * 0.2);
+    if (level < 1.0) wall = mix(wall, vec3(0.035, 0.042, 0.048), 0.85);
+  }
   else if (style == 1) wall = mix(vec3(0.52, 0.28, 0.20), vec3(0.68, 0.48, 0.34), tint);
   else if (style == 2) wall = mix(vec3(0.78, 0.76, 0.72), vec3(0.64, 0.66, 0.68), tint);
   else if (style == 3) wall = mix(vec3(0.55, 0.58, 0.60), vec3(0.40, 0.45, 0.48), tint);
@@ -249,6 +400,8 @@ const FACADE_MAP = /* glsl */ `
     // Швы панелей: горизонталь на перекрытии, вертикаль через пролёт.
     float seam = (1.0 - step(0.012, abs(lv - 0.0))) + (1.0 - step(0.006, abs(fract(u / 6.0) - 0.0)));
     wall *= 1.0 - 0.18 * clamp(seam, 0.0, 1.0);
+    // Подоконные панели и простенки читаются как материал, а не как белая плоскость.
+    wall *= 1.0 - 0.12 * step(0.12, lv) * (1.0 - step(0.28, lv));
   }
   if (style == 3) {
     wall *= 0.9 + 0.1 * step(0.5, fract(u / 0.2));
@@ -258,7 +411,8 @@ const FACADE_MAP = /* glsl */ `
   float mullion = 0.0;
   bool facade = style != 4 && v > plinth && level < floors;
   if (facade) {
-    vec2 size = style == 2 && level < 1.0 ? vec2(0.86, 0.72) : vec2(0.5, 0.52);
+    vec2 size = style == 2 && level < 1.0 ? vec2(0.86, 0.72) :
+      style == 0 ? (level < 1.0 ? vec2(0.86, 0.72) : vec2(0.59, 0.6)) : vec2(0.5, 0.52);
     if (style == 3) size = vec2(0.0);
     vec2 d = abs(vec2(lu, lv) - vec2(0.5, 0.52));
     float frame = step(d.x, size.x * 0.5 + 0.035) * step(d.y, size.y * 0.5 + 0.035);

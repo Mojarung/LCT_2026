@@ -77,8 +77,16 @@ const SPECS: Record<Archetype, Spec> = {
   creeper: { preset: 'Bush 3' },
 };
 
-/** Сколько вариантов ветвления у архетипа: два - уже не клоны, больше - дольше старт. */
-const VARIANTS = 2;
+/** Extra deciduous silhouette; conifers and shrubs keep their cheaper two-model budget. */
+function variantsFor(archetype: Archetype): number {
+  return SHRUBS.has(archetype) ||
+    archetype === 'spruce' ||
+    archetype === 'pine' ||
+    archetype === 'dwarf_conifer' ||
+    archetype === 'thuja'
+    ? 2
+    : 3;
+}
 
 export type Lod = 'hi' | 'lo';
 
@@ -155,12 +163,49 @@ function roundNormals(geometry: THREE.BufferGeometry): void {
   nor.needsUpdate = true;
 }
 
+/** Per-leaf-cluster shade keeps the crown from reading as a uniformly coloured blob. */
+function shadeLeaves(geometry: THREE.BufferGeometry): void {
+  const box = geometry.boundingBox;
+  if (!box) return;
+  const pos = geometry.getAttribute('position');
+  const tones = new Uint8Array(pos.count * 3);
+  const height = Math.max(box.max.y - box.min.y, 0.01);
+  for (let i = 0; i < pos.count; i++) {
+    const x = Math.floor(pos.getX(i) * 0.3);
+    const y = Math.floor(pos.getY(i) * 0.3);
+    const z = Math.floor(pos.getZ(i) * 0.3);
+    const variation = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+    const shade = Math.max(
+      0.72,
+      Math.min(
+        1,
+        0.82 +
+          0.14 * ((pos.getY(i) - box.min.y) / height) +
+          0.07 * (variation - Math.floor(variation)),
+      ),
+    );
+    const byte = Math.round(shade * 255);
+    tones[i * 3] = byte;
+    tones[i * 3 + 1] = byte;
+    tones[i * 3 + 2] = byte;
+  }
+  geometry.setAttribute('color', new THREE.Uint8BufferAttribute(tones, 3, true));
+}
+
 export function generateModel(archetype: Archetype, variant: number, lod: Lod): Model {
   const spec = SPECS[archetype];
   const tree = new Tree();
   tree.options.copy(structuredClone(TreePreset[spec.preset]) as unknown as Options);
   if (spec.overrides) deepMerge(tree.options as unknown as Record<string, unknown>, spec.overrides);
   tree.options.seed = (tree.options.seed || 1) + variant * 7717;
+  if (variant === 2) {
+    // The third tree spreads its primary branches and carries smaller, less even leaf groups.
+    tree.options.branch.angle[1] += 9;
+    tree.options.branch.length[1] *= 1.14;
+    tree.options.branch.start[1] *= 0.9;
+    tree.options.leaves.count = Math.max(5, Math.round(tree.options.leaves.count * 0.88));
+    tree.options.leaves.size *= 0.94;
+  }
   if (lod === 'lo') lighten(tree.options);
   tree.generate();
   const branches = tree.branchesMesh.geometry;
@@ -168,6 +213,7 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
   roundNormals(leaves);
   branches.computeBoundingBox();
   leaves.computeBoundingBox();
+  shadeLeaves(leaves);
   const box = new THREE.Box3();
   if (branches.boundingBox) box.union(branches.boundingBox);
   if (leaves.boundingBox) box.union(leaves.boundingBox);
@@ -268,6 +314,7 @@ export function leafMaterial(
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map,
+    vertexColors: true,
     alphaTest: 0.35,
     side: THREE.DoubleSide,
     roughness: 0.88,
@@ -373,7 +420,10 @@ export class Forest {
   /** Сколько моделей нужно сгенерировать: по ним интерфейс показывает ход. */
   get jobs(): { archetype: Archetype; variant: number }[] {
     const needed = new Set<string>();
-    for (const p of this.plants) needed.add(`${archetypeOf(p)}:${p.seed % VARIANTS}`);
+    for (const p of this.plants) {
+      const archetype = archetypeOf(p);
+      needed.add(`${archetype}:${p.seed % variantsFor(archetype)}`);
+    }
     return [...needed].map((key) => {
       const [archetype, variant] = key.split(':');
       return { archetype: archetype as Archetype, variant: Number(variant) };
@@ -386,7 +436,8 @@ export class Forest {
     const jobs = this.jobs;
     const members = new Map<string, Plant[]>();
     for (const p of this.plants) {
-      const key = `${archetypeOf(p)}:${p.seed % VARIANTS}`;
+      const archetype = archetypeOf(p);
+      const key = `${archetype}:${p.seed % variantsFor(archetype)}`;
       const list = members.get(key);
       if (list) list.push(p);
       else members.set(key, [p]);
@@ -486,13 +537,14 @@ export class Forest {
     const flatten = archetype === 'creeper' ? 0.35 : 1;
     const crown = size.crown * jitter;
     const sx = crown / model.width;
+    const sz = sx * (0.84 + (((plant.seed >>> 13) % 1000) / 1000) * 0.15);
     const sy = (height * flatten) / model.height;
     const angle = ((plant.seed % 3600) / 3600) * Math.PI * 2;
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
     instance.matrix.compose(
       new THREE.Vector3(plant.x, 0, plant.z),
       q,
-      new THREE.Vector3(sx, sy, sx),
+      new THREE.Vector3(sx, sy, sz),
     );
     instance.size = { height: height * flatten, crown };
     instance.center.set(plant.x, (height * flatten) / 2, plant.z);
