@@ -19,6 +19,7 @@ from shapely.geometry import Polygon
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.results import PlanExportReport
+from green.application.schedule import build_schedule
 from green.domain.planting import Verdict
 from green.infrastructure.cad.documents import APPID, load_document
 
@@ -53,6 +54,8 @@ def check_written_plan(
     if doc is None:
         doc, _ = load_document(result)
     expected = {p.placement_id: p for p in plan.placements}
+    # Позиция ведомости у посадки (атрибут POS) - номер строки её вида; вид вне ведомости - пусто.
+    positions = {row.code: str(row.number) for row in build_schedule(plan.placements)}
     counts: Counter[str] = Counter()
     issues = []
     found = 0
@@ -78,6 +81,9 @@ def check_written_plan(
         if len(strings) < _IDENTITY_FIELDS or strings[1] != placement.verdict.value:
             issues.append(f"{identity}: incorrect verdict XDATA")
         issues.extend(_compare(doc, entity, placement, unit_m))
+        position = positions.get(placement.species.code, "")
+        if _attributes(entity).get("POS") != position:
+            issues.append(f"{identity}: POS attribute differs from planting schedule position")
     issues.extend(
         f"{identity}: expected one planting, found {counts[identity]}"
         for identity in expected
@@ -152,7 +158,7 @@ def _compare(doc: Drawing, insert: Insert, placement: Placement, unit: float) ->
         issues.append(f"{identity}: incorrect species block")
     if insert.dxf.layer != _expected_layer(placement):
         issues.append(f"{identity}: incorrect planting layer")
-    attrs = {decode_dxf_unicode(a.dxf.tag): decode_dxf_unicode(a.dxf.text) for a in insert.attribs}
+    attrs = _attributes(insert)
     if attrs.get("SPECIES") != placement.species.name_ru or attrs.get("NUM") != str(
         placement.number
     ):
@@ -169,6 +175,10 @@ def _compare(doc: Drawing, insert: Insert, placement: Placement, unit: float) ->
         if not _near(circle.dxf.radius * 2, placement.species.crown_diameter_m):
             issues.append(f"{identity}: crown symbol size differs from species")
     return issues
+
+
+def _attributes(insert: Insert) -> dict[str, str]:
+    return {decode_dxf_unicode(a.dxf.tag): decode_dxf_unicode(a.dxf.text) for a in insert.attribs}
 
 
 def _expected_layer(placement: Placement) -> str:

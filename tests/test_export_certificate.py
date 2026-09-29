@@ -33,6 +33,14 @@ def test_original_green_names_are_still_protected(tmp_path: Path, kind: str) -> 
     assert not checker.check(before, result).ok
 
 
+# Подмена атрибута вставки: вид, сквозной номер, позиция ведомости.
+TAMPERED_ATTRIBUTES = {
+    "species": ("SPECIES", "Wrong species"),
+    "number": ("NUM", "100"),
+    "position": ("POS", "2"),
+}
+
+
 @pytest.fixture(params=[1.0, 0.001, 0.3048])
 def exported(tmp_path: Path, request: pytest.FixtureRequest):  # noqa: ANN201
     unit = request.param
@@ -68,6 +76,7 @@ def test_saved_plan_matches_for_different_drawing_units(exported) -> None:  # no
         "scale",
         "species",
         "number",
+        "position",
         "symbol",
         "layer",
         "verdict",
@@ -86,10 +95,9 @@ def test_saved_plan_corruption_is_detected(exported, mutation: str) -> None:  # 
         insert.dxf.insert = (0, 0)
     elif mutation == "scale":
         insert.dxf.xscale = 0.001 / unit
-    elif mutation == "species":
-        insert.get_attrib("SPECIES").dxf.text = "Wrong species"
-    elif mutation == "number":
-        insert.get_attrib("NUM").dxf.text = "100"
+    elif mutation in TAMPERED_ATTRIBUTES:
+        tag, value = TAMPERED_ATTRIBUTES[mutation]
+        insert.get_attrib(tag).dxf.text = value
     elif mutation == "symbol":
         doc.blocks.get(insert.dxf.name).query("CIRCLE").first.dxf.radius = 0.01
     elif mutation == "layer":
