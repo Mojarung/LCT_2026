@@ -28,7 +28,7 @@ function ReviewLinks({ run }: { run: RunOut }) {
       {names.has('classification.json') ? (
         <p className="hint">
           <a href={artifactUrl(run.id, 'classification.json')} download>
-            Скачать отчёт распознавания объектов
+            Отчёт распознавания
           </a>
         </p>
       ) : null}
@@ -74,7 +74,7 @@ export function RunHeader({ run }: { run: RunOut }) {
       {run.state === 'succeeded' ? (
         <p className="scene-links">
           <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-            3D-вид участка →
+            3D и снимки →
           </Link>
           <a
             className="scene-link"
@@ -99,14 +99,19 @@ export function RunHeader({ run }: { run: RunOut }) {
 export function RunMetrics({
   run,
   trees,
+  draft = false,
 }: {
   run: RunOut;
   /** Деревья среди посадок плана; null - план ещё не загружен. Число деревьев - первое, что
    *  спрашивает заказчик, а «994 посадки» его не называли (жюри по дизайну, итерация 9). */
   trees?: { trees: number; planted: number } | null;
+  /** Правки ещё не пересобраны в DXF: число посадок - черновика (trees.planted, как в составе
+   *  плана справа), а не итог прогона, и рядом сказано, что это черновик (жюри, этап 21). */
+  draft?: boolean;
 }) {
   const summary = run.summary ?? {};
-  const total = num(summary.placements);
+  const drafted = draft && trees != null;
+  const total = drafted ? trees.planted : num(summary.placements);
   const approval = num(summary.needs_approval);
   const rejected = num(summary.rejections);
   const integrity = summary.integrity_ok === true;
@@ -126,53 +131,45 @@ export function RunMetrics({
         <b>{integer(total)}</b>
         <span>
           {plural(total, 'посадка', 'посадки', 'посадок')} в плане
-          {trees != null && trees.planted === total
-            ? `: ${integer(trees.trees)} ${plural(trees.trees, 'дерево', 'дерева', 'деревьев')}` +
-              (total > trees.trees
-                ? `, ${integer(total - trees.trees)} ${plural(total - trees.trees, 'кустарник', 'кустарника', 'кустарников')}`
-                : '')
-            : ''}
-          {approval ? (
-            `, ${integer(approval)} на согласование`
-          ) : sketch ? (
-            ', требуется проверка'
-          ) : (
-            <>
-              , <em>все без ограничений</em>
-            </>
-          )}
+          {drafted ? ' · черновик правок' : null}
         </span>
       </p>
-      <p className="metric-sub">
-        <b>{integer(rejected)}</b>{' '}
-        {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}
-      </p>
-      {/* Отдельной строкой: отказы и целостность подосновы - два разных факта (жюри, итерация 9).
-          Цела - обычным текстом: курсив выделял норму как событие (итерация 7). */}
-      <p className="metric-sub">
-        Подоснова {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
-      </p>
-      {barrierPlaces ? (
-        <p className="metric-sub quality-line">
-          <b>{integer(barrierPlaces)}</b>{' '}
-          {plural(
-            barrierPlaces,
-            'место станет допустимым',
-            'места станут допустимыми',
-            'мест станут допустимыми',
-          )}{' '}
-          с прикорневым барьером
+      {trees != null && trees.planted === total ? (
+        <dl className="run-breakdown">
+          <div>
+            <dt>Деревья</dt>
+            <dd>{integer(trees.trees)}</dd>
+          </div>
+          <div>
+            <dt>Кустарники</dt>
+            <dd>{integer(total - trees.trees)}</dd>
+          </div>
+        </dl>
+      ) : null}
+      {approval > 0 ? (
+        <p className="run-approval">
+          На согласование <b>{integer(approval)}</b>
         </p>
       ) : null}
-      <LawnLine summary={summary} />
+      {!integrity ? <p className="metric-bad">Целостность подосновы нарушена</p> : null}
       {sketch ? (
         <div className="notice">
-          <p>
-            {unconfirmed > 0
-              ? `Грунт под ямой не подтверждён у ${integer(unconfirmed)} из ${integer(total)} посадок: уточните границы покрытий.`
-              : 'Эскиз: уточните объекты чертежа, допустимость посадок не подтверждена.'}
-          </p>
-          <ReviewLinks run={run} />
+          <p className="notice-title">Эскиз · требуется проверка</p>
+          <p>Допустимость посадок не подтверждена.</p>
+          {unconfirmed > 0 ? (
+            <p>
+              У {integer(unconfirmed)} из {integer(total)} посадок не подтверждён грунт под всей
+              ямой.
+            </p>
+          ) : null}
+          <details className="fold notice-details">
+            <summary>Что проверить</summary>
+            <p>
+              Уточните объекты и границы покрытий. Грунт под всей посадочной ямой должен быть
+              подтверждён замкнутыми контурами.
+            </p>
+            <ReviewLinks run={run} />
+          </details>
         </div>
       ) : null}
       {notices.length ? (
@@ -182,16 +179,36 @@ export function RunMetrics({
           ))}
         </div>
       ) : null}
-      {warnings.length ? (
-        <details className="hud-block fold">
-          <summary>Как собран план: {warnings.length}</summary>
-          <ul className="warn-list">
-            {warnings.map((text) => (
-              <li key={text}>{text}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      <details className="hud-block fold run-details">
+        <summary>Детали расчёта</summary>
+        <dl className="run-facts">
+          <div>
+            <dt>Отклонено мест</dt>
+            <dd>{integer(rejected)}</dd>
+          </div>
+          <div>
+            <dt>Подоснова</dt>
+            <dd>{integrity ? 'Без изменений' : 'Нарушена'}</dd>
+          </div>
+          {barrierPlaces > 0 ? (
+            <div>
+              <dt>Допустимо с барьером</dt>
+              <dd>{integer(barrierPlaces)}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <LawnLine summary={summary} />
+        {warnings.length ? (
+          <details className="fold">
+            <summary>Как собран план · {warnings.length}</summary>
+            <ul className="warn-list">
+              {warnings.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </details>
     </>
   );
 }

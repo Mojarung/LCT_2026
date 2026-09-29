@@ -183,6 +183,10 @@ class AssortmentSummary:
     rejected_by_kind: Mapping[str, int] = field(default_factory=dict)
     rejected_by_rule: Mapping[str, int] = field(default_factory=dict)
     notes: tuple[str, ...] = field(default=())
+    # Чьи месяцы в decor_by_month: tree - деревьев, shrub - кустарников, mixed - вместе, пусто -
+    # посадок нет. Слагаемое индекса «Сезонность» считает деревья и кустарники вместе, и без этой
+    # подписи сводка деревьев с пустым июлем читается как ошибка индекса.
+    decor_of: str = ""
 
 
 @dataclass(frozen=True, slots=True)

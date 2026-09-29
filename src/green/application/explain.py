@@ -11,6 +11,8 @@ from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Explanation, Plan, Verdict
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from green.domain.norms import AnyRule, RuleBook
     from green.domain.planting import Lawn, Placement, Reason, Rejection, RuleCheck
     from green.domain.quality import PlantingValue
@@ -100,7 +102,43 @@ def cite(check: RuleCheck, rulebook: RuleBook) -> str:
     return f"{check.rule_id}: {citation_text(rule, rulebook)}"
 
 
-def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
+# Прирост за крону шире 5 м (params.species_distance_rules, validation._threshold) идёт только
+# к правилам табл. 9.1 СП 42.13330 (прим. 1 к ней): порог их проверки больше нормы таблицы на
+# прирост. Разница меньше полусантиметра - округление, а не прирост.
+CROWN_TABLE = "табл. 9.1"
+CROWN_BASE_M = 5.0
+_INCREMENT_EPS_M = 0.005
+CROWN_NOTE = (
+    " Прирост за крону - по прим. 1 к табл. 9.1 СП 42.13330.2016; его величину акт не задаёт"
+)
+
+
+def crown_increment_m(check: RuleCheck, rule: AnyRule | None) -> float:
+    """Прирост порога проверки за крону шире 5 м: порог минус норма табл. 9.1; 0 - прироста нет."""
+    if not isinstance(rule, DistanceRule) or check.threshold_m is None:
+        return 0.0
+    if CROWN_TABLE not in rule.citation.clause:
+        return 0.0
+    extra = check.threshold_m - rule.min_distance_m
+    return extra if extra >= _INCREMENT_EPS_M else 0.0
+
+
+def crown_note(checks: Sequence[RuleCheck], rulebook: RuleBook, crown_m: float | None) -> str:
+    """Одна фраза на объяснение, если у проверок есть прирост за крону: основание и то, что его
+    величина - толкование проекта. Ставка прироста выводится из порога и кроны вида, а не из
+    параметров: объяснение говорит о том, что проверено."""
+    extras = [e for c in checks if (e := crown_increment_m(c, rulebook.rule(c.rule_id)))]
+    if not extras:
+        return ""
+    what = "прирост"
+    if crown_m is not None and crown_m > CROWN_BASE_M:
+        rate = round(extras[0] / (crown_m - CROWN_BASE_M), 2)
+        what = f"{_number(rate)} м на метр кроны сверх {_number(CROWN_BASE_M)} м"
+    return f"{CROWN_NOTE}, {what} - толкование проекта (crown_extra_per_m)."
+
+
+def describe_check(check: RuleCheck, rulebook: RuleBook, crown_m: float | None = None) -> str:
+    """Проверка словами. crown_m - взрослая крона вида: с ней прирост порога назван кроной."""
     rule = rulebook.rule(check.rule_id)
     target = (
         OBJECT_LABELS.get(check.object_class, str(check.object_class)) if check.object_class else ""
@@ -116,7 +154,19 @@ def describe_check(check: RuleCheck, rulebook: RuleBook) -> str:
     measure = ""
     if isinstance(rule, DistanceRule) and rule.measure_to.value == "outer_wall":
         measure = " до наружной стенки"
-    norm = f" {sign} {_metres(check.threshold_m)} м" if check.threshold_m is not None else ""
+    norm = ""
+    if check.threshold_m is not None:
+        norm = f" {sign} {_metres(check.threshold_m)} м"
+        if extra := crown_increment_m(check, rule):
+            crown = (
+                f"{_number(crown_m)} м"
+                if crown_m is not None and crown_m > CROWN_BASE_M
+                else f"шире {_number(CROWN_BASE_M)} м"
+            )
+            norm += (
+                f": {_metres(check.threshold_m - extra)} м по {CROWN_TABLE} и "
+                f"{_metres(extra)} м за крону {crown}"
+            )
     return (
         f"до {target}{measure} {_metres(check.measured_m)} м{norm}"
         f"{barrier} ({cite(check, rulebook)})"
@@ -129,27 +179,37 @@ def _placement(
     measured = [c for c in placement.checks if c.measured_m is not None]
     closest = sorted(measured, key=lambda c: (c.measured_m or 0) - (c.threshold_m or 0))[:4]
     no_data = [c for c in placement.checks if c.outcome is CheckOutcome.NO_DATA][:1]
-    parts = [describe_check(c, rulebook) for c in (*closest, *no_data)]
+    crown_m = placement.species.crown_mature_m
+    shown = (*closest, *no_data)
+    parts = [describe_check(c, rulebook, crown_m) for c in shown]
     how = f", {', '.join(placement.notes)}" if placement.notes else ""
     text = (
         f"Посадка №{placement.number}, {placement.species.name_ru} "
         f"({placement.species.name_lat}){how}: {VERDICT_LABELS[placement.verdict]}. "
         "Ближайшие ограничения: " + "; ".join(parts) + "."
     )
+    text += crown_note(shown, rulebook, crown_m)
     text += describe_assortment(placement)
     text += describe_value(value)
     return Explanation(placement.placement_id, placement.number, "placement", text)
 
 
-# Вклад одной посадки - десятитысячные доли индекса, поэтому он показывается в тысячных
-# (промилле): «+0,82 ‰» читается, «+0,0008» - нет. Меньше половины сотой промилле - ноль.
+# Вклад одной посадки - десятитысячные доли индекса 0-1. Дендрологу он показывается пунктами
+# шкалы 0-100 (сотыми индекса): «0,089 пункта из 100» читается без знания промилле. Точность
+# прежняя - сотая промилле, то есть тысячная пункта; ноль - меньше половины сотой промилле.
 PERMILLE_ZERO = 0.005
 
 
-def permille(delta: float) -> str:
-    """Вклад в индекс в тысячных долях: «+0,82 ‰»."""
-    value = delta * 1000
-    return f"{'+' if value >= 0 else '−'}{abs(value):.2f} ‰".replace(".", ",")
+def index_points(delta: float) -> str:
+    """Величина вклада в индекс без знака, в пунктах из 100: «0,089 пункта из 100»."""
+    # «0,09», а не «0,090»; точность - тысячная пункта.
+    text = f"{abs(delta) * 100:.3f}".removesuffix("0")
+    return f"{text.replace('.', ',')} пункта из 100"
+
+
+def _index_change(delta: float) -> str:
+    verb = "повышает" if delta >= 0 else "снижает"
+    return f"{verb} индекс качества плана на {index_points(delta)}"
 
 
 def describe_value(value: PlantingValue | None) -> str:
@@ -170,15 +230,14 @@ def describe_value(value: PlantingValue | None) -> str:
         what = "; ".join(value.weak) or "ниже среднего по плану"
         # Отрицательный вклад - ещё не разрешение убрать посадку: оговорка проверки квот.
         scope = f" {value.scope}" if value.delta < 0 and value.scope else ""
-        return f" Слабое место ({permille(value.delta)} к индексу качества): {what}.{gives}{scope}"
+        return f" Слабое место ({_index_change(value.delta)}): {what}.{gives}{scope}"
     if value.delta < 0:
-        higher = permille(-value.delta)[1:]
         return (
-            f" Ценность: без этой посадки расчётный индекс выше на {higher}{why}. {value.scope}"
-            f"{weak}"
+            " Ценность: без этой посадки расчётный индекс выше на "
+            f"{index_points(value.delta)}{why}. {value.scope}{weak}"
         )
     rank = f", больше, чем у {value.percentile:.0%} посадок плана" if value.percentile else ""
-    return f" Ценность: вклад в индекс качества {permille(value.delta)}{rank}{why}.{weak}"
+    return f" Ценность: {_index_change(value.delta)}{rank}{why}.{weak}"
 
 
 def describe_assortment(placement: Placement) -> str:
@@ -230,6 +289,7 @@ def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
                 + "; ".join(describe_check(check, rulebook) for check in rejection.blocking)
                 + "."
             )
+            text += crown_note(rejection.blocking, rulebook, None)
         return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
     parts = [describe_check(c, rulebook) for c in rejection.blocking]
     text = (
@@ -237,6 +297,8 @@ def _rejection(rejection: Rejection, rulebook: RuleBook) -> Explanation:
         + "; ".join(parts)
         + "."
     )
+    # Вид у отказа не выбран: прирост назван без кроны и без ставки.
+    text += crown_note(rejection.blocking, rulebook, None)
     text += describe_barrier(rejection)
     return Explanation(rejection.rejection_id, rejection.number, "rejection", text)
 
@@ -277,3 +339,8 @@ def describe_barrier(rejection: Rejection) -> str:
 
 def _metres(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
+
+
+def _number(value: float) -> str:
+    """Число без лишних нулей: «6», «6,5», «0,5»."""
+    return f"{value:g}".replace(".", ",")

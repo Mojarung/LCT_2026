@@ -21,12 +21,12 @@ from green.interfaces.api.schemas import (
 router = APIRouter(tags=["system"])
 
 
-@router.get("/health")
+@router.get("/health", summary="Проверка работоспособности")
 def health() -> HealthOut:
     return HealthOut(version=__version__)
 
 
-@router.get("/profiles/{name}")
+@router.get("/profiles/{name}", summary="Параметры профиля")
 def profile(name: str, container: ContainerDep) -> ProfileOut:
     """Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов."""
     names = container.profiles.names()
@@ -48,7 +48,7 @@ def profile(name: str, container: ContainerDep) -> ProfileOut:
     )
 
 
-@router.get("/meta")
+@router.get("/meta", summary="Сведения о сервисе: профили, нормы, виды")
 def meta(container: ContainerDep) -> MetaOut:
     rulebook = container.rules.load()
     rules = rulebook.all_rules
@@ -77,7 +77,7 @@ def meta(container: ContainerDep) -> MetaOut:
     )
 
 
-@router.get("/streets")
+@router.get("/streets", summary="Улицы пилотного проекта")
 def streets(container: ContainerDep) -> list[StreetOut]:
     """Улицы пилотного проекта, готовые к прогону.
 

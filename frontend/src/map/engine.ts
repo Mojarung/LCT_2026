@@ -26,6 +26,7 @@ import { lawnChunks, withLawns } from './lawns';
 import { zoneChunks } from './zones';
 import { Palette } from './palette';
 import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
+import { documentMapStyle, type MapStyle } from './style';
 import {
   type BaseCache,
   drawGrid,
@@ -114,6 +115,8 @@ export class PlanEngine {
     editing: false,
   };
   private readonly palette = new Palette();
+  /** Стиль карты: инженерный чертёж или иллюстрация (style.ts), атрибут data-map-style. */
+  private style: MapStyle = documentMapStyle();
   /** Где посадка стояла до переноса, который ещё не принят сервисом: при отказе правки
    *  она возвращается сюда, а не остаётся на карте там, где плана нет. */
   private readonly moveOrigins = new WeakMap<MapItem, Point>();
@@ -172,11 +175,16 @@ export class PlanEngine {
     this.cleanup.push(() => {
       resize.disconnect();
     });
-    // Тема меняет цвета из CSS-переменных: сбросить их кэш и перерисовать карту.
+    // Тема и стиль карты меняют цвета из CSS-переменных и знаки: сбросить кэш цветов и
+    // перерисовать карту.
     const theme = new MutationObserver(() => {
+      this.style = documentMapStyle();
       this.repaint();
     });
-    theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    theme.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-map-style'],
+    });
     const scheme = window.matchMedia('(prefers-color-scheme: dark)');
     const onScheme = () => {
       this.repaint();
@@ -637,6 +645,7 @@ export class PlanEngine {
         this.scene,
         this.marks.layers,
         this.palette,
+        this.style,
       );
     }
     const cache = this.cache;
@@ -657,7 +666,7 @@ export class PlanEngine {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     const visible = worldBounds(this.view, 0, 0, rect.width, rect.height);
-    drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette, dpr);
+    drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette, dpr, this.style);
 
     // Отметка выбранного, север и линейка - в экранных пикселях: их размер не зависит от
     // масштаба, иначе на общем виде обводка вырождается в волос.

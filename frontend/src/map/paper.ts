@@ -103,14 +103,15 @@ export function pinToScreen(ctx: CanvasRenderingContext2D, fill: CanvasPattern):
 
 let scratch: HTMLCanvasElement | null = null;
 
-/** Залить фактурой всё, где маска покрытия непрозрачна. Маска кладётся мировой матрицей во
- *  вспомогательный холст, фактура заливает её по source-in в экранных пикселях, готовый слой
- *  ложится на подоснову. place - та же мировая матрица, что у подосновы. */
+/** Залить фактурой (в инженерном стиле - плоским цветом) всё, где маска покрытия
+ *  непрозрачна. Маска кладётся мировой матрицей во вспомогательный холст, фактура заливает её
+ *  по source-in в экранных пикселях, готовый слой ложится на подоснову. place - та же мировая
+ *  матрица, что у подосновы. */
 export function paintMaterial(
   ctx: CanvasRenderingContext2D,
   mask: CanvasImageSource,
   surface: SurfaceImage,
-  fill: CanvasPattern,
+  fill: CanvasPattern | string,
   place: (target: CanvasRenderingContext2D) => void,
 ): void {
   const { width, height } = ctx.canvas;
@@ -129,7 +130,7 @@ export function paintMaterial(
   s.drawImage(mask, surface.x, surface.y, surface.w, surface.h);
   s.setTransform(1, 0, 0, 1, 0, 0);
   s.globalCompositeOperation = 'source-in';
-  fill.setTransform(new DOMMatrix());
+  if (typeof fill !== 'string') fill.setTransform(new DOMMatrix());
   s.fillStyle = fill;
   s.fillRect(0, 0, width, height);
   s.globalCompositeOperation = 'source-over';

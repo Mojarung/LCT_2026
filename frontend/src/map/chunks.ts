@@ -6,7 +6,13 @@
  * пикселя. */
 
 import type { BasemapFeature } from '../api/artifacts';
-import { type ExistingPlant, plantsOf } from './existing';
+import {
+  type ExistingPlant,
+  plantsOf,
+  stripPoints,
+  shrubStripLines,
+  SHRUB_STRIP_WIDTH_M,
+} from './existing';
 import { addGeometry, type Box, measure } from './geometry';
 import { STYLES, type ClassStyle } from './palette';
 
@@ -45,7 +51,10 @@ export function buildChunks(
   const byKey = new Map<string, Chunk>();
   const box: Box = [0, 0, 0, 0];
   for (const feature of features) {
-    const style = STYLES[feature.properties.class];
+    const shrubLines = shrubStripLines(feature);
+    const style = shrubLines.length
+      ? { group: 'existing' as const, fill: '--c-existing', width: 0 }
+      : STYLES[feature.properties.class];
     if (!style) continue;
     const plants = plantsOf(feature);
     if (plants) {
@@ -67,7 +76,7 @@ export function buildChunks(
     while (band < BANDS.length && (BANDS[band] ?? Infinity) <= span) band += 1;
     const cx = Math.floor((box[0] - x0) / cell);
     const cy = Math.floor((box[1] - y0) / cell);
-    const key = `${feature.properties.class}|${band}|${cx}|${cy}`;
+    const key = `${feature.properties.class}|${feature.properties.vegetation_kind ?? ''}|${band}|${cx}|${cy}`;
     let chunk = byKey.get(key);
     if (!chunk) {
       chunk = {
@@ -87,7 +96,38 @@ export function buildChunks(
       };
       byKey.set(key, chunk);
     }
-    addGeometry(chunk.path, feature.geometry);
+    const strip = stripPoints(feature);
+    if (shrubLines.length) {
+      const r = SHRUB_STRIP_WIDTH_M / 2;
+      for (const line of shrubLines) {
+        for (let i = 1; i < line.length; i++) {
+          const a = line[i - 1];
+          const b = line[i];
+          if (!a || !b) continue;
+          const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (!length) continue;
+          const dx = (-(b[1] - a[1]) * r) / length;
+          const dy = ((b[0] - a[0]) * r) / length;
+          chunk.path.moveTo(a[0] + dx, a[1] + dy);
+          chunk.path.lineTo(b[0] + dx, b[1] + dy);
+          chunk.path.lineTo(b[0] - dx, b[1] - dy);
+          chunk.path.lineTo(a[0] - dx, a[1] - dy);
+          chunk.path.closePath();
+        }
+      }
+      box[0] -= r;
+      box[1] -= r;
+      box[2] += r;
+      box[3] += r;
+    } else if (strip) {
+      // Условные кружки полосы, не кроны и не подтверждённые места стволов.
+      for (const [x, y] of strip) {
+        chunk.path.moveTo(x + 0.25, y);
+        chunk.path.arc(x, y, 0.25, 0, Math.PI * 2);
+      }
+    } else {
+      addGeometry(chunk.path, feature.geometry);
+    }
     chunk.span = Math.max(chunk.span, span);
     chunk.minX = Math.min(chunk.minX, box[0]);
     chunk.minY = Math.min(chunk.minY, box[1]);

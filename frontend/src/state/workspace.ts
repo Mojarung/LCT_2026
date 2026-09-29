@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 
+import { MAP_STYLE_KEY, type MapStyle, parseMapStyle } from '../map/style';
 import { DEFAULT_LAYERS, type LayerKey, type Layers, type MapItem } from '../map/types';
 
 export interface Message {
@@ -37,6 +38,9 @@ interface WorkspaceState {
   panels: Panels;
   zoomShare: number;
   orientation: 'street' | 'north';
+  /** Стиль карты: инженерный чертёж (по умолчанию) или иллюстрация. Переживает смену прогона
+   *  и перезагрузку: это привычка человека, а не состояние плана. */
+  mapStyle: MapStyle;
 
   enter: (runId: string) => void;
   select: (item: MapItem | null) => void;
@@ -53,6 +57,7 @@ interface WorkspaceState {
   setLegend: (open: boolean) => void;
   setZoomShare: (share: number) => void;
   setOrientation: (orientation: 'street' | 'north') => void;
+  setMapStyle: (style: MapStyle) => void;
 }
 
 const read = (key: string): string | null => {
@@ -86,6 +91,14 @@ function savedPanels(): Panels {
   };
 }
 
+const savedMapStyle = (): MapStyle => parseMapStyle(read(MAP_STYLE_KEY));
+
+/** Стиль - атрибутом на <html>: по нему CSS меняет токены подосновы, а движок карты
+ *  перерисовывается (engine.ts следит за атрибутом). */
+function applyMapStyle(style: MapStyle): void {
+  if (typeof document !== 'undefined') document.documentElement.dataset.mapStyle = style;
+}
+
 const fresh = () => ({
   selected: null,
   revision: 0,
@@ -104,6 +117,7 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   runId: null,
   ...fresh(),
   panels: savedPanels(),
+  mapStyle: savedMapStyle(),
 
   enter(runId) {
     if (get().runId === runId) return;
@@ -165,9 +179,19 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   setOrientation(orientation) {
     set({ orientation });
   },
+  setMapStyle(style) {
+    write(MAP_STYLE_KEY, style);
+    applyMapStyle(style);
+    set({ mapStyle: style });
+  },
 }));
 
 /** Для тестов: хранилище - модульное состояние, и размонтирование страницы его не чистит. */
 export function resetWorkspace(): void {
-  useWorkspace.setState({ runId: null, ...fresh(), panels: savedPanels() });
+  useWorkspace.setState({
+    runId: null,
+    ...fresh(),
+    panels: savedPanels(),
+    mapStyle: savedMapStyle(),
+  });
 }

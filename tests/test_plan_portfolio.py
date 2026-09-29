@@ -76,6 +76,29 @@ def test_incomplete_variant_does_not_discard_valid_baseline() -> None:
     assert plan.portfolio.variants[1].error == "No compatible species"
 
 
+def test_rejected_variant_reason_groups_repeated_messages() -> None:
+    """Реестр Понтрягина: одна и та же фраза восемь раз подряд без посадок. Теперь фраза
+    один раз, число посадок и до двух примеров."""
+    same = tuple(ValidationIssue("footprint", (f"p-{i}",), "Место не на грунте") for i in range(8))
+    other = tuple(
+        ValidationIssue("distance", (identity,), "Отступ меньше нормы", "R", 1.0, 2.0)
+        for identity in ("q-1", "q-2")
+    )
+
+    def build(params: PlanParams) -> tuple[Plan, PlanValidation]:
+        if params.placement_solver == "milp":
+            return _plan(0.9), PlanValidation(10, same + other)
+        return _plan(0.3), PlanValidation(0, ())
+
+    plan, _ = choose_plan(build, PlanParams(modes=("alley",), placement_solver="portfolio"), ())
+
+    assert plan.portfolio is not None
+    assert plan.portfolio.variants[1].error == (
+        "Место не на грунте: 8 посадок, например p-0, p-1;"
+        " Отступ меньше нормы: 2 посадки (q-1, q-2)"
+    )
+
+
 def test_all_invalid_variants_stop_generation() -> None:
     def build(_params: PlanParams) -> tuple[Plan, PlanValidation]:
         return _plan(1.0), PlanValidation(1, (ValidationIssue("distance", (), "unsafe"),))

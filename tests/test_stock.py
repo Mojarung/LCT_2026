@@ -79,6 +79,8 @@ def test_tree_strip_is_not_a_trunk() -> None:
     stock = stock_of([_boundary(), strip], BOUNDARY, crown_m=8.0)
     assert stock.trees == 0
     assert len(stock.strips_xy) == 10
+    assert len(stock.crowns()[0]) == 0
+    assert stock.canopy is None
 
 
 def test_trunk_outside_counts_only_when_its_crown_reaches_the_site() -> None:

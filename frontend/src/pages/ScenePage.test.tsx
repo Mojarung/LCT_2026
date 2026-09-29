@@ -35,14 +35,19 @@ describe('3D-вид прогона', () => {
   it('шапка прогона ведёт в 3D, только когда план готов', async () => {
     mockApi({ '/api/v1/runs/r1': run() });
     const first = renderApp('/runs/r1');
-    expect(await screen.findByRole('link', { name: /3D-вид участка/ })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /3D и снимки/ })).toHaveAttribute(
       'href',
       '/runs/r1/3d',
+    );
+    expect(screen.getByRole('link', { name: /кадры улицы/ })).toHaveAttribute(
+      'href',
+      '/runs/r1/3d?shots=street',
     );
     first.unmount();
     mockApi({ '/api/v1/runs/r1': run({ state: 'running' }) });
     renderApp('/runs/r1');
     expect(await screen.findByText(/Тестовая улица/)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /3D-вид участка/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /3D и снимки/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /кадры улицы/ })).not.toBeInTheDocument();
   });
 });

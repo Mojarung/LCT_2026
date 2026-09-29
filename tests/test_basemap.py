@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
+from typing import TYPE_CHECKING
+
 from shapely.geometry import LineString, Point, Polygon
 
 from green.application.basemap import (
@@ -15,7 +19,12 @@ from green.application.basemap import (
     SPAN_FLOOR_M,
     build_basemap,
 )
+from green.application.tree_strips import chain_tree_strips
 from green.domain.objects import Feature, ObjectClass, SourceRef
+from green.infrastructure.reports.artifacts import FileArtifactSink, _basemap
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _ref(handle: str) -> SourceRef:
@@ -172,3 +181,60 @@ def test_point_symbols_survive_the_size_floor() -> None:
     assert basemap.min_span_m > 0
     assert basemap.features_out == len(poles)
     assert SMALL not in basemap.dropped
+
+
+def test_conifer_symbols_are_marked_for_the_map() -> None:
+    """Знак хвойного из съёмки доезжает до карты признаком, лиственный и прочие - без него."""
+    pine = replace(
+        _feature("t1", ObjectClass.EXISTING_TREE, Point(0, 0)),
+        block="SOSNOD_12",
+    )
+    spruce = replace(
+        _feature("t2", ObjectClass.EXISTING_TREE, Point(5, 0)),
+        block="ELOD_3_1",
+    )
+    linden = replace(
+        _feature("t3", ObjectClass.EXISTING_TREE, Point(10, 0)),
+        block="DEREVO_935",
+    )
+    unnamed = _feature("t4", ObjectClass.EXISTING_TREE, Point(15, 0))
+    # Код хвойного у куста или опоры - не хвойное дерево: признак только у класса дерева.
+    shrub = replace(
+        _feature("s1", ObjectClass.EXISTING_SHRUB, Point(20, 0)),
+        block="SOSNOD_1",
+    )
+
+    basemap = build_basemap([pine, spruce, linden, unnamed, shrub])
+
+    assert [f.conifer for f in basemap.features] == [True, True, False, False, False]
+    assert basemap.features_out == 5
+
+
+def test_the_conifer_mark_is_written_only_where_it_is(tmp_path: Path) -> None:
+    pine = replace(_feature("t1", ObjectClass.EXISTING_TREE, Point(0, 0)), block="TUYA_2")
+    linden = _feature("t2", ObjectClass.EXISTING_TREE, Point(5, 0))
+
+    path = FileArtifactSink().save_basemap(tmp_path, build_basemap([pine, linden]))
+
+    features = json.loads(path.read_text(encoding="utf-8"))["features"]
+    assert [f["properties"] for f in features] == [
+        {"class": "existing_tree", "conifer": True, "vegetation_kind": "individual"},
+        {"class": "existing_tree", "vegetation_kind": "individual"},
+    ]
+
+
+def test_tree_strip_semantics_survive_basemap_export() -> None:
+    features = [
+        replace(
+            _feature(str(i), ObjectClass.EXISTING_TREE, Point(i * 0.8, 0)), layer="Полоса деревьев"
+        )
+        for i in range(4)
+    ]
+    features.append(_feature("single", ObjectClass.EXISTING_TREE, Point(20, 10)))
+    payload = _basemap(build_basemap(chain_tree_strips(features)))
+    strips = [f for f in payload["features"] if f["properties"]["vegetation_kind"] == "strip"]
+    singles = [f for f in payload["features"] if f["properties"]["vegetation_kind"] == "individual"]
+    assert len(strips) == len(singles) == 1
+    assert strips[0]["geometry"]["type"] == "MultiPoint"
+    assert len(strips[0]["geometry"]["coordinates"]) == 4
+    assert singles[0]["geometry"]["coordinates"] == [20, 10]

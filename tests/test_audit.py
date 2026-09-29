@@ -254,10 +254,12 @@ def test_our_own_plan_passes_the_audit(tmp_path: Path) -> None:
                 "strict",
                 {"layer_classes": {"GREEN_ZONE_ALLOWED": "ignore", "GREEN_REJECT": "ignore"}},
             ),
+            # Свои слои нормоконтроль узнаёт сам: кусты не считаются деревьями по кругу кроны.
             planting_layers=r"^GREEN_(TREES|SHRUBS)",
-            shrub_layers=r"^GREEN_SHRUBS",
         )
     )
     assert len(report.plantings) == len(generated.plan.placements)
+    shrubs = sum(p.species.is_shrub for p in generated.plan.placements)
+    assert report.summary()["shrubs"] == shrubs
     assert report.summary()["with_violations"] == 0
     assert report.integrity.ok

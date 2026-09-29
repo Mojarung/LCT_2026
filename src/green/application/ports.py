@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport, LayerMap
-    from green.application.editing import RunContext
+    from green.application.editing import Edit, RunContext
     from green.application.params import PlanParams
     from green.application.photos import PhotoJob, PhotoPrompt
     from green.application.results import (
@@ -225,11 +225,34 @@ class GisLayerSource(Protocol):
 
 
 class RunContextStore(Protocol):
-    """Контекст правки вне памяти: правка переживает перезапуск сервиса и новый прогон."""
+    """Контекст правки вне памяти: правка переживает перезапуск сервиса и новый прогон.
 
-    def save(self, context: RunContext) -> None: ...
+    Правки после сохранения контекста лежат в журнале прогона: контекст на каждую правку
+    целиком не пишется (сцена генплана - сотни МБ), а процессы сервиса видят один черновик.
+    """
+
+    def save(self, context: RunContext) -> object | None:
+        """Сохранить контекст и вернуть метку записанного файла (как stamp); None - не сохранён."""
+        ...
 
     def load(self, run_id: str) -> RunContext | None: ...
+
+    def stamp(self, run_id: str) -> object | None:
+        """Метка сохранённого контекста: сменилась - контекст пересохранил другой процесс
+        (пересборка), и контекст в памяти пора поднять заново. None - контекста на диске нет."""
+        ...
+
+    def append_edits(self, run_id: str, edits: Sequence[Edit], after: int) -> int | None:
+        """Дописать принятую пачку правок в журнал под номером after + 1 и вернуть его.
+
+        None - в журнале уже есть правка с номером больше after: её принял другой процесс,
+        её надо догнать и проверить новую правку заново. Прогона нет - NotFoundError.
+        """
+        ...
+
+    def edits_since(self, run_id: str, seq: int) -> list[tuple[int, tuple[Edit, ...]]] | None:
+        """Пачки правок журнала с номером больше seq, по номеру. None - прогон удалён."""
+        ...
 
 
 class RunStore(Protocol):
@@ -248,6 +271,11 @@ class RunStore(Protocol):
     def recent(self, limit: int) -> list[RunRecord]: ...
 
     def artifact(self, run_id: str, name: str) -> Path: ...
+
+    def delete(self, run_id: str) -> None:
+        """Удалить законченный прогон целиком. Идущий - ConflictError, неизвестный -
+        NotFoundError; в обоих случаях на диске ничего не меняется."""
+        ...
 
 
 type PhotoFile = Literal["source", "raw", "photo"]

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from green.application.editing import EditRejection
 from green.application.progress import ProgressView, estimate
 from green.application.results import RunRecord, RunState
 from green.domain.planting import Plan, RuleCheck
@@ -195,11 +196,36 @@ class CheckIn(BaseModel):
 
 
 class CheckOut(BaseModel):
-    verdict: str
-    plantable: bool
-    needs_barrier: bool
-    note: str = ""
-    checks: list[RuleCheckOut] = Field(default_factory=list)
+    """Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы."""
+
+    verdict: str = Field(
+        description=(
+            "Итог по нормам: allowed - посадка допустима, needs_approval - допустима при"
+            " согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно"
+            " или вид здесь запрещён)"
+        )
+    )
+    plantable: bool = Field(
+        description=(
+            "Посадочное место целиком на пригодном грунте внутри границы работ и не задевает"
+            " препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict"
+            " forbidden при plantable true - точка на грунте, но ближе нормы к объекту"
+        )
+    )
+    needs_barrier: bool = Field(
+        description="Место допустимо только с корнезащитным (прикорневым) барьером"
+    )
+    note: str = Field(
+        default="",
+        description=(
+            "Причина по-русски, если место непригодно или вид здесь запрещён; нарушения"
+            " отступов - в checks"
+        ),
+    )
+    checks: list[RuleCheckOut] = Field(
+        default_factory=list,
+        description="Проверка каждого правила отступа: норма, замер, итог",
+    )
 
 
 class EditIn(BaseModel):
@@ -222,6 +248,18 @@ class DraftOut(BaseModel):
     stale: bool
 
 
+class RejectedByEditOut(BaseModel):
+    """Посадка, которую правка перевела в отказ."""
+
+    placement_id: str = Field(description="Идентификатор посадки; под ним же она в отказах плана")
+    reason: str = Field(
+        description=(
+            "Причина по-русски - то же, что ответ проверки точки для этого вида: note"
+            " (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов"
+        )
+    )
+
+
 class PlanSummaryOut(BaseModel):
     """Состояние плана после правки.
 
@@ -234,15 +272,26 @@ class PlanSummaryOut(BaseModel):
     needs_approval: int
     rejections: int
     stale: bool
+    rejected_by_edit: list[RejectedByEditOut] = Field(
+        description=(
+            "Посадки, которые именно эта правка перевела в отказ (перенос или добавление в"
+            " место, запрещённое нормами), с причиной; пусто, если таких нет"
+        ),
+    )
 
     @classmethod
-    def from_plan(cls, plan: Plan, *, stale: bool) -> PlanSummaryOut:
+    def from_plan(
+        cls, plan: Plan, *, stale: bool, rejected: Sequence[EditRejection] = ()
+    ) -> PlanSummaryOut:
         return cls(
             placements=len(plan.placements),
             allowed=plan.allowed_count,
             needs_approval=plan.approval_count,
             rejections=len(plan.rejections),
             stale=stale,
+            rejected_by_edit=[
+                RejectedByEditOut(placement_id=r.placement_id, reason=r.reason) for r in rejected
+            ],
         )
 
 

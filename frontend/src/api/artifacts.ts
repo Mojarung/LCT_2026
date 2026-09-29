@@ -199,7 +199,11 @@ export type Geometry =
 
 export interface BasemapFeature {
   type: 'Feature';
-  properties: { class: string };
+  properties: {
+    class: string;
+    conifer?: boolean;
+    vegetation_kind?: 'individual' | 'strip' | 'shrub_strip';
+  };
   geometry: Geometry;
 }
 

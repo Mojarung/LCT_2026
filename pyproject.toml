@@ -70,6 +70,9 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Корень репозитория в пути: тесты импортируют скрипты tools/ (tools.make_demo_fragment),
+# а `uv run pytest` сам текущий каталог в sys.path не добавляет.
+pythonpath = ["."]
 
 [tool.importlinter]
 root_package = "green"

@@ -29,6 +29,9 @@ export interface EditorHost {
   itemsChanged(): void;
   /** Посадка удалена из плана. */
   removed(item: MapItem): void;
+  /** Посадки, которые правка перевела в отказ (перенос в место, запрещённое нормами): сервис
+   *  держит их в отказах черновика, и в число посадок плана они больше не входят. */
+  rejected?(ids: readonly string[]): void;
   /** Перенос посадки ушёл на сервер (on) или вернулся: показать ожидание у неё на карте. */
   pending(item: MapItem, on: boolean): void;
 }
@@ -87,6 +90,15 @@ export class PlanEditor {
     }
   }
 
+  /** Число посадок черновика ведёт сервис: кого правка перевела в отказ, он называет сам. */
+  private leftPlan(summary: PlanSummaryOut): void {
+    // Граница с сервисом: ответ без списка (сервис до этого поля) - правка без отказов, а не
+    // сбой уже принятой правки.
+    const rejected = (summary as Partial<PlanSummaryOut>).rejected_by_edit ?? [];
+    const ids = rejected.map((r) => r.placement_id);
+    if (ids.length) this.host?.rejected?.(ids);
+  }
+
   private hold(item: MapItem, delta: 1 | -1): void {
     const count = (this.moving.get(item) ?? 0) + delta;
     if (count > 0) this.moving.set(item, count);
@@ -122,6 +134,7 @@ export class PlanEditor {
         return;
       }
       try {
+        this.leftPlan(summary);
         const result = await this.check(item, x, y);
         item.verdict = result.plantable ? result.verdict : 'rejected';
         item.checks = ruleChecks(result);
@@ -149,6 +162,7 @@ export class PlanEditor {
           edits: [{ kind: 'delete', placement_id: item.id }],
         });
         this.host?.removed(item);
+        this.leftPlan(summary);
         store.select(null);
         store.setStale(summary.stale);
         store.say(

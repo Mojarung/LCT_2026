@@ -17,6 +17,7 @@ import numpy as np
 import shapely
 from shapely import STRtree
 
+from green.application.shrub_strips import SHRUB_STRIP_SOURCE
 from green.application.symbols import SymbolRole
 from green.application.tree_strips import STRIP_SOURCE
 from green.domain.objects import ObjectClass
@@ -90,9 +91,9 @@ def vegetation_census(
             kind = _vegetation(catalog, feature.block)
             if kind is not None and geometry.geom_type == "Point":
                 anchors[kind].append((geometry.x, geometry.y))
-        elif feature.source_entity_type == STRIP_SOURCE:
+        elif feature.source_entity_type in {STRIP_SOURCE, SHRUB_STRIP_SOURCE}:
             strips += 1
-            strip_points += len(shapely.get_parts(geometry))
+            strip_points += len(shapely.get_coordinates(geometry))
         elif feature.object_class is ObjectClass.EXISTING_TREE and geometry.geom_type == "Point":
             loose += 1
     return VegetationCensus(

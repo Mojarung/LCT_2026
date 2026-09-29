@@ -1,10 +1,11 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
 import { EXISTING_SHRUB, EXISTING_TREE, MODELS, type PlantModel } from '../../map/models';
+import type { SwatchSign } from '../../map/signs';
 import type { LayerKey } from '../../map/types';
 import { useWorkspace } from '../../state/workspace';
 import { IconClose } from '../icons';
-import { ModelSwatch } from './ModelSwatch';
+import { ModelSwatch, SignSwatch } from './ModelSwatch';
 
 /** Образец кустарника, пока в плане нет ни одного лиственного куста. */
 const SHRUB_FALLBACK = 'syringa_vulgaris';
@@ -18,6 +19,35 @@ const samples = (shrub: string | null): readonly [string, string][] => [
   [shrub ?? SHRUB_FALLBACK, 'кустарник'],
   ['juniperus_sabina', 'хвойный кустарник'],
 ];
+
+/** Знаки посадок инженерного стиля - формулировки легенд проектировщиков пилота
+ *  (разбивочно-посадочный чертёж Грузинской, дендропланы Камчатской и Берзарина). */
+const PLAN_SIGNS: readonly [SwatchSign, string][] = [
+  ['tree', 'Проектируемое дерево (место посадки, контур кроны)'],
+  ['conifer', 'Проектируемое хвойное дерево'],
+  ['shrub', 'Проектируемый кустарник'],
+  ['hedge', 'Живая изгородь, ряд кустарника'],
+];
+
+/** Существующие насаждения: сервис ничего не вырубает, поэтому все - сохраняемые. */
+const EXISTING_SIGNS: readonly [SwatchSign, string][] = [
+  ['existing-tree', 'Существующее дерево лиственное, сохраняемое'],
+  ['existing-conifer', 'Существующее дерево хвойное, сохраняемое'],
+  ['existing-shrub', 'Существующий кустарник, сохраняемый'],
+];
+
+function Signs({ list }: { list: readonly [SwatchSign, string][] }) {
+  return (
+    <>
+      {list.map(([sign, name]) => (
+        <span key={sign}>
+          <SignSwatch sign={sign} size={24} />
+          <b>{name}</b>
+        </span>
+      ))}
+    </>
+  );
+}
 
 /** Слои результата в выходном DXF: то же, что на карте, но в CAD (writer.py). */
 const DXF_LAYERS = [
@@ -76,6 +106,7 @@ export function Legend({
 }) {
   const open = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
+  const drawing = useWorkspace((s) => s.mapStyle) === 'engineering';
   const box = useRef<HTMLElement>(null);
 
   // Пульт слева уступает место панели обозначений ровно на её высоту: высота зависит от
@@ -129,12 +160,16 @@ export function Legend({
             <LayerCheck layer="placements">Посадки плана</LayerCheck>
             {/* Цвет кроны - это вид (состав плана справа), вердикт показан кольцом: иначе
                 два смысла спорили бы за один цвет. */}
-            <div className="legend legend-models">
-              {samples(shrub).map(([code, name]) => (
-                <Sample key={name} code={code}>
-                  {name}
-                </Sample>
-              ))}
+            <div className={drawing ? 'legend legend-models legend-signs' : 'legend legend-models'}>
+              {drawing ? (
+                <Signs list={PLAN_SIGNS} />
+              ) : (
+                samples(shrub).map(([code, name]) => (
+                  <Sample key={name} code={code}>
+                    {name}
+                  </Sample>
+                ))
+              )}
               <span>
                 <i className="approval" />
                 <b>требует согласования</b>
@@ -154,11 +189,11 @@ export function Legend({
             <div className="legend">
               <span>
                 <i className="swatch swatch-plan-lawn" />
-                <b>сохраняемый или восстанавливаемый</b>
+                <b>{drawing ? 'газон сохраняемый' : 'сохраняемый или восстанавливаемый'}</b>
               </span>
               <span>
                 <i className="swatch swatch-plan-lawn-new" />
-                <b>устраиваемый</b>
+                <b>{drawing ? 'газон устраиваемый' : 'устраиваемый'}</b>
               </span>
             </div>
             {/* Зоны допустимости - клетки, где дерево проходит все нормы (слои GREEN_ZONE_*):
@@ -237,25 +272,39 @@ export function Legend({
         <LayerCheck layer="buildings">
           <i className="key swatch-building" /> Здания
         </LayerCheck>
-        <LayerCheck layer="existing">Существующие насаждения</LayerCheck>
-        <div className="legend legend-models">
+        <LayerCheck layer="existing">
+          {drawing ? 'Существующие насаждения' : 'Уже растёт на участке'}
+        </LayerCheck>
+        {drawing ? (
+          <div className="legend legend-models legend-signs">
+            <Signs list={EXISTING_SIGNS} />
+          </div>
+        ) : (
+          <div className="legend legend-models">
+            <span>
+              <ModelSwatch
+                model={EXISTING_TREE}
+                modelKey="~existing-tree"
+                look="existing"
+                size={24}
+              />
+              <b>дерево по съёмке</b>
+            </span>
+            <span>
+              <ModelSwatch
+                model={EXISTING_SHRUB}
+                modelKey="~existing-shrub"
+                look="existing"
+                size={24}
+              />
+              <b>кустарник по съёмке</b>
+            </span>
+          </div>
+        )}
+        <div className="legend">
           <span>
-            <ModelSwatch
-              model={EXISTING_TREE}
-              modelKey="~existing-tree"
-              look="existing"
-              size={24}
-            />
-            <b>дерево по съёмке</b>
-          </span>
-          <span>
-            <ModelSwatch
-              model={EXISTING_SHRUB}
-              modelKey="~existing-shrub"
-              look="existing"
-              size={24}
-            />
-            <b>кустарник по съёмке</b>
+            <i className="swatch" style={{ background: 'var(--c-existing)', height: 6 }} />
+            <b>существующая кустарниковая полоса; ширина условная</b>
           </span>
         </div>
         {/* Раскрытие с «+», как остальные в панелях. Фраза про нетронутые исходные слои здесь

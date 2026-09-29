@@ -598,9 +598,17 @@ export function ScenePage() {
                   <p>
                     {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
                     {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}
-                    {count(counts.existing, 'существующее', 'существующих', 'существующих')}{' '}
-                    {plural(counts.existing, 'насаждение', 'насаждения', 'насаждений')},{' '}
-                    {count(counts.buildings, 'здание', 'здания', 'зданий')}.
+                    {count(
+                      counts.existing,
+                      'отдельная отметка',
+                      'отдельные отметки',
+                      'отдельных отметок',
+                    )}{' '}
+                    насаждений, {count(counts.buildings, 'здание', 'здания', 'зданий')}.
+                    {!!world.shrubStrips?.length &&
+                      ` Кустарниковые полосы: ${world.shrubStrips.length}. Высота и ширина показаны условно; порода и число кустов не заданы.`}
+                    {!!world.treeStrips?.length &&
+                      ` Полосы насаждений: ${world.treeStrips.length}. Показаны условными знаками на земле; число стволов не задано.`}
                   </p>
                   <details className="scene-more">
                     <summary>Этажность и допущения</summary>

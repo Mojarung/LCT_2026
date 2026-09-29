@@ -112,6 +112,9 @@ class RunReport:
     export_validation: PlanExportReport | None = None
     assembly: PackageAssembly | None = None
     classification: ClassificationReport | None = None
+    # Склеенный чертёж комплекта: исходник, с которым сверен результат. Только у комплекта из
+    # нескольких файлов; уходит в артефакты, чтобы сверку можно было повторить `green verify`.
+    merged_dxf: Path | None = None
 
     def summary(self) -> dict[str, object]:
         lawns = self.plan.lawns

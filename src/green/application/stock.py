@@ -24,6 +24,7 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import KDTree
 
+from green.application.shrub_strips import SHRUB_STRIP_SOURCE
 from green.application.tree_strips import STRIP_SOURCE
 from green.domain.objects import ObjectClass
 
@@ -64,7 +65,7 @@ class Stock:
     # Деревья для ярусности и подлеска: стволы, склеенные при CROWN_MERGE_M.
     crown_xy: NDArray[np.float64] = field(default_factory=lambda: _EMPTY_XY)
     crown_inside: NDArray[np.bool_] = field(default_factory=lambda: np.zeros(0, dtype=bool))
-    # Объединение существующих крон (стволы и полосы) в границе работ: считается один раз на
+    # Объединение существующих крон стволов в границе работ: считается один раз на
     # прогон, индекс сравнивает с ним сотни пробных планов.
     canopy: BaseGeometry | None = None
 
@@ -77,8 +78,8 @@ class Stock:
         return int(self.shrubs_inside.sum())
 
     def crowns(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Центры и радиусы существующих крон: стволы и точки полос деревьев."""
-        xy = np.vstack([self.trees_xy, self.strips_xy])
+        """Центры и радиусы существующих крон; неопределённые знаки полос крон не задают."""
+        xy = self.trees_xy
         return xy, np.full(len(xy), self.crown_radius)
 
 
@@ -108,7 +109,11 @@ def stock_of(
         if f.object_class is not ObjectClass.EXISTING_TREE:
             continue
         if f.source_entity_type == STRIP_SOURCE:
-            strips += [(p.x, p.y) for p in shapely.get_parts(f.geometry)]
+            strips += (
+                [(p.x, p.y) for p in shapely.get_parts(f.geometry)]
+                if f.geometry.geom_type in {"Point", "MultiPoint"}
+                else [_centre(f)]
+            )
             continue
         counted += 1
         if f.symbol:
@@ -132,7 +137,7 @@ def stock_of(
     strips_xy = np.array(strips, dtype=np.float64).reshape(-1, 2)
     if len(strips_xy):
         strips_xy = strips_xy[shapely.contains_xy(reach, strips_xy[:, 0], strips_xy[:, 1])]
-    centres = np.vstack([xy, strips_xy])
+    centres = xy
     canopy = (
         shapely.intersection(
             shapely.union_all(
@@ -194,6 +199,7 @@ def _shrubs(features: Sequence[Feature]) -> NDArray[np.float64]:
         (p.x, p.y)
         for f in features
         if f.object_class is ObjectClass.EXISTING_SHRUB
+        and f.source_entity_type != SHRUB_STRIP_SOURCE
         for p in (
             shapely.get_parts(f.geometry)
             if f.geometry.geom_type == "MultiPoint"

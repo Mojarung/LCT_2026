@@ -19,7 +19,7 @@ body.shell-map .topbar {
 .workspace {
   position: fixed;
   inset: 0;
-  background: var(--ground);
+  background: var(--map-sheet);
   overflow: hidden;
 }
 .workspace .canvas-holder {
@@ -1159,6 +1159,12 @@ body.shell-map .topbar {
 .hud-legend .legend-models span {
   align-items: center;
 }
+/* Знаки чертежа подписаны формулировками легенд проектировщиков: длинно, поэтому в одну
+   колонку. */
+.legend.legend-signs {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
 .hud-legend .legend-models i {
   margin-top: 0;
 }
@@ -1366,4 +1372,112 @@ body.shell-map .topbar {
 }
 .detail-3d:hover {
   color: var(--bone-2);
+}
+
+/* Сводка результата: число, состав и решение читаются отдельными строками. */
+.run-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 18px 0 14px;
+  gap: 16px;
+}
+.run-breakdown div + div {
+  border-left: 1px solid var(--hair);
+  padding-left: 16px;
+}
+.run-breakdown dt {
+  color: var(--bone-3);
+  font-size: var(--fs-micro);
+}
+.run-breakdown dd {
+  margin: 3px 0 0;
+  font: 500 var(--fs-strong) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.run-approval {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
+}
+.run-approval b {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+.notice .notice-title {
+  color: var(--bone);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.notice-details {
+  margin-top: 10px;
+}
+.notice-details[open] > summary {
+  margin-bottom: 8px;
+}
+.run-facts {
+  margin: 12px 0;
+  font-size: var(--fs-micro);
+}
+.run-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.run-facts dt {
+  color: var(--bone-3);
+}
+.run-facts dd {
+  margin: 0;
+  text-align: right;
+}
+.run-details > .fold {
+  margin-top: 12px;
+}
+.quality {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 8px 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hair);
+}
+.quality > .detail-heading {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.quality > .quality-index {
+  margin: 0;
+}
+.quality > .quality-fold,
+.quality > .quality-gate {
+  grid-column: 1 / -1;
+}
+.effect-rows li {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.effect-method {
+  margin-top: 10px;
+}
+.effect-method dl {
+  margin: 12px 0;
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+.effect-method dl > div + div {
+  margin-top: 12px;
+}
+.effect-method dt {
+  color: var(--bone-2);
+  font-weight: 500;
+}
+.effect-method dd {
+  margin: 3px 0 0;
+  color: var(--bone-3);
 }

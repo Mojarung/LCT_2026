@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import ezdxf
 import pytest
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 from green.application.classification import classify_scene
 from green.domain.objects import ObjectClass
@@ -146,6 +146,10 @@ def test_only_tree_semantics_turns_a_circle_into_a_trunk_position(tmp_path: Path
     ).load()
     scene, _ = classify_scene(raw, layer_map)
     by_class = {f.object_class: f.geometry for f in scene.features}
-    assert by_class[ObjectClass.EXISTING_TREE].geom_type == "Point"
+    # Знак на слое «Полоса деревьев» - место ствола, а не площадь; с 7bd7d20 кружки этого
+    # слоя собираются в полосу (MultiPoint), даже одиночный.
+    trunk = by_class[ObjectClass.EXISTING_TREE]
+    assert trunk.geom_type in {"Point", "MultiPoint"}
+    assert trunk.centroid.distance(Point(10, 20)) < 1e-9
     assert by_class[ObjectClass.SIDEWALK].area > 1.5
     assert by_class[ObjectClass.LAWN].area > 1.5

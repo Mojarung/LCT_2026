@@ -148,8 +148,11 @@ describe('уточнение объектов чертежа', () => {
     renderApp('/runs/r1');
     const link = await screen.findByRole('link', { name: 'Уточнить объекты на чертеже' });
     expect(link).toHaveAttribute('href', '/runs/r1/review');
-    expect(
-      screen.getByRole('link', { name: 'Скачать отчёт распознавания объектов' }),
-    ).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/classification.json');
+    const report = screen.getByRole('link', { name: 'Отчёт распознавания' });
+    expect(report).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/classification.json');
+    expect(report).toHaveAttribute('download');
+    // У упавшего прогона обе ссылки в карточке причины, а не под раскрытием.
+    expect(link).toBeVisible();
+    expect(report).toBeVisible();
   });
 });

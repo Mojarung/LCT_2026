@@ -120,10 +120,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
   /* Полоса карты в 375 px: подписи кнопок не переносятся («весь / план»), ползунок уходит -
-     на телефоне масштаб жестом и кнопками, а шесть элементов в строку не помещаются. */
+     на телефоне масштаб жестом и кнопками, а шесть элементов в строку не помещаются. Поля
+     кнопок ужаты: с кнопкой стиля карты («чертёж») «обозначения» уходили за край на 375. */
+  .hud-bottom {
+    flex-wrap: wrap;
+    gap: 1px;
+    max-width: calc(100% - 2 * var(--inset));
+  }
   .hud-bottom button {
     white-space: nowrap;
-    padding: 6px 8px;
+    min-width: 28px;
+    padding: 6px 4px;
   }
   .hud-bottom #zoom-range {
     display: none;

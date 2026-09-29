@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /** Проверка работоспособности */
         get: operations["health_api_v1_health_get"];
         put?: never;
         post?: never;
@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Meta */
+        /** Сведения о сервисе: профили, нормы, виды */
         get: operations["meta_api_v1_meta_get"];
         put?: never;
         post?: never;
@@ -46,7 +46,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Profile
+         * Параметры профиля
          * @description Параметры профиля для формы запуска: шаг, приёмы размещения, галочки этапов.
          */
         get: operations["profile_api_v1_profiles__name__get"];
@@ -66,13 +66,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Runs
+         * Список прогонов
          * @description Последние прогоны, новые первыми.
          */
         get: operations["list_runs_api_v1_runs_get"];
         put?: never;
         /**
-         * Create Run
+         * Запустить прогон
          * @description Принять чертёж или улицу из каталога и поставить прогон в очередь.
          *
          *     Источник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного
@@ -95,7 +95,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Demo Run
+         * Запустить демонстрационный прогон
          * @description Прогон встроенного фрагмента улицы Берзарина с профилем по умолчанию.
          *
          *     Фрагмент лежит в пакете: на стенде жюри датасета нет, а показывать сервис надо с
@@ -116,13 +116,21 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Run
+         * Статус прогона
          * @description Статус прогона, сводка и ссылки на артефакты.
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Удалить прогон
+         * @description Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:
+         *     исходником, артефактами и состоянием правки.
+         *
+         *     Идущий прогон - в очереди, считается или пересобирается после правки - не удаляется:
+         *     409, файлы остаются на месте. Неизвестный или некорректный id - 404.
+         */
+        delete: operations["delete_run_api_v1_runs__run_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -136,8 +144,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Artifact
+         * Скачать артефакт прогона
          * @description Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
+         *
+         *     У прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с
+         *     которым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.
          *
          *     Текстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian
          *     умеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие
@@ -163,7 +174,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check
+         * Проверить точку посадки по нормам
          * @description Проверить точку по нормам: тем же индексом ограничений, что и сам прогон.
          */
         post: operations["check_api_v1_runs__run_id__check_post"];
@@ -180,7 +191,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Draft */
+        /** Текущий план с правками */
         get: operations["draft_api_v1_runs__run_id__draft_get"];
         put?: never;
         post?: never;
@@ -200,8 +211,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Edit
+         * Применить правки плана
          * @description Применить правки к плану прогона. DXF при этом не переписывается.
+         *
+         *     Посадка, которая после правки не проходит нормы (перенос или добавление в запретное
+         *     место), уходит в отказы плана, а не остаётся на слое посадок. Правка при этом принята и
+         *     ответ остаётся 200, но такие посадки перечислены в rejected_by_edit с причиной - той же,
+         *     что даёт проверка точки: нарушенные нормы с пунктами актов или непригодное место. В список
+         *     попадают только посадки этого запроса; пустой список - правка никого в отказ не увела.
          */
         post: operations["edit_api_v1_runs__run_id__edits_post"];
         delete?: never;
@@ -218,13 +235,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Photos
+         * Фото прогона
          * @description Фото прогона, новые сверху, и можно ли делать новые на этом сервере.
          */
         get: operations["list_photos_api_v1_runs__run_id__photos_get"];
         put?: never;
         /**
-         * Create Photo
+         * Фото по кадру 3D-вида
          * @description Поставить кадр в очередь модели. Статус: GET по адресу из Location.
          */
         post: operations["create_photo_api_v1_runs__run_id__photos_post"];
@@ -242,7 +259,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Photo Prompt
+         * Промпт фото
          * @description Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора.
          */
         get: operations["photo_prompt_api_v1_runs__run_id__photos_prompt_get"];
@@ -261,12 +278,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Photo */
+        /** Статус фото */
         get: operations["get_photo_api_v1_runs__run_id__photos__photo_id__get"];
         put?: never;
         post?: never;
         /**
-         * Delete Photo
+         * Удалить фото
          * @description Удалить фото вместе с кадром. Фото в очереди или в работе - 409.
          */
         delete: operations["delete_photo_api_v1_runs__run_id__photos__photo_id__delete"];
@@ -283,7 +300,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Photo File
+         * Файл фото
          * @description Кадр 3D-вида (source), выход модели (raw) или увеличенное фото (photo).
          */
         get: operations["get_photo_file_api_v1_runs__run_id__photos__photo_id___kind__get"];
@@ -305,7 +322,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Rebuild
+         * Пересобрать DXF и отчёты по правкам
          * @description Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}.
          */
         post: operations["rebuild_api_v1_runs__run_id__rebuild_post"];
@@ -323,7 +340,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Streets
+         * Улицы пилотного проекта
          * @description Улицы пилотного проекта, готовые к прогону.
          *
          *     Пустой список - обычное дело: каталог собирается из датасета, а датасет монтируется
@@ -463,20 +480,36 @@ export interface components {
             /** Y */
             y: number;
         };
-        /** CheckOut */
+        /**
+         * CheckOut
+         * @description Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы.
+         */
         CheckOut: {
-            /** Checks */
+            /**
+             * Checks
+             * @description Проверка каждого правила отступа: норма, замер, итог
+             */
             checks?: components["schemas"]["RuleCheckOut"][];
-            /** Needs Barrier */
+            /**
+             * Needs Barrier
+             * @description Место допустимо только с корнезащитным (прикорневым) барьером
+             */
             needs_barrier: boolean;
             /**
              * Note
+             * @description Причина по-русски, если место непригодно или вид здесь запрещён; нарушения отступов - в checks
              * @default
              */
             note: string;
-            /** Plantable */
+            /**
+             * Plantable
+             * @description Посадочное место целиком на пригодном грунте внутри границы работ и не задевает препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict forbidden при plantable true - точка на грунте, но ближе нормы к объекту
+             */
             plantable: boolean;
-            /** Verdict */
+            /**
+             * Verdict
+             * @description Итог по нормам: allowed - посадка допустима, needs_approval - допустима при согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно или вид здесь запрещён)
+             */
             verdict: string;
         };
         /** ConverterOut */
@@ -658,6 +691,11 @@ export interface components {
             needs_approval: number;
             /** Placements */
             placements: number;
+            /**
+             * Rejected By Edit
+             * @description Посадки, которые именно эта правка перевела в отказ (перенос или добавление в место, запрещённое нормами), с причиной; пусто, если таких нет
+             */
+            rejected_by_edit: components["schemas"]["RejectedByEditOut"][];
             /** Rejections */
             rejections: number;
             /** Stale */
@@ -774,6 +812,22 @@ export interface components {
             negative: string;
             /** Text */
             text: string;
+        };
+        /**
+         * RejectedByEditOut
+         * @description Посадка, которую правка перевела в отказ.
+         */
+        RejectedByEditOut: {
+            /**
+             * Placement Id
+             * @description Идентификатор посадки; под ним же она в отказах плана
+             */
+            placement_id: string;
+            /**
+             * Reason
+             * @description Причина по-русски - то же, что ответ проверки точки для этого вида: note (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов
+             */
+            reason: string;
         };
         /** RuleCheckOut */
         RuleCheckOut: {
@@ -1178,6 +1232,71 @@ export interface operations {
             };
             /** @description Не найдено */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_run_api_v1_runs__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Состояние прогона изменилось */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

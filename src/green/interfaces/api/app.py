@@ -54,15 +54,17 @@ def create_app(container: Container | None = None) -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
-            allow_methods=["GET", "POST"],
+            allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["*"],
             expose_headers=["Location"],
         )
     install_error_handlers(app)
     app.include_router(system.router, prefix=API_PREFIX)
+    # Фото - раньше прогонов: DELETE /runs/{run_id:path} забирает весь хвост адреса и
+    # перехватил бы DELETE /runs/{id}/photos/{photo_id}.
+    app.include_router(photos.router, prefix=API_PREFIX)
     app.include_router(runs.router, prefix=API_PREFIX)
     app.include_router(edits.router, prefix=API_PREFIX)
-    app.include_router(photos.router, prefix=API_PREFIX)
     # Интерфейс подключается последним: он держит всё, что не /api, и не должен
     # перехватывать маршруты API.
     mount_spa(app, settings.web_dir)

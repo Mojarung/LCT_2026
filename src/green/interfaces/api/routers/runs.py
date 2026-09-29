@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from green.application.errors import InputError, NotFoundError
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
-from green.interfaces.api.errors import PROBLEM_RESPONSES
+from green.interfaces.api.errors import PROBLEM_RESPONSES, conflict_response
 from green.interfaces.api.intake import accept_run, accept_street_run
 from green.interfaces.api.schemas import RunListOut, RunOut
 
@@ -53,7 +53,7 @@ def _artifact_size(container: Container) -> Callable[[str, str], int | None]:
     return size
 
 
-@router.post("", status_code=202)
+@router.post("", status_code=202, summary="Запустить прогон")
 async def create_run(  # noqa: PLR0913 - form fields are separate parameters by design
     *,
     request: Request,
@@ -130,7 +130,7 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
     return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
 
 
-@router.post("/demo", status_code=202)
+@router.post("/demo", status_code=202, summary="Запустить демонстрационный прогон")
 def create_demo_run(
     request: Request, response: Response, background: BackgroundTasks, container: ContainerDep
 ) -> RunOut:
@@ -146,7 +146,7 @@ def create_demo_run(
     return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
 
 
-@router.get("")
+@router.get("", summary="Список прогонов")
 def list_runs(
     request: Request, container: ContainerDep, limit: Annotated[int, Query(ge=1, le=200)] = 50
 ) -> RunListOut:
@@ -157,7 +157,7 @@ def list_runs(
     )
 
 
-@router.get("/{run_id}", name="get_run")
+@router.get("/{run_id}", name="get_run", summary="Статус прогона")
 def get_run(run_id: str, request: Request, container: ContainerDep) -> RunOut:
     """Статус прогона, сводка и ссылки на артефакты."""
     return RunOut.from_record(
@@ -165,9 +165,37 @@ def get_run(run_id: str, request: Request, container: ContainerDep) -> RunOut:
     )
 
 
-@router.get("/{run_id}/artifacts/{name}", name="get_artifact", response_class=FileResponse)
+# {run_id:path}, а не {run_id}: обход вида /runs/..%2F.. иначе не совпал бы ни с одним
+# маршрутом API и получил бы 405 от маршрута интерфейса. Так он доходит до хранилища, а
+# оно проверяет id по виду uuid и отвечает 404, ничего не трогая.
+@router.delete(
+    "/{run_id:path}",
+    status_code=204,
+    response_class=Response,
+    summary="Удалить прогон",
+    responses=conflict_response(),
+)
+def delete_run(run_id: str, container: ContainerDep) -> None:
+    """Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:
+    исходником, артефактами и состоянием правки.
+
+    Идущий прогон - в очереди, считается или пересобирается после правки - не удаляется:
+    409, файлы остаются на месте. Неизвестный или некорректный id - 404.
+    """
+    container.runs.delete(run_id)
+
+
+@router.get(
+    "/{run_id}/artifacts/{name}",
+    name="get_artifact",
+    response_class=FileResponse,
+    summary="Скачать артефакт прогона",
+)
 def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
     """Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
+
+    У прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с
+    которым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.
 
     Текстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian
     умеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие

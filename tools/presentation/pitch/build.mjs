@@ -304,7 +304,7 @@ const slides = [
 </div>
 <pre class="cmd" style="left:96px;top:690px">docker compose up --build
 green run улица.dxf --profile barriers --set spacing_m=6</pre>
-<p class="foot" style="width:960px">Образ на Ubuntu 26.04: по ТЗ МосТех.ОС близка к Ubuntu. Расчёту не нужны GPU и сеть. ${f.params} параметров, 5 профилей; 1 903 теста бэкенда и 289 фронтенда. Манифесты Kubernetes проверены kubeconform.</p>
+<p class="foot" style="width:960px">Образ на Ubuntu 26.04: по ТЗ МосТех.ОС близка к Ubuntu. Расчёту не нужны GPU и сеть. ${f.params} параметров, 5 профилей; 2 053 теста бэкенда и 312 фронтенда. Манифесты Kubernetes проверены kubeconform.</p>
 <div class="crop framed" style="left:1130px;top:280px;width:694px;height:560px">${img('swagger.png', 'fill', 'object-position:0 0')}</div>`,
   },
   // 14. Границы и внедрение (08-limitations, п. 8.2; ТЗ, разд. 4 и 9)

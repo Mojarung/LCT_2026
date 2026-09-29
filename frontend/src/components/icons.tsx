@@ -18,6 +18,7 @@ import {
   IconRoad,
   IconSparkles,
   IconSun as TablerSun,
+  IconTrash,
   IconWalk,
   IconX,
 } from '@tabler/icons-react';
@@ -73,4 +74,8 @@ export type SceneGlyph = keyof typeof SCENE_GLYPHS;
 export function SceneIcon({ name, className = 'icon' }: IconProps & { name: SceneGlyph }) {
   const Glyph = SCENE_GLYPHS[name];
   return <Glyph className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
+}
+
+export function IconDelete({ className = 'icon' }: IconProps) {
+  return <IconTrash className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
 }

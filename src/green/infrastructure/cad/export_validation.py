@@ -19,6 +19,7 @@ from shapely.geometry import Polygon
 
 from green.application.barriers import BARRIER_NOTE
 from green.application.results import PlanExportReport
+from green.application.schedule import build_schedule
 from green.domain.planting import Verdict
 from green.infrastructure.cad.documents import APPID, load_document
 
@@ -53,6 +54,8 @@ def check_written_plan(
     if doc is None:
         doc, _ = load_document(result)
     expected = {p.placement_id: p for p in plan.placements}
+    # Позиция ведомости у посадки (атрибут POS) - номер строки её вида; вид вне ведомости - пусто.
+    positions = {row.code: str(row.number) for row in build_schedule(plan.placements)}
     counts: Counter[str] = Counter()
     issues = []
     found = 0
@@ -65,7 +68,10 @@ def check_written_plan(
             continue
         found += 1
         if not isinstance(entity, Insert) or not entity.has_xdata(APPID):
-            issues.append(f"{entity.dxf.handle}: planting has no INSERT or identity XDATA")
+            issues.append(
+                f"{entity.dxf.handle}: посадка записана не вставкой блока (INSERT) или без XDATA"
+                " с идентификатором"
+            )
             continue
         tags = entity.get_xdata(APPID)
         strings = [t.value for t in tags if t.code == _XDATA_STRING]
@@ -73,13 +79,18 @@ def check_written_plan(
         counts[identity] += 1
         placement = expected.get(identity)
         if placement is None:
-            issues.append(f"{identity}: unexpected planting")
+            issues.append(f"{identity}: посадки нет в проверенном плане")
             continue
         if len(strings) < _IDENTITY_FIELDS or strings[1] != placement.verdict.value:
-            issues.append(f"{identity}: incorrect verdict XDATA")
+            issues.append(f"{identity}: итог по нормам в XDATA не совпадает с планом")
         issues.extend(_compare(doc, entity, placement, unit_m))
+        position = positions.get(placement.species.code, "")
+        if _attributes(entity).get("POS") != position:
+            issues.append(
+                f"{identity}: атрибут POS не совпадает с позицией ведомости посадочного материала"
+            )
     issues.extend(
-        f"{identity}: expected one planting, found {counts[identity]}"
+        f"{identity}: в DXF должна быть одна посадка, найдено {counts[identity]}"
         for identity in expected
         if counts[identity] != 1
     )
@@ -102,26 +113,29 @@ def _check_lawns(doc: Drawing, plan: Plan, unit: float) -> tuple[list[str], int]
     hatches = [e for e in doc.modelspace() if e.dxf.get("layer", "0") == _LAWN_LAYER]
     for entity in hatches:
         if not isinstance(entity, Hatch) or not entity.has_xdata(APPID):
-            issues.append(f"{entity.dxf.handle}: lawn has no HATCH or identity XDATA")
+            issues.append(
+                f"{entity.dxf.handle}: газон записан не штриховкой (HATCH) или без XDATA"
+                " с идентификатором"
+            )
             continue
         strings = [t.value for t in entity.get_xdata(APPID) if t.code == _XDATA_STRING]
         identity = strings[0] if strings else ""
         lawn = expected.get(identity)
         if lawn is None:
-            issues.append(f"{identity}: unexpected lawn")
+            issues.append(f"{identity}: газона нет в проверенном плане")
             continue
         if len(strings) < _IDENTITY_FIELDS or strings[1] != lawn.kind.value:
-            issues.append(f"{identity}: incorrect lawn kind XDATA")
+            issues.append(f"{identity}: вид газона в XDATA не совпадает с планом")
         area = _hatch_area(entity)
         if area is None:
-            issues.append(f"{identity}: lawn boundary is not a closed polyline")
+            issues.append(f"{identity}: граница газона - не замкнутая полилиния")
             continue
         areas[identity] += area * unit * unit
     for identity, lawn in expected.items():
         if identity not in areas:
-            issues.append(f"{identity}: lawn is missing")
+            issues.append(f"{identity}: газон не записан в DXF")
         elif not math.isclose(areas[identity], lawn.area_m2, abs_tol=_AREA_TOLERANCE_M2):
-            issues.append(f"{identity}: lawn area differs from certified plan")
+            issues.append(f"{identity}: площадь газона не совпадает с проверенным планом")
     return issues, len(hatches)
 
 
@@ -143,32 +157,36 @@ def _compare(doc: Drawing, insert: Insert, placement: Placement, unit: float) ->
     issues = []
     location = insert.dxf.insert
     if not _near(location.x * unit, placement.x) or not _near(location.y * unit, placement.y):
-        issues.append(f"{identity}: coordinates differ from certified plan")
+        issues.append(f"{identity}: координаты не совпадают с проверенным планом")
     if any(not _near(insert.dxf.get(axis, 1) * unit, 1) for axis in ("xscale", "yscale", "zscale")):
-        issues.append(f"{identity}: incorrect INSERT scale")
+        issues.append(f"{identity}: масштаб вставки не соответствует единицам чертежа")
     kind = "SHRUB" if placement.species.is_shrub else "TREE"
     block_name = f"GREEN_{kind}_{placement.species.code.upper()}"
     if insert.dxf.name != block_name:
-        issues.append(f"{identity}: incorrect species block")
+        issues.append(f"{identity}: блок знака не того вида")
     if insert.dxf.layer != _expected_layer(placement):
-        issues.append(f"{identity}: incorrect planting layer")
-    attrs = {decode_dxf_unicode(a.dxf.tag): decode_dxf_unicode(a.dxf.text) for a in insert.attribs}
+        issues.append(f"{identity}: посадка не на своём слое GREEN_*")
+    attrs = _attributes(insert)
     if attrs.get("SPECIES") != placement.species.name_ru or attrs.get("NUM") != str(
         placement.number
     ):
-        issues.append(f"{identity}: incorrect species/number attributes")
+        issues.append(f"{identity}: атрибуты вида или номера (SPECIES, NUM) не совпадают с планом")
     block = doc.blocks.get(insert.dxf.name)
     circles = list(block.query("CIRCLE")) if block is not None else []
     if len(circles) != 1:
-        issues.append(f"{identity}: missing or ambiguous crown symbol")
+        issues.append(f"{identity}: в блоке нет знака кроны или их несколько")
     else:
         circle = circles[0]
         center = insert.matrix44().transform(circle.dxf.center)
         if not _near(center.x * unit, placement.x) or not _near(center.y * unit, placement.y):
-            issues.append(f"{identity}: symbol centre displaced from planting")
+            issues.append(f"{identity}: центр знака смещён от точки посадки")
         if not _near(circle.dxf.radius * 2, placement.species.crown_diameter_m):
-            issues.append(f"{identity}: crown symbol size differs from species")
+            issues.append(f"{identity}: размер знака кроны не соответствует виду")
     return issues
+
+
+def _attributes(insert: Insert) -> dict[str, str]:
+    return {decode_dxf_unicode(a.dxf.tag): decode_dxf_unicode(a.dxf.text) for a in insert.attribs}
 
 
 def _expected_layer(placement: Placement) -> str:

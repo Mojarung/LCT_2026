@@ -61,6 +61,8 @@ class ScheduleRow:
     count: int
     stock: Stock
     conditions: tuple[str, ...]
+    # Код вида каталога: по нему посадка в DXF получает позицию своей строки (атрибут POS).
+    code: str
 
     @property
     def pit_area_m2(self) -> float:
@@ -103,6 +105,7 @@ def build_schedule(placements: Sequence[Placement]) -> tuple[ScheduleRow, ...]:
             conditions=tuple(
                 f"{text}: {count} шт." for text, count in sorted(conditions[species.code].items())
             ),
+            code=species.code,
         )
         for number, species in enumerate(ordered, 1)
     )

@@ -72,7 +72,7 @@ def _out(request: Request, job: PhotoJob) -> PhotoOut:
     )
 
 
-@router.get("/{run_id}/photos")
+@router.get("/{run_id}/photos", summary="Фото прогона")
 def list_photos(run_id: str, request: Request, container: ContainerDep) -> PhotoListOut:
     """Фото прогона, новые сверху, и можно ли делать новые на этом сервере."""
     reason = container.photos.unavailable_reason
@@ -83,7 +83,7 @@ def list_photos(run_id: str, request: Request, container: ContainerDep) -> Photo
     )
 
 
-@router.post("/{run_id}/photos", status_code=202)
+@router.post("/{run_id}/photos", status_code=202, summary="Фото по кадру 3D-вида")
 async def create_photo(  # noqa: PLR0913 - form fields are separate parameters by design
     *,
     run_id: str,
@@ -140,7 +140,7 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
     return out
 
 
-@router.get("/{run_id}/photos/prompt")
+@router.get("/{run_id}/photos/prompt", summary="Промпт фото")
 def photo_prompt(  # noqa: PLR0913 - query parameters are separate by design
     *,
     run_id: str,
@@ -169,7 +169,7 @@ def photo_prompt(  # noqa: PLR0913 - query parameters are separate by design
     return PromptOut(text=built.text, negative=built.negative)
 
 
-@router.get("/{run_id}/photos/{photo_id}")
+@router.get("/{run_id}/photos/{photo_id}", summary="Статус фото")
 def get_photo(
     run_id: str, photo_id: str, request: Request, response: Response, container: ContainerDep
 ) -> PhotoOut:
@@ -177,7 +177,7 @@ def get_photo(
     return _out(request, container.photos.get(run_id, photo_id))
 
 
-@router.delete("/{run_id}/photos/{photo_id}", status_code=204)
+@router.delete("/{run_id}/photos/{photo_id}", status_code=204, summary="Удалить фото")
 def delete_photo(run_id: str, photo_id: str, container: ContainerDep) -> Response:
     """Удалить фото вместе с кадром. Фото в очереди или в работе - 409."""
     container.photos.delete(run_id, photo_id)
@@ -186,6 +186,7 @@ def delete_photo(run_id: str, photo_id: str, container: ContainerDep) -> Respons
 
 @router.get(
     "/{run_id}/photos/{photo_id}/{kind}",
+    summary="Файл фото",
     response_class=FileResponse,
     responses={200: {"content": {"image/png": {}, "image/jpeg": {}}}},
 )

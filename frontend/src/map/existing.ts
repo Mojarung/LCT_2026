@@ -3,7 +3,7 @@
  * приглушённой моделью: точку - кроной по умолчанию, кружок - кроной его размера. Контур
  * крупнее MAX_CROWN_M - уже не одна крона, а массив насаждений: он остаётся линией подосновы. */
 
-import type { BasemapFeature, Geometry } from '../api/artifacts';
+import type { BasemapFeature, Geometry, Position } from '../api/artifacts';
 import { type Box, measure } from './geometry';
 
 export interface ExistingPlant {
@@ -12,6 +12,9 @@ export interface ExistingPlant {
   /** Радиус кроны, метры. */
   r: number;
   shrub: boolean;
+  /** Дерево со знаком хвойного в съёмке: в инженерном стиле - зелёное кольцо. Ключа нет у
+   *  лиственных и у деревьев без знака (кружок кроны, полоса деревьев). */
+  conifer?: true;
 }
 
 /** Крона существующего дерева по умолчанию: знак съёмки размера кроны не несёт. */
@@ -22,13 +25,55 @@ const MAX_CROWN_M = 16;
 
 export const EXISTING_CLASSES: ReadonlySet<string> = new Set(['existing_tree', 'existing_shrub']);
 
+/** Старые артефакты не сохраняли TREE_STRIP. Их MultiPoint нельзя выдавать за стволы.
+ * Явное individual в новых данных позволяет отличить настоящую группу отдельных растений. */
+export function stripPoints(feature: BasemapFeature): Position[] | null {
+  if (!EXISTING_CLASSES.has(feature.properties.class)) return null;
+  const kind = feature.properties.vegetation_kind;
+  if (kind === 'individual') return null;
+  if (feature.geometry.type === 'MultiPoint') return feature.geometry.coordinates;
+  if (kind === 'strip' && feature.geometry.type === 'Point') return [feature.geometry.coordinates];
+  if (kind === 'strip') {
+    const box: Box = [Infinity, Infinity, -Infinity, -Infinity];
+    measure(feature.geometry, box);
+    if (Number.isFinite(box[0])) return [[(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]];
+  }
+  return null;
+}
+
+/** Only a recognised linear shrub symbol has an axis. Legacy dots remain ambiguous. */
+export function shrubStripLines(feature: BasemapFeature): Position[][] {
+  if (
+    feature.properties.class !== 'existing_shrub' ||
+    feature.properties.vegetation_kind !== 'shrub_strip'
+  )
+    return [];
+  if (feature.geometry.type === 'LineString') return [feature.geometry.coordinates];
+  if (feature.geometry.type === 'MultiLineString') return feature.geometry.coordinates;
+  return [];
+}
+
+/** Illustrative width and height, not dimensions measured from the survey. */
+export const SHRUB_STRIP_WIDTH_M = 0.8;
+export const SHRUB_STRIP_HEIGHT_M = 0.8;
+
 /** Отметки существующих насаждений объекта или null, если объект - не одиночная крона. */
 export function plantsOf(feature: BasemapFeature): ExistingPlant[] | null {
   const kind = feature.properties.class;
-  if (!EXISTING_CLASSES.has(kind)) return null;
+  if (
+    !EXISTING_CLASSES.has(kind) ||
+    feature.properties.vegetation_kind === 'strip' ||
+    feature.properties.vegetation_kind === 'shrub_strip' ||
+    stripPoints(feature)
+  )
+    return null;
   const shrub = kind === 'existing_shrub';
   const fallback = shrub ? SHRUB_R : TREE_R;
-  return collect(feature.geometry, fallback, shrub);
+  const plants = collect(feature.geometry, fallback, shrub);
+  if (plants && !shrub && feature.properties.conifer === true) {
+    for (const plant of plants) plant.conifer = true;
+  }
+  return plants;
 }
 
 function collect(geometry: Geometry, fallback: number, shrub: boolean): ExistingPlant[] | null {

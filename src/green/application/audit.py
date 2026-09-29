@@ -320,7 +320,7 @@ class _PlantingTyper:
             return PlantingType.SHRUB, "слой назван кустарниковым в параметрах"
         if self._trees is not None and self._trees.search(layer):
             return PlantingType.TREE, "слой назван древесным в параметрах"
-        by_genus = self._by_genus(layer)
+        by_genus = _own_layer(layer) or self._by_genus(layer)
         if by_genus is not None:
             return by_genus
         request = self._request
@@ -345,6 +345,17 @@ class _PlantingTyper:
                 else None
             )
         return self._cache[layer]
+
+
+def _own_layer(layer: str) -> tuple[PlantingType, str] | None:
+    """Свой результат сервис узнаёт по слою: без этого кусты с кругом кроны 1-2 м читались бы
+    деревьями по порогу круга."""
+    name = layer.upper()
+    if name.startswith("GREEN_SHRUBS"):
+        return PlantingType.SHRUB, "слой результата сервиса GREEN_SHRUBS"
+    if name.startswith("GREEN_TREES"):
+        return PlantingType.TREE, "слой результата сервиса GREEN_TREES"
+    return None
 
 
 def _plantings(features: Sequence[Feature]) -> tuple[list[_Found], dict[str, int]]:

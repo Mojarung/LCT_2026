@@ -914,7 +914,13 @@ def _length(segments: NDArray[np.float64]) -> float:
 
 
 def season(layout: Layout) -> TermResult:
-    """Сколько месяцев из 12 есть декоративные посадки (из каталога видов)."""
+    """Сколько месяцев из 12 есть декоративные посадки (из каталога видов).
+
+    Считаются все посадки плана, деревья и кустарники вместе, а сводка состава - отдельно
+    деревья и отдельно кустарники. Поэтому текст называет, кого он считает, и месяцы без
+    декоративных посадок: иначе месяц, который закрыл один куст, спорит с пустым месяцем в
+    сводке деревьев.
+    """
     months = [sorted(p.species.decor_months) for p in layout.placements]
     base = np.zeros(12)
     for owned in months:
@@ -930,8 +936,18 @@ def season(layout: Layout) -> TermResult:
         if alone:
             where = ", ".join(_MONTHS_IN[m - 1] for m in alone)
             details[i] = f"единственная декоративная посадка в {where}"
-    note = f"декоративные посадки есть в {active} месяцах из 12"
-    return TermResult(score, note, deltas, details, {"months": active})
+    return TermResult(score, _season_note(base), deltas, details, {"months": active})
+
+
+def _season_note(base: NDArray[np.float64]) -> str:
+    who = "деревья и кустарники вместе"
+    active = int((base > 0).sum())
+    if not active:
+        return f"{who}: декоративных посадок нет ни в одном месяце"
+    months = "месяце" if active == 1 else "месяцах"
+    note = f"{who}: декоративные посадки есть в {active} {months} из 12"
+    bare = [_MONTHS_IN[m] for m in range(12) if base[m] == 0]
+    return f"{note}; нет в {', '.join(bare)}" if bare else note
 
 
 # --- Штрафы и отметки ---------------------------------------------------------------------

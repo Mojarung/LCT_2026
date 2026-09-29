@@ -53,6 +53,12 @@ export function postJson<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+/** DELETE: ответ 204 без тела, поэтому JSON не читается. Ошибка - та же ApiError. */
+export async function deleteResource(path: string): Promise<void> {
+  const response = await fetch(path, { method: 'DELETE' });
+  if (!response.ok) throw await failure(response);
+}
+
 export const artifactUrl = (runId: string, name: string): string =>
   `/api/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`;
 

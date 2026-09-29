@@ -96,6 +96,10 @@ export interface Line {
 
 /** Всё, что видно в 3D, в координатах сцены. */
 export interface World {
+  /** Условные знаки полос: не модели деревьев и не места подтверждённых стволов. */
+  treeStrips?: Flat[][];
+  /** Recognised shrub-strip axes; dimensions of the 3D band are illustrative. */
+  shrubStrips?: Line[];
   /** Начало сцены в координатах чертежа. */
   origin: [number, number];
   /** Прямоугольник сцены: minX, minZ, maxX, maxZ. */

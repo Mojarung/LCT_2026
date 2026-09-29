@@ -24,10 +24,13 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  resetWorkspace();
   vi.unstubAllGlobals();
+  // Хранилище чистится до сброса рабочего места: оно читает сохранённые панели и стиль карты,
+  // и выбор одного теста иначе становился начальным состоянием следующего.
   localStorage.clear();
   sessionStorage.clear();
+  resetWorkspace();
   document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-map-style');
   document.body.className = '';
 });

@@ -100,6 +100,16 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
+    def delete(self, run_id: str) -> None:
+        """Удалить законченный прогон: файлы, а за ними и контекст правки в памяти.
+
+        Контекст выбрасывается только после удаления файлов: отказ по идущему прогону
+        (ConflictError) не должен лишать правки прогон, который остался на месте.
+        """
+        self._store.delete(run_id)
+        if self._contexts is not None:
+            self._contexts.drop(run_id)
+
     def execute(  # noqa: PLR0913 - комплект прогона приходит отдельными частями
         self,
         run_id: str,
@@ -189,12 +199,14 @@ class RunService:
         record = self._store.get(run_id)
         if self._contexts is None:
             return self._transition(record, RunState.FAILED, error="Правка не подключена")
-        context = self._contexts.get(run_id)
-        if context is None:
-            return self._transition(
-                record, RunState.FAILED, error="Состояние прогона для правки потеряно"
-            )
         with self._slots:
+            # Пока прогон ждал очереди, правки мог принять и другой процесс: в DXF идёт
+            # черновик, догнавший журнал правок, а не тот, что был при постановке в очередь.
+            context = self._contexts.get(run_id)
+            if context is None:
+                return self._transition(
+                    record, RunState.FAILED, error="Состояние прогона для правки потеряно"
+                )
             record = self._transition(record, RunState.RUNNING)
             try:
                 run_dir = self._store.run_dir(run_id)

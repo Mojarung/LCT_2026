@@ -10,6 +10,8 @@ export function MapHud() {
   const setOrientation = useWorkspace((s) => s.setOrientation);
   const legend = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
+  const mapStyle = useWorkspace((s) => s.mapStyle);
+  const setMapStyle = useWorkspace((s) => s.setMapStyle);
   return (
     <div className="hud hud-bottom" data-map-obstacle="bottom">
       <button
@@ -65,6 +67,18 @@ export function MapHud() {
         }}
       >
         {orientation === 'street' ? 'по улице' : 'по северу'}
+      </button>
+      {/* Инженерный чертёж - знаки дендроплана, привычные проектировщику и проверяющему;
+          иллюстрация - кроны моделей видов, как на слайдах. */}
+      <button
+        type="button"
+        aria-pressed={mapStyle === 'engineering'}
+        title="Условные знаки чертежа или иллюстрация кронами"
+        onClick={() => {
+          setMapStyle(mapStyle === 'engineering' ? 'illustrated' : 'engineering');
+        }}
+      >
+        {mapStyle === 'engineering' ? 'чертёж' : 'иллюстрация'}
       </button>
       <button
         type="button"

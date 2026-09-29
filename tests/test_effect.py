@@ -205,7 +205,8 @@ def test_tree_strips_only_give_no_count() -> None:
     trees = _m(effect, "trees")
     assert trees.before is None
     assert "не определяется" in trees.note
-    assert _m(effect, "canopy_m2").before > 0
+    assert _m(effect, "canopy_m2").before == 0
+    assert any("вклад в тень не оценён" in note for note in effect.notes)
 
 
 def test_no_curbs_no_noise_data() -> None:

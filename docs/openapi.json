@@ -237,8 +237,10 @@
         "type": "object"
       },
       "CheckOut": {
+        "description": "Итог проверки точки: по нормам (verdict) и по месту (plantable) - это разные вопросы.",
         "properties": {
           "checks": {
+            "description": "Проверка каждого правила отступа: норма, замер, итог",
             "items": {
               "$ref": "#/components/schemas/RuleCheckOut"
             },
@@ -246,19 +248,23 @@
             "type": "array"
           },
           "needs_barrier": {
+            "description": "Место допустимо только с корнезащитным (прикорневым) барьером",
             "title": "Needs Barrier",
             "type": "boolean"
           },
           "note": {
             "default": "",
+            "description": "Причина по-русски, если место непригодно или вид здесь запрещён; нарушения отступов - в checks",
             "title": "Note",
             "type": "string"
           },
           "plantable": {
+            "description": "Посадочное место целиком на пригодном грунте внутри границы работ и не задевает препятствий, без учёта отступов от сетей и сооружений. Поэтому verdict forbidden при plantable true - точка на грунте, но ближе нормы к объекту",
             "title": "Plantable",
             "type": "boolean"
           },
           "verdict": {
+            "description": "Итог по нормам: allowed - посадка допустима, needs_approval - допустима при согласовании, forbidden - запрещена (ближе нормы к объекту, место непригодно или вид здесь запрещён)",
             "title": "Verdict",
             "type": "string"
           }
@@ -716,6 +722,14 @@
             "title": "Placements",
             "type": "integer"
           },
+          "rejected_by_edit": {
+            "description": "Посадки, которые именно эта правка перевела в отказ (перенос или добавление в место, запрещённое нормами), с причиной; пусто, если таких нет",
+            "items": {
+              "$ref": "#/components/schemas/RejectedByEditOut"
+            },
+            "title": "Rejected By Edit",
+            "type": "array"
+          },
           "rejections": {
             "title": "Rejections",
             "type": "integer"
@@ -730,7 +744,8 @@
           "allowed",
           "needs_approval",
           "rejections",
-          "stale"
+          "stale",
+          "rejected_by_edit"
         ],
         "title": "PlanSummaryOut",
         "type": "object"
@@ -947,6 +962,27 @@
           "negative"
         ],
         "title": "PromptOut",
+        "type": "object"
+      },
+      "RejectedByEditOut": {
+        "description": "Посадка, которую правка перевела в отказ.",
+        "properties": {
+          "placement_id": {
+            "description": "Идентификатор посадки; под ним же она в отказах плана",
+            "title": "Placement Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Причина по-русски - то же, что ответ проверки точки для этого вида: note (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placement_id",
+          "reason"
+        ],
+        "title": "RejectedByEditOut",
         "type": "object"
       },
       "RuleCheckOut": {
@@ -1311,7 +1347,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Health",
+        "summary": "Проверка работоспособности",
         "tags": [
           "system"
         ]
@@ -1332,7 +1368,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Meta",
+        "summary": "Сведения о сервисе: профили, нормы, виды",
         "tags": [
           "system"
         ]
@@ -1375,7 +1411,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Profile",
+        "summary": "Параметры профиля",
         "tags": [
           "system"
         ]
@@ -1451,7 +1487,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "List Runs",
+        "summary": "Список прогонов",
         "tags": [
           "runs"
         ]
@@ -1520,7 +1556,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Create Run",
+        "summary": "Запустить прогон",
         "tags": [
           "runs"
         ]
@@ -1582,13 +1618,87 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Create Demo Run",
+        "summary": "Запустить демонстрационный прогон",
         "tags": [
           "runs"
         ]
       }
     },
     "/api/v1/runs/{run_id}": {
+      "delete": {
+        "description": "Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:\nисходником, артефактами и состоянием правки.\n\nИдущий прогон - в очереди, считается или пересобирается после правки - не удаляется:\n409, файлы остаются на месте. Неизвестный или некорректный id - 404.",
+        "operationId": "delete_run_api_v1_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Состояние прогона изменилось"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          }
+        },
+        "summary": "Удалить прогон",
+        "tags": [
+          "runs"
+        ]
+      },
       "get": {
         "description": "Статус прогона, сводка и ссылки на артефакты.",
         "operationId": "get_run_api_v1_runs__run_id__get",
@@ -1655,7 +1765,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Get Run",
+        "summary": "Статус прогона",
         "tags": [
           "runs"
         ]
@@ -1663,7 +1773,7 @@
     },
     "/api/v1/runs/{run_id}/artifacts/{name}": {
       "get": {
-        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.\n\nТекстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian\nумеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие\nmiddleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо\n1,3 МБ. Крупный result.dxf, наоборот, скачивают целиком и жать его незачем.",
+        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.\n\nУ прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с\nкоторым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.\n\nТекстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian\nумеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие\nmiddleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо\n1,3 МБ. Крупный result.dxf, наоборот, скачивают целиком и жать его незачем.",
         "operationId": "get_artifact_api_v1_runs__run_id__artifacts__name__get",
         "parameters": [
           {
@@ -1730,7 +1840,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Get Artifact",
+        "summary": "Скачать артефакт прогона",
         "tags": [
           "runs"
         ]
@@ -1823,7 +1933,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Check",
+        "summary": "Проверить точку посадки по нормам",
         "tags": [
           "edits"
         ]
@@ -1905,7 +2015,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Draft",
+        "summary": "Текущий план с правками",
         "tags": [
           "edits"
         ]
@@ -1913,7 +2023,7 @@
     },
     "/api/v1/runs/{run_id}/edits": {
       "post": {
-        "description": "Применить правки к плану прогона. DXF при этом не переписывается.",
+        "description": "Применить правки к плану прогона. DXF при этом не переписывается.\n\nПосадка, которая после правки не проходит нормы (перенос или добавление в запретное\nместо), уходит в отказы плана, а не остаётся на слое посадок. Правка при этом принята и\nответ остаётся 200, но такие посадки перечислены в rejected_by_edit с причиной - той же,\nчто даёт проверка точки: нарушенные нормы с пунктами актов или непригодное место. В список\nпопадают только посадки этого запроса; пустой список - правка никого в отказ не увела.",
         "operationId": "edit_api_v1_runs__run_id__edits_post",
         "parameters": [
           {
@@ -1998,7 +2108,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Edit",
+        "summary": "Применить правки плана",
         "tags": [
           "edits"
         ]
@@ -2081,7 +2191,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "List Photos",
+        "summary": "Фото прогона",
         "tags": [
           "photos"
         ]
@@ -2172,7 +2282,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "Create Photo",
+        "summary": "Фото по кадру 3D-вида",
         "tags": [
           "photos"
         ]
@@ -2337,7 +2447,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "Photo Prompt",
+        "summary": "Промпт фото",
         "tags": [
           "photos"
         ]
@@ -2422,7 +2532,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "Delete Photo",
+        "summary": "Удалить фото",
         "tags": [
           "photos"
         ]
@@ -2511,7 +2621,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "Get Photo",
+        "summary": "Статус фото",
         "tags": [
           "photos"
         ]
@@ -2614,7 +2724,7 @@
             "description": "Сервис недоступен"
           }
         },
-        "summary": "Get Photo File",
+        "summary": "Файл фото",
         "tags": [
           "photos"
         ]
@@ -2697,7 +2807,7 @@
             "description": "Внутренняя ошибка сервиса"
           }
         },
-        "summary": "Rebuild",
+        "summary": "Пересобрать DXF и отчёты по правкам",
         "tags": [
           "edits"
         ]
@@ -2723,7 +2833,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Streets",
+        "summary": "Улицы пилотного проекта",
         "tags": [
           "system"
         ]

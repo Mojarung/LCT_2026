@@ -7,7 +7,7 @@ B - результаты по улицам пилота (итоги tools/street
 C - файлы прогона (сверяются с именами в коде: новый файл без описания - ошибка);
 D - параметры профилей (каждое поле PlanParams обязано иметь описание).
 """
-# ruff: noqa: INP001, T201, E501, ISC004, C901, PLR0912, PLR0915, S101 - сборка документации: таблицы и тексты длинные
+# ruff: noqa: INP001, T201, E501, ISC004, C901, PLR0912 - сборка документации: таблицы и тексты длинные
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from collections import defaultdict
 from dataclasses import fields
 from datetime import UTC, datetime
 from enum import Enum
+from functools import partial
 from pathlib import Path
 
 import yaml
@@ -56,7 +57,9 @@ def cell(text: object) -> str:
 
 
 def number(value: float, digits: int = 2) -> str:
-    return f"{value:.{digits}f}".rstrip("0").rstrip(".").replace(".", ",")
+    text = f"{value:.{digits}f}"
+    # Нули срезаются только в дробной части: 250 при digits=0 - не «25».
+    return (text.rstrip("0").rstrip(".") if "." in text else text).replace(".", ",")
 
 
 def thousands(value: object) -> str:
@@ -217,6 +220,7 @@ def _species_row(book: RuleBook, rule: object, subject: str) -> str:
 # Итоги tools/street_runs.py: пакет в образе Docker и нативные прогоны тех улиц, которым не
 # хватило памяти VM Docker. Строка более позднего источника заменяет неудачную строку раньшего.
 # Источники итогов улиц; позже в списке - приоритетнее (перепрогон перекрывает старый итог).
+LATEST = ROOT / "out" / "docker-final-0929"
 SOURCES = (
     (ROOT / "out" / "docker-batch", ROOT / "out" / "docker-batch" / "runs", "Docker, Linux"),
     (ROOT / "out" / "street-runs-native", ROOT / "out" / "street-runs" / "runs", "Windows"),
@@ -232,6 +236,8 @@ SOURCES = (
     (ROOT / "out" / "docker-final-b", ROOT / "out" / "docker-final-b" / "runs", "Docker, Linux"),
     # Третья очередь для последней улицы, когда первая освободилась.
     (ROOT / "out" / "docker-final-c", ROOT / "out" / "docker-final-c" / "runs", "Docker, Linux"),
+    # Все 19 улиц кодом main 29.09.2026 (шаг деревьев по кронам): перекрывает всё прежнее.
+    (LATEST, LATEST / "runs", "Docker, Linux"),
 )
 
 
@@ -321,183 +327,257 @@ STREET_NOTES = {
 }
 
 
-def streets_annex() -> str:
+# Группы норм, по которым месту дерева отказано: так их называет специалист.
+REASON_GROUPS = (
+    ("существующие деревья и кустарники ближе 5 м", ("R-EXTREE", "R-EXSHRUB")),
+    (
+        "подземные сети",
+        (
+            "R-POWER",
+            "R-HEAT",
+            "R-WATER",
+            "R-SEWER",
+            "R-STORM",
+            "R-GAS",
+            "R-TELECOM",
+            "R-DRAIN",
+            "R-ACCESS",
+            "R-UTILUNK",
+        ),
+    ),
+    ("опоры освещения и контактной сети", ("R-POLE",)),
+    ("здания и сооружения", ("R-BLD", "R-STRUCT", "R-FENCE", "R-OBST")),
+    (
+        "проезжая часть, борт и покрытия",
+        ("R-CURB", "R-ROAD", "R-PAVE", "R-SWALK", "R-TRAM", "R-RAIL"),
+    ),
+    ("воздушные ЛЭП", ("R-OHL",)),
+    ("откосы", ("R-SLOPE",)),
+)
+# Хвойные в ведомостях проектов: там названия пород, а не коды каталога.
+CONIFER_WORDS = (
+    "ель",
+    "сосна",
+    "туя",
+    "пихта",
+    "лиственниц",
+    "можжевел",
+    "псевдотсуг",
+    "кипарисовик",
+    "тис ",
+)
+NORM_KM = (150, 180)  # МГСН 1.02-02, табл. В.1: деревьев на 1 км улицы
+
+
+def _short(title: str) -> str:
+    """Название без уточнения в скобках: «Наташинский пр-д (Дорога от ...)» - «Наташинский пр-д»."""
+    return re.sub(r"\s*\(.*\)\s*$", "", title)
+
+
+def _share(value: float) -> str:
+    return f"{round(100 * value)}%"
+
+
+def _designer_mix(designer: dict) -> tuple[str, str, str]:
+    """Пород, главная порода и доля хвойных в принятом проекте улицы."""
+    species = (designer.get("trees") or {}).get("by_species") or {}
+    total = sum(species.values())
+    if not total:
+        return "-", "-", "-"
+    name, count = max(species.items(), key=lambda item: item[1])
+    conifers = sum(
+        v for k, v in species.items() if any(w in k.lower() + " " for w in CONIFER_WORDS)
+    )
+    return str(len(species)), f"{cell(name)} {_share(count / total)}", _share(conifers / total)
+
+
+def _plan_mix(trees: list[dict], conifer_codes: set[str]) -> tuple[str, str, str]:
+    if not trees:
+        return "-", "-", "-"
+    counts: dict[str, int] = defaultdict(int)
+    names: dict[str, str] = {}
+    for p in trees:
+        counts[p["species"]["code"]] += 1
+        names[p["species"]["code"]] = p["species"]["name_ru"]
+    code, count = max(counts.items(), key=lambda item: item[1])
+    conifers = sum(v for k, v in counts.items() if k in conifer_codes)
+    return (
+        str(len(counts)),
+        f"{names[code]} {_share(count / len(trees))}",
+        _share(conifers / len(trees)),
+    )
+
+
+def _reasons(rejections: list[dict]) -> list[tuple[str, float]]:
+    """Доли отказов местам деревьев по группам норм (у отказа бывает несколько причин)."""
+    trees = [r for r in rejections if r["planting_type"] == "tree"]
+    if not trees:
+        return []
+    shares = []
+    for title, prefixes in REASON_GROUPS:
+        hit = sum(1 for r in trees if any(b["rule_id"].startswith(prefixes) for b in r["blocking"]))
+        if hit:
+            shares.append((title, hit / len(trees)))
+    return sorted(shares, key=lambda item: -item[1])
+
+
+def street_facts() -> list[dict]:
+    """Факты по улицам для приложения B: план, проект, отказы, баланс."""
     designer = {
         s["slug"]: s
         for s in yaml.safe_load(
             (ROOT / "docs" / "data" / "designer-plans.yaml").read_text(encoding="utf-8")
         )["streets"]
     }
+    conifers = {
+        s.code for s in YamlSpeciesCatalog(ROOT / "config" / "species.yaml").all() if s.is_conifer
+    }
     rows = []
     for row in street_rows():
         output = Path(str(row["output"]))
-        facts: dict[str, object] = {"row": row, "summary": row.get("summary") or {}}
-        if (output / "plan.json").is_file():
-            plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
-            kinds = [p["planting_type"] for p in plan["placements"]]
-            facts["trees"], facts["shrubs"] = kinds.count("tree"), kinds.count("shrub")
-            facts["lawn_m2"] = round(sum(lawn.get("area_m2", 0) for lawn in plan.get("lawns", [])))
-            rejected = [r for r in plan["rejections"] if r["planting_type"] == "tree"]
-            by_existing = sum(
-                1
-                for r in rejected
-                if any(b["rule_id"] == "R-EXTREE-TREE-001" for b in r["blocking"])
-            )
-            facts["existing_share"] = by_existing / len(rejected) if rejected else 0.0
-        for name in ("quality", "verify", "validation"):
-            if (output / f"{name}.json").is_file():
-                facts[name] = json.loads((output / f"{name}.json").read_text(encoding="utf-8"))
+        facts: dict = {"row": row, "summary": row.get("summary") or {}}
         facts["designer"] = designer.get(row["slug"], {})
-        facts["title"] = facts["designer"].get("title") or row.get("title", row["slug"])  # type: ignore[union-attr]
+        facts["title"] = _short(facts["designer"].get("title") or row.get("title", row["slug"]))
+        if row["state"] == "succeeded" and (output / "plan.json").is_file():
+            plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+            trees = [p for p in plan["placements"] if p["planting_type"] == "tree"]
+            facts["trees"] = len(trees)
+            facts["shrubs"] = len(plan["placements"]) - len(trees)
+            facts["mix"] = _plan_mix(trees, conifers)
+            facts["reasons"] = _reasons(plan["rejections"])
+            for name in ("quality", "verify", "validation"):
+                path = output / f"{name}.json"
+                facts[name] = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+            length = ((facts["quality"] or {}).get("effect") or {}).get("length_m")
+            facts["km"] = length / 1000 if length else None
+            facts["per_km"] = len(trees) / facts["km"] if facts["km"] else None
+            stats = facts["summary"].get("stats") or {}
+            facts["barrier_places"] = int(stats.get("barrier_places") or 0)
         rows.append(facts)
+    return rows
 
+
+def streets_annex() -> str:
+    rows = street_facts()
+    done = [f for f in rows if "trees" in f]
+    issues = sum(len((f.get("validation") or {}).get("issues", [])) for f in done)
     lines = [
         "## Приложение B. Результаты по улицам пилота {#annex-streets}",
         "",
-        "Прогон всех улиц каталога пилота: профиль `strict` (редакция СП 42 2016 года), "
-        "портфель вариантов, без ручных правок и назначений классов. Среда - образ Docker на "
-        "Linux с кодом ночной ветки, перепрогон 28.09.2026 в две очереди одновременно (третья - для "
-        "последней улицы) на машине разработки: 16 потоков, 10 ГБ у виртуальной машины Docker. "
-        "Из-за соседней очереди время улицы на 10-30% больше, чем при прогоне по одной "
-        "(Макеева: 2927 с против 2234 с). Улица Академика Понтрягина в 10 ГБ не поместилась, "
-        "причина исправлена после пакета (примечание ниже). Пакет посчитан кодом до слияния с изменениями 27.09 (проверка "
-        "грунта под всей ямой, пометка посадок на выведенном грунте, профиль `review`): их в "
-        "итогах пакета нет. Проверка кодом main на пяти улицах (Кустанайская, Камчатская, "
-        "Измайловская площадь, Песчаный, 2-я Прядильная): посадок столько же с точностью до 1%, "
-        "деревьев столько же или на одно меньше, 60-97% посадок на тех же точках; грунт под "
-        "ямами на этих улицах выведен по подписям, и код main помечает такие посадки как "
-        "требующие проверки покрытия. Шаг деревьев по взрослым кронам (29.09.2026) в пакете "
-        "тоже не учтён; перепрогон с ним в Docker: все 19 улиц проходят проверку, посадок в "
-        "пределах 1% от пакета, кроме Багрицкого (1178 -> 1117), docs/notes/39. Таблица собрана "
-        "из итогов `tools/street_runs.py` и "
-        "артефактов прогонов скриптом `tools/docs/annexes.py`.",
+        "Сервис проектирует посадки сам по DXF улицы: подоснова, сети, существующие насаждения, "
+        "граница работ. Проект проектировщика на вход не подаётся. Прогон 29.09.2026 в образе "
+        f"Docker, все {len(rows)} улиц каталога пилота, профиль `strict`: нормы СП 42.13330.2016, "
+        "как в ТЗ; существующие насаждения сохраняются; прикорневые барьеры не ставятся; ручных "
+        f"правок нет. Планов выдано {len(done)} из {len(rows)}, нарушений норм по независимой "
+        f"проверке плана - {issues}. Время прогона и сверка исходника - в разделе 8.",
         "",
-        "Столбцы. «Объектов» - сущностей исходника, целостность которых сверена после записи "
-        "(`verify.json`). «Нарушений» - замечаний независимой проверки плана "
-        "(`validation.json`). «Согласование» - посадок с вердиктом «требует согласования». "
-        "«Индекс» - индекс качества выбранного варианта, от 0 до 1 (разд. 3.11). "
-        "«Проект» - новые посадки в принятом проекте улицы по ассортиментным ведомостям "
-        "(`docs/data/designer-plans.yaml`). «У сущ., %» - доля отказов деревьям, где среди нарушенных норм есть "
-        "расстояние до существующего дерева (`R-EXTREE-TREE-001`, 5 м).",
+        "### Что план даёт улице {#annex-streets-effect}",
         "",
-        "| № | Улица | Объектов | Время, мин | Деревьев | Кустарников | Газон, м² | Согласование | Отказов | У сущ., % | Нарушений | Индекс | Проект: деревьев / кустарников |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "Цели - из ТЗ и ответов заказчика на сессии вопросов: нормы без нарушений, плотность по "
+        f"МГСН 1.02-02, табл. В.1 ({NORM_KM[0]}-{NORM_KM[1]} деревьев на 1 км), тень, "
+        "пылезащита, ярусность, шумозащита, разнообразие. Было - существующие насаждения чертежа, "
+        "стало - они вместе с планом (разд. 3.17). Кроны - площадь объединения взрослых крон в "
+        "границе работ; существующие кроны приняты кругами 8,5 м вокруг стволов "
+        "(`existing_crown_m`). Борта под зеленью - доля длины бортов под кронами и полосой "
+        "кустарника. Шумозащита - метры бортов с полосой насаждений от 10 м (МГСН 1.02-02, "
+        "табл. В.5).",
+        "",
+        "| № | Улица | Нарушений | Деревьев на 1 км | Кроны, % участка | Борта под зеленью, % | "
+        "Деревья с нижним ярусом | Шумозащита, м бортов | Пород деревьев | Хвойных |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
-    for facts in rows:
-        row, summary = facts["row"], facts["summary"]
-        assert isinstance(row, dict)
-        assert isinstance(summary, dict)
-        if row["env"] not in {SOURCES[0][2], "-"}:
-            facts["title"] = f"{facts['title']} ({row['env']})"
-        if row["state"] == "not_run":
+    for f in rows:
+        row = f["row"]
+        if "trees" not in f:
             lines.append(
-                f"| {row['number']} | {cell(facts['title'])} | - | - | не досчитан, см. ниже "
-                "|  |  |  |  |  |  |  |  |"
+                f"| {row['number']} | {cell(f['title'])} | план не выдан |  |  |  |  |  |  |  |"
             )
             continue
-        if row["state"] != "succeeded":
-            lines.append(
-                f"| {row['number']} | {cell(facts['title'])} | - | "
-                f"{number(row.get('seconds', 0) / 60, 1)} | прогон остановлен, см. ниже |  |  |  |  |  |  |  |  |"
-            )
-            continue
-        verify = facts.get("verify") or {}
-        validation = facts.get("validation") or {}
-        quality = facts.get("quality") or {}
-        designer = facts["designer"]
-        assert isinstance(designer, dict)
-        # Нет ведомости кустарника (total: null) - прочерк, а не «None» в таблице.
-        totals = [(designer.get(kind) or {}).get("total") for kind in ("trees", "shrubs")]
-        project = " / ".join("-" if value is None else thousands(value) for value in totals)
-        integrity = (
-            "" if summary.get("integrity_ok") and summary.get("export_matches_plan") else " (!)"
-        )
+        effect = effect_of(Path(str(row["output"]))) or {}
+        pair = partial(_pair_or_dash, effect)
+        count, _, conifer = f["mix"]
         lines.append(
-            f"| {row['number']} | {cell(facts['title'])} | "
-            f"{thousands(verify.get('source_entities', '-'))}{integrity} | {number(row['seconds'] / 60, 1)} | "
-            f"{facts.get('trees', '-')} | {thousands(facts.get('shrubs', '-'))} | "
-            f"{thousands(facts.get('lawn_m2', '-'))} | "
-            f"{summary.get('needs_approval', '-')} | {summary.get('rejections', '-')} | "
-            f"{round(100 * facts.get('existing_share', 0))} | "  # type: ignore[call-overload]
-            f"{len(validation.get('issues', [])) if validation else '-'} | "
-            f"{number(quality['index'], 3) if quality.get('index') is not None else '-'} | {project} |"
+            f"| {row['number']} | {cell(f['title'])} | "
+            f"{len((f.get('validation') or {}).get('issues', []))} | "
+            f"{round(f['per_km']) if f['per_km'] is not None else '-'} | {pair('canopy_share')} | "
+            f"{pair('curb_green_share')} | {pair('tiers_trees')} | {pair('noise_curb_m')} | "
+            f"{count} | {conifer} |"
         )
-    done = [f for f in rows if f["row"]["state"] == "succeeded"]  # type: ignore[index]
-    stopped = [f for f in rows if f["row"]["state"] != "succeeded"]  # type: ignore[index]
-    planted = [f for f in done if int(f.get("trees", 0)) + int(f.get("shrubs", 0))]  # type: ignore[call-overload]
+    over = [f for f in done if f["per_km"] is not None and f["per_km"] > NORM_KM[1]]
+    under = [f for f in done if f not in over]
     lines += [
         "",
-        f"Итого: планов с посадками {len(planted)} из {len(rows)}; деревьев "
-        f"{sum(int(f.get('trees', 0)) for f in done)}, кустарников "  # type: ignore[call-overload]
-        f"{sum(int(f.get('shrubs', 0)) for f in done)}; нарушений норм в выданных планах "  # type: ignore[call-overload]
-        f"{sum(len((f.get('validation') or {}).get('issues', [])) for f in done)}.",  # type: ignore[union-attr]
+        "### Где мест под деревья мало {#annex-streets-why}",
+        "",
+        "На улицах ниже нормы В.1 места, допустимые по нормам, заканчиваются раньше нормы. Сервис "
+        "сохраняет все существующие насаждения и не назначает вырубку. Доли - от мест деревьев, "
+        "которые сервис проверил и не занял; у места бывает несколько причин. Прикорневой барьер "
+        "(СП 42.13330.2016, табл. 9.1, прим. 5, 7) - параметр `root_barriers`, по умолчанию "
+        "выключен; места, которые он открыл бы, видны на карте.",
+        "",
+        "| № | Улица | Деревьев на 1 км | Что мешает местам деревьев | Ещё мест с барьером |",
+        "|---|---|---|---|---|",
     ]
-    shares = sorted(round(100 * float(f.get("existing_share", 0))) for f in done)  # type: ignore[arg-type]
-    bagritskogo = next((f for f in done if f["row"]["slug"] == "5-bagritskogo-ulitsa"), None)  # type: ignore[index]
-    example = (
-        f"сервис вырубку не назначает, поэтому новых деревьев там {bagritskogo['trees']} против "
-        f"{bagritskogo['designer']['trees']['total']} в проекте."  # type: ignore[index]
-        if bagritskogo
-        else "сервис вырубку не назначает."
-    )
+    for f in under:
+        reasons = "; ".join(f"{title} - {_share(share)}" for title, share in f["reasons"][:3])
+        lines.append(
+            f"| {f['row']['number']} | {cell(f['title'])} | "
+            f"{round(f['per_km']) if f['per_km'] is not None else '-'} | {reasons or '-'} | "
+            f"{f['barrier_places'] or '-'} |"
+        )
+    if over:
+        lines += [
+            "",
+            f"Выше нормы ({NORM_KM[1]} на 1 км) - улицы, где допустимых мест больше нормы и сервис "
+            "занимает их все: "
+            + ", ".join(f"{f['title']} - {round(f['per_km'])}" for f in over)
+            + ".",
+        ]
     lines += [
         "",
-        "Почему число посадок расходится с проектом. Причины видны в данных, это не ошибки "
-        "расчёта:",
+        "### Сравнение с примерами выхода набора {#annex-streets-examples}",
         "",
-        "1. **Существующие деревья.** Проект вырубает часть существующих деревьев и сажает на "
-        "их месте. Сервис существующие насаждения сохраняет и ставит новое дерево не ближе 5 м "
-        "к ним (`R-EXTREE-TREE-001`, параметр проекта по аналогии с шагом посадки 743-ПП, табл. "
-        "3.6.2). Доля отказов деревьям у "
-        f"существующих деревьев - от {shares[0]} до {shares[-1]}% по улицам (столбец "
-        "«У сущ., %»). На улице Багрицкого дендрологическое обоснование проекта рекомендует к "
-        "вырубке 421 дерево из 1228, в основном клён ясенелистный (инвазивный вид, 369-ПП); "
-        + example,
-        "2. **Нормы строже практики.** Проект местами сажает ближе нормативных отступов: "
-        "нормоконтроль плана проектировщика улицы Берзарина теми же правилами нашёл 391 "
-        "посадку с нарушениями из 554 (разд. 3.16). В плане сервиса нарушений нет.",
-        "3. **Кустарник.** Кустарник проекта считается штуками по ведомости, включая живые "
-        "изгороди в несколько рядов. Живая изгородь сервиса ограничена верхней границей "
-        "плотности 720 кустарников на 1 км улицы (МГСН 1.02-02, табл. В.1), поэтому на "
-        "улицах с протяжёнными изгородями проекта числа несопоставимы.",
-        "4. **Газоны.** Газон строится только на грунте, подтверждённом замкнутыми контурами "
-        "(разд. 3.5, 8.2). Где контуров грунта в чертеже нет, газонов нет, а площадь грунта, "
-        "выведенного по подписям, названа в журнале прогона.",
+        "ТЗ (разд. 6) даёт в наборе пилота примеры выхода - принятые проекты улиц - как ориентир "
+        "формата и состава и для сравнения своего результата. Это не вход сервиса и не образец "
+        "расстановки: нормоконтроль проекта улицы Берзарина теми же правилами нашёл посадки с "
+        "нарушениями отступов (разд. 3.16). Состав проекта - по его ассортиментной ведомости "
+        "(`docs/data/designer-plans.yaml`); проект часто сажает на месте вырубаемых деревьев, "
+        "сервис вырубку не назначает.",
+        "",
+        "| № | Улица | Деревьев | Пород | Главная порода | Хвойных | Пример: деревьев | Пород | "
+        "Главная порода | Хвойных |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
-    memory = []
-    for facts in rows:
-        row = facts["row"]
-        assert isinstance(row, dict)
-        measured = peak_memory(row)
-        if measured is not None:
-            memory.append(f"{cell(facts['title'])} - {number(measured[0], 1)} ГБ ({measured[1]})")
-    if memory:
-        lines += ["", "Пиковая память прогона: " + "; ".join(memory) + "."]
-    noted = [f for f in rows if f in stopped or f["row"]["slug"] in STREET_NOTES]  # type: ignore[index]
-    if noted:
-        lines += ["", "Примечания к строкам:", ""]
-        for facts in noted:
-            row = facts["row"]
-            assert isinstance(row, dict)
-            parts = []
-            if row.get("error"):
-                reason = re.sub(r"\s+", " ", str(row["error"])).strip()
-                parts.append(f"прогон остановлен: «{cell(reason[:400])}»")
-            if row["slug"] in STREET_NOTES:
-                parts.append(STREET_NOTES[row["slug"]])
-            lines.append(f"- {cell(facts['title'])}: " + "; ".join(parts) + ".")
-    lines += _effect_table(rows)
+    for f in done:
+        count, main, conifer = f["mix"]
+        d_count, d_main, d_conifer = _designer_mix(f["designer"])
+        project = (f["designer"].get("trees") or {}).get("total")
+        lines.append(
+            f"| {f['row']['number']} | {cell(f['title'])} | {thousands(f['trees'])} | {count} | "
+            f"{main} | {conifer} | {thousands(project) if project is not None else '-'} | "
+            f"{d_count} | {d_main} | {d_conifer} |"
+        )
     return "\n".join(lines) + "\n"
 
 
-EFFECT_COLUMNS = (
-    ("trees", "Деревья, шт."),
-    ("canopy_share", "Кроны, % участка"),
-    ("curb_green_share", "Борта под зеленью, %"),
-    ("tiers_trees", "Деревья с нижним ярусом"),
-    ("noise_curb_m", "Борта с полосой от 10 м, м"),
-    ("lawn_m2", "Газон, м²"),
-)
+def tech_table() -> str:
+    """Технические показатели прогона для раздела 8: время и сверка исходника."""
+    lines = [
+        "| Улица | Время, мин | Объектов исходника сверено | Изменено |",
+        "|---|---|---|---|",
+    ]
+    for f in street_facts():
+        if "trees" not in f:
+            continue
+        verify = f.get("verify") or {}
+        changed = sum(
+            len(verify.get(k, [])) for k in ("changed", "missing", "added_outside_result_layers")
+        )
+        lines.append(
+            f"| {cell(f['title'])} | {number(float(f['row']['seconds']) / 60, 1)} | "
+            f"{thousands(verify.get('source_entities', '-'))} | {changed} |"
+        )
+    return "\n".join(lines)
 
 
 def effect_of(output: Path) -> dict | None:
@@ -515,55 +595,25 @@ def measure_of(effect: dict, key: str) -> dict:
     return next(m for m in effect["measures"] if m["key"] == key)
 
 
+def _pair_or_dash(effect: dict, key: str) -> str:
+    return _pair(effect, key) if effect else "-"
+
+
 def _pair(effect: dict, key: str) -> str:
     m = measure_of(effect, key)
     before, after = m["before"], m["after"]
     if before is None and after is None:
         return "не определяется"
+    if key == "lawn_m2" and not before and not after:
+        return "не выделен"
     digits = 1 if key.endswith("share") else 0
 
     def text(value: float | None) -> str:
-        return "-" if value is None else thousands(round(value)) if digits == 0 else number(value, 1)
+        return (
+            "-" if value is None else thousands(round(value)) if digits == 0 else number(value, 1)
+        )
 
     return f"{text(before)} → {text(after)}"
-
-
-def _effect_table(rows: list[dict[str, object]]) -> list[str]:
-    """Было - стало по улицам: существующие насаждения чертежа и они вместе с планом."""
-    lines = [
-        "",
-        "### Было - стало по улицам {#annex-streets-effect .newpage}",
-        "",
-        "Было - существующие насаждения чертежа, стало - они вместе с посадками плана (разд. "
-        "3.17). Существующие кроны - круги 8,5 м вокруг стволов (параметр `existing_crown_m`): "
-        "знак дерева в чертеже - кружок, а не крона. Число деревьев по чертежу показано только "
-        "там, где каждое дерево - вставка знака; где деревья нарисованы разобранными знаками и "
-        "знаками массивов, оно не определяется (сверка 27.09.2026: Багрицкого 1441 ствол по "
-        "меткам при 1228 деревьях дендрологического обоснования, Харьковская 428 при 724, "
-        "Лодочная 4148 при 569), а площадь крон считается по тем же меткам. Шумозащита - метры "
-        "бортов с покрытием с одной стороны, у которых полоса насаждений в сторону грунта шире "
-        "10 м (МГСН 1.02-02, табл. В.5). Для уже выданных планов баланс посчитан по контексту "
-        "прогона тем же кодом сервиса (`tools/effect_from_runs.py`).",
-        "",
-        "| № | Улица | " + " | ".join(title for _, title in EFFECT_COLUMNS) + " |",
-        "|---|---|" + "---|" * len(EFFECT_COLUMNS),
-    ]
-    count = 0
-    for facts in rows:
-        row = facts["row"]
-        assert isinstance(row, dict)
-        if row["state"] != "succeeded":
-            continue
-        effect = effect_of(Path(str(row["output"])))
-        if effect is None:
-            continue
-        count += 1
-        lines.append(
-            f"| {row['number']} | {cell(facts['title'])} | "
-            + " | ".join(_pair(effect, key) for key, _ in EFFECT_COLUMNS)
-            + " |"
-        )
-    return lines if count else []
 
 
 def effect_facts(runs: list[dict[str, object]]) -> dict[str, str]:
@@ -637,9 +687,7 @@ def effect_facts(runs: list[dict[str, object]]) -> dict[str, str]:
             f"{number(total('noise_curb_m', 'after') / 1000, 1)} км бортов"
         ),
         "effect_lawn_kept": thousands(round(total("lawn_m2", "before"))),
-        "effect_lawn_new": thousands(
-            round(total("lawn_m2", "after") - total("lawn_m2", "before"))
-        ),
+        "effect_lawn_new": thousands(round(total("lawn_m2", "after") - total("lawn_m2", "before"))),
         "effect_trees_text": (
             f"Число существующих деревьев по чертежу определяется на {len(known)} улицах из "
             f"{len(effects)}"
@@ -1025,7 +1073,10 @@ PARAMS: list[tuple[str, list[tuple[str, str]]]] = [
             ("lawn_phase", "сдвиг сетки кандидатов по газону, м"),
             ("lawn_rotation_deg", "поворот сетки кандидатов по газону, градусы"),
             ("lawn_anchor", "привязка сетки кандидатов: `raster` - к растру покрытий"),
-            ("max_rejections", "предел числа записанных отказов"),
+            (
+                "max_rejections",
+                "предел записи отказов - предохранитель от вырожденного чертежа; пилот его не достигает",
+            ),
             ("zones", "строить зоны допустимости"),
             ("zone_cell_m", "шаг сетки зон допустимости, м"),
         ],
@@ -1307,6 +1358,7 @@ def facts() -> dict[str, str]:
             "minutes_median": number(minutes[len(minutes) // 2], 1),
         }
     found |= _street_texts(runs, int(str(found.get("streets_total", len(runs)))))
+    found["streets_tech_table"] = tech_table()
     found |= effect_facts(runs)
     found |= _audit_texts()
     return {key: str(value) for key, value in found.items()}
@@ -1362,7 +1414,11 @@ def _street_texts(runs: list[dict[str, object]], total: int) -> dict[str, str]:
     peak_text = (
         f"{number(max(peaks)[0], 1)} ГБ ({max(peaks)[1]})"
         if peaks
-        else "несколько гигабайт (замер не проводился)"
+        else (
+            "до 8,2 ГБ на процесс сервиса (прогон 29.09.2026: три улицы одновременно в трёх "
+            "процессах, процесс держит и память прежних прогонов); по одной улице 28.09.2026 - "
+            "до 5,5 ГБ (Олимпийская деревня)"
+        )
     )
     return {
         "streets_summary": summary,

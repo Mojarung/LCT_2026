@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from shapely.geometry.base import BaseGeometry
 
-    from green.application.basemap import Basemap
+    from green.application.basemap import Basemap, BasemapFeature
     from green.application.classification import ClassificationReport
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -153,6 +153,9 @@ class FileArtifactSink:
                 asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
             ),
             **_surface(directory, report.surface),
+            # Исходник сверки комплекта (склеенный чертёж): с ним `green verify` повторяет
+            # сверку результата. У одиночного файла исходник - сам входной файл, ссылки нет.
+            **({report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else {}),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
@@ -395,6 +398,25 @@ def _assortment(info: AssortmentInfo | None) -> dict[str, Any] | None:
     }
 
 
+_DECOR_SEASON = "слагаемое индекса «Сезонность» считает деревья и кустарники вместе"
+# Подпись decor_by_month: чьи это месяцы. Без неё пустой июль в сводке деревьев спорит с
+# сезонностью индекса, где июль закрыл кустарник.
+DECOR_NOTES = {
+    "tree": (
+        "Месяцы декоративности деревьев плана: сколько деревьев декоративны в каждом месяце "
+        f"(по каталогу видов). Кустарники здесь не считаются; {_DECOR_SEASON}."
+    ),
+    "shrub": (
+        "Месяцы декоративности кустарников плана: сколько кустарников декоративны в каждом "
+        f"месяце (по каталогу видов). Деревья здесь не считаются; {_DECOR_SEASON}."
+    ),
+    "mixed": (
+        "Месяцы декоративности деревьев и кустарников плана: сколько посадок декоративны в "
+        "каждом месяце (по каталогу видов), как их считает слагаемое индекса «Сезонность»."
+    ),
+}
+
+
 def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
     """Состав плана отдельным файлом: доли, разнообразие, сезонность и что не удалось."""
     if summary is None:
@@ -408,6 +430,8 @@ def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
         "conifer_share": round(summary.conifer_share, 4),
         "shannon": summary.shannon,
         "decor_by_month": dict(summary.decor_by_month),
+        "decor_by_month_of": summary.decor_of,
+        "decor_by_month_note": DECOR_NOTES.get(summary.decor_of, ""),
         "no_species": summary.no_species,
         "quota_violations": list(summary.quota_violations),
         "existing": dict(summary.existing),
@@ -675,12 +699,26 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
         "features": [
             {
                 "type": "Feature",
-                "properties": {"class": feature.object_class.value},
+                "properties": _basemap_properties(feature),
                 "geometry": orjson.loads(shapely.to_geojson(feature.geometry)),
             }
             for feature in basemap.features
         ],
     }
+
+
+def _basemap_properties(feature: BasemapFeature) -> dict[str, Any]:
+    """Класс объекта и, у хвойного существующего дерева, признак хвойного знака.
+
+    Признак пишется только там, где он есть: у десятков тысяч объектов подосновы лишний
+    ключ утяжелил бы выгрузку, которую браузер разбирает при открытии прогона.
+    """
+    properties: dict[str, Any] = {"class": feature.object_class.value}
+    if feature.conifer:
+        properties["conifer"] = True
+    if feature.vegetation_kind:
+        properties["vegetation_kind"] = feature.vegetation_kind
+    return properties
 
 
 # Цвета карты покрытий: грунт - зеленоватый, твёрдое - серый, полупрозрачные, чтобы линии

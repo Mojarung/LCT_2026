@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from ezdxf.document import Drawing
     from ezdxf.layouts import Modelspace
 
+    from green.application.schedule import ScheduleRow
     from green.domain.norms import RuleBook
     from green.domain.planting import (
         Lawn,
@@ -74,6 +75,14 @@ XDATA_CHUNK = 240
 XDATA_REAL = 1040
 NPA_REFS = 2
 NPA_MAX = 250  # длиннее значение атрибута старые просмотрщики режут
+# Отметка отказа - крест 1 x 1 м в метрах чертежа.
+REJECT_HALF_M = 0.5
+# Лист результата в высотах текста таблицы: ведомость правее габарита плана, легенда правил
+# колонкой заданной ширины правее ведомости - ни одна из них не ложится на план.
+SCHEDULE_GAP_HEIGHTS = 20.0
+LEGEND_GAP_HEIGHTS = 5.0
+LEGEND_WIDTH_HEIGHTS = 70.0
+MTEXT_TOP_LEFT = 1
 # Столбцы ведомости: заголовок и ширина в высотах текста.
 SCHEDULE_COLUMNS = (
     ("Поз.", 4.0),
@@ -119,16 +128,21 @@ class EzdxfPlanWriter:
         snapshot = SourceSnapshot(digests, unexportable)
         self._prepare(doc)
         msp = doc.modelspace()
+        rows = build_schedule(plan.placements)
+        positions = {row.code: str(row.number) for row in rows}
         for zone in plan.zones:
             self._zone(msp, zone, scale)
         for lawn in plan.lawns:
             self._lawn(msp, lawn, scale)
         for placement in plan.placements:
-            self._placement(doc, msp, placement, scale, rulebook)
+            position = positions.get(placement.species.code, "")
+            self._placement(doc, msp, placement, position, scale=scale, rulebook=rulebook)
         for rejection in plan.rejections:
             self._rejection(msp, rejection, scale)
-        self._legend(msp, plan, rulebook, scale)
-        self._schedule(msp, plan, scale)
+        extent = plan_extent(plan)
+        if extent is not None:
+            left = self._schedule(msp, rows, extent, scale)
+            self._legend(msp, plan, rulebook, (left, extent[3] * scale), scale)
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
         return snapshot
@@ -143,8 +157,9 @@ class EzdxfPlanWriter:
             doc.styles.add(TEXT_STYLE, font=self._font)
         if REJECT_BLOCK not in doc.blocks:
             block = doc.blocks.new(REJECT_BLOCK)
-            block.add_line((-0.5, -0.5), (0.5, 0.5))
-            block.add_line((-0.5, 0.5), (0.5, -0.5))
+            half = REJECT_HALF_M
+            block.add_line((-half, -half), (half, half))
+            block.add_line((-half, half), (half, -half))
             block.add_attdef(
                 "NUM", (0.6, 0.2), dxfattribs={"height": self._height, "style": TEXT_STYLE}
             )
@@ -157,19 +172,25 @@ class EzdxfPlanWriter:
             block.add_circle((0, 0), radius=species.crown_diameter_m / 2)
             block.add_line((-0.3, 0), (0.3, 0))
             block.add_line((0, -0.3), (0, 0.3))
+            # На плане видна только позиция ведомости, как у проектировщика (ГОСТ 21.508-2020,
+            # форма 9): одна-две цифры у куста не наезжают на соседа при шаге 1 м. Номер, вид и
+            # нормы остаются скрытыми атрибутами - по ним отчёт и сверка экспорта связывают
+            # вставку с объяснением.
             attribs = {"height": self._height, "style": TEXT_STYLE}
-            block.add_attdef("NUM", (0.4, 0.4), dxfattribs=attribs)
-            block.add_attdef("SPECIES", (0.4, -0.4 - self._height), dxfattribs=attribs)
-            block.add_attdef(
-                "NPA", (0.4, -0.8 - 2 * self._height), dxfattribs={**attribs, "flags": 1}
-            )
+            hidden = {**attribs, "flags": 1}
+            block.add_attdef("POS", (0.4, 0.4), dxfattribs=attribs)
+            block.add_attdef("NUM", (0.4, -0.4 - self._height), dxfattribs=hidden)
+            block.add_attdef("SPECIES", (0.4, -0.8 - 2 * self._height), dxfattribs=hidden)
+            block.add_attdef("NPA", (0.4, -1.2 - 3 * self._height), dxfattribs=hidden)
         return name
 
-    def _placement(
+    def _placement(  # noqa: PLR0913 - позиция ведомости считается один раз на весь план
         self,
         doc: Drawing,
         msp: Modelspace,
         placement: Placement,
+        position: str,
+        *,
         scale: float,
         rulebook: RuleBook,
     ) -> None:
@@ -191,6 +212,7 @@ class EzdxfPlanWriter:
         )[:NPA_REFS]
         ref.add_auto_attribs(
             {
+                "POS": position,
                 "NUM": str(placement.number),
                 "SPECIES": placement.species.name_ru,
                 "NPA": _npa(tightest, rulebook),
@@ -285,7 +307,16 @@ class EzdxfPlanWriter:
             ],
         )
 
-    def _legend(self, msp: Modelspace, plan: Plan, rulebook: RuleBook, scale: float) -> None:
+    def _legend(
+        self,
+        msp: Modelspace,
+        plan: Plan,
+        rulebook: RuleBook,
+        corner: tuple[float, float],
+        scale: float,
+    ) -> None:
+        """Легенда правил колонкой заданной ширины; corner - левый край колонки и верх плана
+        в единицах чертежа."""
         used = sorted({c.rule_id for p in plan.placements for c in p.checks})
         used += sorted({c.rule_id for r in plan.rejections for c in r.blocking} - set(used))
         used += sorted({rule_id for lawn in plan.lawns for rule_id in lawn.rule_ids} - set(used))
@@ -300,30 +331,40 @@ class EzdxfPlanWriter:
             }
             areas = ", ".join(f"{LAWN_LABELS[k]} {_area(a)}" for k, a in totals.items() if a > 0)
             lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
-        xs = [p.x for p in plan.placements] + [r.x for r in plan.rejections]
-        ys = [p.y for p in plan.placements] + [r.y for r in plan.rejections]
-        if not xs:
-            return
+        height = self._height * 2 * scale
         mtext = msp.add_mtext(
             "\\P".join(lines),
             dxfattribs={
                 "layer": LAYER_LABELS,
                 "style": TEXT_STYLE,
-                "char_height": self._height * 2 * scale,
+                "char_height": height,
+                # Ширина колонки: CAD переносит длинные цитаты внутри неё, а не тянет строку
+                # на десятки метров поверх чертежа.
+                "width": LEGEND_WIDTH_HEIGHTS * height,
             },
         )
-        mtext.set_location((min(xs) * scale, (max(ys) + 10 * self._height) * scale))
+        left, top = corner
+        mtext.set_location((left, top + 2 * height), attachment_point=MTEXT_TOP_LEFT)
 
-    def _schedule(self, msp: Modelspace, plan: Plan, scale: float) -> None:
-        """Ведомость элементов озеленения таблицей справа от плана: поз., порода или вид,
-        количество, стандарт посадочного материала (ГОСТ 21.508-2020, п. 10.8, форма 9)."""
-        rows = build_schedule(plan.placements)
-        if not rows:
-            return
+    def _schedule(
+        self,
+        msp: Modelspace,
+        rows: Sequence[ScheduleRow],
+        extent: tuple[float, float, float, float],
+        scale: float,
+    ) -> float:
+        """Ведомость элементов озеленения таблицей справа от габарита плана: поз., порода или
+        вид, количество, стандарт посадочного материала (ГОСТ 21.508-2020, п. 10.8, форма 9).
+
+        Возвращает левый край места под легенду в единицах чертежа: правее таблицы, а без
+        строк ведомости - правее плана.
+        """
         height = self._height * 2 * scale
+        x0 = extent[2] * scale + SCHEDULE_GAP_HEIGHTS * height
+        if not rows:
+            return x0
         step = height * 2
-        x0 = (max(p.x for p in plan.placements) * scale) + 20 * height
-        y0 = max(p.y for p in plan.placements) * scale
+        y0 = extent[3] * scale
         widths = [w * height for _, w in SCHEDULE_COLUMNS]
         right = x0 + sum(widths)
         attribs = {"layer": LAYER_SCHEDULE, "style": TEXT_STYLE, "height": height}
@@ -357,6 +398,31 @@ class EzdxfPlanWriter:
         for width in (0.0, *widths):
             x += width
             msp.add_line((x, y0), (x, y), dxfattribs={"layer": LAYER_SCHEDULE})
+        return right + LEGEND_GAP_HEIGHTS * height
+
+
+def plan_extent(plan: Plan) -> tuple[float, float, float, float] | None:
+    """Габарит всего, что план рисует, в метрах (min_x, min_y, max_x, max_y): кроны посадок,
+    отметки всех отказов, зоны допустимости и газоны. None - план пуст."""
+    boxes = [
+        (p.x - r, p.y - r, p.x + r, p.y + r)
+        for p in plan.placements
+        for r in (p.species.crown_diameter_m / 2,)
+    ]
+    half = REJECT_HALF_M
+    boxes += [(r.x - half, r.y - half, r.x + half, r.y + half) for r in plan.rejections]
+    for item in (*plan.zones, *plan.lawns):
+        if not item.geometry.is_empty:
+            min_x, min_y, max_x, max_y = item.geometry.bounds
+            boxes.append((float(min_x), float(min_y), float(max_x), float(max_y)))
+    if not boxes:
+        return None
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
 
 
 def _npa(checks: Sequence[RuleCheck], rulebook: RuleBook) -> str:

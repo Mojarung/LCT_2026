@@ -9,7 +9,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from green.application.classification import GeometryKind, MatchTarget
-from green.application.params import DEFAULT_QUALITY_WEIGHTS, DEFAULT_WEIGHTS
+from green.application.params import (
+    DEFAULT_QUALITY_WEIGHTS,
+    DEFAULT_WEIGHTS,
+    REJECTIONS_CEILING,
+    REJECTIONS_DEFAULT,
+)
 from green.application.symbols import SymbolRole
 from green.domain.norms import (
     CitationStatus,
@@ -313,7 +318,7 @@ class ProfileModel(_Strict):
     label_roles: dict[str, Literal["soil", "paved", "ignore"]] = Field(default_factory=dict)
     allow_needs_approval: bool = True
     label_search_radius_m: float = Field(default=3.0, gt=0, le=20)
-    max_rejections: int = Field(default=2000, ge=0, le=100_000)
+    max_rejections: int = Field(default=REJECTIONS_DEFAULT, ge=0, le=REJECTIONS_CEILING)
     require_soil: bool = True
     require_work_boundary: bool = True
     planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м

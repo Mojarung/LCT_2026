@@ -15,7 +15,13 @@ import html
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from green.application.explain import LAWN_LABELS, OBJECT_LABELS, VERDICT_LABELS
+from green.application.explain import (
+    CROWN_NOTE,
+    LAWN_LABELS,
+    OBJECT_LABELS,
+    VERDICT_LABELS,
+    crown_increment_m,
+)
 from green.application.places import PLACE_LABELS
 from green.domain.planting import CheckOutcome
 
@@ -61,6 +67,17 @@ class _Norm:
     threshold: float | None
     act: str
     clause: str
+    # Прирост нормы за крону шире 5 м (прим. 1 к табл. 9.1 СП 42.13330), 0 - норма из таблицы.
+    crown_extra: float = 0.0
+
+    @property
+    def crown_split(self) -> str:
+        """Из чего сложена норма с приростом за крону: « = 2,00 + 1,00 за крону». Без разбивки
+        норма 3,00 при 2,0 в табл. 9.1 читается как ошибка. Без прироста - пусто."""
+        if self.threshold is None or not self.crown_extra:
+            return ""
+        base = self.threshold - self.crown_extra
+        return f" = {_m(base)} + {_m(self.crown_extra)} за крону"
 
     @property
     def margin(self) -> float | None:
@@ -85,7 +102,15 @@ class _Rules:
                 clause += f" (ред. 2026: {current[0].clause.split(':')[0]})"
         label = OBJECT_LABELS.get(check.object_class, str(check.object_class or ""))
         target = f"до {label}" if label else ""
-        return _Norm(check.rule_id, target, check.measured_m, check.threshold_m, act, clause)
+        return _Norm(
+            check.rule_id,
+            target,
+            check.measured_m,
+            check.threshold_m,
+            act,
+            clause,
+            crown_increment_m(check, rule),
+        )
 
 
 def governing(placement: Placement, rules: _Rules) -> _Norm | None:
@@ -169,6 +194,22 @@ _HOW = (
 )
 
 
+def _how(plan: Plan, rules: _Rules) -> str:
+    """Пояснение к таблице посадок; если у норм есть прирост за крону - его основание."""
+    raised = any(
+        crown_increment_m(check, rules.by_id.get(check.rule_id))
+        for p in plan.placements
+        for check in p.checks
+        if check.measured_m is not None
+    )
+    if not raised:
+        return _HOW
+    return (
+        f"{_HOW} Норма со слагаемым «за крону» - норма табл. 9.1 и прирост за крону шире 5 м."
+        f"{CROWN_NOTE}, прирост - толкование проекта (crown_extra_per_m)."
+    )
+
+
 def _placement_row(p: Placement, rules: _Rules) -> list[str]:
     norm = governing(p, rules)
     return [
@@ -180,7 +221,7 @@ def _placement_row(p: Placement, rules: _Rules) -> list[str]:
         VERDICT_LABELS[p.verdict],
         f"{norm.target} ({norm.rule_id})" if norm else "",
         _m(norm.measured) if norm else "",
-        _m(norm.threshold) if norm else "",
+        _m(norm.threshold) + norm.crown_split if norm else "",
         _m(norm.margin) if norm else "",
         f"{norm.act}, {norm.clause}" if norm else "",
     ]
@@ -189,7 +230,8 @@ def _placement_row(p: Placement, rules: _Rules) -> list[str]:
 def _rejection_row(r: Rejection, rules: _Rules) -> list[str]:
     broken = _violations(r, rules)
     what = "; ".join(
-        f"{n.target}: {_m(n.measured)} м < {_m(n.threshold)} м ({n.rule_id})" for n in broken
+        f"{n.target}: {_m(n.measured)} м < {_m(n.threshold)} м{n.crown_split} ({n.rule_id})"
+        for n in broken
     )
     basis = "; ".join(f"{n.act}, {n.clause}" for n in broken)
     if r.note and not broken:
@@ -326,7 +368,7 @@ def write_markdown(path: Path, report: RunReport) -> Path:
         lines += _md_table(KIND_HEAD, _kind_rows(plan.effect))
     lines += ["", "## Нормативная база", ""]
     lines += _md_table(("Акт", "Редакция и сверка", "Текст"), _acts(plan, rules))
-    lines += ["", "## Посадки", "", _HOW, ""]
+    lines += ["", "## Посадки", "", _how(plan, rules), ""]
     lines += _md_table(PLACEMENT_HEAD, (_placement_row(p, rules) for p in plan.placements))
     lines += ["", "## Отказы", ""]
     lines += _md_table(REJECTION_HEAD, (_rejection_row(r, rules) for r in plan.rejections))
@@ -415,7 +457,7 @@ def write_html(path: Path, report: RunReport) -> Path:
         *_effect_html(plan.effect),
         "<h2>Нормативная база</h2>",
         _html_table(("Акт", "Редакция и сверка", "Текст"), _acts(plan, rules)),
-        f'<h2>Посадки</h2><p class="how">{html.escape(_HOW)}</p>',
+        f'<h2>Посадки</h2><p class="how">{html.escape(_how(plan, rules))}</p>',
         _html_table(PLACEMENT_HEAD, (_placement_row(p, rules) for p in plan.placements)),
         "<h2>Отказы</h2>",
         _html_table(REJECTION_HEAD, (_rejection_row(r, rules) for r in plan.rejections)),

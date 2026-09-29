@@ -1,5 +1,5 @@
 import { integer } from '../../lib/format';
-import { modelKey, modelOf } from '../../map/models';
+import { isShrubType, modelKey, modelOf } from '../../map/models';
 import type { MapItem } from '../../map/types';
 import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
@@ -96,6 +96,7 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
                 <ModelSwatch
                   model={modelOf(row.code, row.plantingType)}
                   modelKey={modelKey(row.code, row.plantingType)}
+                  shrub={isShrubType(row.plantingType)}
                   size={22}
                 />
                 <span className="composition-name">{row.name}</span>

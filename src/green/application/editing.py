@@ -8,13 +8,18 @@
 не восстановить из артефактов, а перечитывать чертёж на каждое перетаскивание нельзя: чтение
 Берзарина занимает 37 секунд. Поэтому правка доступна, пока контекст жив; когда его нет,
 сервис честно отвечает 409, а не делает вид, что проверил.
+
+Процессов сервиса бывает несколько (`--workers`, реплики), и черновик у них один: принятая
+правка пишется в журнал прогона, а каждый процесс догоняет журнал, прежде чем отдать план.
 """
 
 from __future__ import annotations
 
+import logging
 import math
+import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field, replace
+from dataclasses import MISSING, dataclass, field, fields, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -29,8 +34,8 @@ from green.application.assortment.summary import refresh_summaries
 from green.application.barriers import BARRIER_NOTE, barrier_distance
 from green.application.constraints import ConstraintIndex
 from green.application.effect import street_effect
-from green.application.errors import InputError
-from green.application.explain import explain
+from green.application.errors import ConflictError, InputError
+from green.application.explain import describe_check, explain
 from green.application.lawns import plan_lawns
 from green.application.params import active_distance_rules, species_distance_rules
 from green.application.places import place_map, with_places
@@ -45,7 +50,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.params import PlanParams
-    from green.application.ports import InventoryCounts, RunContextStore
+    from green.application.ports import InventoryCounts, RunContextStore, SpeciesCatalog
     from green.application.quality import Site
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -53,7 +58,10 @@ if TYPE_CHECKING:
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Plan, RuleCheck, Species
 
+LOGGER = logging.getLogger(__name__)
 PLACEMENT_PREFIX = "P"
+# Сколько раз правка догоняет журнал, если другой процесс успел дописать его раньше.
+EDIT_ATTEMPTS = 5
 
 
 class EditKind(StrEnum):
@@ -85,6 +93,26 @@ class PointVerdict:
     note: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class EditRejection:
+    """Посадка, которую правка перевела в отказ, и причина словами проверки точки."""
+
+    placement_id: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class EditResult:
+    """План после пачки правок и посадки, которые в отказ перевела именно эта пачка.
+
+    Правки, которые план догнал по журналу (их принял другой процесс), сюда не входят: их
+    отказы - итог чужого запроса.
+    """
+
+    plan: Plan
+    rejected: tuple[EditRejection, ...] = ()
+
+
 @dataclass(slots=True)
 class RunContext:
     """Состояние прогона, достаточное для пересчёта норм в произвольной точке."""
@@ -102,12 +130,36 @@ class RunContext:
     report: RunReport | None = None
     # Перечётка прогона: «было» баланса после правки то же, что при прогоне.
     inventory: InventoryCounts | None = None
+    # Номер последней правки журнала прогона, которая уже вошла в plan: 0 - правок не было.
+    applied_seq: int = 0
     # Карта покрытий не зависит от вида и строится долго, поэтому считается один раз.
     _surface: SurfaceMap | None = field(default=None, repr=False)
     _surface_built: bool = field(default=False, repr=False)
     _indexes: dict[str, ConstraintIndex] = field(default_factory=dict, repr=False)
     # Участок для индекса качества: граница работ и борта, от вида не зависит.
     _site: Site | None = field(default=None, repr=False)
+
+    def __setstate__(self, state: object) -> None:
+        """Контекст из pickle прежней версии класса: поле, которого тогда не было, - по умолчанию.
+
+        Без этого у поднятого контекста такое поле не задано вовсе (слоты), и первое
+        обращение к нему падает AttributeError.
+        """
+        values: dict[str, object] = {}
+        for part in state if isinstance(state, tuple) else (state,):
+            if isinstance(part, dict):
+                values.update(part)
+        for item in fields(self):
+            if item.name in values:
+                value = values[item.name]
+            elif item.default is not MISSING:
+                value = item.default
+            elif item.default_factory is not MISSING:
+                value = item.default_factory()
+            else:
+                msg = f"В сохранённом контексте правки нет поля {item.name}"
+                raise TypeError(msg)
+            setattr(self, item.name, value)
 
     @property
     def stale(self) -> bool:
@@ -189,37 +241,123 @@ class RunContextCache:
     С хранилищем контекст прогона после записи результата лежит и на диске, и прогон,
     вытесненный из памяти или сделанный до перезапуска сервиса, поднимается оттуда при первой
     правке: иначе жюри, поднявшее сервис заново, не могло бы править ни один прогон.
+
+    Правки после сохранения контекста хранилище держит в журнале прогона. Контекст в памяти -
+    только кэш: перед каждой выдачей он догоняет журнал, а если контекст на диске пересохранил
+    другой процесс (пересборка), поднимается заново. Так у всех процессов один черновик.
     """
 
-    def __init__(self, size: int = 1, store: RunContextStore | None = None) -> None:
+    def __init__(
+        self, species: SpeciesCatalog, size: int = 1, store: RunContextStore | None = None
+    ) -> None:
+        self._species = species
         self._size = max(size, 1)
         self._items: OrderedDict[str, RunContext] = OrderedDict()
+        self._stamps: dict[str, object | None] = {}
         self._store = store
+        # План и номер последней правки меняются вместе, под коротким замком: поток не должен
+        # увидеть план одной правки с номером другой.
+        self._lock = threading.RLock()
+        # Правки одного процесса идут по очереди. Сама правка считается без короткого замка
+        # (секунды на улице), чтобы черновик и проверка точки не ждали её.
+        self._edit_lock = threading.Lock()
 
     def put(self, context: RunContext) -> None:
         """Запомнить контекст; с хранилищем - и сохранить: прогон закончен или пересобран."""
-        self._remember(context)
-        if self._store is not None:
-            self._store.save(context)
+        with self._lock:
+            self._remember(context)
+            if self._store is None:
+                return
+            # Снимок под замком: план и номер правки из одного состояния. Пишется снимок
+            # без замка - запись сцены генплана идёт секунды.
+            snapshot = replace(context, _indexes={})
+        stamp = self._store.save(snapshot)
+        with self._lock:
+            self._stamps[context.run_id] = stamp
 
     def get(self, run_id: str) -> RunContext | None:
-        context = self._items.get(run_id)
-        if context is not None:
-            self._items.move_to_end(run_id)
-            return context
-        context = self._store.load(run_id) if self._store is not None else None
-        if context is not None:
+        with self._lock:
+            context = self._items.get(run_id)
+            if self._store is None:
+                if context is not None:
+                    self._items.move_to_end(run_id)
+                return context
+            stamp = self._store.stamp(run_id)
+            if context is None or (stamp is not None and stamp != self._stamps.get(run_id)):
+                loaded = self._store.load(run_id)
+                if loaded is not None:
+                    context = loaded
+                    self._stamps[run_id] = stamp
+            if context is None:
+                return None
+            if not self._catch_up(context):
+                self.drop(run_id)
+                return None
             self._remember(context)
-        return context
+            return context
+
+    def edit(self, run_id: str, edits: Sequence[Edit]) -> EditResult | None:
+        """Применить правки к плану прогона и записать их в журнал. None - контекста нет.
+
+        Отвергнутая правка (InputError) в журнал не попадает. Если журнал успел уйти вперёд
+        (правку принял другой процесс), план догоняет его, и правка проверяется заново уже по
+        нему: удалить посадку, которую только что удалили в другом окне, нельзя. Отказы в
+        итоге - только от правок этого вызова: план до них уже догнал журнал.
+        """
+        with self._edit_lock:
+            for _ in range(EDIT_ATTEMPTS):
+                context = self.get(run_id)
+                if context is None:
+                    return None
+                base = context.applied_seq
+                result = apply_edits_detailed(context, edits, self._species.all())
+                with self._lock:
+                    # Порядок держит журнал: запись пройдёт, только если после base в нём ничего
+                    # нет. Если план тем временем догнал журнал (другой поток отдавал черновик)
+                    # или поднят с диска заново, журнал уже дальше base - правка считается снова.
+                    if self._store is None:
+                        context.plan = result.plan
+                        return result
+                    seq = self._store.append_edits(run_id, edits, base)
+                    if seq is not None:
+                        context.plan, context.applied_seq = result.plan, seq
+                        return result
+        msg = "План прогона сейчас правят из другого окна или процесса. Повторите правку."
+        raise ConflictError(msg)
+
+    def _catch_up(self, context: RunContext) -> bool:
+        """Применить правки журнала, которых в плане ещё нет. False - прогон удалён."""
+        if self._store is None:
+            return True
+        entries = self._store.edits_since(context.run_id, context.applied_seq)
+        if entries is None:
+            return False
+        for seq, edits in entries:
+            try:
+                context.plan = apply_edits(context, edits, self._species.all())
+            except InputError:
+                # Правка уже была принята по тому же плану: отказ при повторе значит, что
+                # планы процессов разошлись. Пропускаем её, но не молча.
+                LOGGER.warning(
+                    "Правка %s журнала прогона %s не применилась повторно",
+                    seq,
+                    context.run_id,
+                    exc_info=True,
+                )
+            context.applied_seq = seq
+        return True
 
     def _remember(self, context: RunContext) -> None:
         self._items[context.run_id] = context
         self._items.move_to_end(context.run_id)
         while len(self._items) > self._size:
-            self._items.popitem(last=False)
+            evicted, _ = self._items.popitem(last=False)
+            self._stamps.pop(evicted, None)
 
     def drop(self, run_id: str) -> None:
-        self._items.pop(run_id, None)
+        with self._lock:
+            self._items.pop(run_id, None)
+            self._stamps.pop(run_id, None)
 
 
 def check_point(
@@ -264,7 +402,14 @@ def check_point(
 
 
 def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Species]) -> Plan:
-    """Применить правки к плану и пересобрать вердикты, нумерацию и объяснения.
+    """Применить правки к плану и пересобрать вердикты, нумерацию и объяснения."""
+    return apply_edits_detailed(context, edits, catalog).plan
+
+
+def apply_edits_detailed(
+    context: RunContext, edits: Sequence[Edit], catalog: Sequence[Species]
+) -> EditResult:
+    """То же, что apply_edits, и посадки, которые эти правки перевели в отказ, с причиной.
 
     Удалённые посадки на время обработки остаются дырой в списке, а не исчезают: иначе
     позиции следующих правок в той же пачке съезжают и правка приходится не на ту посадку.
@@ -286,7 +431,7 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
         else:
             current[position] = _moved(context, _at(current, position, edit), edit)
 
-    plan = _rebuild_plan(context, [p for p in current if p is not None], catalog)
+    plan, rejected = _rebuild_plan(context, [p for p in current if p is not None], catalog)
     plan = refresh_summaries(plan, context.params, catalog)
     # Посадочные места сдвинулись: газон считается заново по той же карте покрытий прогона.
     plan = plan_lawns(
@@ -297,7 +442,7 @@ def apply_edits(context: RunContext, edits: Sequence[Edit], catalog: Sequence[Sp
         rulebook=context.rulebook,
         params=context.params,
     )
-    return explain(_assess_edited(context, plan, catalog), context.rulebook)
+    return EditResult(explain(_assess_edited(context, plan, catalog), context.rulebook), rejected)
 
 
 def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> Plan:
@@ -341,13 +486,16 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
     return plan
 
 
-def _rebuild_plan(context: RunContext, kept: list[Placement], catalog: Sequence[Species]) -> Plan:
+def _rebuild_plan(
+    context: RunContext, kept: list[Placement], catalog: Sequence[Species]
+) -> tuple[Plan, tuple[EditRejection, ...]]:
     """Собрать план заново: нарушающая посадка становится отказом, как у генератора.
 
     Инвариант всего сервиса: на слоях посадок лежит только то, что нормам удовлетворяет.
     Генератор его держит - точка, не прошедшая правила, попадает в отказы. Правка обязана
     держать его тоже, иначе дерево с нарушенным отступом уедет в DXF на слой «требует
     согласования», и в просмотрщике эксперт прочитает нарушение как согласуемое решение.
+    Такие посадки возвращаются и отдельно, с причиной: правка не уводит их в отказ молча.
     """
     refreshed = reassess_placements(
         kept, context.rulebook, catalog, context.params, context.index_for
@@ -375,7 +523,7 @@ def _rebuild_plan(context: RunContext, kept: list[Placement], catalog: Sequence[
         )
         for i, p in enumerate(violating, 1)
     )
-    return replace(
+    plan = replace(
         context.plan,
         placements=placements,
         rejections=(*context.plan.rejections, *moved_out),
@@ -389,6 +537,25 @@ def _rebuild_plan(context: RunContext, kept: list[Placement], catalog: Sequence[
             ),
             *conditions(placements),
         ),
+    )
+    return plan, tuple(EditRejection(p.placement_id, _reason(context, p)) for p in violating)
+
+
+def _reason(context: RunContext, placement: Placement) -> str:
+    """Почему посадка не прошла: то же, что ответ проверки точки для её вида и типа посадки -
+    note (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов."""
+    point = check_point(
+        context, placement.x, placement.y, placement.species, placement.planting_type
+    )
+    parts = [point.note] if point.note else []
+    parts += [
+        describe_check(check, context.rulebook)
+        for check in point.checks
+        if check.outcome is CheckOutcome.FAIL
+    ]
+    # Фразы проверки - дословно, без правки регистра: причину сверяют с ответом проверки точки.
+    return "; ".join(parts) or (
+        f"Посадка {placement.species.name_ru} после ручной правки не проходит ограничения"
     )
 
 
@@ -490,9 +657,12 @@ def _next_id(used: set[str]) -> str:
 __all__ = [
     "Edit",
     "EditKind",
+    "EditRejection",
+    "EditResult",
     "PointVerdict",
     "RunContext",
     "RunContextCache",
     "apply_edits",
+    "apply_edits_detailed",
     "check_point",
 ]

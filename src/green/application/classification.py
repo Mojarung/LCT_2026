@@ -18,6 +18,7 @@ from green.application.semantic_names import (
     material_context_requires_review,
     name_key,
 )
+from green.application.shrub_strips import recognise_shrub_strips
 from green.application.surface_labels import classify_labels, label_report_groups
 from green.application.symbols import SymbolCatalog, SymbolEntry, SymbolRole
 from green.application.tree_strips import chain_tree_strips
@@ -180,7 +181,7 @@ def classify_scene(
         if feature.symbol is not None:
             strokes[feature.symbol].append(feature.geometry)
     classified.extend(_symbol_features(scene.symbols, entries, overrides, strokes))
-    classified = list(chain_tree_strips(classified))
+    classified = list(chain_tree_strips(recognise_shrub_strips(classified)))
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)

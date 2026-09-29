@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING
 import shapely
 from shapely.errors import GEOSException
 
+from green.application.semantic_names import base_name
+from green.application.shrub_strips import SHRUB_STRIP_SOURCE
 from green.application.surfaces import Material, label_material
+from green.application.tree_strips import STRIP_SOURCE
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -48,6 +51,10 @@ SPAN_FLOOR_M = 0.5
 # Дальше этого детализацию не режем даже на генплане: подоснова должна остаться читаемой.
 MAX_DETAIL_CUT = 2.0
 POINT_TYPES = frozenset({"Point", "MultiPoint"})
+# Знаки съёмки Мосгеотреста для хвойного дерева (config/symbols.yaml): сосна, ель, кипарисовые,
+# туя. Карта рисует такое дерево знаком хвойного сохраняемого, как в дендропланах пилота
+# (зелёное кольцо). Лиственница LISTVN не подтверждена рисунком и сюда не входит.
+CONIFER_SYMBOLS = frozenset({"SOSNOD", "ELOD", "KIPAR", "TUYA"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +63,9 @@ class BasemapFeature:
 
     object_class: ObjectClass
     geometry: BaseGeometry
+    # Существующее дерево со знаком хвойного (CONIFER_SYMBOLS): на карте - зелёное кольцо.
+    conifer: bool = False
+    vegetation_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +155,23 @@ def build_basemap(
         if _is_small(simplified, min_span_m):
             dropped[SMALL] += 1
             continue
-        kept.append(BasemapFeature(object_class=feature.object_class, geometry=simplified))
+        vegetation_kind = None
+        if feature.object_class in {ObjectClass.EXISTING_TREE, ObjectClass.EXISTING_SHRUB}:
+            vegetation_kind = (
+                "shrub_strip"
+                if feature.source_entity_type == SHRUB_STRIP_SOURCE
+                else "strip"
+                if feature.source_entity_type == STRIP_SOURCE
+                else "individual"
+            )
+        kept.append(
+            BasemapFeature(
+                object_class=feature.object_class,
+                geometry=simplified,
+                conifer=_is_conifer(feature),
+                vegetation_kind=vegetation_kind,
+            )
+        )
 
     return Basemap(
         features=tuple(kept),
@@ -156,6 +182,15 @@ def build_basemap(
         tolerance_m=round(tolerance_m, 3),
         min_span_m=round(min_span_m, 3),
         labels=material_labels(labels),
+    )
+
+
+def _is_conifer(feature: Feature) -> bool:
+    """Существующее дерево, вставленное знаком хвойного из съёмки."""
+    return (
+        feature.object_class is ObjectClass.EXISTING_TREE
+        and feature.block is not None
+        and base_name(feature.block).upper() in CONIFER_SYMBOLS
     )
 
 
