@@ -122,7 +122,15 @@ export interface paths {
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Удалить прогон
+         * @description Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:
+         *     исходником, артефактами и состоянием правки.
+         *
+         *     Идущий прогон - в очереди, считается или пересобирается после правки - не удаляется:
+         *     409, файлы остаются на месте. Неизвестный или некорректный id - 404.
+         */
+        delete: operations["delete_run_api_v1_runs__run_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -947,6 +955,71 @@ export interface operations {
             };
             /** @description Не найдено */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_run_api_v1_runs__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Состояние прогона изменилось */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

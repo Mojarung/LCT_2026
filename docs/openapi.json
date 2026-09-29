@@ -1265,6 +1265,80 @@
       }
     },
     "/api/v1/runs/{run_id}": {
+      "delete": {
+        "description": "Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:\nисходником, артефактами и состоянием правки.\n\nИдущий прогон - в очереди, считается или пересобирается после правки - не удаляется:\n409, файлы остаются на месте. Неизвестный или некорректный id - 404.",
+        "operationId": "delete_run_api_v1_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Состояние прогона изменилось"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          }
+        },
+        "summary": "Удалить прогон",
+        "tags": [
+          "runs"
+        ]
+      },
       "get": {
         "description": "Статус прогона, сводка и ссылки на артефакты.",
         "operationId": "get_run_api_v1_runs__run_id__get",

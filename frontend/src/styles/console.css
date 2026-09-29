@@ -230,6 +230,86 @@
   color: var(--warn);
 }
 
+/* Удаление - тихая кнопка-корзина в хвосте строки: в реестре главное имя чертежа, а не
+   действие. Подтверждение - строкой-панелью под прогоном на всю ширину таблицы, вместе со
+   строкой на одном фоне; «Точно удалить?» в цвете ошибки, чтобы второй клик не был случайным. */
+.registry td.act {
+  width: 1%;
+  padding-left: 4px;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--bone-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  font-size: var(--fs-micro);
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background-color 0.12s;
+}
+.registry td.act .row-action {
+  padding: 2px;
+}
+.row-action:hover {
+  color: var(--bone);
+  border-color: var(--hair-2);
+}
+.row-action[aria-expanded='true'],
+.row-action.danger,
+.row-action.danger:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+.row-action.danger:hover {
+  background: var(--panel);
+}
+.row-action[aria-busy='true'] {
+  opacity: 0.5;
+  cursor: progress;
+}
+.registry tr.armed td {
+  background: var(--panel-2);
+  border-bottom-color: transparent;
+}
+.registry .row-confirm td {
+  padding: 0 0 9px;
+  background: var(--panel-2);
+}
+.confirm-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 8px;
+  padding: 0 4px;
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+}
+/* Две кнопки переносятся только вместе: «Отмена» одна на строке читалась оторванной. */
+.confirm-text {
+  margin-right: auto;
+}
+.confirm-buttons {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.registry .row-note td {
+  padding-top: 0;
+  color: var(--bad);
+  font-size: var(--fs-micro);
+}
+
 .empty {
   padding: 18px 0;
   color: var(--bone-3);

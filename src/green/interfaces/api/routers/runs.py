@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from green.application.errors import InputError, NotFoundError
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
-from green.interfaces.api.errors import PROBLEM_RESPONSES
+from green.interfaces.api.errors import PROBLEM_RESPONSES, conflict_response
 from green.interfaces.api.intake import accept_run, accept_street_run
 from green.interfaces.api.schemas import RunListOut, RunOut
 
@@ -163,6 +163,26 @@ def get_run(run_id: str, request: Request, container: ContainerDep) -> RunOut:
     return RunOut.from_record(
         container.store.get(run_id), _artifact_url(request), _artifact_size(container)
     )
+
+
+# {run_id:path}, а не {run_id}: обход вида /runs/..%2F.. иначе не совпал бы ни с одним
+# маршрутом API и получил бы 405 от маршрута интерфейса. Так он доходит до хранилища, а
+# оно проверяет id по виду uuid и отвечает 404, ничего не трогая.
+@router.delete(
+    "/{run_id:path}",
+    status_code=204,
+    response_class=Response,
+    summary="Удалить прогон",
+    responses=conflict_response(),
+)
+def delete_run(run_id: str, container: ContainerDep) -> None:
+    """Удалить законченный прогон (готовый, упавший или прерванный) со всеми файлами:
+    исходником, артефактами и состоянием правки.
+
+    Идущий прогон - в очереди, считается или пересобирается после правки - не удаляется:
+    409, файлы остаются на месте. Неизвестный или некорректный id - 404.
+    """
+    container.runs.delete(run_id)
 
 
 @router.get(

@@ -6,6 +6,7 @@ import logging
 import re
 import shutil
 import threading
+import time
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from typing import IO, TYPE_CHECKING, Any
 
 import orjson
 
-from green.application.errors import InputError, NotFoundError
+from green.application.errors import ConflictError, InputError, NotFoundError
 from green.application.results import RunProgress, RunRecord, RunState, StageTiming
 from green.infrastructure.storage import lease
 
@@ -33,6 +34,14 @@ _ACTIVE = frozenset({RunState.QUEUED, RunState.RUNNING})
 INTERRUPTED = (
     "Прогон прерван: процесс сервиса остановился до конца расчёта. Запустите прогон заново."
 )
+BUSY = (
+    "Прогон ещё идёт: удалить можно только законченный прогон. Дождитесь конца расчёта"
+    " или пересборки плана."
+)
+# Приставка каталога, который стирается: под _RUN_ID она не подходит, и ни список, ни
+# очистка по пределу объёма такой каталог прогоном не считают.
+DELETED = ".deleted-"
+RENAME_ATTEMPTS = 5
 
 
 class FileSystemRunStore:
@@ -205,10 +214,54 @@ class FileSystemRunStore:
             raise NotFoundError(f"Артефакт {name} не найден")
         return path
 
+    def delete(self, run_id: str) -> None:
+        """Удалить законченный прогон целиком: исходник, артефакты, контекст правки.
+
+        Идущий прогон (блокировку держит этот или другой живой процесс) не трогается -
+        ConflictError. Брошенный (статус «идёт», блокировки нет) удаляется, как упавший.
+        Проверка и переименование каталога идут под блокировкой прогона и под замком
+        экземпляра: пока они у нас, прогон не возьмёт в работу ни этот процесс, ни другой.
+        Каталог сначала переименовывается - прогон пропадает из списка сразу, - а стирается
+        потом: прогон тяжёлой улицы весит гигабайты и стирается секундами.
+        """
+        folder = self._dir(run_id)
+        if not (folder / STATUS).is_file():
+            raise NotFoundError(f"Прогон {run_id} не найден")
+        trash = self._root / f"{DELETED}{run_id}"
+        with self._guard:
+            if run_id in self._leases:
+                raise ConflictError(BUSY)
+            handle = lease.acquire(folder / LEASE)
+            if handle is None:
+                raise ConflictError(BUSY)
+            # Под Windows каталог с открытым файлом не переименовать: блокировку отпускаем
+            # до переименования, а замок экземпляра не даёт этому процессу взять её снова.
+            lease.release(handle)
+            _rename(folder, trash)
+        shutil.rmtree(trash, ignore_errors=True)
+        if trash.exists():
+            LOGGER.warning("Каталог удалённого прогона стёрт не полностью: %s", trash)
+        LOGGER.info("Прогон %s удалён", run_id)
+
     def _dir(self, run_id: str) -> Path:
         if not _RUN_ID.fullmatch(run_id):
             raise NotFoundError(f"Прогон {run_id} не найден")
         return self._root / run_id
+
+
+def _rename(folder: Path, target: Path) -> None:
+    """Переименовать каталог прогона. Под Windows файл внутри бывает на мгновение открыт
+    чужим процессом (антивирус, индексатор, читатель статуса) - тогда ещё несколько попыток."""
+    for attempt in range(RENAME_ATTEMPTS):
+        try:
+            folder.rename(target)
+        except PermissionError:
+            if attempt == RENAME_ATTEMPTS - 1:
+                msg = "Файлы прогона сейчас заняты другим процессом. Попробуйте удалить ещё раз."
+                raise ConflictError(msg) from None
+            time.sleep(0.1 * (attempt + 1))
+        else:
+            return
 
 
 def _tree_size(path: Path) -> int:

@@ -1,9 +1,9 @@
 /* Данные сервера для страниц. Справочники не устаревают за сессию, прогон опрашивается,
  * пока идёт, артефакты прогона неизменны до пересборки. */
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { artifactUrl, getJson, runPollInterval } from './client';
+import { ApiError, artifactUrl, deleteResource, getJson, runPollInterval } from './client';
 import type { MetaOut, ProfileOut, RunListOut, RunOut, StreetOut } from './types';
 
 export const keys = {
@@ -67,5 +67,30 @@ export function useArtifact<T>(runId: string, name: string, enabled: boolean) {
     queryFn: () => getJson<T>(artifactUrl(runId, name)),
     enabled,
     staleTime: Infinity,
+  });
+}
+
+/** Удалить законченный прогон. Строка уходит из всех списков сразу, а список всё равно
+ *  перечитывается: реестр не ждёт перезагрузки страницы. 404 - прогона уже нет (удалён из
+ *  другой вкладки), для реестра это тот же итог. */
+export function useDeleteRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        await deleteResource(`/api/v1/runs/${encodeURIComponent(id)}`);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 404)) throw error;
+      }
+    },
+    onSuccess: async (_, id) => {
+      // ['runs'] - начало ключа keys.runs(limit): списки любой длины.
+      client.setQueriesData<RunOut[]>({ queryKey: ['runs'] }, (items) =>
+        items?.filter((item) => item.id !== id),
+      );
+      client.removeQueries({ queryKey: keys.run(id) });
+      client.removeQueries({ queryKey: keys.artifacts(id) });
+      await client.invalidateQueries({ queryKey: ['runs'] });
+    },
   });
 }

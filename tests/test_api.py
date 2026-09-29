@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import ezdxf
@@ -16,6 +17,7 @@ from fastapi.testclient import TestClient
 from test_multi_dxf import _genplan, _utilities
 from test_pipeline_synthetic import ROOT, _street
 
+from green.application.results import RunState
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
 from green.interfaces.api.app import API_PREFIX, create_app
@@ -361,3 +363,87 @@ def test_problem_titles_are_russian(client: TestClient) -> None:
     assert missing["title"] == "Не найдено"
     wrong = _assert_problem(client.put(f"{API_PREFIX}/health"), 405)
     assert wrong["title"] == "Метод не поддерживается"
+
+
+def _entries(path: Path) -> list[str]:
+    return sorted(p.name for p in path.iterdir())
+
+
+def test_finished_demo_run_is_deleted_with_its_files_and_edit_state(
+    client: TestClient, work: Path, finished: dict[str, object]
+) -> None:
+    """Встроенный демо-прогон удаляется, как любой другой; соседний прогон остаётся."""
+    created = client.post(f"{API_PREFIX}/runs/demo")
+    run_id = created.json()["id"]
+    assert client.get(created.headers["Location"]).json()["state"] == "succeeded"
+    container = client.app.state.container  # type: ignore[attr-defined]
+    assert container.contexts.get(run_id) is not None, "правка прогона не открылась"
+
+    response = client.delete(f"{API_PREFIX}/runs/{run_id}")
+
+    assert response.status_code == 204, response.text
+    assert response.content == b""
+    _assert_problem(client.get(f"{API_PREFIX}/runs/{run_id}"), 404)
+    listed = client.get(f"{API_PREFIX}/runs", params={"limit": 200}).json()["items"]
+    assert run_id not in {run["id"] for run in listed}
+    assert not (work / "runs" / run_id).exists()
+    assert container.contexts.get(run_id) is None, "контекст правки остался в памяти"
+    assert client.get(f"{API_PREFIX}/runs/{finished['id']}").status_code == 200
+
+
+def test_failed_run_is_deleted(client: TestClient, work: Path) -> None:
+    created = client.post(
+        f"{API_PREFIX}/runs", files={"file": ("broken.dxf", b"not a drawing", "text/plain")}
+    )
+    run_id = created.json()["id"]
+    assert client.get(created.headers["Location"]).json()["state"] == "failed"
+
+    assert client.delete(f"{API_PREFIX}/runs/{run_id}").status_code == 204
+
+    _assert_problem(client.get(f"{API_PREFIX}/runs/{run_id}"), 404)
+    assert not (work / "runs" / run_id).exists()
+
+
+@pytest.mark.parametrize("state", [RunState.QUEUED, RunState.RUNNING], ids=lambda s: s.value)
+def test_live_run_is_not_deleted_and_keeps_its_files(
+    client: TestClient, work: Path, state: RunState
+) -> None:
+    """Прогон считается (или пересобирается после правки): удалить нельзя, файлы целы."""
+    store = client.app.state.container.store  # type: ignore[attr-defined]
+    record = store.create("live.dxf", "strict", {})
+    store.save(replace(record, state=state))
+    folder = work / "runs" / record.run_id
+    before = sorted(p.relative_to(folder) for p in folder.rglob("*"))
+
+    body = _assert_problem(client.delete(f"{API_PREFIX}/runs/{record.run_id}"), 409)
+
+    assert "идёт" in str(body["detail"])
+    assert client.get(f"{API_PREFIX}/runs/{record.run_id}").json()["state"] == state.value
+    assert sorted(p.relative_to(folder) for p in folder.rglob("*")) == before
+    # Закончился - удаляется.
+    store.save(replace(record, state=RunState.FAILED, error="остановлен тестом"))
+    assert client.delete(f"{API_PREFIX}/runs/{record.run_id}").status_code == 204
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "not-a-run-id",
+        "01a0eac7-e330-7505-883b-f24d08f36d96",
+        "..%2F..",
+        "%2E%2E%2F%2E%2E%2Fpyproject.toml",
+        "..%5C..",
+        "{run}%2F..%2F..",
+    ],
+)
+def test_bad_run_ids_are_not_found_and_delete_nothing(
+    client: TestClient, work: Path, finished: dict[str, object], run_id: str
+) -> None:
+    runs, before, around = work / "runs", _entries(work / "runs"), _entries(work)
+
+    response = client.delete(f"{API_PREFIX}/runs/{run_id.format(run=finished['id'])}")
+
+    _assert_problem(response, 404)
+    assert _entries(runs) == before
+    assert _entries(work) == around
+    assert (ROOT / "pyproject.toml").is_file()

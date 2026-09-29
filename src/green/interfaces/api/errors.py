@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from green.application.errors import (
     ConfigurationError,
+    ConflictError,
     ConversionError,
     GreenError,
     InputError,
@@ -68,6 +69,7 @@ _STATUS: dict[type[GreenError], HTTPStatus] = {
     ConversionError: HTTPStatus.UNPROCESSABLE_ENTITY,
     PayloadTooLargeError: HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
     EditContextLostError: HTTPStatus.CONFLICT,
+    ConflictError: HTTPStatus.CONFLICT,
     ConfigurationError: HTTPStatus.INTERNAL_SERVER_ERROR,
 }
 
@@ -129,5 +131,5 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
 
 
 def conflict_response() -> dict[int | str, dict[str, object]]:
-    """409 у методов правки: контекст прогона не сохранён, прогон нужно запустить заново."""
+    """409: у правки - контекст прогона не сохранён, у удаления - прогон ещё идёт."""
     return {409: {"model": Problem, "description": title_of(HTTPStatus.CONFLICT)}}

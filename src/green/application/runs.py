@@ -100,6 +100,16 @@ class RunService:
     def reject(self, run_id: str, reason: str) -> RunRecord:
         return self._transition(self._store.get(run_id), RunState.FAILED, error=reason)
 
+    def delete(self, run_id: str) -> None:
+        """Удалить законченный прогон: файлы, а за ними и контекст правки в памяти.
+
+        Контекст выбрасывается только после удаления файлов: отказ по идущему прогону
+        (ConflictError) не должен лишать правки прогон, который остался на месте.
+        """
+        self._store.delete(run_id)
+        if self._contexts is not None:
+            self._contexts.drop(run_id)
+
     def execute(  # noqa: PLR0913 - комплект прогона приходит отдельными частями
         self,
         run_id: str,

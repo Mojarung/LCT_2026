@@ -7,6 +7,7 @@ import {
   IconChevronRight,
   IconMoon as TablerMoon,
   IconSun as TablerSun,
+  IconTrash,
   IconX,
 } from '@tabler/icons-react';
 
@@ -39,4 +40,8 @@ export function IconChevron({
 }: IconProps & { direction: 'left' | 'right' }) {
   const Glyph = direction === 'left' ? IconChevronLeft : IconChevronRight;
   return <Glyph className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
+}
+
+export function IconDelete({ className = 'icon' }: IconProps) {
+  return <IconTrash className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
 }

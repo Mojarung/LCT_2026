@@ -21,3 +21,7 @@ class ConversionError(GreenError):
 
 class NotFoundError(GreenError):
     """Запрошенный объект не существует."""
+
+
+class ConflictError(GreenError):
+    """Действие не подходит к текущему состоянию объекта: например, удалить идущий прогон."""
