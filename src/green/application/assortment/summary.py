@@ -91,10 +91,12 @@ def build_summary(  # noqa: PLR0913 - сводка собирается из в�
     family = Counter[str]()
     conifers = 0
     months = dict.fromkeys(_MONTHS, 0)
+    forms: set[str] = set()
     for code, count in counts.items():
         species = catalog.get(code)
         if species is None:
             continue
+        forms.add("tree" if species.is_tree else "shrub")
         genus[species.genus] += count
         family[species.family] += count
         conifers += count if species.is_conifer else 0
@@ -115,6 +117,9 @@ def build_summary(  # noqa: PLR0913 - сводка собирается из в�
         rejected_by_kind=dict(sorted(rejected_by_kind.items())),
         rejected_by_rule=dict(sorted(rejected_by_rule.items(), key=lambda kv: (-kv[1], kv[0]))),
         notes=assignment.notes,
+        # Чьи месяцы в decor_by_month - по видам сводки, а не по типу плана: сводка деревьев
+        # смешанного плана и сводка плана кустарников подписаны каждая своим.
+        decor_of="mixed" if len(forms) > 1 else next(iter(forms), ""),
     )
 
 

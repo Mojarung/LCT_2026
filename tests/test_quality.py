@@ -387,6 +387,39 @@ def test_season_is_the_share_of_decorative_months() -> None:
     assert season.score == pytest.approx(5 / 12, abs=1e-4)
 
 
+def test_season_note_counts_trees_and_shrubs_together_and_names_bare_months() -> None:
+    """Сводка состава деревьев с пустым июлем не спорит со слагаемым: оно само говорит, кого
+    считает и каких месяцев не хватает."""
+    note = _term(_plan(), "season").note
+    assert note == (
+        "деревья и кустарники вместе: декоративные посадки есть в 5 месяцах из 12; нет в "
+        "феврале, марте, апреле, июле, августе, ноябре, декабре"
+    )
+
+
+def test_season_note_of_a_full_year_names_no_bare_months() -> None:
+    year = replace(LIME, decor_months=frozenset(range(1, 13)))
+    plan = Plan(placements=(_place(1, 10.0, 0.0, year),), rejections=())
+    note = _term(plan, "season").note
+    assert note == "деревья и кустарники вместе: декоративные посадки есть в 12 месяцах из 12"
+
+
+def test_season_note_of_one_month() -> None:
+    may = replace(LIME, decor_months=frozenset({5}))
+    plan = Plan(placements=(_place(1, 10.0, 0.0, may),), rejections=())
+    assert _term(plan, "season").note.startswith(
+        "деревья и кустарники вместе: декоративные посадки есть в 1 месяце из 12; нет в январе,"
+    )
+
+
+def test_season_note_without_decorative_plantings() -> None:
+    plain = replace(LIME, decor_months=frozenset())
+    plan = Plan(placements=(_place(1, 10.0, 0.0, plain),), rejections=())
+    assert _term(plan, "season").note == (
+        "деревья и кустарники вместе: декоративных посадок нет ни в одном месяце"
+    )
+
+
 def test_dust_counts_only_curbs_with_soil_beside_them() -> None:
     site = _site()
     segments = split_segments(site.curb_segments, 1.0)

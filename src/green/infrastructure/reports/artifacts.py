@@ -398,6 +398,25 @@ def _assortment(info: AssortmentInfo | None) -> dict[str, Any] | None:
     }
 
 
+_DECOR_SEASON = "слагаемое индекса «Сезонность» считает деревья и кустарники вместе"
+# Подпись decor_by_month: чьи это месяцы. Без неё пустой июль в сводке деревьев спорит с
+# сезонностью индекса, где июль закрыл кустарник.
+DECOR_NOTES = {
+    "tree": (
+        "Месяцы декоративности деревьев плана: сколько деревьев декоративны в каждом месяце "
+        f"(по каталогу видов). Кустарники здесь не считаются; {_DECOR_SEASON}."
+    ),
+    "shrub": (
+        "Месяцы декоративности кустарников плана: сколько кустарников декоративны в каждом "
+        f"месяце (по каталогу видов). Деревья здесь не считаются; {_DECOR_SEASON}."
+    ),
+    "mixed": (
+        "Месяцы декоративности деревьев и кустарников плана: сколько посадок декоративны в "
+        "каждом месяце (по каталогу видов), как их считает слагаемое индекса «Сезонность»."
+    ),
+}
+
+
 def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
     """Состав плана отдельным файлом: доли, разнообразие, сезонность и что не удалось."""
     if summary is None:
@@ -411,6 +430,8 @@ def _assortment_summary(summary: AssortmentSummary | None) -> dict[str, Any]:
         "conifer_share": round(summary.conifer_share, 4),
         "shannon": summary.shannon,
         "decor_by_month": dict(summary.decor_by_month),
+        "decor_by_month_of": summary.decor_of,
+        "decor_by_month_note": DECOR_NOTES.get(summary.decor_of, ""),
         "no_species": summary.no_species,
         "quota_violations": list(summary.quota_violations),
         "existing": dict(summary.existing),
