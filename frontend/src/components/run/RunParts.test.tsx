@@ -35,7 +35,7 @@ describe('RunMetrics', () => {
     expect(container.querySelector('.metric')).toHaveTextContent(/^994посадки в плане$/);
     expect(breakdown('Деревья')).toHaveTextContent(/^205$/);
     expect(breakdown('Кустарники')).toHaveTextContent(/^789$/);
-    expect(container.querySelector('.run-approval')).toHaveTextContent(/^На согласование 28$/);
+    expect(container.querySelector('.run-approval')).toHaveTextContent(/^На согласование28$/);
   });
 
   it('молчит о составе, пока план не сходится с числом прогона', () => {

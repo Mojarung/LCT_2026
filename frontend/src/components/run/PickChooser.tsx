@@ -119,7 +119,7 @@ export function PickChooser({
   return (
     <div className="pick-chooser" ref={box}>
       <p className="pick-chooser-title" id={title}>
-        Стволы рядом: выберите посадку
+        Посадки рядом: выберите одну
       </p>
       <ul role="listbox" aria-labelledby={title}>
         {choice.items.map((item, index) => (

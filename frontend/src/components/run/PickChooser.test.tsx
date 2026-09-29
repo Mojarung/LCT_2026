@@ -66,6 +66,6 @@ describe('PickChooser', () => {
         <PickChooser choice={choice} onChoose={() => undefined} onClose={() => undefined} />
       </div>,
     );
-    expect(screen.getByRole('listbox', { name: 'Стволы рядом: выберите посадку' })).toBeVisible();
+    expect(screen.getByRole('listbox', { name: 'Посадки рядом: выберите одну' })).toBeVisible();
   });
 });

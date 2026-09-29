@@ -1,9 +1,49 @@
+import type { ReactNode } from 'react';
+
 import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
 
+/** Переключатель из двух вариантов: оба названы, выбранный нажат. Одна кнопка с подписью
+ *  текущего состояния («по улице») читалась то как состояние, то как действие. */
+function Pair<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly [T, string, string][];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <span className="hud-pair" role="group" aria-label={label}>
+      {options.map(([key, text, title]) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={value === key}
+          title={title}
+          onClick={() => {
+            if (value !== key) onChange(key);
+          }}
+        >
+          {text}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function Sep(): ReactNode {
+  return <i className="hud-sep" aria-hidden="true" />;
+}
+
 /** Кнопки карты у нижней кромки. Колесо мыши есть не у всех: на ноутбуке тачпадом масштаб
- *  ловится плохо, а на защите карту крутят чужими руками - ползунок задаёт масштаб сразу. */
-export function MapHud() {
+ *  ловится плохо, а на защите карту крутят чужими руками - ползунок задаёт масштаб сразу.
+ *  Правка плана - здесь же, у карты, которую она меняет: галочка внизу пульта прогона
+ *  терялась под сводкой. */
+export function MapHud({ editable = false }: { editable?: boolean }) {
   const engine = useEngine();
   const share = useWorkspace((s) => s.zoomShare);
   const orientation = useWorkspace((s) => s.orientation);
@@ -12,6 +52,8 @@ export function MapHud() {
   const setLegend = useWorkspace((s) => s.setLegend);
   const mapStyle = useWorkspace((s) => s.mapStyle);
   const setMapStyle = useWorkspace((s) => s.setMapStyle);
+  const editing = useWorkspace((s) => s.editing);
+  const setEditing = useWorkspace((s) => s.setEditing);
   return (
     <div className="hud hud-bottom" data-map-obstacle="bottom">
       <button
@@ -56,30 +98,34 @@ export function MapHud() {
       >
         +
       </button>
-      <button
-        type="button"
-        title="Повернуть план: вдоль улицы или севером вверх"
-        onClick={() => {
+      <Sep />
+      <Pair
+        label="Поворот плана"
+        value={orientation}
+        options={[
+          ['street', 'вдоль улицы', 'Улица горизонтально'],
+          ['north', 'север вверх', 'Север вверху, как на топосъёмке'],
+        ]}
+        onChange={() => {
           const current = engine.current;
           if (!current) return;
           current.toggleOrientation();
           setOrientation(current.orientation());
         }}
-      >
-        {orientation === 'street' ? 'по улице' : 'по северу'}
-      </button>
+      />
+      <Sep />
       {/* Инженерный чертёж - знаки дендроплана, привычные проектировщику и проверяющему;
           иллюстрация - кроны моделей видов, как на слайдах. */}
-      <button
-        type="button"
-        aria-pressed={mapStyle === 'engineering'}
-        title="Условные знаки чертежа или иллюстрация кронами"
-        onClick={() => {
-          setMapStyle(mapStyle === 'engineering' ? 'illustrated' : 'engineering');
-        }}
-      >
-        {mapStyle === 'engineering' ? 'чертёж' : 'иллюстрация'}
-      </button>
+      <Pair
+        label="Стиль карты"
+        value={mapStyle}
+        options={[
+          ['engineering', 'чертёж', 'Условные знаки дендроплана'],
+          ['illustrated', 'кроны', 'Иллюстрация: кроны моделей видов'],
+        ]}
+        onChange={setMapStyle}
+      />
+      <Sep />
       <button
         type="button"
         aria-pressed={legend}
@@ -88,8 +134,21 @@ export function MapHud() {
           setLegend(!legend);
         }}
       >
-        обозначения
+        легенда
       </button>
+      {editable ? (
+        <button
+          type="button"
+          className="hud-edit"
+          aria-pressed={editing}
+          title="Переносить и удалять посадки на карте"
+          onClick={() => {
+            setEditing(!editing);
+          }}
+        >
+          править
+        </button>
+      ) : null}
     </div>
   );
 }

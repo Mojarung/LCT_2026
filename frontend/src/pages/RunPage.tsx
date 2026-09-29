@@ -27,7 +27,7 @@ import { useOverflowMark } from '../hooks/useOverflowMark';
 import { describeItem } from '../lib/checks';
 import type { PlanEngine } from '../map/engine';
 import { loadSurface, toMapItems } from '../map/items';
-import { commonest, planSpecies } from '../map/models';
+import { commonest } from '../map/models';
 import type { EngineHooks, MapItem } from '../map/types';
 import { PlanEditor } from '../state/editor';
 import { EngineContext } from '../state/engine';
@@ -167,8 +167,6 @@ export function RunPage() {
       ),
     [placements],
   );
-  // Виды плана для легенды стиля чертежа: у каждого свой знак из шаблона заказчика.
-  const species = useMemo(() => planSpecies(placements), [placements]);
 
   const engine = useRef<PlanEngine | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -339,6 +337,18 @@ export function RunPage() {
     );
   }
 
+  const conflictCount = basemap.data?.source_conflicts?.items.length ?? 0;
+  const conflictNotice = (
+    <SourceConflictNotice
+      report={basemap.data?.source_conflicts}
+      runId={runId}
+      onFocus={focusConflict}
+      selected={selectedConflict}
+      visible={sourceVisible}
+      onVisibilityChange={setSourceVisible}
+    />
+  );
+
   const mapReady = done ? Boolean(items && basemap.data) : live && Boolean(basemap.data);
   const withMap = done || live;
 
@@ -361,8 +371,8 @@ export function RunPage() {
               {data ? <RunStatus run={data} /> : <span className="spinner" aria-hidden="true" />}
             </div>
           )}
-          {withMap ? <MapHud /> : null}
-          {withMap ? <Legend done={done} shrub={shrub} species={species} /> : null}
+          {withMap ? <MapHud editable={done} /> : null}
+          {withMap ? <Legend done={done} shrub={shrub} /> : null}
           {choice ? (
             <PickChooser
               key={choice.id}
@@ -387,14 +397,9 @@ export function RunPage() {
           <PanelToggle panel="left" label="панель прогона" />
           {data ? <RunHeader run={data} /> : null}
           <div className="hud-scroll" ref={leftScroll} hidden={broken}>
-            <SourceConflictNotice
-              report={basemap.data?.source_conflicts}
-              runId={runId}
-              onFocus={focusConflict}
-              selected={selectedConflict}
-              visible={sourceVisible}
-              onVisibilityChange={setSourceVisible}
-            />
+            {/* Найденные конфликты - строка блока «Проверить» в сводке; пока сводки нет или
+                конфликтов нет, отчёт проверки стоит здесь сам по себе. */}
+            {done && data && conflictCount ? null : conflictNotice}
 
             {done && data ? (
               <RunMetrics
@@ -409,6 +414,7 @@ export function RunPage() {
                     : null
                 }
                 draft={stale}
+                conflicts={conflictCount ? conflictNotice : null}
               />
             ) : broken ? null : (
               <p className="metric">

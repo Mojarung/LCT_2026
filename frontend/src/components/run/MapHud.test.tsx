@@ -16,21 +16,23 @@ function hud() {
 }
 
 describe('стиль карты', () => {
-  it('по умолчанию чертёж; кнопка переключает на иллюстрацию и запоминает выбор', async () => {
+  it('по умолчанию чертёж; «кроны» переключают на иллюстрацию и запоминают выбор', async () => {
     hud();
-    const toggle = screen.getByRole('button', { name: 'чертёж' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const drawing = screen.getByRole('button', { name: 'чертёж' });
+    const crowns = screen.getByRole('button', { name: 'кроны' });
+    expect(drawing).toHaveAttribute('aria-pressed', 'true');
+    expect(crowns).toHaveAttribute('aria-pressed', 'false');
 
-    await userEvent.click(toggle);
+    await userEvent.click(crowns);
 
-    const back = screen.getByRole('button', { name: 'иллюстрация' });
-    expect(back).toHaveAttribute('aria-pressed', 'false');
+    expect(crowns).toHaveAttribute('aria-pressed', 'true');
+    expect(drawing).toHaveAttribute('aria-pressed', 'false');
     expect(useWorkspace.getState().mapStyle).toBe('illustrated');
     expect(localStorage.getItem('green-map-style')).toBe('illustrated');
     // По атрибуту CSS меняет токены подосновы, а движок перерисовывает карту.
     expect(document.documentElement.dataset.mapStyle).toBe('illustrated');
 
-    await userEvent.click(back);
+    await userEvent.click(drawing);
     expect(document.documentElement.dataset.mapStyle).toBe('engineering');
   });
 
@@ -62,25 +64,30 @@ describe('стиль карты', () => {
     expect(screen.queryByText('Существующее хвойное насаждение')).toBeNull();
   });
 
-  it('легенда чертежа с видами плана - знак каждого вида, а не три общих', () => {
-    act(() => {
-      useWorkspace.getState().setLegend(true);
-    });
+  it('кнопка «править» есть только у готового плана и включает режим правки', async () => {
+    const { unmount } = hud();
+    expect(screen.queryByRole('button', { name: 'править' })).toBeNull();
+    unmount();
     render(
-      <Legend
-        done
-        species={[
-          { code: 'tilia_cordata', name: 'Липа мелколистная', plantingType: 'tree' },
-          { code: 'spiraea_japonica', name: 'Спирея японская', plantingType: 'shrub' },
-          { code: 'fraxinus_excelsior', name: 'Ясень обыкновенный', plantingType: 'tree' },
-        ]}
-      />,
+      <EngineContext.Provider value={{ current: null }}>
+        <MapHud editable />
+      </EngineContext.Provider>,
     );
-    expect(screen.getByText('Липа мелколистная')).toBeVisible();
-    expect(screen.getByText('Спирея японская')).toBeVisible();
-    // Вид без знака в шаблоне остаётся в легенде - общим знаком дерева.
-    expect(screen.getByText('Ясень обыкновенный')).toBeVisible();
-    expect(screen.getByText('Живая изгородь, ряд кустарника')).toBeVisible();
-    expect(screen.queryByText('Проектируемое дерево (место посадки, контур кроны)')).toBeNull();
+    const edit = screen.getByRole('button', { name: 'править' });
+    expect(edit).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(edit);
+    expect(useWorkspace.getState().editing).toBe(true);
+    expect(edit).toHaveAttribute('aria-pressed', 'true');
+    act(() => {
+      useWorkspace.getState().setEditing(false);
+    });
+  });
+
+  it('легенда по умолчанию закрыта', () => {
+    localStorage.removeItem('green-legend');
+    act(() => {
+      useWorkspace.getState().enter('новый-прогон');
+    });
+    expect(useWorkspace.getState().panels.legend).toBe(false);
   });
 });

@@ -181,16 +181,16 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
     // План на предположении о грунте - эскиз, и это сказано у числа, а не в журнале.
-    const title = await within(left).findByText('Эскиз · требуется проверка');
+    const title = await within(left).findByText('Эскиз · проверить');
     expect(title).toBeVisible();
     const notice = title.closest('.notice');
-    expect(notice).toHaveTextContent('Допустимость посадок не подтверждена.');
-    expect(notice).toHaveTextContent('У 40 из 40 посадок не подтверждён грунт под всей ямой.');
+    expect(notice).toHaveTextContent('Грунт под ямой не подтверждён40 из 40');
     expect(left).not.toHaveTextContent('все без ограничений');
-    // Что делать - под раскрытием в том же предупреждении.
-    await openFold(left, 'Что проверить');
+    // Почему эскиз и что делать - под раскрытием в том же блоке.
+    await openFold(left, 'Почему эскиз и что сделать');
+    expect(within(left).getByText(/Допустимость посадок не подтверждена/)).toBeVisible();
     expect(
-      within(left).getByText(/Грунт под всей посадочной ямой должен быть подтверждён/),
+      within(left).getByText(/грунт под всей посадочной ямой должен быть подтверждён/i),
     ).toBeVisible();
   });
 
@@ -459,12 +459,11 @@ describe('RunPage: finished run', () => {
   });
 
   it('keeps the legend one click away on an ordinary screen and remembers the choice', async () => {
-    // Заглушка matchMedia в тестах - не высокий экран: обозначения закрыты и не отнимают
-    // у пульта треть высоты.
+    // Обозначения по умолчанию закрыты: виды плана со знаками уже есть в составе справа.
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const toggle = await screen.findByRole('button', { name: 'обозначения' });
+    const toggle = await screen.findByRole('button', { name: 'легенда' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
 
@@ -484,7 +483,7 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    await userEvent.click(await screen.findByRole('button', { name: 'обозначения' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'легенда' }));
     const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
     const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
     expect(weak).not.toBeChecked();

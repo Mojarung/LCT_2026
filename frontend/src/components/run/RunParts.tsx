@@ -1,5 +1,6 @@
 /* Части левой панели прогона и подложки карты: шапка, сводка, предупреждения, статус. */
 
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
 import { artifactUrl } from '../../api/client';
@@ -12,6 +13,15 @@ import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
+
+/** Профиль норм словами (config/profiles): код 'strict' в шапке ничего не говорил. */
+const PROFILE_NAMES: Record<string, string> = {
+  strict: 'строгие нормы',
+  barriers: 'нормы с барьерами',
+  no_utilities: 'без сетей',
+  review: 'проверка входа',
+  shrubs: 'ряд кустарника',
+};
 
 /** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
  *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
@@ -64,27 +74,19 @@ export function RunHeader({ run }: { run: RunOut }) {
         ← все прогоны
       </Link>
       <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
-      <p className="run-sub">
-        <span>{run.profile}</span>
-        <span>{run.id.slice(0, 8)}</span>
+      <p className="run-sub" title={`Прогон ${run.id}`}>
+        <span>{PROFILE_NAMES[run.profile] ?? run.profile}</span>
         {Object.entries(run.overrides).map(([key, value]) => (
           <span key={key}>{overrideLabel(key, value)}</span>
         ))}
       </p>
       {run.state === 'succeeded' ? (
         <p className="scene-links">
+          {/* Один вход: кадры улицы и фото - кнопками внутри 3D-вида. Две ссылки рядом
+              («3D и снимки», «кадры улицы») не объясняли, чем отличаются. */}
           <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-            3D и снимки →
+            3D-вид, снимки и фото →
           </Link>
-          <a
-            className="scene-link"
-            href={`/runs/${encodeURIComponent(run.id)}/3d?shots=street`}
-            target="_blank"
-            rel="noopener"
-            title="Кадры улицы с автоматических ракурсов и фото по ним, в новой вкладке"
-          >
-            кадры улицы ↗
-          </a>
         </p>
       ) : null}
     </div>
@@ -100,8 +102,11 @@ export function RunMetrics({
   run,
   trees,
   draft = false,
+  conflicts = null,
 }: {
   run: RunOut;
+  /** Кнопка конфликтов подосновы (SourceConflictNotice): первая строка блока «Проверить». */
+  conflicts?: ReactNode;
   /** Деревья среди посадок плана; null - план ещё не загружен. Число деревьев - первое, что
    *  спрашивает заказчик, а «994 посадки» его не называли (жюри по дизайну, итерация 9). */
   trees?: { trees: number; planted: number } | null;
@@ -146,56 +151,63 @@ export function RunMetrics({
           </div>
         </dl>
       ) : null}
-      {approval > 0 ? (
-        <p className="run-approval">
-          На согласование <b>{integer(approval)}</b>
-        </p>
-      ) : null}
       {!integrity ? <p className="metric-bad">Целостность подосновы нарушена</p> : null}
-      {sketch ? (
-        <div className="notice">
-          <p className="notice-title">Эскиз · требуется проверка</p>
-          <p>Допустимость посадок не подтверждена.</p>
-          {unconfirmed > 0 ? (
-            <p>
-              У {integer(unconfirmed)} из {integer(total)} посадок не подтверждён грунт под всей
-              ямой.
-            </p>
-          ) : null}
-          <details className="fold notice-details">
-            <summary>Что проверить</summary>
-            <p>
-              Уточните объекты и границы покрытий. Грунт под всей посадочной ямой должен быть
-              подтверждён замкнутыми контурами.
-            </p>
-            <ReviewLinks run={run} />
-          </details>
-        </div>
-      ) : null}
-      {notices.length ? (
-        <div className="notice">
+      {/* Всё, что человеку надо проверить, - одним блоком: раньше согласование, эскиз, конфликты
+          и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
+      {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
+        <div className="notice check-block">
+          <p className="notice-title">{sketch ? 'Эскиз · проверить' : 'Проверить'}</p>
+          {conflicts}
+          <dl className="run-facts">
+            {approval > 0 ? (
+              <div className="run-approval">
+                <dt>На согласование</dt>
+                <dd>{integer(approval)}</dd>
+              </div>
+            ) : null}
+            {sketch && unconfirmed > 0 ? (
+              <div>
+                <dt>Грунт под ямой не подтверждён</dt>
+                <dd>
+                  {integer(unconfirmed)} из {integer(total)}
+                </dd>
+              </div>
+            ) : null}
+            {rejected > 0 ? (
+              <div>
+                <dt>Отклонено мест</dt>
+                <dd>{integer(rejected)}</dd>
+              </div>
+            ) : null}
+            {barrierPlaces > 0 ? (
+              <div>
+                <dt>Возможно с прикорневым барьером</dt>
+                <dd>{integer(barrierPlaces)}</dd>
+              </div>
+            ) : null}
+          </dl>
           {notices.map((text) => (
             <p key={text}>{text}</p>
           ))}
+          {sketch ? (
+            <details className="fold notice-details">
+              <summary>Почему эскиз и что сделать</summary>
+              <p>
+                Допустимость посадок не подтверждена. Уточните объекты и границы покрытий: грунт под
+                всей посадочной ямой должен быть подтверждён замкнутыми контурами.
+              </p>
+              <ReviewLinks run={run} />
+            </details>
+          ) : null}
         </div>
       ) : null}
       <details className="hud-block fold run-details">
         <summary>Детали расчёта</summary>
         <dl className="run-facts">
           <div>
-            <dt>Отклонено мест</dt>
-            <dd>{integer(rejected)}</dd>
-          </div>
-          <div>
             <dt>Подоснова</dt>
             <dd>{integrity ? 'Без изменений' : 'Нарушена'}</dd>
           </div>
-          {barrierPlaces > 0 ? (
-            <div>
-              <dt>Допустимо с барьером</dt>
-              <dd>{integer(barrierPlaces)}</dd>
-            </div>
-          ) : null}
         </dl>
         <LawnLine summary={summary} />
         {warnings.length ? (

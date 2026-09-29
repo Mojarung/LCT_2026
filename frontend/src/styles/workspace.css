@@ -171,6 +171,30 @@ body.shell-map .topbar {
   color: var(--bone);
   background: var(--panel-2);
 }
+/* Пара вариантов: оба названы, выбранный нажат. Разделитель отделяет группы кнопок. */
+.hud-pair {
+  display: flex;
+  gap: 1px;
+}
+.hud-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 6px 4px;
+  background: var(--hair-2);
+}
+/* Правка меняет план - кнопка заметна и нажатая выделена цветом, а не только фоном. */
+.hud-bottom .hud-edit {
+  color: var(--bone);
+  font-weight: 600;
+}
+.hud-bottom .hud-edit[aria-pressed='true'] {
+  color: var(--ground);
+  background: var(--accent, var(--bone));
+}
+/* Строка правки пустая - её нет, пульт не держит пустую полосу под сводкой. */
+#edit-bar[data-empty='1'] {
+  display: none;
+}
 
 /* Ползунок масштаба рядом с «+» и «−»: колесо есть не у всякой мыши, а на тачпаде масштаб
    ловится плохо. Дорожка и бегунок рисуются вручную - у браузеров они разные. */
