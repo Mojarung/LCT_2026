@@ -97,6 +97,7 @@ def build_container(settings: Settings | None = None) -> Container:
     )
     streets = JsonStreetCatalog(settings.streets_dir)
     contexts = RunContextCache(
+        species,
         settings.edit_contexts,
         store=PickleRunContextStore(store, code_fingerprint())
         if settings.edit_contexts_saved

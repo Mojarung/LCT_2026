@@ -199,12 +199,14 @@ class RunService:
         record = self._store.get(run_id)
         if self._contexts is None:
             return self._transition(record, RunState.FAILED, error="Правка не подключена")
-        context = self._contexts.get(run_id)
-        if context is None:
-            return self._transition(
-                record, RunState.FAILED, error="Состояние прогона для правки потеряно"
-            )
         with self._slots:
+            # Пока прогон ждал очереди, правки мог принять и другой процесс: в DXF идёт
+            # черновик, догнавший журнал правок, а не тот, что был при постановке в очередь.
+            context = self._contexts.get(run_id)
+            if context is None:
+                return self._transition(
+                    record, RunState.FAILED, error="Состояние прогона для правки потеряно"
+                )
             record = self._transition(record, RunState.RUNNING)
             try:
                 run_dir = self._store.run_dir(run_id)
