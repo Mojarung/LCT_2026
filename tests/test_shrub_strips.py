@@ -180,7 +180,9 @@ def test_demo_export_preserves_circle_sizes_and_true_points(tmp_path: Path) -> N
 
 def test_real_holdout_drawings(tmp_path: Path) -> None:
     """Native circle coordinates and radii, independent streets, not generated motifs."""
-    cases = json.loads((ROOT / "tests/fixtures/topographic_shrub_strips.json").read_text())
+    cases = json.loads(
+        (ROOT / "tests/fixtures/topographic_shrub_strips.json").read_text(encoding="utf-8")
+    )
     for case in cases:
         doc = ezdxf.new("R2018")
         doc.header["$INSUNITS"] = 6
