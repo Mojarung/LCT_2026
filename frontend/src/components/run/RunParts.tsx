@@ -28,7 +28,7 @@ function ReviewLinks({ run }: { run: RunOut }) {
       {names.has('classification.json') ? (
         <p className="hint">
           <a href={artifactUrl(run.id, 'classification.json')} download>
-            Скачать отчёт распознавания объектов
+            Отчёт распознавания
           </a>
         </p>
       ) : null}
@@ -73,7 +73,7 @@ export function RunHeader({ run }: { run: RunOut }) {
       </p>
       {run.state === 'succeeded' ? (
         <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-          3D-вид участка и снимки →
+          3D и снимки →
         </Link>
       ) : null}
     </div>
@@ -113,55 +113,44 @@ export function RunMetrics({
     <>
       <p className="metric">
         <b>{integer(total)}</b>
-        <span>
-          {plural(total, 'посадка', 'посадки', 'посадок')} в плане
-          {trees != null && trees.planted === total
-            ? `: ${integer(trees.trees)} ${plural(trees.trees, 'дерево', 'дерева', 'деревьев')}` +
-              (total > trees.trees
-                ? `, ${integer(total - trees.trees)} ${plural(total - trees.trees, 'кустарник', 'кустарника', 'кустарников')}`
-                : '')
-            : ''}
-          {approval ? (
-            `, ${integer(approval)} на согласование`
-          ) : sketch ? (
-            ', требуется проверка'
-          ) : (
-            <>
-              , <em>все без ограничений</em>
-            </>
-          )}
-        </span>
+        <span>{plural(total, 'посадка', 'посадки', 'посадок')} в плане</span>
       </p>
-      <p className="metric-sub">
-        <b>{integer(rejected)}</b>{' '}
-        {plural(rejected, 'место отклонено', 'места отклонено', 'мест отклонено')}
-      </p>
-      {/* Отдельной строкой: отказы и целостность подосновы - два разных факта (жюри, итерация 9).
-          Цела - обычным текстом: курсив выделял норму как событие (итерация 7). */}
-      <p className="metric-sub">
-        Подоснова {integrity ? 'цела' : <span className="metric-bad">нарушена</span>}
-      </p>
-      {barrierPlaces ? (
-        <p className="metric-sub quality-line">
-          <b>{integer(barrierPlaces)}</b>{' '}
-          {plural(barrierPlaces, 'место станет', 'места станут', 'мест станут')} допустимыми с
-          прикорневым барьером
+      {trees != null && trees.planted === total ? (
+        <dl className="run-breakdown">
+          <div>
+            <dt>Деревья</dt>
+            <dd>{integer(trees.trees)}</dd>
+          </div>
+          <div>
+            <dt>Кустарники</dt>
+            <dd>{integer(total - trees.trees)}</dd>
+          </div>
+        </dl>
+      ) : null}
+      {approval > 0 ? (
+        <p className="run-approval">
+          На согласование <b>{integer(approval)}</b>
         </p>
       ) : null}
-      <LawnLine summary={summary} />
+      {!integrity ? <p className="metric-bad">Целостность подосновы нарушена</p> : null}
       {sketch ? (
         <div className="notice">
-          <p>
-            Исследовательский эскиз: требуется уточнить объекты или границы покрытий. Допустимость
-            посадок не подтверждена.
-          </p>
+          <p className="notice-title">Эскиз · требуется проверка</p>
+          <p>Допустимость посадок не подтверждена.</p>
           {unconfirmed > 0 ? (
             <p>
-              Грунт под всей посадочной ямой не подтверждён замкнутыми контурами у{' '}
-              {integer(unconfirmed)} из {integer(total)} посадок. Проверьте границы покрытия.
+              У {integer(unconfirmed)} из {integer(total)} посадок не подтверждён грунт под всей
+              ямой.
             </p>
           ) : null}
-          <ReviewLinks run={run} />
+          <details className="fold notice-details">
+            <summary>Что проверить</summary>
+            <p>
+              Уточните объекты и границы покрытий. Грунт под всей посадочной ямой должен быть
+              подтверждён замкнутыми контурами.
+            </p>
+            <ReviewLinks run={run} />
+          </details>
         </div>
       ) : null}
       {notices.length ? (
@@ -171,16 +160,36 @@ export function RunMetrics({
           ))}
         </div>
       ) : null}
-      {warnings.length ? (
-        <details className="hud-block fold">
-          <summary>Как собран план: {warnings.length}</summary>
-          <ul className="warn-list">
-            {warnings.map((text) => (
-              <li key={text}>{text}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      <details className="hud-block fold run-details">
+        <summary>Детали расчёта</summary>
+        <dl className="run-facts">
+          <div>
+            <dt>Отклонено мест</dt>
+            <dd>{integer(rejected)}</dd>
+          </div>
+          <div>
+            <dt>Подоснова</dt>
+            <dd>{integrity ? 'Без изменений' : 'Нарушена'}</dd>
+          </div>
+          {barrierPlaces > 0 ? (
+            <div>
+              <dt>Допустимо с барьером</dt>
+              <dd>{integer(barrierPlaces)}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <LawnLine summary={summary} />
+        {warnings.length ? (
+          <details className="fold">
+            <summary>Как собран план · {warnings.length}</summary>
+            <ul className="warn-list">
+              {warnings.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </details>
     </>
   );
 }

@@ -68,6 +68,20 @@ export function EffectBlock({ effect }: { effect: EffectJson | null | undefined 
           </li>
         ))}
       </ul>
+      <details className="fold effect-method">
+        <summary>Что означают показатели</summary>
+        <dl>
+          {rows.map((m) => (
+            <div key={m.key}>
+              <dt>{fullTitle(m)}</dt>
+              <dd>
+                {m.note}
+                {m.basis ? ` Основание: ${m.basis}.` : ''}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
       {effect.kinds.length ? (
         <details className="fold">
           <summary>Виды посадок: {effect.kinds.length}</summary>

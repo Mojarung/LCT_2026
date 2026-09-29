@@ -11,12 +11,12 @@ const HEADLINE: { name: string; label: string; what: string; open?: boolean }[] 
   },
   {
     name: 'interpretations.csv',
-    label: 'Интерпретации, CSV',
+    label: 'Нормы · CSV',
     what: 'По строке на проверенную норму: посадка, правило, акт, пункт',
   },
   {
     name: 'report.html',
-    label: 'Отчёт интерпретаций',
+    label: 'Отчёт по посадкам',
     what: 'По каждой посадке определяющая норма, запас и пункт акта; печатается в PDF',
     open: true,
   },

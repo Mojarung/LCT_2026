@@ -1,5 +1,5 @@
 import type { QualityJson } from '../../api/artifacts';
-import { decimal, plural } from '../../lib/format';
+import { decimal } from '../../lib/format';
 
 /** Индекс качества плана: оценка, слагаемые с тем, что измерено, и основание каждого.
  *  Веса - выбор команды: это сказано один раз над слагаемыми, у каждого - только число. */
@@ -10,7 +10,7 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
   return (
     <section className="quality" aria-labelledby="quality-title">
       <h2 className="detail-heading" id="quality-title">
-        Качество плана
+        Оценка плана
       </h2>
       {quality.index == null ? (
         <p className="quality-gate">{quality.gate}</p>
@@ -22,10 +22,7 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
       {/* Итог стоит числом, разбор - под раскрытием: десять слагаемых со шкалами занимали
           панель целиком, и состав плана уходил за нижний край на высоте проектора. */}
       <details className="fold quality-fold">
-        <summary>
-          Разбор: {quality.terms.length}{' '}
-          {plural(quality.terms.length, 'слагаемое', 'слагаемых', 'слагаемых')}
-        </summary>
+        <summary>Как рассчитана оценка</summary>
         <p className="term-note">Веса слагаемых выбрала команда.</p>
         <ul className="quality-terms">
           {quality.terms.map((term) => (
