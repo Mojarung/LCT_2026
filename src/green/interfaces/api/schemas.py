@@ -258,6 +258,8 @@ class PhotoOut(BaseModel):
     species: list[str]
     shrubs: list[str]
     shot: str = Field(description="Подпись кадра, по которому сделано фото")
+    modern: bool = Field(description="Современные московские фасады вместо условных")
+    custom: bool = Field(description="Промпт написан в редакторе, а не собран сервисом")
     width: int
     height: int
     created_at: datetime
@@ -275,3 +277,10 @@ class PhotoListOut(BaseModel):
     available: bool
     reason: str | None = Field(description="Почему фото делать нельзя, если нельзя")
     photos: list[PhotoOut]
+
+
+class PromptOut(BaseModel):
+    """Промпт, который уйдёт в модель при этих параметрах: для редактора в интерфейсе."""
+
+    text: str
+    negative: str

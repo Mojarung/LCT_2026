@@ -14,6 +14,8 @@ function photo(patch: Partial<PhotoOut>): PhotoOut {
     species: [],
     shrubs: [],
     shot: '',
+    modern: false,
+    custom: false,
     width: 1024,
     height: 576,
     created_at: '2026-09-29T10:00:00Z',

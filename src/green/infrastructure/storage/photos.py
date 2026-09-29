@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -67,6 +68,12 @@ class FileSystemPhotoStore:
             raise NotFoundError(f"Кадр фото {photo_id} не найден")
         return path
 
+    def delete(self, run_id: str, photo_id: str) -> None:
+        folder = self._dir(run_id, photo_id)
+        if not (folder / JOB).is_file():
+            raise NotFoundError(f"Фото {photo_id} не найдено")
+        shutil.rmtree(folder)
+
     def _dir(self, run_id: str, photo_id: str) -> Path:
         if not _PHOTO_ID.fullmatch(photo_id):
             raise NotFoundError(f"Фото {photo_id} не найдено")
@@ -94,6 +101,9 @@ def _payload(job: PhotoJob) -> dict[str, object]:
             "species": list(o.species),
             "shrubs": list(o.shrubs),
             "shot": o.shot,
+            "modern": o.modern,
+            "custom_text": o.custom_text,
+            "custom_negative": o.custom_negative,
         },
     }
 
@@ -115,6 +125,10 @@ def _job(data: dict[str, Any]) -> PhotoJob:
             species=tuple(o["species"]),
             shrubs=tuple(o.get("shrubs", ())),
             shot=str(o.get("shot", "")),
+            # Задания до 29.09.2026 шли без современных фасадов и своего промпта.
+            modern=bool(o.get("modern", False)),
+            custom_text=str(o.get("custom_text", "")),
+            custom_negative=str(o.get("custom_negative", "")),
         ),
         width=int(data["width"]),
         height=int(data["height"]),

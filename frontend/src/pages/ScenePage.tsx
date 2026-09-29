@@ -10,11 +10,21 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
 import { artifactUrl } from '../api/client';
-import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
+import {
+  useArtifact,
+  useCreatePhoto,
+  useDeletePhoto,
+  usePhotos,
+  usePromptPreview,
+  useRun,
+} from '../api/queries';
 import { BarButton } from '../components/scene/BarButton';
 import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
+import { type PromptDraft, PromptEditor } from '../components/scene/PromptEditor';
 import { ScenePanel } from '../components/scene/ScenePanel';
+import { SideToggle } from '../components/scene/SideToggle';
+import { useSideCollapsed } from '../hooks/useSideCollapsed';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
 import { plural } from '../lib/format';
 import { SHOT_HEIGHT, SHOT_WIDTH, type ShotTarget } from '../scene3d/autoshots';
@@ -222,6 +232,9 @@ export function ScenePage() {
     error: string | null;
   } | null>(null);
   const [scenery, setScenery] = useState(false);
+  const [modern, setModern] = useState(true);
+  const [leftCollapsed, toggleLeft] = useSideCollapsed('green-scene-left');
+  const [promptDraft, setPromptDraft] = useState<PromptDraft | null>(null);
   const [requested, setRequested] = useState<Record<string, string>>({});
   const lastPlant = useRef<Plant | null>(null);
   const photos = usePhotos(runId, done);
@@ -230,6 +243,11 @@ export function ScenePage() {
     [shots, photos.data?.photos],
   );
   const photosAvailable = photos.data?.available ?? false;
+  const promptPreview = usePromptPreview(
+    runId,
+    { scenery, modern, season: settings.season, hour: settings.hour },
+    photosAvailable,
+  );
   const photoBusy = (photos.data?.photos ?? []).filter(
     (p) => p.state === 'queued' || p.state === 'running',
   ).length;
@@ -243,6 +261,7 @@ export function ScenePage() {
     }, NOTICE_MS);
   };
   const createPhoto = useCreatePhoto(runId);
+  const deletePhoto = useDeletePhoto(runId);
   const settingsRef = useRef(settings);
   useEffect(() => {
     settingsRef.current = settings;
@@ -408,6 +427,9 @@ export function ScenePage() {
         species: frame.trees,
         shrubs: frame.shrubs,
         shot: label,
+        modern,
+        prompt: promptDraft?.text ?? '',
+        negative: promptDraft?.negative ?? '',
       })
       .then((photo) => {
         done?.(photo.id);
@@ -543,7 +565,18 @@ export function ScenePage() {
       {!hudHidden ? (
         <>
           <div className="scene-left">
-            <aside className="hud hud-left scene-head" aria-label="Прогон">
+            <aside
+              className={
+                leftCollapsed ? 'hud hud-left scene-head collapsed' : 'hud hud-left scene-head'
+              }
+              aria-label="Прогон"
+            >
+              <SideToggle
+                side="left"
+                collapsed={leftCollapsed}
+                label="панель прогона и снимков"
+                onToggle={toggleLeft}
+              />
               <div className="hud-head">
                 <Link className="back" to={`/runs/${encodeURIComponent(runId)}`}>
                   ← план прогона
@@ -579,7 +612,7 @@ export function ScenePage() {
                 </div>
               ) : null}
             </aside>
-            {readyToFly ? (
+            {readyToFly && !leftCollapsed ? (
               <MediaPanel
                 items={media}
                 photos={photos.data?.photos ?? []}
@@ -587,6 +620,15 @@ export function ScenePage() {
                 reason={photos.data?.reason ?? null}
                 scenery={scenery}
                 onScenery={setScenery}
+                modern={modern}
+                onModern={setModern}
+                editor={
+                  <PromptEditor
+                    auto={promptPreview.data}
+                    draft={promptDraft}
+                    onDraft={setPromptDraft}
+                  />
+                }
                 shooting={shooting}
                 sending={sendingView}
                 onShot={(scale) => {
@@ -594,6 +636,25 @@ export function ScenePage() {
                 }}
                 onPhotoView={() => {
                   void photoFromView();
+                }}
+                photoBusy={photoBusy}
+                onShots={() => {
+                  void openGallery({ kind: 'street' }, 'Кадры улицы');
+                }}
+                onRemoveShot={(id) => {
+                  setShots((list) => {
+                    const gone = list.find((s) => s.id === id);
+                    if (gone) URL.revokeObjectURL(gone.url);
+                    return list.filter((s) => s.id !== id);
+                  });
+                }}
+                onDeletePhoto={(id) => {
+                  if (!window.confirm('Удалить фото с сервера? Вернуть его будет нельзя.')) return;
+                  deletePhoto.mutate(id, {
+                    onError: (error) => {
+                      toast(error.message);
+                    },
+                  });
                 }}
                 onPhoto={(shot) => {
                   void photoFromSnapshot(shot);
@@ -649,43 +710,6 @@ export function ScenePage() {
                     if (!e) return;
                     if (cam.touring) e.stopTour();
                     else e.startTour();
-                  }}
-                />
-              </div>
-              <div className="bar-group" role="group" aria-label="Снимки и фото">
-                <BarButton
-                  icon="snapshot"
-                  label="снимок"
-                  keyHint="P"
-                  disabled={shooting}
-                  title="Снимок кадра в PNG"
-                  onClick={() => {
-                    void shoot(1);
-                  }}
-                />
-                <BarButton
-                  icon={photoBusy ? 'spinner' : 'photo'}
-                  label={photoBusy ? `фото ИИ · ${String(photoBusy)}` : 'фото ИИ'}
-                  keyHint="F"
-                  accent
-                  spin={photoBusy > 0}
-                  disabled={!photosAvailable || sendingView}
-                  title={
-                    photosAvailable
-                      ? 'Отправить этот вид в нейросеть: фото с той же расстановкой, около минуты'
-                      : (photos.data?.reason ?? 'Фото недоступно')
-                  }
-                  onClick={() => {
-                    void photoFromView();
-                  }}
-                />
-                <BarButton
-                  icon="shots"
-                  label="кадры"
-                  keyHint="K"
-                  title="Кадры улицы с автоматических ракурсов; K над растением - его кадры"
-                  onClick={() => {
-                    void openGallery({ kind: 'street' }, 'Кадры улицы');
                   }}
                 />
               </div>

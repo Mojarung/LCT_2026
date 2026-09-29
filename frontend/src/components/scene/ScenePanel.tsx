@@ -1,12 +1,14 @@
 /* Пульт 3D-вида: время суток, сезон, возраст посадок, облачность, качество и снимки. Всё, что
  * меняет картинку, а не план: план правится на рабочем месте прогона. */
 
-import { type ReactNode, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { Quality, ViewSettings } from '../../scene3d/engine';
 import { FLY_SPEED_MAX, FLY_SPEED_MIN } from '../../scene3d/freecam';
 import { PLAN_YEAR } from '../../scene3d/growth';
 import { clock, type Season } from '../../scene3d/solar';
+import { useSideCollapsed } from '../../hooks/useSideCollapsed';
+import { SideToggle } from './SideToggle';
 
 const SEASONS: { value: Season; label: string }[] = [
   { value: 'spring', label: 'весна' },
@@ -162,7 +164,7 @@ function Section({
 const pct = (v: number) => `${String(Math.round(v * 100))}%`;
 
 export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, toggle] = useSideCollapsed('green-scene-right');
   const season = SEASONS.find((o) => o.value === settings.season)?.label ?? '';
   const age = AGES.find((o) => o.value === settings.age)?.label ?? '';
   const quality = QUALITIES.find((o) => o.value === settings.quality)?.label ?? '';
@@ -173,22 +175,12 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
   ].filter(Boolean);
   return (
     <aside
-      className="hud scene-panel"
+      className={collapsed ? 'hud scene-panel collapsed' : 'hud scene-panel'}
       aria-label="Пульт 3D-вида"
-      data-collapsed={collapsed ? 'true' : undefined}
     >
+      <SideToggle side="right" collapsed={collapsed} label="пульт" onToggle={toggle} />
       <div className="panel-head">
         <span className="panel-title">Пульт</span>
-        <button
-          type="button"
-          className="ghost small"
-          aria-expanded={!collapsed}
-          onClick={() => {
-            setCollapsed((v) => !v);
-          }}
-        >
-          {collapsed ? 'развернуть' : 'свернуть'}
-        </button>
       </div>
       {collapsed ? null : (
         <div className="hud-scroll">

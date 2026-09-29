@@ -46,6 +46,26 @@
             "title": "Image",
             "type": "string"
           },
+          "modern": {
+            "default": true,
+            "description": "Современные московские фасады: объём и этажность домов те же",
+            "title": "Modern",
+            "type": "boolean"
+          },
+          "negative": {
+            "default": "",
+            "description": "Свой негативный промпт",
+            "maxLength": 4000,
+            "title": "Negative",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "",
+            "description": "Свой промпт вместо собранного сервисом",
+            "maxLength": 4000,
+            "title": "Prompt",
+            "type": "string"
+          },
           "scenery": {
             "default": false,
             "description": "Разрешить модели дорисовать фон и деревья, которых нет в плане",
@@ -503,6 +523,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "custom": {
+            "description": "Промпт написан в редакторе, а не собран сервисом",
+            "title": "Custom",
+            "type": "boolean"
+          },
           "error": {
             "anyOf": [
               {
@@ -537,6 +562,11 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "modern": {
+            "description": "Современные московские фасады вместо условных",
+            "title": "Modern",
+            "type": "boolean"
           },
           "photo_url": {
             "anyOf": [
@@ -654,6 +684,8 @@
           "species",
           "shrubs",
           "shot",
+          "modern",
+          "custom",
           "width",
           "height",
           "created_at",
@@ -896,6 +928,25 @@
           "steps"
         ],
         "title": "ProgressOut",
+        "type": "object"
+      },
+      "PromptOut": {
+        "description": "Промпт, который уйдёт в модель при этих параметрах: для редактора в интерфейсе.",
+        "properties": {
+          "negative": {
+            "title": "Negative",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "negative"
+        ],
+        "title": "PromptOut",
         "type": "object"
       },
       "RuleCheckOut": {
@@ -2127,7 +2178,255 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/photos/prompt": {
+      "get": {
+        "description": "Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора.",
+        "operationId": "photo_prompt_api_v1_runs__run_id__photos_prompt_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenery",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Scenery",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "modern",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Modern",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "default": "summer",
+              "enum": [
+                "spring",
+                "summer",
+                "autumn",
+                "winter"
+              ],
+              "title": "Season",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hour",
+            "required": false,
+            "schema": {
+              "default": 11.0,
+              "maximum": 24,
+              "minimum": 0,
+              "title": "Hour",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "viewpoint",
+            "required": false,
+            "schema": {
+              "default": "aerial",
+              "enum": [
+                "aerial",
+                "ground"
+              ],
+              "title": "Viewpoint",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "species",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Species",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "shrubs",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Shrubs",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "Photo Prompt",
+        "tags": [
+          "photos"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/photos/{photo_id}": {
+      "delete": {
+        "description": "Удалить фото вместе с кадром. Фото в очереди или в работе - 409.",
+        "operationId": "delete_photo_api_v1_runs__run_id__photos__photo_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "title": "Photo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Сервис недоступен"
+          }
+        },
+        "summary": "Delete Photo",
+        "tags": [
+          "photos"
+        ]
+      },
       "get": {
         "operationId": "get_photo_api_v1_runs__run_id__photos__photo_id__get",
         "parameters": [

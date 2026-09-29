@@ -234,6 +234,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/photos/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photo Prompt
+         * @description Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора.
+         */
+        get: operations["photo_prompt_api_v1_runs__run_id__photos_prompt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/photos/{photo_id}": {
         parameters: {
             query?: never;
@@ -245,7 +265,11 @@ export interface paths {
         get: operations["get_photo_api_v1_runs__run_id__photos__photo_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Photo
+         * @description Удалить фото вместе с кадром. Фото в очереди или в работе - 409.
+         */
+        delete: operations["delete_photo_api_v1_runs__run_id__photos__photo_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -342,6 +366,24 @@ export interface components {
              * @description Кадр 3D-вида, PNG, стороны кратны 32, до 2048 px
              */
             image: string;
+            /**
+             * Modern
+             * @description Современные московские фасады: объём и этажность домов те же
+             * @default true
+             */
+            modern: boolean;
+            /**
+             * Negative
+             * @description Свой негативный промпт
+             * @default
+             */
+            negative: string;
+            /**
+             * Prompt
+             * @description Свой промпт вместо собранного сервисом
+             * @default
+             */
+            prompt: string;
             /**
              * Scenery
              * @description Разрешить модели дорисовать фон и деревья, которых нет в плане
@@ -535,6 +577,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Custom
+             * @description Промпт написан в редакторе, а не собран сервисом
+             */
+            custom: boolean;
             /** Error */
             error: string | null;
             /** Finished At */
@@ -545,6 +592,11 @@ export interface components {
             hour: number;
             /** Id */
             id: string;
+            /**
+             * Modern
+             * @description Современные московские фасады вместо условных
+             */
+            modern: boolean;
             /**
              * Photo Url
              * @description Увеличенное фото, когда оно готово
@@ -712,6 +764,16 @@ export interface components {
              * @description Название этапа для человека
              */
             title: string;
+        };
+        /**
+         * PromptOut
+         * @description Промпт, который уйдёт в модель при этих параметрах: для редактора в интерфейсе.
+         */
+        PromptOut: {
+            /** Negative */
+            negative: string;
+            /** Text */
+            text: string;
         };
         /** RuleCheckOut */
         RuleCheckOut: {
@@ -1556,6 +1618,81 @@ export interface operations {
             };
         };
     };
+    photo_prompt_api_v1_runs__run_id__photos_prompt_get: {
+        parameters: {
+            query?: {
+                scenery?: boolean;
+                modern?: boolean;
+                season?: "spring" | "summer" | "autumn" | "winter";
+                hour?: number;
+                viewpoint?: "aerial" | "ground";
+                species?: string;
+                shrubs?: string;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     get_photo_api_v1_runs__run_id__photos__photo_id__get: {
         parameters: {
             query?: never;
@@ -1576,6 +1713,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PhotoOut"];
                 };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_photo_api_v1_runs__run_id__photos__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Не найдено */
             404: {

@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Form, Request, Response, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from green.application.photos import (
+    MAX_PROMPT,
     SIDE_MAX,
     PhotoJob,
     PhotoOptions,
@@ -19,11 +20,12 @@ from green.application.photos import (
     PhotoUnavailableError,
     Season,
     Viewpoint,
+    build_prompt,
     species_names,
 )
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.errors import PROBLEM_RESPONSES, Problem
-from green.interfaces.api.schemas import PhotoListOut, PhotoOut
+from green.interfaces.api.schemas import PhotoListOut, PhotoOut, PromptOut
 
 router = APIRouter(
     prefix="/runs",
@@ -54,6 +56,8 @@ def _out(request: Request, job: PhotoJob) -> PhotoOut:
         species=list(o.species),
         shrubs=list(o.shrubs),
         shot=o.shot,
+        modern=o.modern,
+        custom=bool(o.custom_text.strip()),
         width=job.width,
         height=job.height,
         created_at=job.created_at,
@@ -102,6 +106,15 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
         str, Form(description="Латинские названия кустарников в кадре через запятую")
     ] = "",
     shot: Annotated[str, Form(max_length=SHOT_MAX, description="Подпись кадра в галерее")] = "",
+    modern: Annotated[
+        bool, Form(description="Современные московские фасады: объём и этажность домов те же")
+    ] = True,
+    prompt: Annotated[
+        str, Form(max_length=MAX_PROMPT, description="Свой промпт вместо собранного сервисом")
+    ] = "",
+    negative: Annotated[
+        str, Form(max_length=MAX_PROMPT, description="Свой негативный промпт")
+    ] = "",
 ) -> PhotoOut:
     """Поставить кадр в очередь модели. Статус: GET по адресу из Location."""
     container.store.get(run_id)
@@ -115,6 +128,9 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
         species=species_names(species.split(",")),
         shrubs=species_names(shrubs.split(",")),
         shot=" ".join(shot.split()),
+        modern=modern,
+        custom_text=prompt,
+        custom_negative=negative,
     )
     job = container.photos.submit(run_id, await image.read(), options)
     out = _out(request, job)
@@ -124,12 +140,48 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
     return out
 
 
+@router.get("/{run_id}/photos/prompt")
+def photo_prompt(  # noqa: PLR0913 - query parameters are separate by design
+    *,
+    run_id: str,
+    container: ContainerDep,
+    scenery: bool = False,
+    modern: bool = True,
+    season: Season = "summer",
+    hour: Annotated[float, Query(ge=0, le=24)] = 11.0,
+    viewpoint: Viewpoint = "aerial",
+    species: str = "",
+    shrubs: str = "",
+) -> PromptOut:
+    """Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора."""
+    container.store.get(run_id)
+    built = build_prompt(
+        PhotoOptions(
+            scenery=scenery,
+            modern=modern,
+            season=season,
+            hour=hour,
+            viewpoint=viewpoint,
+            species=species_names(species.split(",")),
+            shrubs=species_names(shrubs.split(",")),
+        )
+    )
+    return PromptOut(text=built.text, negative=built.negative)
+
+
 @router.get("/{run_id}/photos/{photo_id}")
 def get_photo(
     run_id: str, photo_id: str, request: Request, response: Response, container: ContainerDep
 ) -> PhotoOut:
     response.headers["Cache-Control"] = "no-store"
     return _out(request, container.photos.get(run_id, photo_id))
+
+
+@router.delete("/{run_id}/photos/{photo_id}", status_code=204)
+def delete_photo(run_id: str, photo_id: str, container: ContainerDep) -> Response:
+    """Удалить фото вместе с кадром. Фото в очереди или в работе - 409."""
+    container.photos.delete(run_id, photo_id)
+    return Response(status_code=204)
 
 
 @router.get(

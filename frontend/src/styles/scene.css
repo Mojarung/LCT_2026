@@ -529,7 +529,7 @@
 .bar-group:last-of-type {
   border-right: 0;
 }
-.scene-bar .bar-button {
+:is(.scene-bar, .media-actions) .bar-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -544,40 +544,40 @@
   font-weight: 500;
   white-space: nowrap;
 }
-.scene-bar .bar-button .icon {
+:is(.scene-bar, .media-actions) .bar-button .icon {
   flex: none;
   color: var(--bone-2);
 }
-.scene-bar .bar-button:hover:not(:disabled) {
+:is(.scene-bar, .media-actions) .bar-button:hover:not(:disabled) {
   background: var(--panel-2);
 }
-.scene-bar .bar-button[aria-pressed='true'] {
+:is(.scene-bar, .media-actions) .bar-button[aria-pressed='true'] {
   background: var(--panel-2);
   box-shadow: inset 0 0 0 1.5px var(--bone);
   font-weight: 600;
 }
-.scene-bar .bar-button[aria-pressed='true'] .icon {
+:is(.scene-bar, .media-actions) .bar-button[aria-pressed='true'] .icon {
   color: var(--bone);
 }
-.scene-bar .bar-button.accent {
+:is(.scene-bar, .media-actions) .bar-button.accent {
   background: var(--bone);
   color: var(--inverse);
 }
-.scene-bar .bar-button.accent .icon {
+:is(.scene-bar, .media-actions) .bar-button.accent .icon {
   color: var(--inverse);
 }
-.scene-bar .bar-button.accent .bar-key {
+:is(.scene-bar, .media-actions) .bar-button.accent .bar-key {
   color: var(--inverse);
   border-color: color-mix(in srgb, var(--inverse) 40%, transparent);
 }
-.scene-bar .bar-button.accent:hover:not(:disabled) {
+:is(.scene-bar, .media-actions) .bar-button.accent:hover:not(:disabled) {
   background: color-mix(in srgb, var(--bone) 85%, var(--inverse));
 }
-.scene-bar .bar-button:disabled {
+:is(.scene-bar, .media-actions) .bar-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.scene-bar .bar-button:focus-visible {
+:is(.scene-bar, .media-actions) .bar-button:focus-visible {
   outline: 2px solid var(--bone);
   outline-offset: 1px;
 }
@@ -1033,4 +1033,82 @@
   .media-list {
     overflow: visible;
   }
+}
+
+.media-actions {
+  gap: 4px;
+}
+.media-actions .bar-button {
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--hair-2);
+}
+.media-actions .bar-button.accent {
+  border-color: var(--bone);
+}
+.media-card-actions .media-delete {
+  margin-left: auto;
+}
+
+/* --- Редактор промпта фото нейросетью в панели «Снимки и фото» --- */
+.prompt-editor {
+  margin: 6px 0 2px;
+  font-size: var(--fs-micro);
+}
+.prompt-editor > summary {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--bone);
+}
+.prompt-state {
+  font-weight: 400;
+  color: var(--bone-3);
+}
+.prompt-field {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--bone-2);
+}
+.prompt-field textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--bone);
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+}
+.prompt-field textarea:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 1px;
+}
+.prompt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+.prompt-foot .hint {
+  margin: 0;
+}
+
+/* Свёрнутые панели - квадратная кнопка со стрелкой у своего края (.hud.collapsed). */
+.scene-left > .hud.collapsed {
+  width: 42px;
+  height: 42px;
+}
+.scene-panel.collapsed {
+  width: 42px;
+  height: 42px;
+}
+.scene-panel .panel-head {
+  padding-right: 44px;
 }

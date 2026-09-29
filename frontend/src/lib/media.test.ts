@@ -25,6 +25,8 @@ const photo = (id: string, created: string, patch: Partial<PhotoOut> = {}): Phot
   species: [],
   shrubs: [],
   shot: '',
+  modern: false,
+  custom: false,
   width: 1024,
   height: 576,
   created_at: created,

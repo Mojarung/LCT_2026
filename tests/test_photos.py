@@ -302,3 +302,78 @@ def test_frame_with_alpha_is_flattened_on_white(tmp_path: Path) -> None:
         assert flat.mode == "RGB"
         assert flat.getpixel((0, 0)) == (255, 255, 255)
         assert flat.getpixel((5, 5)) == (10, 120, 40)
+
+
+def test_modern_facades_keep_the_volume_and_can_be_switched_off() -> None:
+    modern = build_prompt(PhotoOptions())
+    plain = build_prompt(PhotoOptions(modern=False))
+
+    assert "number of floors" in modern.text
+    assert "clinker brick" in modern.text
+    assert "khrushchevka" in modern.negative
+    assert "clinker" not in plain.text
+    assert "khrushchevka" not in plain.negative
+
+
+def test_custom_prompt_replaces_the_built_one() -> None:
+    from green.application.photos import prompt_for  # noqa: PLC0415
+
+    custom = prompt_for(PhotoOptions(custom_text="  my prompt  ", custom_negative=""))
+    built = prompt_for(PhotoOptions())
+
+    assert custom.text == "my prompt"
+    assert custom.negative == build_prompt(PhotoOptions()).negative
+    assert built == build_prompt(PhotoOptions())
+
+
+def test_api_previews_the_prompt_and_takes_a_custom_one(client: TestClient) -> None:
+    store = client.app.state.container.store  # type: ignore[attr-defined]
+    run = store.create("street.dxf", "strict", {})
+
+    preview = client.get(
+        f"{API_PREFIX}/runs/{run.run_id}/photos/prompt",
+        params={"modern": "false", "viewpoint": "ground"},
+    ).json()
+    assert "eye level" in preview["text"]
+    assert "clinker" not in preview["text"]
+
+    response = client.post(
+        f"{API_PREFIX}/runs/{run.run_id}/photos",
+        files={"image": ("shot.png", _png(512, 288), "image/png")},
+        data={"prompt": "a photo of a quiet street", "modern": "false"},
+    )
+    photo = client.get(response.headers["Location"]).json()
+    assert photo["custom"] is True
+    assert photo["modern"] is False
+
+
+def test_api_deletes_a_finished_photo(client: TestClient) -> None:
+    store = client.app.state.container.store  # type: ignore[attr-defined]
+    run = store.create("street.dxf", "strict", {})
+    created = client.post(
+        f"{API_PREFIX}/runs/{run.run_id}/photos",
+        files={"image": ("shot.png", _png(512, 288), "image/png")},
+    )
+    location = created.headers["Location"]
+
+    assert client.delete(location).status_code == 204
+    assert client.get(location).status_code == 404
+    assert client.get(f"{API_PREFIX}/runs/{run.run_id}/photos").json()["photos"] == []
+    assert client.delete(location).status_code == 404
+
+
+def test_photo_in_work_is_not_deleted(runs: FileSystemRunStore) -> None:
+    from green.application.photos import PhotoBusyError  # noqa: PLC0415
+
+    run = runs.create("street.dxf", "strict", {})
+
+    class Never(Executor):
+        def submit(self, fn: object, /, *args: object, **kwargs: object) -> Future[None]:
+            del fn, args, kwargs
+            return Future()
+
+    service = PhotoService(FileSystemPhotoStore(runs), CopyRenderer(), executor=Never())
+    job = service.submit(run.run_id, _png(512, 288), PhotoOptions())
+
+    with pytest.raises(PhotoBusyError):
+        service.delete(run.run_id, job.id)

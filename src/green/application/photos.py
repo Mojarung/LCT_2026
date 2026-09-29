@@ -39,6 +39,8 @@ SIDE_MIN = 256
 SIDE_MAX = 2048
 MAX_SOURCE_BYTES = 16 * 2**20
 MAX_SPECIES = 6
+# Предел своего промпта из редактора: модель читает не больше, а длинный текст - не промпт.
+MAX_PROMPT = 4000
 STEPS = 25
 CFG = 4.0
 
@@ -48,6 +50,10 @@ type Viewpoint = Literal["aerial", "ground"]
 
 class PhotoUnavailableError(GreenError):
     """Генерация фото не настроена на этом сервере: нет модели или программы."""
+
+
+class PhotoBusyError(GreenError):
+    """Фото ещё в очереди или рисуется: удалить его сейчас нельзя."""
 
 
 class PhotoError(GreenError):
@@ -73,6 +79,11 @@ class PhotoOptions:
     shrubs: tuple[str, ...] = ()
     # Подпись кадра («Участок 1 из 3», «№ 12. Клён, с юга»): по ней галерея узнаёт фото кадра.
     shot: str = ""
+    # Современные московские фасады вместо условных: пятно, высота и этажность домов те же.
+    modern: bool = True
+    # Свой промпт из редактора интерфейса: заменяет собранный сервисом, негативный - тоже.
+    custom_text: str = ""
+    custom_negative: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +135,20 @@ NEGATIVE = (
     "oversaturated, blurry, text, watermark, user interface"
 )
 SCENERY_NEGATIVE = f"{NEGATIVE}, topiary, clipped round bushes, empty flat horizon, blue foliage"
+# Современная московская жилая застройка 2020-х: керамогранит и клинкер в два-три оттенка,
+# панорамные окна, коммерция в первых этажах (новые ЖК Москвы, docs/notes/40). Дом остаётся
+# тем же объёмом: модель без этого надстраивала этажи.
+MODERN_FACADES = (
+    "The buildings keep their exact footprint, height and number of floors, but look like new "
+    "Moscow residential architecture of the 2020s: facades of porcelain stoneware panels and "
+    "clinker brick in two or three shades of light grey, graphite and warm beige, large "
+    "floor-to-ceiling windows with dark frames, French balconies, a glazed ground floor with "
+    "shops and cafes, clean new granite curbs and fresh concrete paving, modern street lamps."
+)
+PLAIN_FACADES = "real facades with window frames"
+MODERN_NEGATIVE = (
+    "soviet panel building, khrushchevka, old balconies, peeling paint, rust, dilapidated facade"
+)
 # В режиме по плану модель охотно досаживала берёзы у стен и изгородь вдоль ограды: запрет прямо.
 PLAN_NEGATIVE = (
     f"{NEGATIVE}, extra trees, additional trees, new trees, trees in front of the building, "
@@ -163,6 +188,7 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
         f"{SEASONS[options.season]}, {light_of(options.hour)}. "
     )
     finish = f" Photorealistic, natural colors, sharp, high detail, shot on {camera}."
+    facades = MODERN_FACADES if options.modern else f"Keep {PLAIN_FACADES}."
     if options.scenery:
         trees = (
             ", ".join(options.species[:MAX_SPECIES]) + " trees"
@@ -176,12 +202,13 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
             f"and size. Make everything look real: {trees} with {foliage} and visible branches, "
             f"loose natural groups of flowering and evergreen shrubs{kinds} of different heights "
             "(not topiary, not clipped balls), mowed lawn with slight unevenness, worn grey "
-            "asphalt with patches, concrete curbs, paving tiles, real facades with balconies and "
-            "window frames, soft realistic shadows. All foliage in natural greens, no blue or "
-            "cyan tints. Behind the street, in the distance, other residential blocks and trees "
-            "fade into light haze instead of an empty field." + finish
+            "asphalt with patches, concrete curbs, paving tiles, soft realistic shadows. "
+            + facades
+            + " All foliage in natural greens, no blue or cyan tints. Behind the street, in the "
+            "distance, other residential blocks and trees fade into light haze instead of an "
+            "empty field." + finish
         )
-        return PhotoPrompt(text=text, negative=SCENERY_NEGATIVE)
+        return PhotoPrompt(text=text, negative=with_modern(SCENERY_NEGATIVE, options))
     # По плану: только материалы, ни одного нового объекта. Породы называются, лишь когда они
     # есть в кадре, - иначе модель брала «липу, клён и берёзу» как приглашение их посадить.
     trees = (
@@ -201,10 +228,24 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
         "pavement or wall, keep it bare. Only make the materials real: "
         f"{trees}, with {foliage} and visible branches{shrubs}; mowed lawn with slight "
         "unevenness, worn grey asphalt with patches, concrete curbs, paving tiles, metal fences, "
-        "real facades with window frames, soft realistic shadows." + finish
+        "soft realistic shadows. " + facades + finish
     )
-    negative = PLAN_NEGATIVE
-    return PhotoPrompt(text=text, negative=negative)
+    return PhotoPrompt(text=text, negative=with_modern(PLAN_NEGATIVE, options))
+
+
+def with_modern(negative: str, options: PhotoOptions) -> str:
+    return f"{negative}, {MODERN_NEGATIVE}" if options.modern else negative
+
+
+def prompt_for(options: PhotoOptions) -> PhotoPrompt:
+    """Промпт задания: свой из редактора, если он есть, иначе собранный по параметрам."""
+    built = build_prompt(options)
+    if not options.custom_text.strip():
+        return built
+    return PhotoPrompt(
+        text=options.custom_text.strip()[:MAX_PROMPT],
+        negative=(options.custom_negative.strip() or built.negative)[:MAX_PROMPT],
+    )
 
 
 def png_size(data: bytes) -> tuple[int, int]:
@@ -281,6 +322,14 @@ class PhotoService:
     def jobs(self, run_id: str) -> list[PhotoJob]:
         return [self._alive(job) for job in self._store.jobs(run_id)]
 
+    def delete(self, run_id: str, photo_id: str) -> None:
+        """Удалить фото и его кадр. То, что модель ещё рисует, не удаляется: очередь не
+        прерывает задание на середине, а файлы потом появились бы в пустом месте."""
+        job = self.get(run_id, photo_id)
+        if job.state in {PhotoState.QUEUED, PhotoState.RUNNING}:
+            raise PhotoBusyError("Фото ещё рисуется: удалить можно, когда модель закончит")
+        self._store.delete(run_id, photo_id)
+
     def file(self, run_id: str, photo_id: str, kind: Literal["source", "raw", "photo"]) -> Path:
         job = self.get(run_id, photo_id)
         if kind != "source" and job.state is not PhotoState.SUCCEEDED:
@@ -308,7 +357,7 @@ class PhotoService:
                 source=self._store.path(job.run_id, job.id, "source"),
                 raw=self._store.path(job.run_id, job.id, "raw"),
                 photo=self._store.path(job.run_id, job.id, "photo"),
-                prompt=build_prompt(job.options),
+                prompt=prompt_for(job.options),
                 size=(job.width, job.height),
             )
             done = replace(
