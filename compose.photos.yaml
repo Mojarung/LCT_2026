@@ -1,0 +1,18 @@
+# Фото по кадру 3D-вида на видеокарте NVIDIA (бонус, разд. 5.9 документации). Нужны драйвер
+# NVIDIA и nvidia-container-toolkit на хосте и каталог моделей:
+#   python3 tools/photos/fetch_models.py --dest /opt/green-models --platform linux
+#   GREEN_PHOTO_MODELS_HOST=/opt/green-models docker compose -f compose.yaml -f compose.photos.yaml up -d --build
+# Без этого файла сервис работает как обычно, кнопка фото показывает, что модели не настроены.
+services:
+  api:
+    image: green-photos:latest
+    build:
+      context: .
+      dockerfile: docker/photos/Dockerfile
+    environment:
+      GREEN_PHOTO_MODELS_DIR: /models
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    volumes:
+      - ${GREEN_PHOTO_MODELS_HOST:-./models}:/models:ro
+    runtime: nvidia
