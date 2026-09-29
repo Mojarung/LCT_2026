@@ -83,7 +83,9 @@ def main() -> None:
     with pymupdf.open(mandatory_pdf) as doc, pymupdf.open(PITCH / "free.pdf") as free:
         doc.insert_pdf(free)
         doc.set_metadata({"title": "green - озеленение улиц по нормам", "author": "MISIS MOJARUNG"})
-        doc.save(out_pdf, garbage=3, deflate=True)
+        # Снимки сервиса сняты в 2x: 150 dpi на слайде 1920 px хватает, файл меньше вчетверо.
+        doc.rewrite_images(dpi_threshold=180, dpi_target=150, quality=82)
+        doc.save(out_pdf, garbage=4, deflate=True, clean=True)
 
     prs = mandatory_deck(template)
     blank = prs.slide_layouts[len(prs.slide_layouts) - 1]
