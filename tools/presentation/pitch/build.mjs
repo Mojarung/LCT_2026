@@ -264,7 +264,7 @@ const slides = [
   <figure><div class="crop framed">${img('modern-after.jpg', 'fill')}</div><figcaption>фото: новые фасады</figcaption></figure>
 </div>
 <div class="trio" style="top:660px">
-  <figure><div class="crop framed">${img('modern-street-src.jpg', 'fill')}</div><figcaption>кадр 3D-вида, осень</figcaption></figure>
+  <figure><div class="crop framed">${img('modern-street-src.jpg', 'fill')}</div><figcaption>кадр 3D-вида, кроны 25 лет</figcaption></figure>
   <span class="arrow ink">→</span>
   <figure><div class="crop framed">${img('modern-street.jpg', 'fill')}</div><figcaption>фото: новые фасады</figcaption></figure>
   <p class="trio-note">Дом сохраняет пятно, высоту и этажность, меняются только материалы: керамогранит, клинкер, витрины на первом этаже. Посадки, ограды и люди остаются на своих местах.</p>
