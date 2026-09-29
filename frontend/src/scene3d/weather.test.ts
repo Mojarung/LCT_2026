@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { placePeople } from './people';
+import { AREA_PER_PERSON_M2, MIN_GAP_M, PEOPLE_MAX, placePeople } from './people';
 import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
 import { atmosphereOf, CALM, particleCount } from './weather';
 
@@ -39,9 +39,9 @@ describe('погода', () => {
 });
 
 describe('люди', () => {
-  /** Метр на пиксель: газон, по середине - тротуар шириной 3 м вдоль x, сбоку проезд. */
+  /** Метр на пиксель: газон, по середине - тротуар 600 x 3 м вдоль x, сбоку проезд. */
   function grid() {
-    const width = 60;
+    const width = 600;
     const height = 20;
     const kinds = new Uint8Array(width * height).fill(GRASS);
     for (let y = 8; y < 11; y++) for (let x = 0; x < width; x++) kinds[y * width + x] = PAVERS;
@@ -51,7 +51,7 @@ describe('люди', () => {
       width,
       height,
       metresPerPx: 1,
-      rect: [0, 0, 60, 20] as [number, number, number, number],
+      rect: [0, 0, 600, 20] as [number, number, number, number],
     };
   }
 
@@ -71,7 +71,26 @@ describe('люди', () => {
   });
 
   it('без тротуаров и площадок людей нет', () => {
-    const empty = { ...grid(), kinds: new Uint8Array(60 * 20).fill(GRASS) };
+    const empty = { ...grid(), kinds: new Uint8Array(600 * 20).fill(GRASS) };
     expect(placePeople(empty, 30)).toEqual([]);
+  });
+
+  it('людей не больше, чем вмещает плитка, - на узком тротуаре нет толпы', () => {
+    // 1800 м² плитки: не больше одного человека на AREA_PER_PERSON_M2.
+    const people = placePeople(grid(), PEOPLE_MAX);
+    expect(people.length).toBeLessThanOrEqual(Math.floor(1800 / AREA_PER_PERSON_M2));
+    expect(people.length).toBeGreaterThan(20);
+  });
+
+  it('соседи стоят не ближе MIN_GAP_M', () => {
+    const people = placePeople(grid(), PEOPLE_MAX);
+    for (let i = 0; i < people.length; i++) {
+      for (let j = i + 1; j < people.length; j++) {
+        const a = people[i];
+        const b = people[j];
+        if (!a || !b) continue;
+        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThanOrEqual(MIN_GAP_M - 1e-9);
+      }
+    }
   });
 });

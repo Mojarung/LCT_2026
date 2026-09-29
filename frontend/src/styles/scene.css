@@ -643,69 +643,6 @@
   margin: 6px 0 10px;
   font-size: var(--fs-small);
 }
-.photo-list {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.photo-item {
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 10px;
-  align-items: center;
-}
-.photo-item img {
-  display: block;
-  width: 96px;
-  height: 54px;
-  object-fit: cover;
-  border: 1px solid var(--hair-2);
-  border-radius: 4px;
-}
-.photo-item[data-state='queued'] img,
-.photo-item[data-state='running'] img {
-  opacity: 0.7;
-}
-.photo-state {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-.photo-shot {
-  overflow: hidden;
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  color: var(--bone);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.photo-bar {
-  display: block;
-  height: 5px;
-  overflow: hidden;
-  background: var(--panel-2);
-  border-radius: 3px;
-}
-.photo-bar span {
-  display: block;
-  height: 100%;
-  background: var(--bone);
-  border-radius: 3px;
-  transition: width 1s linear;
-}
-.photo-note {
-  font-size: var(--fs-micro);
-  color: var(--bone-3);
-}
-.photo-note a {
-  color: var(--bone);
-  font-weight: 600;
-}
-.photo-note.bad {
-  color: var(--bad);
-}
 
 /* --- Пульт: шапка со сворачиванием и разделы по смыслу --- */
 .panel-head {
@@ -788,8 +725,192 @@
 .scene-more[open] summary {
   margin-bottom: 6px;
 }
-.section-body .photo-tray {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--hair);
+
+/* --- Общая галерея на пульте: снимки и фото нейросетью одной сеткой --- */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.media-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  border-radius: 6px;
+  cursor: zoom-in;
+}
+.media-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.media-thumb:hover,
+.media-thumb:focus-visible {
+  border-color: var(--bone);
+  outline: none;
+}
+.media-thumb[data-pending='true'] img {
+  opacity: 0.55;
+}
+.media-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(20 18 15 / 72%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+.media-badge[data-bad='true'] {
+  background: var(--bad);
+}
+.viewer-meta .media-badge {
+  position: static;
+  margin-right: 6px;
+}
+.media-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: rgb(20 18 15 / 35%);
+}
+.media-progress span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transition: width 1s linear;
+}
+
+/* --- Просмотр: кадр по центру, листание по бокам, действия внизу --- */
+.media-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+.media-viewer::backdrop {
+  background: rgb(12 11 10 / 95%);
+}
+.media-viewer[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.viewer-head,
+.viewer-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+}
+.viewer-head h2 {
+  margin: 0;
+  font-size: var(--fs-strong);
+  color: #fff;
+}
+.viewer-meta {
+  margin: 4px 0 0;
+  font-size: var(--fs-small);
+  color: rgb(255 255 255 / 75%);
+}
+.viewer-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-small);
+  color: rgb(255 255 255 / 70%);
+}
+.media-viewer .ghost.small,
+.media-viewer .ghost.small.button {
+  color: #fff;
+  border-color: rgb(255 255 255 / 40%);
+}
+.viewer-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px 1fr 64px;
+  align-items: center;
+  min-height: 0;
+  padding: 0 8px;
+}
+.viewer-stage img {
+  justify-self: center;
+  max-width: 100%;
+  /* Кадр вписывается между шапкой и подвалом: иначе крупное фото закрывало кнопки. */
+  max-height: calc(100dvh - 190px);
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 45%);
+}
+.viewer-nav {
+  width: 48px;
+  height: 48px;
+  justify-self: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+.viewer-nav:hover:not(:disabled) {
+  background: rgb(255 255 255 / 24%);
+}
+.viewer-nav:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.viewer-status {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgb(12 11 10 / 75%);
+  font-size: var(--fs-small);
+}
+.viewer-foot {
+  justify-content: space-between;
+}
+.viewer-sides {
+  width: 240px;
+}
+.viewer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+@media (max-width: 640px) {
+  .viewer-stage {
+    grid-template-columns: 40px 1fr 40px;
+  }
+  .viewer-nav {
+    width: 36px;
+    height: 36px;
+  }
+  .viewer-foot {
+    flex-wrap: wrap;
+  }
 }

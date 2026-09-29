@@ -12,8 +12,9 @@ import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
 import { artifactUrl } from '../api/client';
 import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
 import { BarButton } from '../components/scene/BarButton';
-import { PhotoTray } from '../components/scene/PhotoTray';
-import { ScenePanel, type Shot } from '../components/scene/ScenePanel';
+import { MediaGallery } from '../components/scene/MediaGallery';
+import { MediaViewer } from '../components/scene/MediaViewer';
+import { ScenePanel } from '../components/scene/ScenePanel';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
 import { plural } from '../lib/format';
 import { SHOT_HEIGHT, SHOT_WIDTH, type ShotTarget } from '../scene3d/autoshots';
@@ -29,6 +30,7 @@ import {
 } from '../scene3d/engine';
 import { FLY_SPEED_DEFAULT } from '../scene3d/freecam';
 import type { SurfaceImage } from '../scene3d/ground';
+import { mediaItems, type Shot } from '../lib/media';
 import { fitForPhoto } from '../lib/photos';
 import { clock } from '../scene3d/solar';
 import { formatView, parseView } from '../scene3d/viewHash';
@@ -223,6 +225,10 @@ export function ScenePage() {
   const [requested, setRequested] = useState<Record<string, string>>({});
   const lastPlant = useRef<Plant | null>(null);
   const photos = usePhotos(runId, done);
+  const media = useMemo(
+    () => mediaItems(shots, photos.data?.photos ?? []),
+    [shots, photos.data?.photos],
+  );
   const photosAvailable = photos.data?.available ?? false;
   const photoBusy = (photos.data?.photos ?? []).filter(
     (p) => p.state === 'queued' || p.state === 'running',
@@ -324,10 +330,7 @@ export function ScenePage() {
         return next.slice(0, MAX_SHOTS);
       });
       setFlash((n) => n + 1);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
+      toast('Снимок в галерее на пульте: там просмотр, скачивание и «в фото ИИ».');
     } catch (error: unknown) {
       // Сбой снимка - строка поверх сцены, а не «3D-вид не собрался»: сцена цела.
       toast(error instanceof Error ? error.message : String(error));
@@ -373,7 +376,8 @@ export function ScenePage() {
     }
   };
   // Пока открыта галерея, сцена не рисуется: видеокарта нужна модели фото, а не кадру за панелью.
-  const galleryOpen = gallery !== null;
+  const [viewer, setViewer] = useState<number | null>(null);
+  const galleryOpen = gallery !== null || viewer !== null;
   useEffect(() => {
     engine.current?.setPaused(galleryOpen);
   }, [galleryOpen]);
@@ -464,6 +468,8 @@ export function ScenePage() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isTyping(event.target) || event.repeat) return;
+      // Под открытым окном (галерея кадров, просмотр) клавиши сцены молчат.
+      if (document.querySelector('dialog[open]')) return;
       const e = engine.current;
       if (!e) return;
       if (event.code === 'Escape') setGallery(null);
@@ -576,27 +582,22 @@ export function ScenePage() {
             <ScenePanel
               settings={settings}
               onChange={change}
-              shots={shots}
               onShot={(scale) => {
                 void shoot(scale);
               }}
               busy={shooting}
               speed={cam.speed}
               onSpeed={(speed) => engine.current?.setSpeed(speed)}
-              onPhoto={
-                photosAvailable
-                  ? (shot) => {
-                      void photoFromSnapshot(shot);
-                    }
-                  : undefined
-              }
-              photos={
-                <PhotoTray
+              galleryCount={media.length}
+              gallery={
+                <MediaGallery
+                  items={media}
                   photos={photos.data?.photos ?? []}
                   available={photosAvailable}
                   reason={photos.data?.reason ?? null}
                   scenery={scenery}
                   onScenery={setScenery}
+                  onOpen={setViewer}
                 />
               }
             />
@@ -755,6 +756,24 @@ export function ScenePage() {
           onClose={() => {
             setGallery(null);
           }}
+        />
+      ) : null}
+      {viewer !== null && readyToFly && media.length ? (
+        <MediaViewer
+          items={media}
+          index={Math.min(viewer, media.length - 1)}
+          photos={photos.data?.photos ?? []}
+          onIndex={setViewer}
+          onClose={() => {
+            setViewer(null);
+          }}
+          onPhoto={
+            photosAvailable
+              ? (shot) => {
+                  void photoFromSnapshot(shot);
+                }
+              : undefined
+          }
         />
       ) : null}
       {hover && readyToFly && !gallery ? (

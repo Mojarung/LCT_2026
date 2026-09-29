@@ -8,19 +8,6 @@ import { FLY_SPEED_MAX, FLY_SPEED_MIN } from '../../scene3d/freecam';
 import { PLAN_YEAR } from '../../scene3d/growth';
 import { clock, type Season } from '../../scene3d/solar';
 
-export interface Shot {
-  id: number;
-  url: string;
-  name: string;
-  width: number;
-  height: number;
-  /** Сам снимок и что в кадре: по кнопке «в фото» он уходит в нейросеть. */
-  blob: Blob;
-  viewpoint: 'aerial' | 'ground';
-  trees: string[];
-  shrubs: string[];
-}
-
 const SEASONS: { value: Season; label: string }[] = [
   { value: 'spring', label: 'весна' },
   { value: 'summer', label: 'лето' },
@@ -117,15 +104,14 @@ const fromSlider = (value: number) => FLY_SPEED_MIN * Math.exp((value / SPEED_ST
 export interface ScenePanelProps {
   settings: ViewSettings;
   onChange: (patch: Partial<ViewSettings>) => void;
-  shots: Shot[];
   onShot: (scale: number) => void;
   busy: boolean;
   speed: number;
   onSpeed: (speed: number) => void;
-  /** Отправить снимок в нейросеть; нет - фото на сервере недоступно. */
-  onPhoto?: (shot: Shot) => void;
-  /** Раздел «Фото нейросетью»: очередь и готовые фото. */
-  photos?: ReactNode;
+  /** Общая галерея снимков и фото нейросетью. */
+  gallery: ReactNode;
+  /** Сколько в галерее, для сводки в заголовке раздела. */
+  galleryCount: number;
 }
 
 /** Какие разделы пульта открыты: запоминается в браузере, без хранилища - по умолчанию. */
@@ -184,13 +170,12 @@ const pct = (v: number) => `${String(Math.round(v * 100))}%`;
 export function ScenePanel({
   settings,
   onChange,
-  shots,
   onShot,
   busy,
   speed,
   onSpeed,
-  onPhoto,
-  photos,
+  gallery,
+  galleryCount,
 }: ScenePanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const season = SEASONS.find((o) => o.value === settings.season)?.label ?? '';
@@ -225,7 +210,7 @@ export function ScenePanel({
           <Section
             id="shots"
             title="Снимки и фото"
-            summary={shots.length ? `снимков ${String(shots.length)}` : undefined}
+            summary={galleryCount ? `в галерее ${String(galleryCount)}` : undefined}
             defaultOpen
           >
             <div className="scene-shot-buttons">
@@ -252,39 +237,7 @@ export function ScenePanel({
                 снимок ×2
               </button>
             </div>
-            {shots.length ? (
-              <ul className="scene-shots">
-                {shots.map((s) => (
-                  <li key={s.id}>
-                    <a href={s.url} download={s.name} title={`Скачать ${s.name}`}>
-                      <img
-                        src={s.url}
-                        alt={`Снимок ${s.width}×${s.height}`}
-                        width={96}
-                        height={54}
-                      />
-                    </a>
-                    {onPhoto ? (
-                      <button
-                        type="button"
-                        className="ghost small"
-                        title="Отправить снимок в нейросеть: фото с той же расстановкой"
-                        onClick={() => {
-                          onPhoto(s);
-                        }}
-                      >
-                        в фото
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="hint">
-                Снимок скачивается файлом PNG, «в фото» у снимка отправит его в нейросеть.
-              </p>
-            )}
-            {photos}
+            {gallery}
           </Section>
           <Section
             id="time"

@@ -67,6 +67,14 @@ function runLength(
 }
 
 /** Расстановка: count людей по пикселям тротуаров (нет тротуаров - по площадкам). */
+/** Квадратных метров плитки на человека при ползунке 100%: оживлённый тротуар, а не толпа.
+ *  Без этого 450 человек вставали на любой тротуар, и на узком выходила очередь. */
+export const AREA_PER_PERSON_M2 = 30;
+/** Ближе друг к другу люди не встают. */
+export const MIN_GAP_M = 1.6;
+/** Попыток найти свободное место на человека: дальше тротуар считается заполненным. */
+const TRIES = 12;
+
 export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Person[] {
   const random = rng(seed);
   let allowed: ReadonlySet<number> = new Set([PAVERS]);
@@ -79,15 +87,39 @@ export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Per
     if (cells.length >= Math.max(50, count)) break;
   }
   if (!cells.length) return [];
+  const area = cells.length * grid.metresPerPx * grid.metresPerPx;
+  const target = Math.min(count, Math.floor(area / AREA_PER_PERSON_M2));
   const people: Person[] = [];
+  // Занятые места - по сетке с шагом в зазор: сосед ищется в девяти клетках, а не во всех.
+  const taken = new Map<string, { x: number; z: number }[]>();
+  const keyOf = (x: number, z: number) =>
+    `${String(Math.floor(x / MIN_GAP_M))}:${String(Math.floor(z / MIN_GAP_M))}`;
+  const crowded = (x: number, z: number) => {
+    const cx = Math.floor(x / MIN_GAP_M);
+    const cz = Math.floor(z / MIN_GAP_M);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (const o of taken.get(`${String(cx + dx)}:${String(cz + dz)}`) ?? []) {
+          if (Math.hypot(o.x - x, o.z - z) < MIN_GAP_M) return true;
+        }
+      }
+    }
+    return false;
+  };
   const dirs = Array.from(
     { length: 8 },
     (_, k) => [Math.cos((k * Math.PI) / 4), Math.sin((k * Math.PI) / 4)] as const,
   );
-  for (let n = 0; n < count; n++) {
+  for (let misses = 0; people.length < target && misses < target * TRIES;) {
     const cell = cells[Math.floor(random() * cells.length)] ?? 0;
     const px = cell % grid.width;
     const py = Math.floor(cell / grid.width);
+    const x = grid.rect[0] + (px + 0.5) * grid.metresPerPx;
+    const z = grid.rect[1] + (py + 0.5) * grid.metresPerPx;
+    if (crowded(x, z)) {
+      misses += 1;
+      continue;
+    }
     let best = 0;
     let dir: readonly [number, number] = [1, 0];
     for (const d of dirs) {
@@ -98,11 +130,13 @@ export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Per
       }
     }
     const walking = random() < WALKING && best > 3;
-    const x = grid.rect[0] + (px + 0.5) * grid.metresPerPx;
-    const z = grid.rect[1] + (py + 0.5) * grid.metresPerPx;
     // Модель смотрит в +z; курс поворачивает её лицом вдоль направления прогулки.
     const heading = walking ? Math.atan2(dir[0], dir[1]) : random() * Math.PI * 2;
     people.push({ x, z, heading, span: walking ? best : 0, seed: random() });
+    const key = keyOf(x, z);
+    const list = taken.get(key);
+    if (list) list.push({ x, z });
+    else taken.set(key, [{ x, z }]);
   }
   return people;
 }
