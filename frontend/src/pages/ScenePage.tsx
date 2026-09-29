@@ -3,6 +3,7 @@
  * Страница грузится отдельным чанком (router.ts, lazy): three.js и модели крон весят больше
  * всего остального интерфейса, и тем, кто 3D не открывает, их качать незачем. */
 
+import { SourceConflictNotice } from '../components/run/SourceConflictNotice';
 import '../styles/scene.css';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -595,6 +596,7 @@ export function ScenePage() {
               </div>
               {counts && world ? (
                 <div className="hud-scroll scene-facts">
+                  <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
                   <p>
                     {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
                     {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}

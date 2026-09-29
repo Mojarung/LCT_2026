@@ -17,6 +17,7 @@ from shapely.errors import GEOSException
 
 from green.application.semantic_names import base_name
 from green.application.shrub_strips import SHRUB_STRIP_SOURCE
+from green.application.source_conflicts import SourceConflicts, find_source_conflicts
 from green.application.surfaces import Material, label_material
 from green.application.tree_strips import STRIP_SOURCE
 from green.domain.objects import ObjectClass
@@ -98,6 +99,7 @@ class Basemap:
     # Подписи, по которым сервис решил, где грунт, а где покрытие. Без них на карте не видно,
     # что прямоугольник - это детская площадка со спецпокрытием, а не газон.
     labels: tuple[MaterialLabel, ...] = ()
+    source_conflicts: SourceConflicts | None = None
 
 
 def material_labels(labels: Sequence[TextLabel]) -> tuple[MaterialLabel, ...]:
@@ -182,6 +184,7 @@ def build_basemap(
         tolerance_m=round(tolerance_m, 3),
         min_span_m=round(min_span_m, 3),
         labels=material_labels(labels),
+        source_conflicts=find_source_conflicts(features),
     )
 
 

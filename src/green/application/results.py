@@ -138,6 +138,9 @@ class RunReport:
 
         return {
             "placements": len(self.plan.placements),
+            "source_conflicts": len(self.basemap.source_conflicts.items)
+            if self.basemap and self.basemap.source_conflicts is not None
+            else None,
             # Газоны (п. 3 ТЗ): число участков и площади в м², всего и по видам.
             "lawns": len(lawns),
             "lawn_m2": lawn_m2(*LawnKind),
