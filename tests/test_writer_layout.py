@@ -1,5 +1,6 @@
-"""DXF для CAD: у посадки видна позиция ведомости (POS), номер, вид и нормы скрыты; ведомость
-стоит справа от габарита всего плана, легенда правил - справа от ведомости, в единицах чертежа.
+"""DXF для CAD: у посадки видна позиция ведомости - обычный TEXT на GREEN_LABELS там, где атрибут
+POS, а сам POS, номер, вид и нормы скрыты; ведомость стоит справа от габарита всего плана,
+легенда правил - справа от ведомости, в единицах чертежа.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from green.infrastructure.config.repositories import YamlRuleBookSource
 
 if TYPE_CHECKING:
     from ezdxf.document import Drawing
-    from ezdxf.entities import Attrib, Insert, MText
+    from ezdxf.entities import Attrib, Insert, MText, Text
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOK = YamlRuleBookSource(ROOT / "config" / "acts.yaml", ROOT / "config" / "rules.yaml").load()
@@ -128,6 +129,18 @@ def _attr(insert: Insert, tag: str) -> Attrib:
     return attrib
 
 
+def _identity(entity: Insert | Text) -> str:
+    """Идентификатор посадки из XDATA LCT_GREEN: у вставки и у подписи её позиции."""
+    if not entity.has_xdata("LCT_GREEN"):
+        return ""
+    strings = [tag.value for tag in entity.get_xdata("LCT_GREEN") if tag.code == 1000]
+    return strings[0] if strings else ""
+
+
+def _position_labels(doc: Drawing) -> list[Text]:
+    return list(doc.modelspace().query(f"TEXT[layer=='{LAYER_LABELS}']"))
+
+
 def _plan_right_edge_m(plan: Plan) -> float:
     """Правый край всего, что план рисует, в метрах: кроны посадок, отказы, зоны, газоны."""
     edges = [p.x + p.species.crown_diameter_m / 2 for p in plan.placements]
@@ -174,13 +187,59 @@ def test_planting_shows_schedule_position_not_running_number(tmp_path: Path) -> 
     assert shown == {"1": "1", "2": "1", "3": "2"}
 
 
-def test_schedule_position_is_visible_at_label_height(tmp_path: Path) -> None:
+def test_schedule_position_attribute_stays_but_is_hidden(tmp_path: Path) -> None:
+    # Видимый атрибут рядом с видимым текстом nanoCAD и AutoCAD нарисовали бы дважды.
     doc = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
     for insert in _plantings(doc):
         position = _attr(insert, "POS")
-        assert not position.is_invisible
+        assert position.is_invisible
         assert math.isclose(position.dxf.height, LABEL_HEIGHT_M)
         assert position.dxf.layer == LAYER_LABELS
+
+
+def test_position_attribute_is_hidden_even_if_source_block_shows_it(tmp_path: Path) -> None:
+    # Исходником подали прежний result.dxf: блок вида уже есть, и POS в нём видимый.
+    source = tmp_path / "source.dxf"
+    doc = ezdxf.new("R2018")
+    block = doc.blocks.new("GREEN_TREE_TILIA_CORDATA")
+    block.add_circle((0, 0), radius=LIME.crown_diameter_m / 2)
+    block.add_attdef("POS", (0.4, 0.4), dxfattribs={"height": LABEL_HEIGHT_M})
+    doc.saveas(source)
+    written = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
+    limes = [i for i in _plantings(written) if i.dxf.name == "GREEN_TREE_TILIA_CORDATA"]
+    assert len(limes) == 2
+    for insert in limes:
+        assert _attr(insert, "POS").is_invisible
+
+
+def test_schedule_position_is_plain_text_where_the_attribute_is(tmp_path: Path) -> None:
+    # LibreCAD атрибуты вставок не рисует, обычный TEXT - рисует: номер виден в любом просмотрщике.
+    doc = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
+    labels = _position_labels(doc)
+    assert sorted(label.dxf.text for label in labels) == ["1", "1", "2"]
+    by_planting = {_identity(label): label for label in labels}
+    for insert in _plantings(doc):
+        label = by_planting.get(_identity(insert))
+        assert label is not None, f"у посадки {_identity(insert)} нет подписи позиции"
+        position = _attr(insert, "POS")
+        assert label.dxf.text == position.dxf.text
+        assert label.dxf.insert.isclose(position.dxf.insert, abs_tol=1e-9)
+        assert math.isclose(label.dxf.height, position.dxf.height)
+        assert label.dxf.style == "GREEN_TEXT"
+
+
+def test_position_text_is_in_drawing_units_for_millimetre_drawing(tmp_path: Path) -> None:
+    plan = _mixed_plan()
+    doc = ezdxf.readfile(_write(tmp_path, plan, unit_m=MM))
+    points = {p.placement_id: (p.x / MM, p.y / MM) for p in plan.placements}
+    labels = _position_labels(doc)
+    assert len(labels) == len(plan.placements)
+    for label in labels:
+        x, y = points[_identity(label)]
+        assert math.isclose(label.dxf.height, LABEL_HEIGHT_M / MM, rel_tol=1e-9)
+        # Подпись справа сверху от точки посадки, дальше 0,1 м и ближе 1 м - в миллиметрах чертежа.
+        assert 0.1 / MM < label.dxf.insert.x - x < 1 / MM
+        assert 0.1 / MM < label.dxf.insert.y - y < 1 / MM
 
 
 def test_number_species_and_norms_stay_but_are_hidden(tmp_path: Path) -> None:
@@ -271,6 +330,7 @@ def test_plan_without_plantings_puts_legend_beyond_what_exists(
     doc = ezdxf.readfile(_write(tmp_path, plan))
     msp = doc.modelspace()
     assert not msp.query(f"*[layer=='{LAYER_SCHEDULE}']")  # нет посадок - нет строк ведомости
+    assert not _position_labels(doc)  # и нет подписей позиций: номер отказа - атрибут отметки
     legend = _legend(doc)
     assert legend.dxf.insert.x > _plan_right_edge_m(plan)
     assert legend.dxf.insert.y >= Y0
@@ -281,6 +341,7 @@ def test_empty_plan_draws_no_legend_and_no_schedule(tmp_path: Path) -> None:
     msp = doc.modelspace()
     assert not msp.query(f"MTEXT[layer=='{LAYER_LABELS}']")
     assert not msp.query(f"*[layer=='{LAYER_SCHEDULE}']")
+    assert not _position_labels(doc)
 
 
 # --- сверка экспорта ---------------------------------------------------------------------------
@@ -305,3 +366,40 @@ def test_export_check_flags_position_not_matching_schedule(tmp_path: Path, mutat
     report = check_written_plan(target, plan, unit_m=1.0)
     assert not report.ok
     assert any(issue.startswith("p3:") and "POS" in issue for issue in report.issues)
+
+
+@pytest.mark.parametrize("mutation", ["wrong", "missing", "duplicate", "moved"])
+def test_export_check_flags_position_text_not_matching_schedule(
+    tmp_path: Path, mutation: str
+) -> None:
+    plan = _mixed_plan()
+    target = _write(tmp_path, plan)
+    doc = ezdxf.readfile(target)
+    msp = doc.modelspace()
+    label = next((t for t in _position_labels(doc) if _identity(t) == "p3"), None)
+    assert label is not None, "у спиреи нет подписи позиции"
+    if mutation == "wrong":
+        label.dxf.text = "3"  # сквозной номер вместо позиции ведомости
+    elif mutation == "missing":
+        msp.delete_entity(label)
+    elif mutation == "duplicate":
+        msp.add_entity(label.copy())
+    else:
+        label.dxf.insert = label.dxf.insert.replace(x=label.dxf.insert.x + 1.0)  # на метр в сторону
+    doc.saveas(target)
+    report = check_written_plan(target, plan, unit_m=1.0)
+    assert not report.ok
+    assert any(issue.startswith("p3:") and "подпись позиции" in issue for issue in report.issues)
+
+
+def test_export_check_flags_position_text_of_unknown_planting(tmp_path: Path) -> None:
+    plan = _mixed_plan()
+    target = _write(tmp_path, plan)
+    doc = ezdxf.readfile(target)
+    label = next((t for t in _position_labels(doc) if _identity(t) == "p3"), None)
+    assert label is not None, "у спиреи нет подписи позиции"
+    label.set_xdata("LCT_GREEN", [(1000, "p99")])
+    doc.saveas(target)
+    issues = check_written_plan(target, plan, unit_m=1.0).issues
+    assert any(issue.startswith("p99:") and "подпись позиции" in issue for issue in issues)
+    assert any(issue.startswith("p3:") and "подпись позиции" in issue for issue in issues)

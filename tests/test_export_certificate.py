@@ -82,14 +82,30 @@ def test_saved_plan_matches_for_different_drawing_units(exported) -> None:  # no
         "symbol",
         "layer",
         "verdict",
+        "label_text",
+        "label_moved",
+        "label_deleted",
+        "label_duplicate",
     ],
 )
-def test_saved_plan_corruption_is_detected(exported, mutation: str) -> None:  # noqa: ANN001
+def test_saved_plan_corruption_is_detected(exported, mutation: str) -> None:  # noqa: ANN001, C901, PLR0912
     path, plan, unit = exported
     doc = ezdxf.readfile(path)
     msp = doc.modelspace()
     insert = msp.query("INSERT[layer=='GREEN_TREES']").first
-    if mutation == "delete":
+    # Подпись позиции ведомости у посадки - обычный TEXT, его LibreCAD рисует, а атрибут - нет.
+    label = msp.query("TEXT[layer=='GREEN_LABELS']").first
+    if mutation.startswith("label"):
+        assert label is not None, "у посадки нет подписи позиции"
+    if mutation == "label_text":
+        label.dxf.text = "2"
+    elif mutation == "label_moved":
+        label.dxf.insert = label.dxf.insert.replace(x=label.dxf.insert.x + 1.0 / unit)  # на 1 м
+    elif mutation == "label_deleted":
+        msp.delete_entity(label)
+    elif mutation == "label_duplicate":
+        msp.add_entity(label.copy())
+    elif mutation == "delete":
         msp.delete_entity(insert)
     elif mutation == "duplicate":
         msp.add_entity(insert.copy())
