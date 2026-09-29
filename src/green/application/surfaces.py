@@ -16,6 +16,7 @@ import numpy as np
 import shapely
 from scipy import sparse
 from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import label as connected_components
 from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
@@ -36,6 +37,8 @@ SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
 # Подписи-фразы площадок и покрытий: «ДЕТ.ПЛ.», «СПОРТ ПЛ.», «СПЕЦ.ПОКРЫТИЕ», «ПЛИТКА БЕТОННАЯ».
 # Короткие обозначения («А», «Б») фразами не ищутся: «ж.б.» у трубы - не бетонное покрытие.
 PAVED_PHRASE = re.compile(r"ПОКР|^(ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК|АСФАЛЬТ|БРУСЧ|ПЛИТК|ТЕРРАВЕЙ")
+FUNCTIONAL_PHRASE = re.compile(r"^(?:ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК")
+FUNCTIONAL_MAX_AREA_M2 = 3000.0
 SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
 # Полигоны, чья середина - известный материал: штриховки газонов, тротуаров, проезжей части.
 SOIL_AREAS = frozenset({ObjectClass.LAWN})
@@ -111,6 +114,9 @@ class SurfaceMap:
     uncertainty_area: BaseGeometry | None = None
     # Грани со знаком существующего массива: грунт, но не место для новой посадки.
     woodland_area: BaseGeometry | None = None
+    functional_area: BaseGeometry | None = None
+    functional_grid: NDArray[np.bool_] | None = field(default=None, repr=False)
+    functional_labels: tuple[tuple[float, float, str], ...] = ()
     # Совмещённый режим (вопрос 3 пользователя): материал вокруг подписей вне решённых
     # граней, разлитый по расстоянию, - в растре inferred_grid; здесь его площадь и подписи.
     hybrid_mode: bool = False
@@ -143,7 +149,35 @@ class SurfaceMap:
             result[shapely.intersects(self.paved_area, points)] = int(Material.PAVED)
         if self.uncertainty_area is not None:
             result[shapely.intersects(self.uncertainty_area, points)] = int(Material.UNKNOWN)
+        if self.functional_area is not None:
+            result[shapely.intersects(self.functional_area, points)] = int(Material.PAVED)
+        if self.functional_grid is not None:
+            result[
+                inside
+                & self.functional_grid[
+                    rows.clip(0, self.grid.shape[0] - 1), cols.clip(0, self.grid.shape[1] - 1)
+                ]
+            ] = int(Material.PAVED)
         return result
+
+    def functional_reason(self, point: BaseGeometry) -> str | None:
+        """Явная причина отказа на функциональной площадке чертежа."""
+        exact = self.functional_area is not None and self.functional_area.intersects(point)
+        cell = False
+        if self.functional_grid is not None:
+            row, col = self._cells(np.array([[point.x, point.y]]))
+            cell = bool(
+                0 <= row[0] < self.grid.shape[0]
+                and 0 <= col[0] < self.grid.shape[1]
+                and self.functional_grid[row[0], col[0]]
+            )
+        if not (exact or cell):
+            return None
+        label = min(
+            self.functional_labels,
+            key=lambda item: (item[0] - point.x) ** 2 + (item[1] - point.y) ** 2,
+        )[2]
+        return f"функциональная площадка: {label}"
 
     def fits_soil(self, points: NDArray[np.object_], radius_m: float) -> NDArray[np.bool_]:
         """A disk fits exact lawn geometry or a conservative union of inferred cells.
@@ -240,7 +274,8 @@ class SurfaceMap:
 
     def review_notes(self) -> tuple[str, ...]:
         if not self.closed_faces_mode:
-            return ()
+            note = self._functional_note()
+            return (note,) if note else ()
         if self.hybrid_mode:
             return self._hybrid_notes()
         notes = []
@@ -265,6 +300,8 @@ class SurfaceMap:
                 f"{self.unsupported_boundary_faces}; забор, ось дороги или рельсы "
                 "не определяют грунт внутри. Уточните роль линий по исходнику."
             )
+        if note := self._functional_note():
+            notes.append(note)
         return tuple(notes)
 
     def _hybrid_notes(self) -> tuple[str, ...]:
@@ -290,7 +327,22 @@ class SurfaceMap:
                 f"Контуров с противоречивыми подписями покрытий: {self.conflicting_faces}; "
                 "посадка в них запрещена до уточнения границ и материала."
             )
+        if note := self._functional_note():
+            notes.append(note)
         return tuple(notes)
+
+    def _functional_note(self) -> str | None:
+        names = {
+            reason
+            for x, y, _ in self.functional_labels
+            if (reason := self.functional_reason(shapely.Point(x, y)))
+        }
+        if not names:
+            return None
+        return (
+            f"{'; '.join(sorted(names))}: деревья и кустарники внутри небольшой площадки "
+            "не размещаются."
+        )
 
     def _cells(self, xy: NDArray[np.float64]) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
         cols = np.floor((xy[:, 0] - self.origin[0]) / self.cell).astype(np.int64)
@@ -298,7 +350,7 @@ class SurfaceMap:
         return rows, cols
 
 
-def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named metric limits
+def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stages
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
     extent: BaseGeometry | None,
@@ -318,6 +370,9 @@ def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named met
         raise ValueError("Unknown surface inference mode")
     faces_mode = inference_mode != "distance"
     features = _near_extent(features, extent)
+    functional_labels = tuple(
+        (label.x, label.y, label.text.strip()) for label in labels if _functional_label(label)
+    )
     seed_xy, seed_kind = _seeds(features, labels)
     # Деревья - затравка только для заливки по расстоянию, знаки массивов - только для граней:
     # исключить посадку можно лишь из замкнутого контура массива. Совмещённый режим деревья
@@ -334,7 +389,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named met
         if f.geometry.geom_type in _AREA_TYPES
         and (f.object_class is ObjectClass.LAWN or f.object_class.is_hard_surface)
     ]
-    if not len(seed_xy) and not polygons:
+    if not len(seed_xy) and not polygons and not functional_labels:
         return None
     barriers = _barrier_lines(features)
     if extent is not None and not extent.is_empty:
@@ -357,7 +412,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named met
     faces = None
     fallback = _Fallback()
     if faces_mode:
-        faces = _closed_materials(features, seed_xy, seed_kind, uncertain)
+        faces = _closed_materials(features, seed_xy, seed_kind, uncertain, functional_labels)
         uncertain = _exclude_conflicts(free, uncertain, faces.conflicting_area, origin, cell)
         if soil_area is not None:
             # A declared material polygon is independent of label propagation:
@@ -389,7 +444,21 @@ def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named met
             ambiguity=ambiguity_m / cell,
             tree_limit=tree_distance_m / cell,
         )
+    functional_area = (
+        faces.functional_area if faces and not faces.functional_area.is_empty else None
+    )
+    if functional_area is not None:
+        if soil_area is not None:
+            soil_area = soil_area.difference(functional_area)
+        paved_area = _merge_material_area(paved_area, functional_area, extent)
     soil_area = _soil_polygons(soil_area)
+    functional_grid = (
+        _functional_cells(free, grid, functional_labels, origin, cell)
+        if functional_labels
+        else None
+    )
+    if functional_grid is not None:
+        grid[functional_grid] = int(Material.PAVED)
     grid[barrier] = int(Material.BARRIER)
     inferred_grid = grid.copy()
     _paint_materials(grid, (soil_area, paved_area, uncertain), origin, cell)
@@ -407,6 +476,9 @@ def build_surface_map(  # noqa: PLR0913, PLR0915 - evidence stages and named met
         paved_area=paved_area,
         uncertainty_area=uncertain,
         woodland_area=_merge_material_area(None, faces.woodland, extent) if faces else None,
+        functional_area=functional_area,
+        functional_grid=functional_grid,
+        functional_labels=functional_labels,
         closed_faces_mode=faces_mode,
         hybrid_mode=inference_mode == "hybrid",
         fallback_soil_m2=fallback.soil_m2,
@@ -533,6 +605,7 @@ def _closed_materials(
     seed_xy: NDArray[np.float64],
     seed_kind: NDArray[np.int8],
     uncertain: BaseGeometry | None,
+    functional_labels: tuple[tuple[float, float, str], ...],
 ) -> FaceMaterials:
     certain = (
         ~shapely.intersects(uncertain, shapely.points(seed_xy))
@@ -557,6 +630,10 @@ def _closed_materials(
         seed_xy[certain & (seed_kind == Material.PAVED)],
         material_lines=material_lines,
         woodland_xy=seed_xy[woodland],
+        functional_xy=np.array([(x, y) for x, y, _ in functional_labels], dtype=np.float64).reshape(
+            -1, 2
+        ),
+        functional_max_area_m2=FUNCTIONAL_MAX_AREA_M2,
     )
     return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
 
@@ -611,6 +688,8 @@ def _seeds(
     xy: list[tuple[float, float]] = []
     kind: list[int] = []
     for label in labels:
+        if _functional_label(label):
+            continue
         material = _label_seed(label)
         if material is not None:
             xy.append((label.x, label.y))
@@ -652,6 +731,48 @@ def _label_seed(label: TextLabel) -> Material | None:
     if label.surface_role == "auto":
         return label_material(label.text)
     return None
+
+
+def _functional_label(label: TextLabel) -> bool:
+    # Пояснительный слой нельзя брать как доказательство грунта, но подпись назначения
+    # площадки внутри её контура остаётся отрицательным свидетельством для посадки.
+    # Явное пользовательское исключение конкретной подписи при этом уважаем.
+    explicit_ignore = (
+        label.surface_role == "ignore"
+        and label.surface_evidence is not None
+        and label.surface_evidence.method == "explicit_label"
+    )
+    return not explicit_ignore and bool(FUNCTIONAL_PHRASE.search(label.text.strip().upper()))
+
+
+def _functional_cells(
+    free: NDArray[np.bool_],
+    grid: NDArray[np.int8],
+    labels: tuple[tuple[float, float, str], ...],
+    origin: tuple[float, float],
+    cell: float,
+) -> NDArray[np.bool_]:
+    """Закрыть малую область за контуром или компонент выведенного грунта."""
+    result = np.zeros(free.shape, dtype=bool)
+    if not labels:
+        return result
+    components, count = connected_components(free)
+    sizes = np.bincount(components.ravel(), minlength=count + 1)
+    soil_components, soil_count = connected_components(free & (grid == Material.SOIL))
+    soil_sizes = np.bincount(soil_components.ravel(), minlength=soil_count + 1)
+    for x, y, _ in labels:
+        col = int(np.floor((x - origin[0]) / cell))
+        row = int(np.floor((y - origin[1]) / cell))
+        if not (0 <= row < free.shape[0] and 0 <= col < free.shape[1]):
+            continue
+        component = components[row, col]
+        if component and sizes[component] * cell * cell < FUNCTIONAL_MAX_AREA_M2:
+            result |= components == component
+        else:
+            soil_component = soil_components[row, col]
+            if soil_component and soil_sizes[soil_component] * cell * cell < FUNCTIONAL_MAX_AREA_M2:
+                result |= soil_components == soil_component
+    return result
 
 
 def label_material(text: str) -> Material | None:

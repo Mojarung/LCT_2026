@@ -220,15 +220,20 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             require_work_boundary=params.require_work_boundary,
             planting_radius_m=local.footprint_radius_m,
         )
-        issues.extend(
-            ValidationIssue(
-                "footprint",
-                (placements[position].placement_id,),
-                "Посадочное место не целиком на пригодном грунте: выходит за границу работ,"
-                " на покрытие или задевает препятствие",
+        for position in np.flatnonzero(~index.plantable(points)):
+            functional = (
+                surface.functional_reason(points[position]) if surface is not None else None
             )
-            for position in np.flatnonzero(~index.plantable(points))
-        )
+            issues.append(
+                ValidationIssue(
+                    "footprint",
+                    (placements[position].placement_id,),
+                    f"Посадочное место запрещено: {functional}"
+                    if functional
+                    else "Посадочное место не целиком на пригодном грунте: выходит за границу "
+                    "работ, на покрытие или задевает препятствие",
+                )
+            )
         if params.require_utility_data and not index.has_utility_data:
             issues.append(
                 ValidationIssue(

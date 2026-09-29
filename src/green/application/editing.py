@@ -402,7 +402,8 @@ def check_point(
     plantable = bool(index.plantable(points)[0])
     batch = index.evaluate(points)
     verdict = batch.verdict(0) if plantable else Verdict.FORBIDDEN
-    note = "" if plantable else NOT_ON_SOIL
+    functional = index.surface.functional_reason(points[0]) if index.surface is not None else None
+    note = "" if plantable else (functional or NOT_ON_SOIL)
     if species is not None:
         candidate = Placement("preview", 0, kind, species, x, y, verdict, batch.checks(0))
         local = species_verdict(
