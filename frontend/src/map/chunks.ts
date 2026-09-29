@@ -5,7 +5,7 @@
  * на Камчатской), а мелко нарезанный позволяет не трогать то, чего нет в кадре, и то, что мельче
  * пикселя. */
 
-import type { BasemapFeature, Position } from '../api/artifacts';
+import type { BasemapFeature, Geometry, Position } from '../api/artifacts';
 import {
   type ExistingPlant,
   plantsOf,
@@ -34,6 +34,8 @@ export interface Chunk {
   /** Полоса кустарника съёмки: в стиле чертежа на приближении её рисует знак шаблона. */
   hedge: boolean;
   path: Path2D;
+  /** Только замкнутые контуры: открытая линия здания остаётся в path для обводки. */
+  fillPath: Path2D | null;
   span: number;
   minX: number;
   minY: number;
@@ -94,6 +96,7 @@ export function buildChunks(
         shadow: style.shadow ?? false,
         hedge: shrubLines.length > 0,
         path: new Path2D(),
+        fillPath: null,
         span: 0,
         minX: Infinity,
         minY: Infinity,
@@ -104,6 +107,7 @@ export function buildChunks(
     }
     const strip = stripPoints(feature);
     if (shrubLines.length) {
+      chunk.fillPath = chunk.path;
       const r = SHRUB_STRIP_WIDTH_M / 2;
       for (const line of shrubLines) {
         for (let i = 1; i < line.length; i++) {
@@ -133,6 +137,7 @@ export function buildChunks(
       }
     } else {
       addGeometry(chunk.path, feature.geometry);
+      if (style.fill) chunk.fillPath = addFillGeometry(chunk.fillPath, feature.geometry);
     }
     chunk.span = Math.max(chunk.span, span);
     chunk.minX = Math.min(chunk.minX, box[0]);
@@ -142,4 +147,36 @@ export function buildChunks(
   }
   // Заливки рисуются первыми, иначе газон и здания закрашивают линии поверх себя.
   return [...byKey.values()].sort((a, b) => (b.fillVar ? 1 : 0) - (a.fillVar ? 1 : 0));
+}
+
+function closed(line: Position[]): boolean {
+  const first = line[0];
+  const last = line[line.length - 1];
+  return Boolean(line.length >= 4 && first && last && first[0] === last[0] && first[1] === last[1]);
+}
+
+function addFillGeometry(path: Path2D | null, geometry: Geometry): Path2D | null {
+  switch (geometry.type) {
+    case 'LineString':
+      if (closed(geometry.coordinates)) {
+        path ??= new Path2D();
+        addGeometry(path, geometry);
+      }
+      return path;
+    case 'MultiLineString':
+      for (const line of geometry.coordinates) {
+        path = addFillGeometry(path, { type: 'LineString', coordinates: line });
+      }
+      return path;
+    case 'Polygon':
+    case 'MultiPolygon':
+      path ??= new Path2D();
+      addGeometry(path, geometry);
+      return path;
+    case 'GeometryCollection':
+      for (const part of geometry.geometries) path = addFillGeometry(path, part);
+      return path;
+    default:
+      return path;
+  }
 }
