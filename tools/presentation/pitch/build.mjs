@@ -235,8 +235,8 @@ const slides = [
     bg: 'dark',
     html: `
 <h1 class="title">Участок в 3D по тем же координатам</h1>
-<div class="crop framed" style="left:96px;top:270px;width:1060px;height:600px">${img('scene-tour-1.png', 'fill', 'object-position:50% 45%;transform:scale(1.16);transform-origin:45% 55%')}</div>
-<div class="crop framed" style="left:1200px;top:270px;width:624px;height:600px">${img('scene-tour-2.png', 'fill', 'object-position:40% 50%;transform:scale(1.1);transform-origin:40% 50%')}</div>
+<div class="crop framed" style="left:96px;top:270px;width:1060px;height:600px">${img('scene-kust-1.jpg', 'fill', 'object-position:50% 50%;transform:scale(1.14);transform-origin:40% 62%')}</div>
+<div class="crop framed" style="left:1200px;top:270px;width:624px;height:600px">${img('scene-kust-2.jpg', 'fill', 'object-position:55% 50%;transform:scale(1.08);transform-origin:55% 55%')}</div>
 <p class="foot">Здания по этажности из подписей чертежа, кроны по виду и возрасту, солнце по часу над Москвой. Кадры посадки и улицы подбираются автоматически: объект виден, дома и соседние кроны не заслоняют.</p>`,
   },
   // 10. Фото
