@@ -250,7 +250,7 @@ export function ScenePage() {
   const promptPreview = usePromptPreview(
     runId,
     { scenery, modern, season: settings.season, hour: settings.hour },
-    photosAvailable,
+    photosAvailable && promptOpen,
   );
   const photoBusy = (photos.data?.photos ?? []).filter(
     (p) => p.state === 'queued' || p.state === 'running',

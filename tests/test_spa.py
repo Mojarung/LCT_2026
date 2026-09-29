@@ -172,3 +172,19 @@ def test_the_real_bundle_loads_nothing_from_the_internet() -> None:
     found = {path.name: EXTERNAL.findall(path.read_text(encoding="utf-8")) for path in sources}
 
     assert not {name: hits for name, hits in found.items() if hits}
+
+
+def test_bundle_text_is_gzipped_when_the_browser_accepts_it(tmp_path: Path) -> None:
+    """FileResponse под Granian уходит мимо GZipMiddleware: сервер жмёт текст бандла сам."""
+    web = _bundle(tmp_path)
+    script = "const green = 1;\n" * 400
+    (web / "assets" / "big.js").write_bytes(script.encode())
+    with _client(tmp_path, web) as client:
+        packed = client.get("/assets/big.js", headers={"Accept-Encoding": "gzip"})
+        plain = client.get("/assets/big.js", headers={"Accept-Encoding": "identity"})
+
+    assert packed.headers["content-encoding"] == "gzip"
+    assert packed.text == script  # httpx распаковывает сам
+    assert packed.headers["vary"] == "Accept-Encoding"
+    assert "content-encoding" not in plain.headers
+    assert plain.text == script

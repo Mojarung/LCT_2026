@@ -211,6 +211,8 @@ export class SceneEngine {
       antialias: true,
       powerPreference: 'high-performance',
     });
+    // getProgramInfoLog на каждую программу блокировал страницу на 1,3 с при первом кадре.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
@@ -316,6 +318,9 @@ export class SceneEngine {
     if (this.canvas.parentElement) this.resizeObserver.observe(this.canvas.parentElement);
     this.trackPointer();
     this.apply(this.settings);
+    // Программы шейдеров собираются параллельно (KHR_parallel_shader_compile), а не в первом
+    // кадре одной длинной задачей.
+    await this.renderer.compileAsync(this.scene, this.camera);
     this.events.progress?.('ready', 1, 1);
     this.running = true;
     this.startLoop();

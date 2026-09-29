@@ -448,6 +448,7 @@ async function record() {
     // 8. 3D-вид
     // 3D и фото - на полной улице пилота, посчитанной заранее (docs/demo.md): у фрагмента
     // вокруг пустой газон, а у Кустанайской дома, тротуары и люди.
+    await cap('', '');
     await page.goto(`${base}/runs/${SCENE_RUN}/3d#${SCENE_VIEW}`);
     await page.waitForSelector('.scene-bar', { timeout: 240000 });
     await sleep(2500);
@@ -458,7 +459,6 @@ async function record() {
     const plants = page.locator('summary', { hasText: 'Посадки' }).first();
     if (await plants.count()) await glide(plants);
     await glide(page.getByRole('radio', { name: '25 лет' }));
-    await page.locator('input[type=range]').first().fill('18');
     await sleep(1500);
     await page.mouse.move(960, 700, { steps: 20 });
     await page.keyboard.press('KeyT');
@@ -468,12 +468,21 @@ async function record() {
       window.location.hash = h;
     }, SCENE_VIEW);
     await sleep(2500);
+    // Время суток - ползунком, по полчаса: свет догоняет его плавно. Сезон - отдельно, после.
     await cap(
-      '8 · 3D-вид: Кустанайская улица целиком',
-      'Люди на тротуарах, сезон и время суток меняются на пульте',
+      '8 · 3D-вид: время суток',
+      'Солнце над Москвой по часу: ползунок ведёт свет от полудня к вечеру',
     );
+    const hour = page.locator('input[type=range]').first();
+    await glide(hour, { click: false });
+    for (let h = 11.5; h <= 18.5; h += 0.5) {
+      await hour.fill(String(h));
+      await sleep(260);
+    }
+    await sleep(2500);
+    await cap('8 · 3D-вид: сезон', 'Осенью кроны по виду меняют цвет, зимой деревья без листвы');
     await glide(page.getByRole('radio', { name: 'осень' }));
-    await sleep(3500);
+    await sleep(4000);
     await glide(page.getByRole('radio', { name: 'лето' }));
     await sleep(2000);
 
