@@ -1,0 +1,65 @@
+[
+  {
+    "file": "asphalt_diff.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_06/asphalt_06_diff_1k.jpg",
+    "asset": "https://polyhaven.com/a/asphalt_06",
+    "license": "CC0-1.0",
+    "md5": "3d92683ec4481c35a43b4034f8363bc3"
+  },
+  {
+    "file": "asphalt_nor_gl.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_06/asphalt_06_nor_gl_1k.jpg",
+    "asset": "https://polyhaven.com/a/asphalt_06",
+    "license": "CC0-1.0",
+    "md5": "a699e3d31f0bf5f03ea7e635e2d59ca2"
+  },
+  {
+    "file": "asphalt_arm.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_06/asphalt_06_arm_1k.jpg",
+    "asset": "https://polyhaven.com/a/asphalt_06",
+    "license": "CC0-1.0",
+    "md5": "f0b797123609b4f9e210f95a619755a6"
+  },
+  {
+    "file": "pavers_diff.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pavement_02/pavement_02_diff_1k.jpg",
+    "asset": "https://polyhaven.com/a/pavement_02",
+    "license": "CC0-1.0",
+    "md5": "aa8b6d83c9005d001db57cd76646981a"
+  },
+  {
+    "file": "pavers_nor_gl.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pavement_02/pavement_02_nor_gl_1k.jpg",
+    "asset": "https://polyhaven.com/a/pavement_02",
+    "license": "CC0-1.0",
+    "md5": "9a244f2fdee3ad5c7c1cd6cef81713e6"
+  },
+  {
+    "file": "pavers_arm.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pavement_02/pavement_02_arm_1k.jpg",
+    "asset": "https://polyhaven.com/a/pavement_02",
+    "license": "CC0-1.0",
+    "md5": "d055d1a31f66439e8dd495da6efc1e5f"
+  },
+  {
+    "file": "grass_diff.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_diff_1k.jpg",
+    "asset": "https://polyhaven.com/a/leafy_grass",
+    "license": "CC0-1.0",
+    "md5": "0dbc071e91d6905edfcfbe8eb785a1ab"
+  },
+  {
+    "file": "grass_nor_gl.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_nor_gl_1k.jpg",
+    "asset": "https://polyhaven.com/a/leafy_grass",
+    "license": "CC0-1.0",
+    "md5": "8279e096e204ea326d57a318869f99df"
+  },
+  {
+    "file": "grass_arm.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_arm_1k.jpg",
+    "asset": "https://polyhaven.com/a/leafy_grass",
+    "license": "CC0-1.0",
+    "md5": "44fb4e40ef0f3425a7d1a14bc328e4d8"
+  }
+]

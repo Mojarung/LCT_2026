@@ -331,6 +331,15 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 onChange({ quality: value });
               }}
             />
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.enhanced}
+                disabled={settings.quality === 'low'}
+                onChange={(e) => onChange({ enhanced: e.target.checked })}
+              />
+              Объёмный свет и сглаживание
+            </label>
           </Section>
         </div>
       )}

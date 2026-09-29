@@ -250,9 +250,11 @@ export async function neutralLeaves(source: THREE.Texture): Promise<THREE.Textur
   for (let i = 0; i < d.length; i += 4) {
     const lum = 0.3 * (d[i] ?? 0) + 0.59 * (d[i + 1] ?? 0) + 0.11 * (d[i + 2] ?? 0);
     const v = Math.min(255, lum * gain);
-    d[i] = v;
-    d[i + 1] = v;
-    d[i + 2] = v;
+    // Keep subdued photographic colour variation in veins and leaf edges; species
+    // tint still comes from the instance, but leaves no longer look uniformly painted.
+    for (let channel = 0; channel < 3; channel++) {
+      d[i + channel] = Math.min(255, v * Math.pow((d[i + channel] ?? 0) / Math.max(lum, 1), 0.25));
+    }
   }
   ctx.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);

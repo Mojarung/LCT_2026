@@ -26,7 +26,8 @@ import { neutralLeaves } from './textures';
 import type { Plant } from './types';
 
 type Options = Tree['options'];
-type Overrides = { [K in keyof Options]?: Partial<Options[K]> } & { seed?: number };
+type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
+type Overrides = DeepPartial<Options>;
 
 interface Spec {
   preset: keyof typeof TreePreset;
@@ -36,12 +37,29 @@ interface Spec {
 /** Архетип -> пресет ez-tree и поправки. Пресеты автора подобраны под лес, поправки - под
  *  городские посадки: у кроны улицы штамб выше и ветвление плотнее. */
 const SPECS: Record<Archetype, Spec> = {
-  broadleaf: { preset: 'Oak Medium', overrides: { leaves: { type: 'ash', count: 16, size: 3 } } },
+  broadleaf: {
+    preset: 'Oak Medium',
+    overrides: {
+      branch: { children: { 0: 10, 1: 5, 2: 3 } },
+      leaves: { type: 'ash', count: 12, size: 3.2 },
+    },
+  },
   oak: { preset: 'Oak Large' },
   ash: { preset: 'Ash Medium' },
   birch: { preset: 'Aspen Medium', overrides: { bark: { type: 'birch' }, leaves: { count: 14 } } },
   poplar: { preset: 'Aspen Large' },
-  small: { preset: 'Ash Small' },
+  small: {
+    preset: 'Ash Small',
+    overrides: {
+      branch: {
+        levels: 3,
+        children: { 0: 12, 1: 5, 2: 3 },
+        length: { 0: 20, 1: 14, 2: 7, 3: 5 },
+        start: { 1: 0.4, 2: 0.15, 3: 0.1 },
+      },
+      leaves: { count: 10, size: 3.2, sizeVariance: 0.45 },
+    },
+  },
   weeping: {
     preset: 'Aspen Medium',
     overrides: {
@@ -250,7 +268,7 @@ export function leafMaterial(
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map,
-    alphaTest: 0.5,
+    alphaTest: 0.35,
     side: THREE.DoubleSide,
     roughness: 0.88,
     metalness: 0,

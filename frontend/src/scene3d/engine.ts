@@ -31,9 +31,11 @@ import {
   type SurfaceImage,
 } from './ground';
 import { pick } from './pick';
+import type { ScenePostprocessing } from './postprocessing';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import { asphalt, concrete, fenceBars, grass, hedgeLeaves, noiseTexture, pavers } from './textures';
+import { concrete, fenceBars, hedgeLeaves, noiseTexture } from './textures';
+import { loadGroundMaterials } from './materials';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
 import { atmosphereOf, Weather } from './weather';
@@ -63,6 +65,8 @@ export interface ViewSettings {
   age: number;
   clouds: number;
   quality: Quality;
+  /** Contact light, HDR and antialiasing; disabled in the fast preset. */
+  enhanced: boolean;
   showExisting: boolean;
   /** Погода, 0..1: сила ветра, дождя, снега и листопада. */
   wind: number;
@@ -79,6 +83,7 @@ export const DEFAULT_SETTINGS: ViewSettings = {
   age: 10,
   clouds: 0.3,
   quality: 'medium',
+  enhanced: true,
   showExisting: true,
   wind: 0.3,
   rain: 0,
@@ -92,12 +97,25 @@ interface QualityPreset {
   shadowSize: number;
   shadowExtent: number;
   lodDistance: number;
+  pixels: number;
 }
 
 const QUALITY: Record<Quality, QualityPreset> = {
-  low: { pixelRatio: 1, shadowSize: 2048, shadowExtent: 110, lodDistance: 35 },
-  medium: { pixelRatio: 1.5, shadowSize: 4096, shadowExtent: 150, lodDistance: 60 },
-  high: { pixelRatio: 2, shadowSize: 4096, shadowExtent: 200, lodDistance: 110 },
+  low: { pixelRatio: 1, shadowSize: 2048, shadowExtent: 110, lodDistance: 35, pixels: 1920 * 1080 },
+  medium: {
+    pixelRatio: 1.5,
+    shadowSize: 4096,
+    shadowExtent: 150,
+    lodDistance: 60,
+    pixels: 1920 * 1080,
+  },
+  high: {
+    pixelRatio: 2,
+    shadowSize: 4096,
+    shadowExtent: 110,
+    lodDistance: 110,
+    pixels: 2560 * 1440,
+  },
 };
 
 export type Stage = 'textures' | 'ground' | 'buildings' | 'plants' | 'ready';
@@ -194,6 +212,8 @@ export class SceneEngine {
   private running = false;
   /** Цикл кадра остановлен: галерея поверх сцены, видеокарта отдана модели фото. */
   private paused = false;
+  private postprocessing: ScenePostprocessing | null = null;
+  private effects: typeof ScenePostprocessing | null = null;
 
   private constructor(
     readonly canvas: HTMLCanvasElement,
@@ -209,6 +229,7 @@ export class SceneEngine {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.info.autoReset = false;
     this.scene.name = 'green-3d';
     this.atmosphere = new Atmosphere(this.renderer, this.scene);
     this.forest = new Forest(world.plants);
@@ -234,8 +255,13 @@ export class SceneEngine {
     events: EngineEvents,
   ): Promise<SceneEngine> {
     const engine = new SceneEngine(canvas, world, events);
-    await engine.build(surface);
-    return engine;
+    try {
+      await engine.build(surface);
+      return engine;
+    } catch (error) {
+      engine.dispose();
+      throw error;
+    }
   }
 
   private step(stage: Stage, done = 0, total = 1): Promise<void> {
@@ -249,12 +275,16 @@ export class SceneEngine {
 
   private async build(surface: SurfaceImage | null): Promise<void> {
     await this.step('textures');
+    if (this.renderer.extensions.has('EXT_color_buffer_float')) {
+      this.effects = (await import('./postprocessing')).ScenePostprocessing;
+    }
     const anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
     const noise = noiseTexture();
-    const tex = { grass: grass(), asphalt: asphalt(), pavers: pavers(), noise };
-    for (const t of [tex.grass, tex.asphalt, tex.pavers]) t.anisotropy = anisotropy;
+    this.disposables.push(noise);
+    const materials = await loadGroundMaterials(anisotropy);
+    const tex = { ...materials, noise };
     this.facade.uNoise.value = noise;
-    this.disposables.push(noise, tex.grass, tex.asphalt, tex.pavers);
+    this.disposables.push(...materials.textures);
     await this.step('ground');
     const mask = buildMask(this.world, surface);
     this.disposables.push(mask.texture);
@@ -387,8 +417,14 @@ export class SceneEngine {
     const stripMarks = this.scene.getObjectByName('tree-strip-symbols');
     if (stripMarks) stripMarks.visible = s.showExisting;
     const q = QUALITY[s.quality];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
     this.resize();
+    if (s.enhanced && s.quality !== 'low' && this.effects) {
+      this.postprocessing ??= new this.effects(this.renderer, this.scene, this.camera);
+      this.postprocessing.apply(s.quality);
+    } else if (this.postprocessing) {
+      this.postprocessing.dispose();
+      this.postprocessing = null;
+    }
     const weather = atmosphereOf(s, s.clouds);
     this.atmosphere.apply({
       hour: s.hour,
@@ -476,11 +512,18 @@ export class SceneEngine {
     });
   }
 
-  private resize(): void {
+  private resize(captureRatio?: number): void {
     const parent = this.canvas.parentElement;
     const w = parent?.clientWidth ?? this.canvas.clientWidth;
     const h = parent?.clientHeight ?? this.canvas.clientHeight;
     if (!w || !h) return;
+    const q = QUALITY[this.settings.quality];
+    const ratio = Math.min(
+      Math.max(window.devicePixelRatio || 1, this.settings.quality === 'high' ? 1.35 : 1),
+      q.pixelRatio,
+      Math.sqrt(q.pixels / (w * h)),
+    );
+    this.renderer.setPixelRatio(captureRatio ?? ratio);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -493,6 +536,12 @@ export class SceneEngine {
     this.camera.updateMatrixWorld();
   }
 
+  private render(): void {
+    this.renderer.info.reset();
+    if (this.postprocessing) this.postprocessing.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
   private frame(): void {
     if (!this.running) return;
     this.clock.update();
@@ -502,7 +551,7 @@ export class SceneEngine {
     else this.freecam.update(dt);
     this.applyPose();
     this.prepare(t);
-    this.renderer.render(this.scene, this.camera);
+    this.render();
     this.tickStats();
     this.tickHover();
     this.tickPose();
@@ -717,7 +766,7 @@ export class SceneEngine {
         this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
         this.camera.updateMatrixWorld();
         this.prepare(t);
-        this.renderer.render(this.scene, this.camera);
+        this.render();
         const blob = await new Promise<Blob | null>((resolve) => {
           this.canvas.toBlob(resolve, 'image/png');
         });
@@ -736,11 +785,11 @@ export class SceneEngine {
     }
   }
 
-  /** Снимок кадра в PNG. scale 2 - вдвое больше пикселей, чем на экране: для слайда. */
   private isRunning(): boolean {
     return this.running;
   }
 
+  /** PNG for presentations, up to 4K worth of pixels to bound HDR buffer memory. */
   async capture(scale = 1): Promise<Blob> {
     if (!this.running) throw new Error('3D-вид закрыт: снимать нечего');
     // Скачивание снимка уводит фокус, и keyup зажатой клавиши может потеряться.
@@ -749,13 +798,14 @@ export class SceneEngine {
     // браузер его прочтёт, а экран мигнёт увеличенным разрешением.
     this.renderer.setAnimationLoop(null);
     const before = this.renderer.getPixelRatio();
-    const target = Math.min(before * scale, 4);
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const target = Math.min(before * scale, 4, Math.sqrt((3840 * 2160) / (size.x * size.y)));
     try {
       if (target !== before) this.renderer.setPixelRatio(target);
-      this.resize();
+      this.resize(target);
       this.applyPose();
       this.prepare(this.clock.getElapsed());
-      this.renderer.render(this.scene, this.camera);
+      this.render();
       const blob = await new Promise<Blob | null>((resolve) => {
         this.canvas.toBlob(resolve, 'image/png');
       });
@@ -776,7 +826,7 @@ export class SceneEngine {
       // Смена размера холста стирает кадр: на паузе под галереей остаётся один неподвижный.
       this.applyPose();
       this.prepare(this.clock.getElapsed());
-      this.renderer.render(this.scene, this.camera);
+      this.render();
       return;
     }
     this.clock.update();
@@ -808,6 +858,7 @@ export class SceneEngine {
     this.weather.dispose();
     this.people?.dispose();
     for (const d of this.disposables) d.dispose();
+    this.postprocessing?.dispose();
     this.renderer.dispose();
   }
 }

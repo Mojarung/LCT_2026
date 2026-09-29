@@ -24,7 +24,7 @@ export interface GrassOptions {
 export const GRASS_PRESETS: Record<'low' | 'medium' | 'high', GrassOptions | null> = {
   low: null,
   medium: { size: 40, count: 240_000, radius: 18 },
-  high: { size: 56, count: 520_000, radius: 26 },
+  high: { size: 44, count: 520_000, radius: 20 },
 };
 
 /** Травинка: три сегмента, сужение к кончику. x - поперёк, y - доля высоты. */
@@ -113,13 +113,13 @@ float lawn = smoothstep(0.5, 0.62, m + edge) * inside;
 float dist = length(local);
 float fade = 1.0 - smoothstep(uRadius * 0.6, uRadius, dist);
 float patchy = texture2D(uNoise, world / 7.0).r;
-float h = mix(0.035, 0.1, aBlade.x * aBlade.x) * (0.75 + 0.5 * patchy) * uGrow * lawn * fade;
+float h = mix(0.045, 0.14, aBlade.x * aBlade.x) * (0.75 + 0.5 * patchy) * uGrow * lawn * fade;
 float c = cos(aBlade.y);
 float s = sin(aBlade.y);
-float width = 0.018 + 0.014 * aBlade.w;
+float width = 0.006 + 0.007 * aBlade.w;
 float t = position.y;
 float gust = sin(uTime * 1.7 + dot(world, vec2(0.21, 0.13))) * 0.5 + sin(uTime * 3.1 + world.x * 0.7) * 0.2;
-float bend = (aBlade.z - 0.3) * 0.5 + gust * (0.1 + 0.9 * uWind);
+float bend = 0.35 + aBlade.z * 0.85 + gust * (0.1 + 0.9 * uWind);
 vec3 blade = vec3(position.x * width, t * h, bend * t * t * h);
 vec3 transformed = vec3(world.x + blade.x * c - blade.z * s, blade.y, world.y + blade.x * s + blade.z * c);
 vGrass = vec3(t, aBlade.w, patchy);
@@ -143,9 +143,13 @@ export function grassMaterial(uniforms: GrassUniforms): THREE.MeshStandardMateri
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGrass;')
       .replace(
+        '#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\nnormal = normalize(mat3(viewMatrix) * vec3(0.0, 1.0, 0.0));',
+      )
+      .replace(
         '#include <map_fragment>',
         `vec3 grassBase = mix(vec3(0.045, 0.075, 0.02), vec3(0.07, 0.1, 0.03), vGrass.y);
-vec3 grassTip = mix(vec3(0.16, 0.2, 0.06), vec3(0.22, 0.22, 0.08), vGrass.z);
+vec3 grassTip = mix(vec3(0.085, 0.15, 0.035), vec3(0.13, 0.18, 0.055), vGrass.z);
 diffuseColor.rgb *= mix(grassBase, grassTip, vGrass.x);`,
       );
   };

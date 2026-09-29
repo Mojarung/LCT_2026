@@ -11,6 +11,7 @@
  * фасадов не несёт, и выдавать догадку за точность нельзя. */
 
 import * as THREE from 'three';
+import { RELIEF_NORMAL } from './relief';
 
 import type { Building, Flat, Ring } from './types';
 
@@ -178,8 +179,12 @@ export function facadeMaterial(uniforms: FacadeUniforms): THREE.MeshStandardMate
       )
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvInfo = aInfo;\nvFacade = uv;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${FACADE_HEAD}`)
+      .replace('#include <common>', `#include <common>\n${FACADE_HEAD}\n${RELIEF_NORMAL}`)
       .replace('#include <map_fragment>', FACADE_MAP)
+      .replace(
+        '#include <normal_fragment_maps>',
+        '#include <normal_fragment_maps>\nnormal = reliefNormal(-vViewPosition, normal, facadeRelief);',
+      )
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = facadeRough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = facadeMetal;')
       .replace(
@@ -198,6 +203,7 @@ uniform float uNight;
 uniform sampler2D uNoise;
 float facadeRough;
 float facadeMetal;
+float facadeRelief;
 vec3 facadeGlow;
 
 float hash12(vec2 p) {
@@ -248,14 +254,23 @@ const FACADE_MAP = /* glsl */ `
     wall *= 0.9 + 0.1 * step(0.5, fract(u / 0.2));
   }
   float glass = 0.0;
+  float reveal = 0.0;
+  float mullion = 0.0;
   bool facade = style != 4 && v > plinth && level < floors;
   if (facade) {
     vec2 size = style == 2 && level < 1.0 ? vec2(0.86, 0.72) : vec2(0.5, 0.52);
     if (style == 3) size = vec2(0.0);
     vec2 d = abs(vec2(lu, lv) - vec2(0.5, 0.52));
     float frame = step(d.x, size.x * 0.5 + 0.035) * step(d.y, size.y * 0.5 + 0.035);
-    glass = step(d.x, size.x * 0.5) * step(d.y, size.y * 0.5);
-    wall = mix(wall, wall * 0.55 + vec3(0.05), frame - glass);
+    vec2 aa = max(fwidth(vec2(lu, lv)), vec2(0.0001));
+    vec2 pane = 1.0 - smoothstep(size * 0.5 - aa, size * 0.5 + aa, d);
+    glass = pane.x * pane.y;
+    // A shallow recess and slim crossbars give windows depth without extra meshes.
+    reveal = frame;
+    mullion = (1.0 - smoothstep(0.006, 0.006 + aa.x, abs(lu - 0.5))) * glass;
+    mullion = max(mullion, (1.0 - smoothstep(0.007, 0.007 + aa.y, abs(lv - 0.64))) * glass);
+    wall = mix(wall, vec3(0.17, 0.18, 0.18), clamp(frame - glass + mullion, 0.0, 1.0));
+    glass *= 1.0 - mullion;
   }
   // Горит примерно каждое третье окно, у каждого своя яркость и оттенок лампы; витрина
   // первого этажа ночью не светится сплошь - магазины к ночи закрыты.
@@ -263,6 +278,12 @@ const FACADE_MAP = /* glsl */ `
   float shop = style == 2 && level < 1.0 ? 0.35 : 1.0;
   float lit = step(0.68, roll) * glass * uNight * shop * (0.35 + 0.65 * hash12(vec2(level, cell) * 1.3));
   vec3 glassColor = mix(vec3(0.06, 0.08, 0.10), vec3(0.16, 0.19, 0.22), hash12(vec2(cell * 1.7, level)));
+  // Recess shadows and varied blinds stay attached to each window, at every angle.
+  float blind = step(0.7, roll) * smoothstep(0.57, 0.59, lv) * (1.0 - uNight);
+  glassColor = mix(glassColor, vec3(0.36, 0.34, 0.29), blind * 0.65);
+  float revealShade = smoothstep(0.24, 0.32, lv) * (1.0 - smoothstep(0.71, 0.79, lv));
+  glassColor *= mix(0.55, 1.0, revealShade);
+  facadeRelief = -0.035 * reveal + 0.012 * mullion;
   // Парапет: верхние 40 см стены без окон и чуть темнее, как жесть отлива.
   if (v > height - 0.4 && style != 4) wall *= 0.72;
   diffuseColor.rgb *= mix(wall, glassColor, glass);

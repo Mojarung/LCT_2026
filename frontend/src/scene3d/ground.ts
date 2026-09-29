@@ -161,6 +161,12 @@ export interface GroundTextures {
   asphalt: THREE.Texture;
   pavers: THREE.Texture;
   noise: THREE.Texture;
+  grassNormalMap?: THREE.Texture;
+  asphaltNormalMap?: THREE.Texture;
+  paversNormalMap?: THREE.Texture;
+  grassArmMap?: THREE.Texture;
+  asphaltArmMap?: THREE.Texture;
+  paversArmMap?: THREE.Texture;
 }
 
 /** Земля: один лист на всю сцену и поле вокруг, фактура по маске в шейдере. */
@@ -189,6 +195,19 @@ export function groundMesh(
     uAsphalt: { value: tex.asphalt },
     uPavers: { value: tex.pavers },
     uNoise: { value: tex.noise },
+    uPbr: {
+      value: new THREE.Vector3(
+        Number(!!tex.grassNormalMap && !!tex.grassArmMap),
+        Number(!!tex.paversNormalMap && !!tex.paversArmMap),
+        Number(!!tex.asphaltNormalMap && !!tex.asphaltArmMap),
+      ),
+    },
+    uGrassNormal: { value: tex.grassNormalMap ?? tex.noise },
+    uAsphaltNormal: { value: tex.asphaltNormalMap ?? tex.noise },
+    uPaversNormal: { value: tex.paversNormalMap ?? tex.noise },
+    uGrassArm: { value: tex.grassArmMap ?? tex.noise },
+    uAsphaltArm: { value: tex.asphaltArmMap ?? tex.noise },
+    uPaversArm: { value: tex.paversArmMap ?? tex.noise },
     ...weather,
   };
   material.onBeforeCompile = (shader) => {
@@ -202,7 +221,8 @@ export function groundMesh(
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GROUND_FRAGMENT_HEAD}`)
       .replace('#include <map_fragment>', GROUND_MAP)
-      .replace('#include <roughnessmap_fragment>', GROUND_ROUGHNESS);
+      .replace('#include <roughnessmap_fragment>', GROUND_ROUGHNESS)
+      .replace('#include <normal_fragment_maps>', GROUND_NORMAL);
   };
   material.customProgramCacheKey = () => 'green-ground';
   const mesh = new THREE.Mesh(geometry, material);
@@ -219,19 +239,28 @@ uniform sampler2D uGrass;
 uniform sampler2D uAsphalt;
 uniform sampler2D uPavers;
 uniform sampler2D uNoise;
+uniform vec3 uPbr;
+uniform sampler2D uGrassNormal;
+uniform sampler2D uAsphaltNormal;
+uniform sampler2D uPaversNormal;
+uniform sampler2D uGrassArm;
+uniform sampler2D uAsphaltArm;
+uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
 vec3 groundWeights;
 float groundSnow;
 float groundWet;
-float groundBreakup;
+vec3 groundArm;
 
-// Два масштаба одной фактуры со сдвигом: повтор плитки на газоне не читается глазом.
+// Smoothly blend hashed texture offsets: patches no longer repeat in a visible grid.
 vec3 antiTile(sampler2D tex, vec2 p, float scale) {
-  vec3 a = texture2D(tex, p / scale).rgb;
-  vec3 b = texture2D(tex, p / (scale * 3.7) + vec2(0.37, 0.71)).rgb;
-  float n = texture2D(uNoise, p / 90.0).r;
-  return mix(a, b, smoothstep(0.35, 0.65, n) * 0.45);
+  float n = texture2D(uNoise, p / 90.0).r * 8.0;
+  float cell = floor(n);
+  vec2 a = sin(vec2(3.0, 7.0) * (cell + 1.0)) * 17.0;
+  vec2 b = sin(vec2(3.0, 7.0) * (cell + 2.0)) * 17.0;
+  return mix(texture2D(tex, p / scale + a).rgb,
+             texture2D(tex, p / scale + b).rgb, smoothstep(0.2, 0.8, fract(n)));
 }
 `;
 
@@ -253,12 +282,15 @@ const GROUND_MAP = /* glsl */ `
   // Крупные пятна - шумом в десятки метров, а не фактурой: повтор плитки фактуры сверху
   // читается рядами, пятна шума - нет.
   float macro = texture2D(uNoise, p / 173.0).r * 0.6 + texture2D(uNoise, p / 47.0).g * 0.4;
-  vec3 g = antiTile(uGrass, p, 6.0);
-  g *= mix(vec3(1.12, 1.0, 0.72), vec3(0.84, 0.97, 0.9), macro) * (0.8 + 0.26 * macro);
+  vec3 g = antiTile(uGrass, p, 2.0);
+  // Keep the scanned fine structure, with a living summer turf palette.
+  float turfLuma = dot(g, vec3(0.2126, 0.7152, 0.0722));
+  g = mix(g, turfLuma * vec3(0.55, 1.08, 0.28), 0.78);
+  g *= mix(vec3(1.06, 0.96, 0.8), vec3(0.8, 1.03, 0.88), macro) * 0.65;
   // Дальнее поле за краем съёмки глуше: оно фон, а не газон участка.
   g = mix(g * vec3(0.86, 0.84, 0.8), g, outside);
-  vec3 pv = texture2D(uPavers, p / 3.0).rgb * (0.9 + 0.16 * macro);
-  vec3 a = antiTile(uAsphalt, p, 4.0) * (0.84 + 0.3 * macro);
+  vec3 pv = texture2D(uPavers, p / 2.1).rgb * (0.9 + 0.16 * macro);
+  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.84 + 0.3 * macro);
   vec3 col = g * lawn + pv * paver + a * asph;
   // Мокрое покрытие темнее, газон темнеет меньше; лужи - пятнами шума.
   float puddle = smoothstep(0.55, 0.7, texture2D(uNoise, p / 9.0).g) * (1.0 - lawn);
@@ -268,14 +300,30 @@ const GROUND_MAP = /* glsl */ `
   groundSnow = clamp(cover, 0.0, 1.0);
   col = mix(col, vec3(0.9, 0.92, 0.96), groundSnow);
   groundWet = uWet * (1.0 - groundSnow) * (0.6 + 0.4 * puddle);
+  groundArm = antiTile(uGrassArm, p, 2.0) * lawn
+    + texture2D(uPaversArm, p / 2.1).rgb * paver
+    + antiTile(uAsphaltArm, p, 3.0) * asph;
+  groundArm = mix(vec3(1.0, 0.92, 0.0), groundArm, dot(groundWeights, uPbr));
+  col *= mix(groundArm.r, 1.0, 0.35 + groundSnow * 0.65);
   diffuseColor.rgb *= col;
 }
 `;
 
 const GROUND_ROUGHNESS = /* glsl */ `
-float roughnessFactor = roughness * (groundWeights.x * 1.0 + groundWeights.y * 0.82 + groundWeights.z * 0.9);
+float roughnessFactor = clamp(groundArm.g, 0.45, 1.0);
 roughnessFactor = mix(roughnessFactor, 0.12, groundWet * (1.0 - groundWeights.x) * 0.9);
 roughnessFactor = mix(roughnessFactor, 0.75, groundSnow);
+`;
+
+// The scanned texture coordinates are world X/Z; transform their tangent normal to view space.
+const GROUND_NORMAL = /* glsl */ `
+vec2 groundP = vGroundPos.xz;
+vec3 scannedNormal = (antiTile(uGrassNormal, groundP, 2.0) * groundWeights.x
+  + texture2D(uPaversNormal, groundP / 2.1).rgb * groundWeights.y
+  + antiTile(uAsphaltNormal, groundP, 3.0) * groundWeights.z) * 2.0 - 1.0;
+scannedNormal = mix(vec3(0.0, 0.0, 1.0), scannedNormal, dot(groundWeights, uPbr));
+scannedNormal.xy *= mix(1.0, 0.35, groundWeights.x) * (1.0 - groundSnow * 0.95) * (1.0 - groundWet * 0.85);
+normal = normalize(mat3(viewMatrix) * vec3(scannedNormal.x, scannedNormal.z, scannedNormal.y));
 `;
 
 /** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта. */

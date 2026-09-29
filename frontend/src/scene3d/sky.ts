@@ -101,6 +101,7 @@ export class Atmosphere {
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
     }
+    this.sun.shadow.radius = 1.5 + s.clouds * 2.5;
     const cam = this.sun.shadow.camera;
     cam.left = -s.shadowExtent;
     cam.right = s.shadowExtent;
@@ -153,7 +154,7 @@ export class Atmosphere {
       clouds: s.clouds,
     });
     this.sun.color.copy(this.state.color);
-    this.sun.intensity = this.state.intensity;
+    this.sun.intensity = this.state.intensity * (1 - 0.15 * day);
     this.hemi.intensity = 0.14 + 0.16 * day;
     this.hemi.color.set(day > 0.5 ? 0xc8dcff : 0x6f7fa8);
     const haze = new THREE.Color(0.74, 0.8, 0.87).lerp(
@@ -164,7 +165,7 @@ export class Atmosphere {
     haze.lerp(new THREE.Color(0.78, 0.8, 0.82), s.clouds * 0.4 * day);
     this.fog.color.copy(haze);
     this.fog.density = 0.0006 + s.clouds * 0.0005 + s.fog;
-    this.renderer.toneMappingExposure = 0.42 + 0.2 * day;
+    this.renderer.toneMappingExposure = 0.42 + 0.28 * day;
     this.environment();
   }
 
@@ -185,7 +186,7 @@ export class Atmosphere {
     this.envTarget = target;
     this.scene.environment = target.texture;
     this.scene.environmentIntensity =
-      0.12 + 0.16 * THREE.MathUtils.smoothstep(this.state.elevation, -4, 20);
+      0.12 + 0.28 * THREE.MathUtils.smoothstep(this.state.elevation, -4, 20);
   }
 
   /** Небо и светила вокруг камеры: коробка неба конечна, и в стороне от начала сцены
