@@ -5,6 +5,7 @@ import { ApiError, artifactUrl } from '../api/client';
 import { useArtifact, useRun } from '../api/queries';
 import { type CenterRequest, type FitRequest, ReviewMap } from '../components/review/ReviewMap';
 import { integer, plural } from '../lib/format';
+import { profileTitle } from '../lib/profiles';
 import { geometryPath, joinPaths } from '../lib/reviewPaths';
 import {
   ASSIGNABLE,
@@ -420,9 +421,9 @@ export function ReviewPage() {
                   <a href={artifactUrl(runId, REVIEW_DXF)} download>
                     этот DXF
                   </a>{' '}
-                  новым прогоном с тем же профилем «{run.data?.profile}» и вставьте JSON в поле
-                  «Параметры поверх профиля, JSON». Остальные файлы комплекта уже собраны в этом
-                  DXF.
+                  новым прогоном с тем же профилем «{run.data ? profileTitle(run.data.profile) : ''}
+                  » и вставьте JSON в поле «Параметры поверх профиля, JSON». Остальные файлы
+                  комплекта уже собраны в этом DXF.
                 </p>
               ) : run.data && names.has(GEOMETRY) ? (
                 <p className="hint">

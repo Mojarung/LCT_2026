@@ -75,10 +75,10 @@ describe('консоль запуска', () => {
     renderApp('/');
     const user = userEvent.setup();
 
-    const summary = await screen.findByText(/^Параметры: strict, шаг 5 м$/);
+    const summary = await screen.findByText(/^Параметры: Строгий, шаг 5 м$/);
     expect(summary.closest('details')).not.toHaveAttribute('open');
     await user.click(screen.getByRole('checkbox', { name: /Добор узких полос/ }));
-    expect(summary).toHaveTextContent('Параметры: strict, шаг 5 м, изменены');
+    expect(summary).toHaveTextContent('Параметры: Строгий, шаг 5 м, изменены');
   });
 
   it('снятая галочка добора уходит изменением приёмов профиля', async () => {
@@ -112,7 +112,7 @@ describe('консоль запуска', () => {
     renderApp('/');
     const user = userEvent.setup();
 
-    await screen.findByRole('option', { name: 'shrubs' });
+    await screen.findByRole('option', { name: 'Кустарник вдоль борта' });
     await user.selectOptions(screen.getByLabelText('Профиль норм'), 'shrubs');
 
     expect(await screen.findByDisplayValue('1')).toBeInTheDocument();
@@ -186,15 +186,39 @@ describe('консоль запуска', () => {
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/runs/demo')).toBe(true);
   });
 
-  it('что применяется: числа свода из /meta', async () => {
+  it('главная объясняет шаги, ссылается на каталог видов из /meta и не выводит счётчики', async () => {
     mockApi(consoleRoutes());
     renderApp('/');
 
-    const facts = await screen.findByRole('region', { name: 'Нормы и каталог видов' });
-    await waitFor(() => {
-      expect(within(facts).getByText('76')).toBeInTheDocument();
+    const how = await screen.findByRole('region', { name: 'Как это работает' });
+    expect(within(how).getAllByRole('listitem')).toHaveLength(4);
+    // Число видов - из /meta (в моке один вид), ссылка ведёт в базу моделей.
+    expect(await within(how).findByRole('link', { name: 'каталога 1 вида' })).toHaveAttribute(
+      'href',
+      '/models',
+    );
+    expect(screen.queryByText(/правил в своде норм/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ЛЦТ 2026/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Как это работает' })).toHaveAttribute('href', '#how');
+  });
+
+  it('профиль в реестре и в списке формы - по-русски, основной режим первым', async () => {
+    mockApi({
+      ...consoleRoutes(),
+      '/api/v1/runs?limit=12': { items: [run({ id: 'r7', profile: 'barriers' })] },
     });
-    expect(within(facts).getByRole('link', { name: '1' })).toHaveAttribute('href', '/models');
+    renderApp('/');
+
+    expect(await screen.findByRole('cell', { name: 'С прикорневыми барьерами' })).toBeVisible();
+    const options = within(await screen.findByLabelText('Профиль норм')).getAllByRole('option');
+    await waitFor(() => {
+      expect(options.map((o) => o.textContent)).toEqual([
+        'Строгий',
+        'Без данных о сетях',
+        'С прикорневыми барьерами',
+        'Кустарник вдоль борта',
+      ]);
+    });
   });
 
   it('последние прогоны - ссылками на их страницы, имя чертежа без «.dxf»', async () => {

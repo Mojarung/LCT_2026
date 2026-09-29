@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useDeleteRun, useRuns } from '../../api/queries';
 import type { RunOut } from '../../api/types';
 import { drawingName, integer, stamp } from '../../lib/format';
+import { profileTitle } from '../../lib/profiles';
 import { IconDelete } from '../icons';
 
 export const RECENT_LIMIT = 12;
@@ -71,7 +72,7 @@ function RunRow({ run }: { run: RunOut }) {
             {name}
           </Link>
         </td>
-        <td className="mono">{run.profile}</td>
+        <td>{profileTitle(run.profile)}</td>
         <td className="mono num">{placements(run)}</td>
         <td className="mono num nowrap">
           <time dateTime={run.created_at}>{stamp(run.created_at)}</time>

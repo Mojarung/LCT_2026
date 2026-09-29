@@ -393,6 +393,109 @@ fieldset.field {
 fieldset.field > legend {
   margin-bottom: 10px;
 }
+
+/* Подпись поля со значком определения. От строки подписи встаёт и окошко: так оно не
+   вылезает за край узкого экрана, где бы ни стоял значок. */
+.field-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 7px;
+}
+.field-head > label,
+.field-head > .field-title {
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone-2);
+}
+fieldset.field > legend {
+  position: relative;
+  padding: 0;
+}
+.params-lead {
+  max-width: 60ch;
+  margin: 0 0 18px;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--bone-2);
+}
+.check-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+.check-row > .check {
+  margin-bottom: 8px;
+}
+
+/* --- определение термина: значок и окошко --- */
+.tip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+/* Значок мелкий, а цель касания 24 px (WCAG 2.5.8): отрицательные поля не раздвигают строку. */
+.tip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--bone-3);
+  cursor: help;
+  touch-action: manipulation;
+  transition: color 0.12s;
+}
+.tip-button:hover,
+.tip-button:focus-visible,
+.tip:has(.tip-body:not([hidden])) .tip-button {
+  color: var(--bone);
+}
+.tip-button:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 0;
+}
+.check-row .tip-button {
+  margin-top: -2px;
+}
+.tip-body {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 48px));
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  box-shadow: var(--lift);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--bone);
+  text-align: left;
+  cursor: auto;
+}
+.tip-body[hidden] {
+  display: none;
+}
+.tip-lead {
+  color: var(--bone-2);
+}
+.tip-list {
+  display: grid;
+  gap: 6px;
+}
+.tip-list b {
+  font-weight: 600;
+}
 .hint {
   margin: 6px 0 0;
   color: var(--bone-3);

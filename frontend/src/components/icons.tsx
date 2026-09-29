@@ -10,6 +10,7 @@ import {
   IconDrone,
   IconEyeOff,
   IconHome,
+  IconInfoCircle,
   IconLayoutGrid,
   IconLoader2,
   IconMoon as TablerMoon,
@@ -78,4 +79,9 @@ export function SceneIcon({ name, className = 'icon' }: IconProps & { name: Scen
 
 export function IconDelete({ className = 'icon' }: IconProps) {
   return <IconTrash className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
+}
+
+/** Пояснение термина в форме: значок рядом с подписью поля. */
+export function IconInfo({ className = 'icon' }: IconProps) {
+  return <IconInfoCircle className={className} size={16} stroke={STROKE} aria-hidden="true" />;
 }

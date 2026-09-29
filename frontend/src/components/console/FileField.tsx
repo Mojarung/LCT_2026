@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { InfoTip } from '../InfoTip';
 
 interface FileFieldProps {
   id: string;
   label: string;
   accept: string;
   hint?: string;
+  /** Определение поля во всплывающем окошке рядом с подписью. */
+  info?: ReactNode;
   multiple?: boolean;
   /** Главное поле формы: крупная зона, файл можно перетащить. */
   drop?: boolean;
@@ -20,6 +24,7 @@ export function FileField({
   label,
   accept,
   hint,
+  info,
   multiple = false,
   drop = false,
   files,
@@ -36,9 +41,12 @@ export function FileField({
   const chosen = files.length > 1 ? `файлов: ${files.length}` : (files[0]?.name ?? 'не выбран');
   return (
     <div className="field">
-      <span className="field-title" id={`${id}-label`}>
-        {label}
-      </span>
+      <div className="field-head">
+        <span className="field-title" id={`${id}-label`}>
+          {label}
+        </span>
+        {info ? <InfoTip term={label}>{info}</InfoTip> : null}
+      </div>
       {/* Зона перетаскивания - тот же прозрачный input на всё поле: браузер сам принимает
           брошенный на него файл, подсветка только показывает, что бросать можно. */}
       <div
@@ -68,7 +76,7 @@ export function FileField({
         />
         {drop && !files.length ? (
           <span className="drop-hint" aria-hidden="true">
-            Перетащите чертёж сюда
+            Перетащите DXF или DWG сюда
           </span>
         ) : null}
         <span className="pick" aria-hidden="true">

@@ -7,6 +7,7 @@ import type { RunOut } from '../../api/types';
 import { explainFailure } from '../../lib/failure';
 import { drawingName, integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
+import { profileTitle } from '../../lib/profiles';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
@@ -65,7 +66,7 @@ export function RunHeader({ run }: { run: RunOut }) {
       </Link>
       <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
       <p className="run-sub">
-        <span>{run.profile}</span>
+        <span>{profileTitle(run.profile)}</span>
         <span>{run.id.slice(0, 8)}</span>
         {Object.entries(run.overrides).map(([key, value]) => (
           <span key={key}>{overrideLabel(key, value)}</span>
