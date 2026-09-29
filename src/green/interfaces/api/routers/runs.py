@@ -76,7 +76,9 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
     ] = None,
     extra: Annotated[
         list[UploadFile] | None,
-        File(description="Остальные чертежи комплекта (DXF или DWG): склеиваются с основным"),
+        File(
+            description="Зависимости XREF и дополнительные чертежи (DXF или DWG). Сохраните исходные имена файлов"
+        ),
     ] = None,
     layers: Annotated[
         list[UploadFile] | None,

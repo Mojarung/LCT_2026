@@ -182,6 +182,18 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
         }}
       />
 
+      {!street && (
+        <FileField
+          id={`${ids}-extra`}
+          label="Зависимости и дополнительные чертежи"
+          accept=".dxf,.dwg"
+          hint="Выберите сразу все DXF/DWG, на которые ссылается основной чертёж (XREF), включая вложенные зависимости. Сохраните исходные имена файлов. Чертежи без ссылки добавятся отдельными слоями."
+          multiple
+          files={extra}
+          onChange={setExtra}
+        />
+      )}
+
       <details className="advanced params">
         <summary>
           Параметры: {profileChosen ?? 'профиль'}
@@ -254,15 +266,6 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
           <p className="hint">Сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.</p>
         </fieldset>
 
-        <FileField
-          id={`${ids}-extra`}
-          label="Остальные чертежи комплекта"
-          accept=".dxf,.dwg"
-          hint="Склеиваются с основным: сети, дендроизыскания, генплан. С улицей из каталога не нужны."
-          multiple
-          files={extra}
-          onChange={setExtra}
-        />
         <FileField
           id={`${ids}-inventory`}
           label="Перечётная ведомость"
