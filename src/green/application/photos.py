@@ -124,6 +124,11 @@ NEGATIVE = (
     "oversaturated, blurry, text, watermark, user interface"
 )
 SCENERY_NEGATIVE = f"{NEGATIVE}, topiary, clipped round bushes, empty flat horizon, blue foliage"
+# В режиме по плану модель охотно досаживала берёзы у стен и изгородь вдоль ограды: запрет прямо.
+PLAN_NEGATIVE = (
+    f"{NEGATIVE}, extra trees, additional trees, new trees, trees in front of the building, "
+    "hedge, extra bushes, added vegetation, fence replaced by bushes"
+)
 
 
 def light_of(hour: float) -> str:
@@ -152,38 +157,53 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
     else:
         view = "real aerial photograph taken from a drone over"
         camera = "a DJI Mavic 3, 24mm lens"
-    trees = (
-        ", ".join(options.species[:MAX_SPECIES]) + " trees"
-        if options.species
-        else "young linden, maple and birch trees"
-    )
     foliage = FOLIAGE[options.season]
-    kinds = f" ({', '.join(options.shrubs[:MAX_SPECIES])})" if options.shrubs else ""
-    if options.scenery:
-        shrubs = (
-            f"loose natural groups of flowering and evergreen shrubs{kinds} of different "
-            "heights (not topiary, not clipped balls)"
-        )
-        tail = (
-            " All foliage in natural greens, no blue or cyan tints. Behind the street, in the "
-            "distance, other residential blocks and trees fade into light haze instead of an "
-            "empty field."
-        )
-        negative = SCENERY_NEGATIVE
-    else:
-        shrubs = f"clipped green shrubs{kinds}"
-        tail = ""
-        negative = NEGATIVE
-    text = (
+    lead = (
         f"Transform this 3D render into a {view} a residential street in Moscow in "
-        f"{SEASONS[options.season]}, {light_of(options.hour)}. Keep the exact composition and "
-        "every object in its place: the buildings, the road, curbs, sidewalks, street lamps and "
-        "every tree and shrub at the same position and size. Make everything look real: "
-        f"{trees} with {foliage} and visible branches, {shrubs}, mowed lawn with slight "
-        "unevenness, worn grey asphalt with patches, concrete curbs, paving tiles, real facades "
-        f"with balconies and window frames, soft realistic shadows.{tail} Photorealistic, "
-        f"natural colors, sharp, high detail, shot on {camera}."
+        f"{SEASONS[options.season]}, {light_of(options.hour)}. "
     )
+    finish = f" Photorealistic, natural colors, sharp, high detail, shot on {camera}."
+    if options.scenery:
+        trees = (
+            ", ".join(options.species[:MAX_SPECIES]) + " trees"
+            if options.species
+            else "young linden, maple and birch trees"
+        )
+        kinds = f" ({', '.join(options.shrubs[:MAX_SPECIES])})" if options.shrubs else ""
+        text = (
+            lead + "Keep the exact composition and every object in its place: the buildings, the "
+            "road, curbs, sidewalks, street lamps and every tree and shrub at the same position "
+            f"and size. Make everything look real: {trees} with {foliage} and visible branches, "
+            f"loose natural groups of flowering and evergreen shrubs{kinds} of different heights "
+            "(not topiary, not clipped balls), mowed lawn with slight unevenness, worn grey "
+            "asphalt with patches, concrete curbs, paving tiles, real facades with balconies and "
+            "window frames, soft realistic shadows. All foliage in natural greens, no blue or "
+            "cyan tints. Behind the street, in the distance, other residential blocks and trees "
+            "fade into light haze instead of an empty field." + finish
+        )
+        return PhotoPrompt(text=text, negative=SCENERY_NEGATIVE)
+    # По плану: только материалы, ни одного нового объекта. Породы называются, лишь когда они
+    # есть в кадре, - иначе модель брала «липу, клён и берёзу» как приглашение их посадить.
+    trees = (
+        f"the trees in the render are {', '.join(options.species[:MAX_SPECIES])}"
+        if options.species
+        else "the trees that are in the render"
+    )
+    shrubs = (
+        f"; the shrubs in the render are {', '.join(options.shrubs[:MAX_SPECIES])}"
+        if options.shrubs
+        else ""
+    )
+    text = (
+        lead + "Keep the exact composition and every object in its place and size: the buildings, "
+        "the road, curbs, sidewalks, fences, street lamps, people, trees and shrubs. Add nothing: "
+        "no new trees, shrubs, hedges, buildings or cars; where the render shows bare lawn, "
+        "pavement or wall, keep it bare. Only make the materials real: "
+        f"{trees}, with {foliage} and visible branches{shrubs}; mowed lawn with slight "
+        "unevenness, worn grey asphalt with patches, concrete curbs, paving tiles, metal fences, "
+        "real facades with window frames, soft realistic shadows." + finish
+    )
+    negative = PLAN_NEGATIVE
     return PhotoPrompt(text=text, negative=negative)
 
 

@@ -92,7 +92,9 @@ def test_default_prompt_keeps_the_plan_and_scenery_adds_haze() -> None:
 
     assert "Keep the exact composition" in plain.text
     assert "haze" not in plain.text
-    assert "clipped green shrubs" in plain.text
+    assert "Add nothing" in plain.text
+    assert "birch" not in plain.text
+    assert "extra trees" in plain.negative
     assert "haze" in scenery.text
     assert "not topiary" in scenery.text
     assert "topiary" in scenery.negative
@@ -114,9 +116,9 @@ def test_prompt_follows_season_hour_viewpoint_and_species() -> None:
     assert "winter" in prompt.text
     assert "evening golden light" in prompt.text
     assert "eye level from the sidewalk of a residential street" in prompt.text
-    assert "Tilia cordata trees" in prompt.text
+    assert "the trees in the render are Tilia cordata" in prompt.text
     assert "bare branches" in prompt.text
-    assert "shrubs (Spiraea vanhouttei)" in prompt.text
+    assert "the shrubs in the render are Spiraea vanhouttei" in prompt.text
 
 
 @pytest.mark.parametrize(
