@@ -259,7 +259,7 @@ def _count_phrase(what: str, count: float, target: float) -> str:
         return ""
     return (
         f"{what} в плане {count:.0f} при цели {target:.0f} (МГСН 1.02-02, табл. В.1): "
-        "каждое на счету"
+        "каждая посадка на счету"
     )
 
 

@@ -101,8 +101,9 @@ export function buildChunks(
       const r = SHRUB_STRIP_WIDTH_M / 2;
       for (const line of shrubLines) {
         for (let i = 1; i < line.length; i++) {
-          const a = line[i - 1]!;
-          const b = line[i]!;
+          const a = line[i - 1];
+          const b = line[i];
+          if (!a || !b) continue;
           const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
           if (!length) continue;
           const dx = (-(b[1] - a[1]) * r) / length;

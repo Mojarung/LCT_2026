@@ -1357,6 +1357,22 @@ body.shell-map .topbar {
 .hud-head .scene-link:hover {
   color: var(--bone-2);
 }
+.hud-head .scene-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+}
+.detail-3d {
+  display: inline-block;
+  margin: 2px 0 10px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone);
+}
+.detail-3d:hover {
+  color: var(--bone-2);
+}
 
 /* Сводка результата: число, состав и решение читаются отдельными строками. */
 .run-breakdown {

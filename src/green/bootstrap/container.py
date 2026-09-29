@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from green.application.audit import AuditSite
 from green.application.editing import RunContextCache
+from green.application.photos import PhotoService
 from green.application.placement import GreedyPlantingStrategy
 from green.application.runs import RunService
 from green.application.use_case import PlanSite
@@ -26,9 +27,11 @@ from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
 from green.infrastructure.gis.layers import YamlGisLayerSource
 from green.infrastructure.inventory import read_inventory
+from green.infrastructure.photo.sdcpp import SdCppPhotoRenderer
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
 from green.infrastructure.storage.contexts import PickleRunContextStore, code_fingerprint
+from green.infrastructure.storage.photos import FileSystemPhotoStore
 from green.infrastructure.storage.runs import FileSystemRunStore
 from green.infrastructure.streets import JsonStreetCatalog
 
@@ -55,6 +58,7 @@ class Container:
     streets: JsonStreetCatalog
     # Контексты прогонов для правки на карте: живут в памяти, переживают запрос, но не рестарт.
     contexts: RunContextCache
+    photos: PhotoService
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -112,6 +116,19 @@ def build_container(settings: Settings | None = None) -> Container:
         inventory=lambda path: read_inventory(path, species.all()),
         contexts=contexts,
     )
+    photos = PhotoService(
+        FileSystemPhotoStore(store),
+        SdCppPhotoRenderer(
+            models_dir=settings.photo_models_dir,
+            sd_binary=settings.photo_sd_binary,
+            esrgan_binary=settings.photo_esrgan_binary,
+            upscaler=settings.photo_upscaler,
+            max_vram_gb=settings.photo_max_vram_gb,
+            timeout_s=settings.photo_timeout_s,
+        )
+        if settings.photo_models_dir
+        else None,
+    )
     return Container(
         settings=settings,
         use_case=use_case,
@@ -130,6 +147,7 @@ def build_container(settings: Settings | None = None) -> Container:
         converters=converters,
         streets=streets,
         contexts=contexts,
+        photos=photos,
     )
 
 

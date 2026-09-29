@@ -53,7 +53,7 @@ const FAMILIES: readonly Family[] = [
   },
   {
     test: /^Требуется уточнить классы объектов/,
-    reason: () => 'На чертеже остались объекты, назначение которых сервис не распознал.',
+    reason: () => 'Сервис не распознал назначение части объектов чертежа.',
     action: 'Уточните объекты на чертеже и запустите прогон снова.',
   },
   {
@@ -98,6 +98,6 @@ export function explainFailure(error: string | null | undefined): Failure {
     ? typeof family.action === 'string'
       ? family.action
       : family.action(raw)
-    : 'Проверьте чертёж и параметры по подробностям и запустите прогон снова.';
+    : 'Проверьте чертёж и параметры по тексту ошибки и запустите прогон снова.';
   return { reason, action, details: raw === reason ? null : raw };
 }

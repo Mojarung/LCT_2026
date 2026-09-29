@@ -82,7 +82,7 @@ export function ModelsPage() {
           })}
           <section aria-labelledby="models-existing">
             <h2 className="section-label" id="models-existing">
-              Уже растёт на участке
+              Существующие насаждения
             </h2>
             <ul className="models-grid">
               <li>
@@ -95,7 +95,7 @@ export function ModelsPage() {
                 />
                 <div>
                   <b>Дерево по съёмке</b>
-                  <span>знак или кружок кроны с подосновы, вид по чертежу не известен</span>
+                  <span>знак или кружок кроны с подосновы, вид неизвестен</span>
                 </div>
               </li>
               <li>
@@ -108,7 +108,7 @@ export function ModelsPage() {
                 />
                 <div>
                   <b>Кустарник по съёмке</b>
-                  <span>бледная крона с крестиком: не наша посадка</span>
+                  <span>бледная крона с крестиком, не из плана</span>
                 </div>
               </li>
             </ul>

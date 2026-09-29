@@ -121,7 +121,7 @@ def test_quota_limits_a_species_when_structures_are_small() -> None:
 
 
 def test_existing_trees_consume_the_quota_and_push_the_species_out() -> None:
-    """20 существующих лип и 20 новых мест: доля липы на улице уже выбрана, липы не будет."""
+    """20 существующих лип и 20 новых мест: доля липы на улице исчерпана, липы не будет."""
     structures = _singles(20)
     candidates = _candidates(structures, list(CATALOG))
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
@@ -290,7 +290,7 @@ def test_the_plan_names_the_quota_a_species_has_used_up() -> None:
     structures = _singles(30)
     result = assign(_candidates(structures, list(CATALOG)), structures, CATALOG, {}, PARAMS)
     assert _counts(result)["tilia_cordata"] == 3
-    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана"
+    assert result.used_up["tilia_cordata"] == "квота вида 10% исчерпана"
 
 
 def test_a_species_absent_from_the_plan_can_be_held_back_by_its_genus() -> None:
@@ -306,12 +306,12 @@ def test_a_species_absent_from_the_plan_can_be_held_back_by_its_genus() -> None:
         **{f"c-{i}-{code}": code for i in range(2) for code in others},
     }
     used_up = quotas.used_up(chosen)
-    assert used_up["tilia_cordata"] == "квота вида 10% выбрана"
-    assert used_up["tilia_tomentosa"] == "квота рода Tilia 20% выбрана"
+    assert used_up["tilia_cordata"] == "квота вида 10% исчерпана"
+    assert used_up["tilia_tomentosa"] == "квота рода Tilia 20% исчерпана"
 
 
 def test_existing_trees_are_named_when_they_used_up_the_quota() -> None:
     structures = _singles(20)
     candidates = _candidates(structures, list(CATALOG))
     result = assign(candidates, structures, CATALOG, {"tilia_cordata": 20}, PARAMS)
-    assert result.used_up["tilia_cordata"] == "квота вида 10% выбрана с существующими деревьями"
+    assert result.used_up["tilia_cordata"] == "квота вида 10% исчерпана с существующими деревьями"

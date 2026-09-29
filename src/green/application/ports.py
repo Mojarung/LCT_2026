@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from green.application.classification import ClassificationReport, LayerMap
     from green.application.editing import Edit, RunContext
     from green.application.params import PlanParams
+    from green.application.photos import PhotoJob, PhotoPrompt
     from green.application.results import (
         IntegrityReport,
         PlanExportReport,
@@ -275,3 +276,36 @@ class RunStore(Protocol):
         """Удалить законченный прогон целиком. Идущий - ConflictError, неизвестный -
         NotFoundError; в обоих случаях на диске ничего не меняется."""
         ...
+
+
+type PhotoFile = Literal["source", "raw", "photo"]
+
+
+class PhotoRenderer(Protocol):
+    """Генеративная модель правки: кадр 3D-вида -> фото с той же расстановкой."""
+
+    def unavailable_reason(self) -> str | None:
+        """Почему фото делать нельзя (нет модели, программы), или None."""
+        ...
+
+    def render(
+        self, *, source: Path, raw: Path, photo: Path, prompt: PhotoPrompt, size: tuple[int, int]
+    ) -> bool:
+        """Записать выход модели в raw и увеличенное фото в photo; True - увеличенное есть."""
+        ...
+
+
+class PhotoStore(Protocol):
+    """Задания фото прогона: кадр, выход модели, увеличенное фото и статус."""
+
+    def create(self, job: PhotoJob, source: bytes) -> None: ...
+
+    def save(self, job: PhotoJob) -> None: ...
+
+    def get(self, run_id: str, photo_id: str) -> PhotoJob: ...
+
+    def jobs(self, run_id: str) -> list[PhotoJob]: ...
+
+    def path(self, run_id: str, photo_id: str, kind: PhotoFile) -> Path: ...
+
+    def delete(self, run_id: str, photo_id: str) -> None: ...

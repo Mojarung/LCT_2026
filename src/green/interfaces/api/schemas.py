@@ -293,3 +293,43 @@ class PlanSummaryOut(BaseModel):
                 RejectedByEditOut(placement_id=r.placement_id, reason=r.reason) for r in rejected
             ],
         )
+
+
+class PhotoOut(BaseModel):
+    """Фото участка по кадру 3D-вида: задание очереди и ссылки на картинки."""
+
+    id: str
+    state: Literal["queued", "running", "succeeded", "failed"]
+    scenery: bool = Field(description="Модель дорисовала фон и деревья, которых нет в плане")
+    season: str
+    hour: float
+    viewpoint: Literal["aerial", "ground"]
+    species: list[str]
+    shrubs: list[str]
+    shot: str = Field(description="Подпись кадра, по которому сделано фото")
+    modern: bool = Field(description="Современные московские фасады вместо условных")
+    custom: bool = Field(description="Промпт написан в редакторе, а не собран сервисом")
+    width: int
+    height: int
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    seconds: float | None
+    error: str | None
+    upscaled: bool
+    source_url: str
+    photo_url: str | None = Field(description="Увеличенное фото, когда оно готово")
+    raw_url: str | None = Field(description="Выход модели размером кадра")
+
+
+class PhotoListOut(BaseModel):
+    available: bool
+    reason: str | None = Field(description="Почему фото делать нельзя, если нельзя")
+    photos: list[PhotoOut]
+
+
+class PromptOut(BaseModel):
+    """Промпт, который уйдёт в модель при этих параметрах: для редактора в интерфейсе."""
+
+    text: str
+    negative: str

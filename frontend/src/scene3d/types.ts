@@ -21,6 +21,8 @@ export interface BuildingJson {
 
 export interface ScenePlantJson {
   id: string;
+  /** Номер посадки, как в plan.json; нет у прогонов, записанных до 29.09.2026. */
+  number?: number;
   x: number;
   y: number;
   type: string;
@@ -73,6 +75,8 @@ export interface Building {
 
 export interface Plant {
   id: string;
+  /** Номер посадки в плане; у существующих насаждений и старых прогонов нет. */
+  number?: number;
   x: number;
   z: number;
   /** tree | shrub | hedge | existing_tree | existing_shrub */

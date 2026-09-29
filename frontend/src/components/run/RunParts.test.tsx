@@ -25,17 +25,22 @@ const show = (trees: { trees: number; planted: number } | null) =>
     </MemoryRouter>,
   );
 
+/** Значение строки разбивки «Деревья / Кустарники» по её подписи. */
+const breakdown = (term: string) => screen.getByText(term, { selector: 'dt' }).nextElementSibling;
+
 describe('RunMetrics', () => {
   it('называет деревья и кустарники, когда план загружен целиком', () => {
     // Жюри по дизайну (итерация 9): «994 посадки» не отвечали, сколько деревьев.
-    show({ trees: 205, planted: 994 });
-    expect(
-      screen.getByText(/посадки в плане: 205 деревьев, 789 кустарников, 28 на согласование/),
-    ).toBeInTheDocument();
+    const { container } = show({ trees: 205, planted: 994 });
+    expect(container.querySelector('.metric')).toHaveTextContent(/^994посадки в плане$/);
+    expect(breakdown('Деревья')).toHaveTextContent(/^205$/);
+    expect(breakdown('Кустарники')).toHaveTextContent(/^789$/);
+    expect(container.querySelector('.run-approval')).toHaveTextContent(/^На согласование 28$/);
   });
 
   it('молчит о составе, пока план не сходится с числом прогона', () => {
-    show({ trees: 3, planted: 3 });
-    expect(screen.queryByText(/деревьев|деревья|дерево/)).toBeNull();
+    const { container } = show({ trees: 3, planted: 3 });
+    expect(container.querySelector('.run-breakdown')).toBeNull();
+    expect(screen.queryByText(/деревь|кустарник/i)).toBeNull();
   });
 });

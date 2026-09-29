@@ -63,10 +63,16 @@ describe('ряды кустарника - полосой живой изгоро
 });
 
 describe('существующее дерево со знаком хвойного', () => {
-  const feature = (cls: string, conifer?: boolean) =>
+  // Сервис пишет vegetation_kind у каждой существующей растительности (7bd7d20): MultiPoint
+  // без него - старая выгрузка «Полосы деревьев», а не стволы (existing.stripPoints).
+  const feature = (cls: string, conifer?: boolean, kind: 'individual' | null = 'individual') =>
     plantsOf({
       type: 'Feature',
-      properties: conifer === undefined ? { class: cls } : { class: cls, conifer },
+      properties: {
+        class: cls,
+        ...(kind ? { vegetation_kind: kind } : {}),
+        ...(conifer === undefined ? {} : { conifer }),
+      },
       geometry: {
         type: 'MultiPoint',
         coordinates: [
@@ -77,10 +83,16 @@ describe('существующее дерево со знаком хвойног
     });
 
   it('признак подосновы доезжает до каждой отметки дерева', () => {
-    expect(feature('existing_tree', true)?.every((plant) => plant.conifer === true)).toBe(true);
+    const conifers = feature('existing_tree', true);
+    expect(conifers).toHaveLength(2);
+    expect(conifers?.every((plant) => plant.conifer === true)).toBe(true);
     expect(feature('existing_tree')?.some((plant) => plant.conifer)).toBe(false);
     // Кустарник хвойным кольцом не рисуется, даже если признак пришёл.
     expect(feature('existing_shrub', true)?.some((plant) => plant.conifer)).toBe(false);
+  });
+
+  it('точки старой выгрузки без vegetation_kind - полоса, а не отдельные деревья', () => {
+    expect(feature('existing_tree', true, null)).toBeNull();
   });
 });
 

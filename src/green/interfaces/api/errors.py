@@ -18,6 +18,7 @@ from green.application.errors import (
     InputError,
     NotFoundError,
 )
+from green.application.photos import PhotoBusyError, PhotoUnavailableError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -71,6 +72,8 @@ _STATUS: dict[type[GreenError], HTTPStatus] = {
     EditContextLostError: HTTPStatus.CONFLICT,
     ConflictError: HTTPStatus.CONFLICT,
     ConfigurationError: HTTPStatus.INTERNAL_SERVER_ERROR,
+    PhotoUnavailableError: HTTPStatus.SERVICE_UNAVAILABLE,
+    PhotoBusyError: HTTPStatus.CONFLICT,
 }
 
 

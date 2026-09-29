@@ -149,7 +149,7 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
       editing: on,
       message: {
         text: on
-          ? 'Тяните посадку мышью или двигайте Alt со стрелками. Delete удаляет выбранную.'
+          ? 'Тяните посадку мышью или двигайте клавишами Alt+стрелки. Delete удаляет выбранную.'
           : '',
         kind: 'info',
       },

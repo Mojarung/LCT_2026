@@ -143,6 +143,17 @@ const done = (overrides: Partial<RunOut> = {}) =>
     ...overrides,
   });
 
+/** Раскрыть <details> по тексту его summary, как это сделал бы человек. */
+async function openFold(scope: HTMLElement, summary: string | RegExp) {
+  const toggle = within(scope).getByText(summary, { selector: 'summary' });
+  await userEvent.click(toggle);
+  expect(toggle.closest('details')).toHaveAttribute('open');
+}
+
+/** Значение строки «подпись - число» в списке определений по её подписи. */
+const fact = (scope: HTMLElement, term: string) =>
+  within(scope).getByText(term, { selector: 'dt' }).nextElementSibling;
+
 function succeededRoutes(record: RunOut = done()) {
   return {
     '/api/v1/runs/r1': record,
@@ -169,11 +180,18 @@ describe('RunPage: finished run', () => {
     );
     renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
-    expect(await within(left).findByText(/требуется проверка/)).toBeVisible();
+    // План на предположении о грунте - эскиз, и это сказано у числа, а не в журнале.
+    const title = await within(left).findByText('Эскиз · требуется проверка');
+    expect(title).toBeVisible();
+    const notice = title.closest('.notice');
+    expect(notice).toHaveTextContent('Допустимость посадок не подтверждена.');
+    expect(notice).toHaveTextContent('У 40 из 40 посадок не подтверждён грунт под всей ямой.');
     expect(left).not.toHaveTextContent('все без ограничений');
-    expect(left).toHaveTextContent(
-      'Грунт под всей посадочной ямой не подтверждён замкнутыми контурами у 40 из 40 посадок',
-    );
+    // Что делать - под раскрытием в том же предупреждении.
+    await openFold(left, 'Что проверить');
+    expect(
+      within(left).getByText(/Грунт под всей посадочной ямой должен быть подтверждён/),
+    ).toBeVisible();
   });
 
   it('leads with the number of placements and the integrity of the base drawing', async () => {
@@ -186,12 +204,16 @@ describe('RunPage: finished run', () => {
       /^Тестовая улица$/,
     );
     expect(await within(left).findByText('302')).toBeInTheDocument();
-    expect(left).toHaveTextContent('посадки в плане, все без ограничений');
-    expect(left).toHaveTextContent('161 место отклонено');
-    expect(left).toHaveTextContent('Подоснова цела');
+    expect(left.querySelector('.metric')).toHaveTextContent(/^302посадки в плане$/);
+    // Целая подоснова - не тревога: нарушение сказано у числа, иначе строка в деталях.
+    expect(left.querySelector('.metric-bad')).toBeNull();
+    await openFold(left, 'Детали расчёта');
+    expect(fact(left, 'Отклонено мест')).toHaveTextContent(/^161$/);
+    expect(fact(left, 'Подоснова')).toHaveTextContent(/^Без изменений$/);
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
-    expect(await within(right).findByText('0,81')).toBeInTheDocument();
+    await userEvent.click(within(right).getByRole('button', { name: 'Эффект' }));
+    expect(await within(right).findByText('0,81')).toBeVisible();
     expect(within(left).queryByText('0,81')).toBeNull();
     expect(document.body).toHaveClass('shell-map');
   });
@@ -312,7 +334,12 @@ describe('RunPage: finished run', () => {
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     expect(await within(right).findByRole('heading', { name: 'Состав плана: 3' })).toBeVisible();
     expect(within(right).getByRole('button', { name: /Липа мелколистная/ })).toHaveTextContent('2');
-    expect(within(right).getByRole('heading', { name: 'Качество плана' })).toBeVisible();
+    // Оценка плана - соседний раздел той же панели, в один клик.
+    const effect = within(right).getByRole('button', { name: 'Эффект' });
+    expect(effect).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(effect);
+    expect(effect).toHaveAttribute('aria-pressed', 'true');
+    expect(within(right).getByRole('heading', { name: 'Оценка плана' })).toBeVisible();
   });
 
   it('explains a picked placement by the rule, the act and its clause', async () => {
@@ -339,8 +366,11 @@ describe('RunPage: finished run', () => {
     expect(right).toHaveTextContent(
       'R-UTIL-WATER-001 · норма 2,00 м · СП 42.13330.2016, табл. 9.1',
     );
+    // Норма - первой, выбор растения - под раскрытием.
+    expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).not.toBeVisible();
+    await openFold(right, 'О растении и его выборе');
     expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).toBeVisible();
-    expect(right).toHaveTextContent('Пригодность месту 74%');
+    expect(right).toHaveTextContent('Пригодность места 74%');
 
     // Перенос без перетаскивания: кнопка есть только в режиме правки.
     expect(within(right).queryByRole('button', { name: /новое место/ })).toBeNull();
@@ -357,19 +387,28 @@ describe('RunPage: finished run', () => {
       within(right).getByText(/Кликните точку на карте: посадка № 1 переедет туда/),
     ).toBeVisible();
 
-    await userEvent.click(within(right).getByRole('button', { name: 'к составу плана' }));
+    await userEvent.click(within(right).getByRole('button', { name: '← К плану' }));
     expect(useWorkspace.getState().selected).toBeNull();
   });
 
-  it('offers the DXF and the interpretations first, with their sizes', async () => {
+  it('offers the DXF first and the interpretations one click away, with their sizes', async () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const dxf = await screen.findByRole('link', { name: /Скачать DXF/ });
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    const dxf = await within(right).findByRole('link', { name: /Скачать план DXF/ });
+    expect(dxf).toBeVisible();
     expect(dxf).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/result.dxf');
+    expect(dxf).toHaveAttribute('download');
     expect(dxf).toHaveTextContent('1,5 МБ');
-    expect(screen.getByRole('link', { name: /Интерпретации, CSV/ })).toHaveTextContent('30 КБ');
-    expect(screen.getByText('Файлы прогона: 4')).toBeInTheDocument();
+
+    await openFold(right, 'Отчёты и другие файлы');
+    const csv = within(right).getByRole('link', { name: /Нормы · CSV/ });
+    expect(csv).toBeVisible();
+    expect(csv).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/interpretations.csv');
+    expect(csv).toHaveTextContent('30 КБ');
+    // Служебные файлы - ещё глубже, числом: plan, rules, quality, basemap.
+    expect(within(right).getByText('Файлы расчёта · 4', { selector: 'summary' })).toBeVisible();
   });
 
   it('puts warnings that change the meaning of the plan next to the number', async () => {
@@ -396,7 +435,12 @@ describe('RunPage: finished run', () => {
     // Ключевое предупреждение стоит у числа и остаётся в полном списке под раскрытием.
     const copies = await within(left).findAllByText(warnings[0] ?? '');
     expect(copies.map((node) => Boolean(node.closest('.notice')))).toEqual([true, false]);
-    expect(within(left).getByText('Как собран план: 2')).toBeInTheDocument();
+    expect(copies[0]).toBeVisible();
+    expect(copies[1]).not.toBeVisible();
+    await openFold(left, 'Детали расчёта');
+    await openFold(left, 'Как собран план · 2');
+    expect(copies[1]).toBeVisible();
+    expect(within(left).getByText('Слой 0 пуст.')).toBeVisible();
   });
 
   it('remembers a collapsed panel', async () => {

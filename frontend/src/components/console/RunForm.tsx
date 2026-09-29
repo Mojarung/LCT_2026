@@ -19,7 +19,7 @@ import { FileField } from './FileField';
  *  про группы кустарника различаются тем, откуда место: пустое после квот деревьев или
  *  свободный газон. */
 const SWITCH_LABELS: { name: Switch | 'fill'; label: string }[] = [
-  { name: 'fill', label: 'Добор зоны: узкие полосы и карманы газона' },
+  { name: 'fill', label: 'Добор узких полос и карманов газона' },
   { name: 'shrub_rows', label: 'Ряд кустарника у борта под кронами аллеи' },
   { name: 'curb_hedges', label: 'Живая изгородь вдоль остальных бортов, до 720 кустов на 1 км' },
   { name: 'understory', label: 'Кустарник под кроной дерева, где ряда нет' },
@@ -153,7 +153,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
               ))}
             </select>
             <p className="hint" id={`${ids}-street-hint`}>
-              Чертежи крупнее полусотни мегабайт считаются минутами.
+              Чертёж больше 50 МБ считается несколько минут.
             </p>
           </div>
           <p className="or">или</p>
@@ -163,7 +163,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
           <div className="field sample">
             <p className="sample-title">Встроенный участок улицы Берзарина</p>
             <p className="hint">
-              Фрагмент настоящей подосновы с сетями: каталог улиц не подключён.
+              Фрагмент настоящей подосновы с сетями. Каталог улиц не подключён.
             </p>
           </div>
           <p className="or">или</p>
@@ -238,6 +238,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
                 type="checkbox"
                 checked={values ? (name === 'fill' ? values.fill : values.switches[name]) : false}
                 disabled={!values}
+                aria-describedby={name === 'root_barriers' ? `${ids}-barriers-hint` : undefined}
                 onChange={(event) => {
                   if (!values) return;
                   const checked = event.target.checked;
@@ -251,7 +252,9 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
               {label}
             </label>
           ))}
-          <p className="hint">Сокращённые отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.</p>
+          <p className="hint" id={`${ids}-barriers-hint`}>
+            Барьеры сокращают отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.
+          </p>
         </fieldset>
 
         <FileField

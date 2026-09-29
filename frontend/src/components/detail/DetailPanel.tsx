@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
 import { useOverflowMark } from '../../hooks/useOverflowMark';
@@ -41,8 +42,8 @@ function MoveByClick({ item }: { item: MapItem }) {
       </button>
       {placing ? (
         <p className="hint">
-          Кликните точку на карте: посадка № {item.number} переедет туда. Повторное нажатие кнопки
-          или Esc на карте отменяет.
+          Кликните точку на карте: посадка № {item.number} переедет туда. Отмена - та же кнопка или
+          Esc.
         </p>
       ) : null}
     </div>
@@ -52,6 +53,7 @@ function MoveByClick({ item }: { item: MapItem }) {
 function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string, Rule> }) {
   const select = useWorkspace((s) => s.select);
   const editing = useWorkspace((s) => s.editing);
+  const { runId = '' } = useParams();
   const kind = KIND_RU[item.planting_type] ?? '';
   const title =
     item.kind === 'placement'
@@ -76,6 +78,17 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
         {VERDICT_RU[item.verdict] ?? item.verdict}
       </span>
       {kind ? <p className="detail-note">{kind}</p> : null}
+      {item.kind === 'placement' && runId ? (
+        <a
+          className="detail-3d"
+          href={`/runs/${encodeURIComponent(runId)}/3d?plant=${encodeURIComponent(item.id)}`}
+          target="_blank"
+          rel="noopener"
+          title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"
+        >
+          кадры посадки в 3D ↗
+        </a>
+      ) : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
       {item.note ? <p className="detail-explain">{item.note}</p> : null}
       {/* Норма - первым: это ответ на вопрос «можно ли здесь сажать», ценность и вид - после. */}
@@ -124,14 +137,18 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
             <button
               type="button"
               aria-pressed={section === 'plants'}
-              onClick={() => setSection('plants')}
+              onClick={() => {
+                setSection('plants');
+              }}
             >
               Посадки
             </button>
             <button
               type="button"
               aria-pressed={section === 'effect'}
-              onClick={() => setSection('effect')}
+              onClick={() => {
+                setSection('effect');
+              }}
             >
               Эффект
             </button>

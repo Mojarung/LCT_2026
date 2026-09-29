@@ -10,7 +10,7 @@ from green import __version__
 from green.bootstrap.container import Container, build_container
 from green.infrastructure.logs import configure_logging
 from green.interfaces.api.errors import install_error_handlers
-from green.interfaces.api.routers import edits, runs, system
+from green.interfaces.api.routers import edits, photos, runs, system
 from green.interfaces.web import mount_spa
 
 API_PREFIX = "/api/v1"
@@ -18,6 +18,10 @@ TAGS = [
     {"name": "system", "description": "Состояние сервиса и справочники для клиента."},
     {"name": "runs", "description": "Прогоны: загрузка DXF/DWG, статус, артефакты результата."},
     {"name": "edits", "description": "Правка плана на карте: проверка точки, правки, пересборка."},
+    {
+        "name": "photos",
+        "description": "Фото участка по кадру 3D-вида: очередь генеративной модели, статус, файлы.",
+    },
 ]
 
 
@@ -56,6 +60,9 @@ def create_app(container: Container | None = None) -> FastAPI:
         )
     install_error_handlers(app)
     app.include_router(system.router, prefix=API_PREFIX)
+    # Фото - раньше прогонов: DELETE /runs/{run_id:path} забирает весь хвост адреса и
+    # перехватил бы DELETE /runs/{id}/photos/{photo_id}.
+    app.include_router(photos.router, prefix=API_PREFIX)
     app.include_router(runs.router, prefix=API_PREFIX)
     app.include_router(edits.router, prefix=API_PREFIX)
     # Интерфейс подключается последним: он держит всё, что не /api, и не должен

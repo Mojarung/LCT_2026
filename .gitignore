@@ -70,6 +70,7 @@ docs/notes/*
 !docs/notes/35-quality-index-v3.md
 !docs/notes/37-run-time.md
 !docs/notes/39-crown-spacing.md
+!docs/notes/40-scene-photos.md
 tools/research/*
 !tools/research/check_law_quotes.py
 !tools/research/quality_robustness.py

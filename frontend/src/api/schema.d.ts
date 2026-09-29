@@ -227,6 +227,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Фото прогона
+         * @description Фото прогона, новые сверху, и можно ли делать новые на этом сервере.
+         */
+        get: operations["list_photos_api_v1_runs__run_id__photos_get"];
+        put?: never;
+        /**
+         * Фото по кадру 3D-вида
+         * @description Поставить кадр в очередь модели. Статус: GET по адресу из Location.
+         */
+        post: operations["create_photo_api_v1_runs__run_id__photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/photos/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Промпт фото
+         * @description Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора.
+         */
+        get: operations["photo_prompt_api_v1_runs__run_id__photos_prompt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/photos/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Статус фото */
+        get: operations["get_photo_api_v1_runs__run_id__photos__photo_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Удалить фото
+         * @description Удалить фото вместе с кадром. Фото в очереди или в работе - 409.
+         */
+        delete: operations["delete_photo_api_v1_runs__run_id__photos__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/photos/{photo_id}/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Файл фото
+         * @description Кадр 3D-вида (source), выход модели (raw) или увеличенное фото (photo).
+         */
+        get: operations["get_photo_file_api_v1_runs__run_id__photos__photo_id___kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/rebuild": {
         parameters: {
             query?: never;
@@ -285,6 +370,65 @@ export interface components {
             size_bytes?: number | null;
             /** Url */
             url: string;
+        };
+        /** Body_create_photo_api_v1_runs__run_id__photos_post */
+        Body_create_photo_api_v1_runs__run_id__photos_post: {
+            /**
+             * Hour
+             * @default 11
+             */
+            hour: number;
+            /**
+             * Image
+             * @description Кадр 3D-вида, PNG, стороны кратны 32, до 2048 px
+             */
+            image: string;
+            /**
+             * Modern
+             * @description Современные московские фасады: объём и этажность домов те же
+             * @default true
+             */
+            modern: boolean;
+            /**
+             * Negative
+             * @description Свой негативный промпт
+             * @default
+             */
+            negative: string;
+            /**
+             * Prompt
+             * @description Свой промпт вместо собранного сервисом
+             * @default
+             */
+            prompt: string;
+            /**
+             * Scenery
+             * @description Разрешить модели дорисовать фон и деревья, которых нет в плане
+             * @default false
+             */
+            scenery: boolean;
+            /** @default summer */
+            season: components["schemas"]["Season"];
+            /**
+             * Shot
+             * @description Подпись кадра в галерее
+             * @default
+             */
+            shot: string;
+            /**
+             * Shrubs
+             * @description Латинские названия кустарников в кадре через запятую
+             * @default
+             */
+            shrubs: string;
+            /**
+             * Species
+             * @description Латинские названия деревьев в кадре через запятую
+             * @default
+             */
+            species: string;
+            /** @default aerial */
+            viewpoint: components["schemas"]["Viewpoint"];
         };
         /** Body_create_run_api_v1_runs_post */
         Body_create_run_api_v1_runs_post: {
@@ -444,6 +588,95 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** PhotoListOut */
+        PhotoListOut: {
+            /** Available */
+            available: boolean;
+            /** Photos */
+            photos: components["schemas"]["PhotoOut"][];
+            /**
+             * Reason
+             * @description Почему фото делать нельзя, если нельзя
+             */
+            reason: string | null;
+        };
+        /**
+         * PhotoOut
+         * @description Фото участка по кадру 3D-вида: задание очереди и ссылки на картинки.
+         */
+        PhotoOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Custom
+             * @description Промпт написан в редакторе, а не собран сервисом
+             */
+            custom: boolean;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Height */
+            height: number;
+            /** Hour */
+            hour: number;
+            /** Id */
+            id: string;
+            /**
+             * Modern
+             * @description Современные московские фасады вместо условных
+             */
+            modern: boolean;
+            /**
+             * Photo Url
+             * @description Увеличенное фото, когда оно готово
+             */
+            photo_url: string | null;
+            /**
+             * Raw Url
+             * @description Выход модели размером кадра
+             */
+            raw_url: string | null;
+            /**
+             * Scenery
+             * @description Модель дорисовала фон и деревья, которых нет в плане
+             */
+            scenery: boolean;
+            /** Season */
+            season: string;
+            /** Seconds */
+            seconds: number | null;
+            /**
+             * Shot
+             * @description Подпись кадра, по которому сделано фото
+             */
+            shot: string;
+            /** Shrubs */
+            shrubs: string[];
+            /** Source Url */
+            source_url: string;
+            /** Species */
+            species: string[];
+            /** Started At */
+            started_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "succeeded" | "failed";
+            /** Upscaled */
+            upscaled: boolean;
+            /**
+             * Viewpoint
+             * @enum {string}
+             */
+            viewpoint: "aerial" | "ground";
+            /** Width */
+            width: number;
+        };
         /**
          * PlanSummaryOut
          * @description Состояние плана после правки.
@@ -571,6 +804,16 @@ export interface components {
             title: string;
         };
         /**
+         * PromptOut
+         * @description Промпт, который уйдёт в модель при этих параметрах: для редактора в интерфейсе.
+         */
+        PromptOut: {
+            /** Negative */
+            negative: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * RejectedByEditOut
          * @description Посадка, которую правка перевела в отказ.
          */
@@ -652,6 +895,8 @@ export interface components {
          * @enum {string}
          */
         RunState: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {string} */
+        Season: "spring" | "summer" | "autumn" | "winter";
         /** SpeciesOut */
         SpeciesOut: {
             /** Code */
@@ -709,6 +954,8 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** @enum {string} */
+        Viewpoint: "aerial" | "ground";
     };
     responses: never;
     parameters: never;
@@ -1343,6 +1590,423 @@ export interface operations {
             };
             /** @description Внутренняя ошибка сервиса */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_photos_api_v1_runs__run_id__photos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoListOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    create_photo_api_v1_runs__run_id__photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_photo_api_v1_runs__run_id__photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    photo_prompt_api_v1_runs__run_id__photos_prompt_get: {
+        parameters: {
+            query?: {
+                scenery?: boolean;
+                modern?: boolean;
+                season?: "spring" | "summer" | "autumn" | "winter";
+                hour?: number;
+                viewpoint?: "aerial" | "ground";
+                species?: string;
+                shrubs?: string;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_photo_api_v1_runs__run_id__photos__photo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_photo_api_v1_runs__run_id__photos__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_photo_file_api_v1_runs__run_id__photos__photo_id___kind__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                photo_id: string;
+                kind: "source" | "raw" | "photo";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                    "image/png": unknown;
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Сервис недоступен */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

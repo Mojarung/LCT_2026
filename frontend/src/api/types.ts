@@ -16,3 +16,6 @@ export type CheckOut = Schemas['CheckOut'];
 export type EditIn = Schemas['EditIn'];
 export type PlanSummaryOut = Schemas['PlanSummaryOut'];
 export type RunListOut = Schemas['RunListOut'];
+export type PhotoOut = Schemas['PhotoOut'];
+export type PhotoListOut = Schemas['PhotoListOut'];
+export type PromptOut = Schemas['PromptOut'];

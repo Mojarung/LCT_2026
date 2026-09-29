@@ -16,7 +16,7 @@ export function MapHud() {
     <div className="hud hud-bottom" data-map-obstacle="bottom">
       <button
         type="button"
-        title="Показать весь план"
+        title="Вписать весь план в окно"
         onClick={() => {
           engine.current?.fit();
         }}
@@ -58,8 +58,7 @@ export function MapHud() {
       </button>
       <button
         type="button"
-        aria-pressed={orientation === 'street'}
-        title="Развернуть вид вдоль улицы или по северу"
+        title="Повернуть план: вдоль улицы или севером вверх"
         onClick={() => {
           const current = engine.current;
           if (!current) return;

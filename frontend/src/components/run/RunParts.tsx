@@ -72,9 +72,20 @@ export function RunHeader({ run }: { run: RunOut }) {
         ))}
       </p>
       {run.state === 'succeeded' ? (
-        <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-          3D и снимки →
-        </Link>
+        <p className="scene-links">
+          <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
+            3D и снимки →
+          </Link>
+          <a
+            className="scene-link"
+            href={`/runs/${encodeURIComponent(run.id)}/3d?shots=street`}
+            target="_blank"
+            rel="noopener"
+            title="Кадры улицы с автоматических ракурсов и фото по ним, в новой вкладке"
+          >
+            кадры улицы ↗
+          </a>
+        </p>
       ) : null}
     </div>
   );
@@ -230,9 +241,7 @@ export function RunStatus({ run }: { run: RunOut }) {
         <span className="spinner" aria-hidden="true" />
         <div>
           <p className="status-title">{title}</p>
-          <p className="hint">
-            Чертёж появится здесь, как только будет прочитан. Ход расчёта показан в полосе внизу.
-          </p>
+          <p className="hint">Чертёж появится здесь после чтения. Ход расчёта - в полосе внизу.</p>
         </div>
       </div>
     );

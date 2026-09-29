@@ -303,7 +303,7 @@ export function ReviewMap({
         ref={canvas}
         className="review-canvas"
         tabIndex={0}
-        aria-label="Подоснова для уточнения классов. Выбор объекта - в полях слева; стрелки двигают карту, плюс и минус меняют масштаб."
+        aria-label="Подоснова чертежа. Объект выбирается в полях слева, стрелки двигают карту, плюс и минус меняют масштаб."
         onKeyDown={onKeyDown}
         onPointerDown={(event) => {
           drag.current = { x: event.clientX, y: event.clientY };

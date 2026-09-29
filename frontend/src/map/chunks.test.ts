@@ -3,15 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BasemapFeature } from '../api/artifacts';
 import { buildChunks } from './chunks';
 
-// В jsdom нет Path2D: для нарезки важны только ключи кусков и их габариты.
+// В jsdom нет Path2D: для нарезки важны только ключи кусков и их габариты. Кружки всех
+// кусков пишутся в один журнал: тест, который их считает, сам проверяет, что кусок один.
+const arc = vi.fn();
 class FakePath {
-  arc = vi.fn();
+  arc = arc;
   moveTo() {}
   lineTo() {}
   closePath() {}
 }
 
 beforeEach(() => {
+  arc.mockClear();
   vi.stubGlobal('Path2D', FakePath);
 });
 afterEach(() => {
@@ -104,8 +107,9 @@ it('полоса остаётся условными кружками, не по
   );
   expect(existing).toHaveLength(0);
   expect(chunks).toHaveLength(1);
-  expect(chunks[0]?.path.arc).toHaveBeenCalledTimes(3);
-  expect(chunks[0]?.path.arc).toHaveBeenCalledWith(0, 0, 0.25, 0, Math.PI * 2);
+  expect(chunks[0]?.path).toBeInstanceOf(FakePath);
+  expect(arc).toHaveBeenCalledTimes(3);
+  expect(arc).toHaveBeenCalledWith(0, 0, 0.25, 0, Math.PI * 2);
 });
 
 it('recognised shrub strip is a filled band, never a list of crowns', () => {

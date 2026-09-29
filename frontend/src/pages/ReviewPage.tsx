@@ -122,9 +122,9 @@ export function ReviewPage() {
         `Объект DXF: ${one.properties.source_entity_type ?? 'тип не сохранён'}`,
         `Класс: ${className(assignments[one.id] ?? one.properties.class)}`,
         `Границы, м: ${one.properties.bounds.join(', ')}`,
-        `Резерв геометрии, м: ${String(one.properties.error_m ?? 'нет данных')}`,
+        `Погрешность геометрии, м: ${String(one.properties.error_m ?? 'нет данных')}`,
       ].join('\n')
-    : `Выбрано объектов: ${integer(chosen.length)}. Назначение применяется ко всем выбранным объектам.`;
+    : `Выбрано объектов: ${integer(chosen.length)}. Класс назначается всем выбранным.`;
 
   const labelDetail = label
     ? [
@@ -136,7 +136,7 @@ export function ReviewPage() {
           labelAssignments[label.id] ? 'назначено вами' : evidenceName(label.evidence?.method)
         }.`,
       ].join('\n')
-    : `Подписей: ${integer(labels.length)}. На карте показаны номер и первые 80 символов; здесь - полный текст выбранной подписи.`;
+    : `Подписей: ${integer(labels.length)}. На карте - номер и первые 80 символов, здесь - полный текст выбранной.`;
 
   const json =
     ready && run.data
@@ -173,11 +173,11 @@ export function ReviewPage() {
       <div className="sheet review-sheet">
         <header className="stamp">
           <div className="stamp-title">
-            <h1>Что изображено на чертеже</h1>
+            <h1>Уточнение объектов чертежа</h1>
             <p>{run.data?.source_name ?? runId}</p>
           </div>
           <p className="models-back">
-            <Link to={missing ? '/' : runLink}>{missing ? '← все прогоны' : 'к прогону'}</Link>
+            <Link to={missing ? '/' : runLink}>{missing ? '← все прогоны' : '← к прогону'}</Link>
           </p>
         </header>
         {nothing ? (
@@ -189,8 +189,8 @@ export function ReviewPage() {
           <div className="review-body">
             <section className="review-controls" aria-label="Уточнение объектов">
               <p className="hint">
-                Выберите группу и осмотрите объекты. Назначайте класс только по исходнику и легенде.
-                Уточнение названий не подтверждает полноту съёмки или пригодность грунта.
+                Выберите группу, осмотрите объекты на карте и назначьте класс по исходнику и
+                легенде. Уточнение классов не подтверждает полноту съёмки и пригодность грунта.
               </p>
               <p className="review-status" role="status">
                 {status}
@@ -297,7 +297,7 @@ export function ReviewPage() {
                     );
                   }}
                 >
-                  Отменить своё назначение
+                  Отменить назначение
                 </button>
               </div>
 
@@ -309,7 +309,7 @@ export function ReviewPage() {
                     setLabelsVisible(event.target.checked);
                   }}
                 />
-                Подписи с номерами
+                Подписи на карте
               </label>
 
               <div className="field">
@@ -366,7 +366,7 @@ export function ReviewPage() {
                     setLabelAssignments((previous) => ({ ...previous, [label.id]: labelRole }));
                   }}
                 >
-                  Назначить роль подписи
+                  Назначить роль
                 </button>
                 <button
                   type="button"
@@ -381,7 +381,7 @@ export function ReviewPage() {
                     );
                   }}
                 >
-                  Отменить роль подписи
+                  Отменить роль
                 </button>
               </div>
 
@@ -393,10 +393,10 @@ export function ReviewPage() {
                   aria-expanded={showJson}
                   aria-controls={`${ids}-json`}
                   onClick={() => {
-                    setShowJson(true);
+                    setShowJson((v) => !v);
                   }}
                 >
-                  Показать JSON для повторного прогона
+                  {showJson ? 'Скрыть JSON' : 'Показать JSON'}
                 </button>
                 <button
                   type="button"
@@ -404,7 +404,7 @@ export function ReviewPage() {
                   disabled={!canExport}
                   onClick={download}
                 >
-                  Скачать уточнения JSON
+                  Скачать JSON
                 </button>
               </div>
               {showJson ? (
@@ -421,19 +421,18 @@ export function ReviewPage() {
                     этот DXF
                   </a>{' '}
                   новым прогоном с тем же профилем «{run.data?.profile}» и вставьте JSON в поле
-                  «Параметры поверх профиля, JSON». Остальные файлы комплекта повторно добавлять не
-                  нужно: они уже собраны в этом DXF.
+                  «Параметры поверх профиля, JSON». Остальные файлы комплекта уже собраны в этом
+                  DXF.
                 </p>
               ) : run.data && names.has(GEOMETRY) ? (
                 <p className="hint">
-                  Не удалось сохранить неизменную копию DXF. Для повторного прогона нужен исходник с
-                  хешем из отчёта; изменённый файл требует нового уточнения.
+                  Копию DXF сохранить не удалось. Для повторного прогона нужен исходник с хешем из
+                  отчёта, изменённый файл придётся уточнять заново.
                 </p>
               ) : null}
               <p className="hint">
-                Оранжевый - выбранная группа, красный - выбранный объект. Серая геометрия даёт
-                контекст. Координаты местные, в метрах. Формы не упрощены; объекты не скрываются
-                из-за неизвестного класса.
+                Оранжевый - выбранная группа, красный - выбранный объект, серый - остальной чертёж.
+                Координаты местные, в метрах. Формы не упрощены, неизвестные объекты не скрыты.
               </p>
             </section>
 

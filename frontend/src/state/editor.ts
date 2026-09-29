@@ -145,7 +145,7 @@ export class PlanEditor {
         this.host?.itemsChanged();
         store.setStale(summary.stale);
         store.touch();
-        store.say(`Посадка № ${String(item.number)} перенесена. Нормы пересчитаны.`);
+        store.say(`Посадка № ${String(item.number)} перенесена и проверена по нормам.`);
       } catch (error) {
         store.say(reason(error), 'error');
       } finally {
@@ -186,7 +186,7 @@ export class PlanEditor {
         if (run.state === 'failed') throw new Error(run.error ?? 'Пересборка не удалась.');
         if (run.state === 'succeeded' && run.updated_at !== before.updated_at) return run;
       }
-      throw new Error('Пересборка идёт дольше десяти минут: проверьте, что сервис жив.');
+      throw new Error('Пересборка идёт дольше 10 минут. Проверьте, что сервис работает.');
     });
   }
 }
