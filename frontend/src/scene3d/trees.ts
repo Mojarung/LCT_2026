@@ -74,7 +74,24 @@ const SPECS: Record<Archetype, Spec> = {
   thuja: { preset: 'Pine Small', overrides: { leaves: { count: 26 } } },
   shrub: { preset: 'Bush 1' },
   shrub_dense: { preset: 'Bush 2' },
-  creeper: { preset: 'Bush 3' },
+  // Стелющийся можжевельник - своя форма, а не круглый куст: ветви от основания почти
+  // горизонтально с поднятыми концами. Такая модель сама вдвое шире высоты, и масштаб к размеру
+  // вида почти равномерный. Круглый куст приходилось сплющивать втрое, и хвоя ложилась блином.
+  creeper: {
+    preset: 'Bush 3',
+    overrides: {
+      branch: {
+        levels: 3,
+        angle: { 1: 72, 2: 40 },
+        children: { 0: 14, 1: 6, 2: 3 },
+        start: { 1: 0.05, 2: 0.15 },
+        length: { 0: 4, 1: 14, 2: 7, 3: 3 },
+        force: { direction: { x: 0, y: 1, z: 0 }, strength: 0.035 },
+        gnarliness: { 1: 0.12, 2: 0.1 },
+      },
+      leaves: { count: 10, size: 1.5, angle: 25 },
+    },
+  },
 };
 
 /** Extra deciduous silhouette; conifers and shrubs keep their cheaper two-model budget. */
@@ -533,8 +550,8 @@ export class Forest {
     const archetype = instance.group.archetype;
     const jitter = 0.92 + (((plant.seed >>> 4) % 1000) / 1000) * 0.16;
     const height = size.height * jitter;
-    // Стелющийся можжевельник ниже своей ширины втрое: у модели куста пропорция другая.
-    const flatten = archetype === 'creeper' ? 0.35 : 1;
+    // Стелющийся можжевельник ниже высоты вида из каталога (она для куста в полный рост).
+    const flatten = archetype === 'creeper' ? 0.6 : 1;
     const crown = size.crown * jitter;
     const sx = crown / model.width;
     const sz = sx * (0.84 + (((plant.seed >>> 13) % 1000) / 1000) * 0.15);
