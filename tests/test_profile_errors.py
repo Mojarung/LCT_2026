@@ -106,6 +106,17 @@ def test_consequence_of_a_bad_item_is_not_reported_as_a_second_error() -> None:
     assert text == PREFIX + 'modes[0]: допустимые значения alley, lawn, fill (получено "x")'
 
 
+def test_own_validator_message_is_kept_not_replaced_by_a_generic_phrase() -> None:
+    """Текст наших валидаторов уже объясняет причину по-русски: общая фраза «значение не
+    подходит» его бы потеряла, а поле не повторяется дважды."""
+    text = _refusal({"conifer_share": [0.8, 0.2]})
+
+    assert text == PREFIX + (
+        "conifer_share: доля хвойных задаётся парой 0 <= min <= max <= 1 (получено [0.8, 0.2])"
+    )
+    assert not ENGLISH.search(text)
+
+
 def test_bad_profile_file_is_explained_the_same_way(tmp_path: Path) -> None:
     (tmp_path / "broken.yaml").write_text("spacing_m: -3\nbogus: 1\n", encoding="utf-8")
 

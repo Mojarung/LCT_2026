@@ -51,6 +51,9 @@ _PHRASES = {
     "dict_type": "должно быть словарём",
 }
 _UNKNOWN = "значение не подходит"
+# Ошибки наших валидаторов (schemas.py): их текст уже по-русски и объясняет причину -
+# «правило ... с классом ignore без reason», - общая фраза его бы потеряла.
+_OWN_MESSAGE = frozenset({"value_error", "assertion_error"})
 
 
 def describe_validation_error(error: ValidationError) -> str:
@@ -78,6 +81,8 @@ def _line(error: ErrorDetails) -> str:
 
 
 def _phrase(error: ErrorDetails) -> str:
+    if error["type"] in _OWN_MESSAGE:
+        return _own_message(error)
     template = _PHRASES.get(error["type"])
     if template is None:
         return _UNKNOWN
@@ -91,6 +96,16 @@ def _phrase(error: ErrorDetails) -> str:
         return template.format(**context)
     except KeyError:
         return _UNKNOWN
+
+
+def _own_message(error: ErrorDetails) -> str:
+    """Текст исключения валидатора без английской приставки pydantic и без повтора поля."""
+    cause = (error.get("ctx") or {}).get("error")
+    text = str(cause) if cause is not None else ""
+    if not text:
+        return _UNKNOWN
+    field = _location(error["loc"])
+    return text.removeprefix(f"{field}: ") if error["loc"] else text
 
 
 def _location(loc: tuple[int | str, ...]) -> str:
