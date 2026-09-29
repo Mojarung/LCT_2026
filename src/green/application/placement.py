@@ -25,6 +25,7 @@ from green.application.candidate_selection import SelectionProblem, select_candi
 from green.application.constraints import ConstraintIndex, EvaluationBatch, boundary_gaps
 from green.application.errors import InputError
 from green.application.params import (
+    REJECTIONS_CEILING,
     active_distance_rules,
     lawn_step_m,
     species_distance_rules,
@@ -208,7 +209,7 @@ class GreedyPlantingStrategy:
             placements=tuple(selector.placements),
             rejections=tuple(selector.rejections),
             warnings=_warnings(
-                features, index, selector.rejections, params, disabled_rules_note(rulebook, params)
+                features, index, selector.unrecorded, params, disabled_rules_note(rulebook, params)
             ),
             stats=stats,
             zones=zones,
@@ -624,6 +625,9 @@ class _Selector:
     _options: list[tuple[_Candidate, int]] = field(default_factory=list)
     _planted: _Grid | None = None
     _refused: _Grid | None = None
+    # Отклонённые места сверх предела записи max_rejections: в план не попали, число - для
+    # предупреждения.
+    unrecorded: int = 0
     _eligible: list[tuple[_Candidate, EvaluationBatch, int]] = field(default_factory=list)
     _chosen: list[_Candidate] = field(default_factory=list)
     # Все предложенные места с принимаемым вердиктом, по порядку: из них - вместимость участка.
@@ -676,11 +680,20 @@ class _Selector:
                         self._chosen.append(candidate)
                         return
         first, row = options[0]
-        quiet = planted.near(first.x, first.y) or refused.near(first.x, first.y)
-        if quiet or len(self.rejections) >= self.params.max_rejections:
+        if planted.near(first.x, first.y) or refused.near(first.x, first.y):
             return
+        # Место за пределом записи тоже занимает сетку отказов: соседние станции сливаются с
+        # ним так же, как без предела, и счёт незаписанных - это счёт мест, а не станций.
         refused.add(first.x, first.y)
-        self.rejections.append(self._rejection(first, batch, row))
+        self._record(first, batch, row)
+
+    def _record(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> None:
+        """Отказ записывается в план, пока не достигнут предел max_rejections; сверх него место
+        только считается - для предупреждения."""
+        if len(self.rejections) >= self.params.max_rejections:
+            self.unrecorded += 1
+            return
+        self.rejections.append(self._rejection(candidate, batch, row))
 
     def optimize(self) -> SelectionReport:
         pool = self._eligible
@@ -822,11 +835,10 @@ def boundary_gap_note(gaps: Sequence[tuple[str, float]]) -> str | None:
 def _warnings(
     features: Sequence[Feature],
     index: ConstraintIndex,
-    plan_rejections: Sequence[Rejection],
+    unrecorded: int,
     params: PlanParams,
     disabled: str | None,
 ) -> tuple[str, ...]:
-    max_rejections = params.max_rejections
     warnings = list(index.surface.review_notes()) if index.surface is not None else []
     if disabled:
         warnings.append(disabled)
@@ -856,9 +868,13 @@ def _warnings(
     gaps = boundary_gap_note(boundary_gaps(features))
     if gaps:
         warnings.append(gaps)
-    if len(plan_rejections) >= max_rejections:
+    if unrecorded:
+        limit = params.max_rejections
+        places = counted(unrecorded, "месте", "местах", "местах")
+        ceiling = f"{REJECTIONS_CEILING:,}".replace(",", " ")
         warnings.append(
-            f"Отметок отказов больше лимита {max_rejections}: показаны только первые, "
-            "остальные кандидаты отклонены без отметки в чертеже."
+            f"Достигнут предел записи отказов max_rejections = {limit}: записаны первые "
+            f"{limit}, отказы ещё в {places} не попали ни в план, ни в интерпретации - "
+            f"поднимите max_rejections (не больше {ceiling})."
         )
     return tuple(warnings)

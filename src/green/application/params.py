@@ -54,6 +54,13 @@ DEFAULT_QUALITY_WEIGHTS: Mapping[str, float] = {
 TREE_STEP_MIN_M = 5.0
 STEP_TOLERANCE = 0.95
 
+# Отказы отбора мест записываются все: предел - предохранитель от вырожденного чертежа. Прежний
+# предел 2000 срезал Олимпийскую деревню (жюри, R-25); без предела у неё до 3496 отказов (вариант
+# с жадным отбором) - больше, чем у любой улицы пилота (замер 29.09.2026). Верхняя граница
+# профиля - REJECTIONS_CEILING.
+REJECTIONS_DEFAULT = 20_000
+REJECTIONS_CEILING = 100_000
+
 
 def step_with_tolerance(step_m: float, planting_type: PlantingType) -> float:
     """Наименьшее допустимое расстояние между соседними посадками одного типа."""
@@ -128,7 +135,8 @@ class PlanParams:
     label_roles: Mapping[str, str] = field(default_factory=dict)
     allow_needs_approval: bool = True
     label_search_radius_m: float = 3.0
-    max_rejections: int = 2000
+    # Предел записи отказов - предохранитель, а не отбор: пилот его не достигает.
+    max_rejections: int = REJECTIONS_DEFAULT
     require_soil: bool = True
     require_work_boundary: bool = True
     # Посадочное место дерева - яма 2,2 x 2,2 м под ком 1,3 x 1,3 м (743-ПП, табл. 3.3.1; IV группа
