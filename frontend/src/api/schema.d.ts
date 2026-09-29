@@ -351,6 +351,12 @@ export interface components {
             /** @default summer */
             season: components["schemas"]["Season"];
             /**
+             * Shot
+             * @description Подпись кадра в галерее
+             * @default
+             */
+            shot: string;
+            /**
              * Shrubs
              * @description Латинские названия кустарников в кадре через запятую
              * @default
@@ -558,6 +564,11 @@ export interface components {
             season: string;
             /** Seconds */
             seconds: number | null;
+            /**
+             * Shot
+             * @description Подпись кадра, по которому сделано фото
+             */
+            shot: string;
             /** Shrubs */
             shrubs: string[];
             /** Source Url */

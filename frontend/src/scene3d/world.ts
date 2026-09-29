@@ -299,6 +299,7 @@ function basemapBuildings(basemap: BasemapJson, box: Box, frame: Frame): Buildin
 
 interface PlantPoint {
   id: string;
+  number?: number;
   x: number;
   y: number;
   type: string;
@@ -321,6 +322,7 @@ function planPoints(scene: SceneJson | null, plan: PlanJson | null): PlantPoint[
       p.species?.life_form ?? (isShrubType(p.planting_type) ? 'shrub_medium' : 'tree_medium');
     return {
       id: p.id,
+      number: p.number,
       x: p.x,
       y: p.y,
       type: p.planting_type,
@@ -365,6 +367,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   const frame = frameAt(origin);
   const plants: Plant[] = points.map((p) => ({
     id: p.id,
+    number: p.number,
     ...frame.toFlat(p.x, p.y),
     type: p.type,
     code: p.code,

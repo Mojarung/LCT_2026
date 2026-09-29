@@ -105,6 +105,8 @@ export interface PhotoRequest {
   viewpoint: 'aerial' | 'ground';
   species: string[];
   shrubs: string[];
+  /** Подпись кадра: по ней галерея находит фото своего кадра. */
+  shot: string;
 }
 
 /** Поставить кадр в очередь модели. */
@@ -120,6 +122,7 @@ export function useCreatePhoto(runId: string) {
       form.append('viewpoint', req.viewpoint);
       form.append('species', req.species.join(','));
       form.append('shrubs', req.shrubs.join(','));
+      form.append('shot', req.shot);
       return postForm<PhotoOut>(photosUrl(runId), form);
     },
     onSuccess: () => client.invalidateQueries({ queryKey: keys.photos(runId) }),

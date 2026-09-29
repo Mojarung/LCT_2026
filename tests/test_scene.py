@@ -124,7 +124,7 @@ def test_scene_has_the_contract_keys_and_survives_json() -> None:
         "use",
         "labels",
     }
-    assert set(scene["plants"][0]) == {"id", "x", "y", "type", "code", "structure"}
+    assert set(scene["plants"][0]) == {"id", "number", "x", "y", "type", "code", "structure"}
     assert set(scene["species"]["tilia_cordata"]) == SPECIES_KEYS
 
 
@@ -157,12 +157,14 @@ def test_plants_carry_species_and_structure_and_species_only_those_used() -> Non
     linden, spruce = scene["plants"]
     assert linden == {
         "id": "P1",
+        "number": linden["number"],
         "x": 50.0,
         "y": 50.0,
         "type": "tree",
         "code": "tilia_cordata",
         "structure": "row",
     }
+    assert isinstance(linden["number"], int)
     assert spruce["structure"] is None
     assert set(scene["species"]) == {"tilia_cordata", "picea_abies"}
     assert scene["species"]["picea_abies"]["conifer"] is True

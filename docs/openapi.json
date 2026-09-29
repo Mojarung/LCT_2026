@@ -56,6 +56,13 @@
             "$ref": "#/components/schemas/Season",
             "default": "summer"
           },
+          "shot": {
+            "default": "",
+            "description": "Подпись кадра в галерее",
+            "maxLength": 160,
+            "title": "Shot",
+            "type": "string"
+          },
           "shrubs": {
             "default": "",
             "description": "Латинские названия кустарников в кадре через запятую",
@@ -575,6 +582,11 @@
             ],
             "title": "Seconds"
           },
+          "shot": {
+            "description": "Подпись кадра, по которому сделано фото",
+            "title": "Shot",
+            "type": "string"
+          },
           "shrubs": {
             "items": {
               "type": "string"
@@ -641,6 +653,7 @@
           "viewpoint",
           "species",
           "shrubs",
+          "shot",
           "width",
           "height",
           "created_at",

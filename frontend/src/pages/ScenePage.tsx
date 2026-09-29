@@ -29,7 +29,7 @@ import { FLY_SPEED_DEFAULT } from '../scene3d/freecam';
 import type { SurfaceImage } from '../scene3d/ground';
 import { clock } from '../scene3d/solar';
 import { formatView, parseView } from '../scene3d/viewHash';
-import type { SceneJson } from '../scene3d/types';
+import type { Plant, SceneJson } from '../scene3d/types';
 import { buildWorld } from '../scene3d/world';
 
 const STAGE_TITLES: Record<Stage, string> = {
@@ -203,7 +203,7 @@ export function ScenePage() {
   } | null>(null);
   const [scenery, setScenery] = useState(false);
   const [requested, setRequested] = useState<Record<string, string>>({});
-  const lastPlant = useRef<{ id: string; name: string } | null>(null);
+  const lastPlant = useRef<Plant | null>(null);
   const photos = usePhotos(runId, done);
   const createPhoto = useCreatePhoto(runId);
   const settingsRef = useRef(settings);
@@ -230,7 +230,7 @@ export function ScenePage() {
       hover: (h) => {
         if (!alive) return;
         setHover(h);
-        if (h) lastPlant.current = { id: h.plant.id, name: h.plant.name };
+        if (h) lastPlant.current = h.plant;
       },
       camera: (state) => {
         if (!alive) return;
@@ -365,6 +365,7 @@ export function ScenePage() {
         viewpoint: shot.viewpoint,
         species: shot.trees,
         shrubs: shot.shrubs,
+        shot: `${gallery?.title ?? ''}. ${shot.label}`,
       },
       {
         onSuccess: (photo) => {
@@ -404,7 +405,7 @@ export function ScenePage() {
         const plant = lastPlant.current;
         void openGalleryRef.current(
           plant ? { kind: 'plant', id: plant.id } : { kind: 'street' },
-          plant ? `Кадры: ${plant.name}` : 'Кадры улицы',
+          plant ? plantTitle(plant) : 'Кадры улицы',
         );
       } else if (event.code === 'KeyP') void shootRef.current(1);
       else if (event.code === 'KeyH') setHudHidden((v) => !v);
@@ -442,14 +443,12 @@ export function ScenePage() {
   useEffect(() => {
     if (!readyToFly || autoOpened.current || (!autoTarget && !autoStreet)) return;
     autoOpened.current = true;
-    const name = world?.plants.find((p) => p.id === autoTarget)?.name ?? 'посадка';
-    // Номер посадки приходит из ссылки карты: в сцене номеров нет, а эксперт ищет по нему.
-    const number = search.get('n');
+    const plant = world?.plants.find((p) => p.id === autoTarget);
     void openGalleryRef.current(
       autoTarget ? { kind: 'plant', id: autoTarget } : { kind: 'street' },
-      autoTarget ? `Кадры: ${number ? `№ ${number}. ` : ''}${name}` : 'Кадры улицы',
+      autoTarget ? (plant ? plantTitle(plant) : 'Кадры посадки') : 'Кадры улицы',
     );
-  }, [readyToFly, autoTarget, autoStreet, world, search]);
+  }, [readyToFly, autoTarget, autoStreet, world]);
   const counts = world
     ? {
         trees: world.plants.filter((p) => !p.existing && p.type === 'tree').length,
@@ -721,4 +720,9 @@ function floorsLine(by: Record<'label' | 'neighbor' | 'letter' | 'assumed', numb
     .filter(([, n]) => n > 0)
     .map(([what, n]) => `${what} - ${String(n)}`);
   return parts.length ? `Этажность зданий: ${parts.join(', ')}.` : '';
+}
+
+/** Заголовок галереи посадки: номер, как на карте и в выгрузках, и вид. */
+function plantTitle(plant: Plant): string {
+  return `Кадры: ${plant.number ? `№ ${String(plant.number)}. ` : ''}${plant.name}`;
 }

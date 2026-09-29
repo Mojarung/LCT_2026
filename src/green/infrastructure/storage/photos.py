@@ -93,6 +93,7 @@ def _payload(job: PhotoJob) -> dict[str, object]:
             "viewpoint": o.viewpoint,
             "species": list(o.species),
             "shrubs": list(o.shrubs),
+            "shot": o.shot,
         },
     }
 
@@ -113,6 +114,7 @@ def _job(data: dict[str, Any]) -> PhotoJob:
             viewpoint=o["viewpoint"],
             species=tuple(o["species"]),
             shrubs=tuple(o.get("shrubs", ())),
+            shot=str(o.get("shot", "")),
         ),
         width=int(data["width"]),
         height=int(data["height"]),

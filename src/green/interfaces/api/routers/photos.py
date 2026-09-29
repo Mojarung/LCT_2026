@@ -30,6 +30,7 @@ router = APIRouter(
     tags=["photos"],
     responses={**PROBLEM_RESPONSES, 503: {"model": Problem, "description": "Сервис недоступен"}},
 )
+SHOT_MAX = 160
 MEDIA = {"source": "image/png", "raw": "image/png", "photo": "image/jpeg"}
 
 
@@ -52,6 +53,7 @@ def _out(request: Request, job: PhotoJob) -> PhotoOut:
         viewpoint=o.viewpoint,
         species=list(o.species),
         shrubs=list(o.shrubs),
+        shot=o.shot,
         width=job.width,
         height=job.height,
         created_at=job.created_at,
@@ -99,6 +101,7 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
     shrubs: Annotated[
         str, Form(description="Латинские названия кустарников в кадре через запятую")
     ] = "",
+    shot: Annotated[str, Form(max_length=SHOT_MAX, description="Подпись кадра в галерее")] = "",
 ) -> PhotoOut:
     """Поставить кадр в очередь модели. Статус: GET по адресу из Location."""
     container.store.get(run_id)
@@ -111,6 +114,7 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
         viewpoint=viewpoint,
         species=species_names(species.split(",")),
         shrubs=species_names(shrubs.split(",")),
+        shot=" ".join(shot.split()),
     )
     job = container.photos.submit(run_id, await image.read(), options)
     out = _out(request, job)

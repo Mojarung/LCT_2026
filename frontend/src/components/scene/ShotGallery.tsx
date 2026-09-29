@@ -93,22 +93,44 @@ export function ShotGallery({
 }: ShotGalleryProps) {
   const byId = new Map(photos.map((p) => [p.id, p]));
   const ordered = new Set(Object.values(requested));
+  // По одному фото на кадр, свежее: облёт снимают не раз, и одинаковые фото ничего не дают.
+  const seen = new Set<string>();
   const earlier = photos
     .filter((p) => !ordered.has(p.id) && p.state === 'succeeded')
+    .filter((p) => {
+      const key = `${p.shot || p.id}|${String(p.scenery)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, EARLIER_MAX);
+  const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const headingId = useId();
-  // Диалог: фокус на заголовок, иначе он остаётся на body за галереей.
+  // Обработчик - через ссылку: страница передаёт новую функцию на каждую отрисовку, а диалог
+  // открывается один раз, иначе опрос фото раз в 3 с дёргал бы фокус.
+  const close = useRef(onClose);
   useEffect(() => {
+    close.current = onClose;
+  });
+  // Модальный <dialog>: встаёт над шапкой сайта, держит фокус внутри и закрывается по Esc.
+  useEffect(() => {
+    const box = dialog.current;
+    if (!box) return;
+    if (typeof box.showModal === 'function' && !box.open) box.showModal();
     heading.current?.focus();
+    const cancel = (event: Event) => {
+      event.preventDefault();
+      close.current();
+    };
+    box.addEventListener('cancel', cancel);
+    return () => {
+      box.removeEventListener('cancel', cancel);
+      if (box.open) box.close();
+    };
   }, []);
   return (
-    <section
-      className="hud scene-gallery"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={headingId}
-    >
+    <dialog ref={dialog} className="scene-gallery" aria-labelledby={headingId}>
       <header className="gallery-head">
         <h2 id={headingId} ref={heading} tabIndex={-1}>
           {title}
@@ -192,7 +214,7 @@ export function ShotGallery({
                 {available ? (
                   <button
                     type="button"
-                    className="primary small"
+                    className="ghost small"
                     disabled={photo?.state === 'queued' || photo?.state === 'running'}
                     title="Фото по кадру от Qwen-Image-2.1, расстановка та же"
                     onClick={() => {
@@ -214,12 +236,13 @@ export function ShotGallery({
           <ul className="gallery-grid">
             {earlier.map((photo) => (
               <li key={photo.id} className="gallery-card">
-                <PhotoStatus photo={photo} label="прежнее фото прогона" />
+                <PhotoStatus photo={photo} label={photo.shot || 'прежнее фото прогона'} />
+                {photo.shot ? <p className="gallery-label">{photo.shot}</p> : null}
               </li>
             ))}
           </ul>
         </>
       ) : null}
-    </section>
+    </dialog>
   );
 }

@@ -235,13 +235,20 @@ def test_api_queues_a_photo_and_serves_the_files(client: TestClient) -> None:
     response = client.post(
         f"{API_PREFIX}/runs/{run.run_id}/photos",
         files={"image": ("shot.png", _png(512, 288), "image/png")},
-        data={"scenery": "true", "season": "autumn", "hour": "16", "species": "Tilia cordata"},
+        data={
+            "scenery": "true",
+            "season": "autumn",
+            "hour": "16",
+            "species": "Tilia cordata",
+            "shot": "Участок 1 из 3",
+        },
     )
     assert response.status_code == 202, response.text
     photo = client.get(response.headers["Location"]).json()
     assert photo["state"] == "succeeded"
     assert photo["scenery"] is True
     assert photo["species"] == ["Tilia cordata"]
+    assert photo["shot"] == "Участок 1 из 3"
 
     image = client.get(photo["photo_url"])
     assert image.status_code == 200

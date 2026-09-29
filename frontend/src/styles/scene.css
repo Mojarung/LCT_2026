@@ -291,6 +291,14 @@
   .scene-help {
     display: none;
   }
+  /* Полоса камеры - в потоке под сценой, как полоса хода на рабочем месте: прибитая к низу
+     окна, она ложилась на пульт и закрывала его. */
+  .scene-bar {
+    position: static;
+    order: 3;
+    margin: 12px var(--gutter) 0;
+    align-self: flex-start;
+  }
   /* Пульт - полосой под сведениями, как правая панель рабочего места: поверх сцены он
      закрывал текст сведений. */
   .scene-panel {
@@ -318,19 +326,25 @@
   }
 }
 
-/* --- Галерея автоматических кадров и фото: поверх сцены, до свободного полёта --- */
+/* --- Галерея автоматических кадров и фото: модальный <dialog> поверх всей страницы --- */
 .scene-gallery {
-  left: 50%;
-  top: calc(var(--inset) * 2 + var(--bar));
-  transform: translateX(-50%);
+  position: fixed;
+  inset: 0;
+  margin: calc(var(--inset) * 2 + var(--bar)) auto var(--inset);
   width: min(1120px, calc(100% - var(--inset) * 2));
+  max-width: none;
+  height: fit-content;
   max-height: calc(100% - var(--inset) * 3 - var(--bar));
   overflow: auto;
   padding: 16px 18px;
-  z-index: 5;
-  /* Диалог, а не стекло: сквозь полупрозрачный фон читались подписи пульта. */
+  color: var(--bone);
   background: var(--panel);
-  backdrop-filter: none;
+  border: 1.5px solid var(--edge);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+}
+.scene-gallery::backdrop {
+  background: rgb(20 18 15 / 35%);
 }
 .gallery-head h2:focus {
   outline: none;
@@ -446,7 +460,7 @@
   border: 2px solid #fff;
   border-radius: 50%;
   box-shadow:
-    0 0 0 2px var(--warn),
+    0 0 0 2px var(--edge),
     0 1px 4px rgb(0 0 0 / 45%);
   pointer-events: none;
 }
@@ -463,13 +477,11 @@
   color: var(--bone);
 }
 
-/* Узкий экран: галерея - во весь экран. Правило стоит после базового, иначе то его перебивает. */
+/* Узкий экран: галерея во весь экран. Правило стоит после базового, иначе то его перебивает. */
 @media (max-width: 1080px) {
   .scene-gallery {
-    position: fixed;
-    inset: var(--inset);
-    transform: none;
+    margin: var(--inset);
     width: auto;
-    max-height: none;
+    max-height: calc(100% - var(--inset) * 2);
   }
 }

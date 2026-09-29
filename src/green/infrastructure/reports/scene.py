@@ -123,6 +123,8 @@ def _plant(placement: Placement) -> dict[str, Any]:
     info = placement.assortment
     return {
         "id": placement.placement_id,
+        # Номер посадки, как в plan.json и на карте: галерея кадров подписывает им заголовок.
+        "number": placement.number,
         "x": round(placement.x, DIGITS),
         "y": round(placement.y, DIGITS),
         "type": placement.planting_type.value,

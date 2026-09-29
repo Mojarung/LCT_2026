@@ -257,6 +257,7 @@ class PhotoOut(BaseModel):
     viewpoint: Literal["aerial", "ground"]
     species: list[str]
     shrubs: list[str]
+    shot: str = Field(description="Подпись кадра, по которому сделано фото")
     width: int
     height: int
     created_at: datetime
