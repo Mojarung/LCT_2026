@@ -78,6 +78,11 @@ def _line(error: ErrorDetails) -> str:
 
 
 def _phrase(error: ErrorDetails) -> str:
+    # Preserve the actionable reason from the layer-map validator after localisation.
+    if error["type"] == "value_error" and str((error.get("ctx") or {}).get("error", "")).endswith(
+        "с классом ignore без reason"
+    ):
+        return "для правила ignore требуется причина (reason)"
     template = _PHRASES.get(error["type"])
     if template is None:
         return _UNKNOWN

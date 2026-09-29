@@ -9,12 +9,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import ezdxf
-from shapely.geometry import MultiPoint
+from shapely.geometry import MultiPoint, Point, box
 from test_pipeline_synthetic import ROOT
 
 from green.application.classification import classify_scene
 from green.application.params import PlanParams
+from green.application.stock import stock_of
 from green.application.surfaces import _seeds
+from green.application.tree_strips import chain_tree_strips
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.infrastructure.cad.reader import EzdxfSceneReader
 from green.infrastructure.config.repositories import YamlLayerMapSource
@@ -52,11 +54,12 @@ def test_twenty_circles_every_80_cm_are_one_strip(tmp_path: Path) -> None:
     assert {f.classification.method for f in members} == {f"tree_strip_member:{trees[0].ref}"}
 
 
-def test_five_trees_five_metres_apart_stay_five_trees(tmp_path: Path) -> None:
+def test_isolated_marks_on_strip_layer_are_still_ambiguous(tmp_path: Path) -> None:
     scene = _circles(tmp_path, 5.0, 5)
 
     trees = [f for f in scene.features if f.object_class is ObjectClass.EXISTING_TREE]
-    assert [t.geometry.geom_type for t in trees] == ["Point"] * 5
+    assert [t.geometry.geom_type for t in trees] == ["MultiPoint"] * 5
+    assert all(t.source_entity_type == "TREE_STRIP" for t in trees)
 
 
 def test_tree_symbols_one_metre_apart_are_real_trees(tmp_path: Path) -> None:
@@ -92,3 +95,20 @@ def test_strip_seeds_soil_at_every_circle_not_at_its_centre() -> None:
 
     assert sorted(map(tuple, xy.tolist())) == sorted(corner)
     assert len(kinds) == len(corner)
+
+
+def test_filled_dot_on_strip_layer_keeps_footprint_without_inventing_a_tree() -> None:
+
+    dot = Feature(
+        SourceRef("file", "xref", "dot"),
+        STRIP_LAYER,
+        Point(5, 5).buffer(0.04),
+        object_class=ObjectClass.EXISTING_TREE,
+        source_entity_type="REGION",
+    )
+    result = chain_tree_strips([dot])
+    assert result[0].geometry.equals(dot.geometry)
+    assert result[0].source_entity_type == "TREE_STRIP"
+    stock = stock_of(result, box(0, 0, 10, 10), crown_m=8)
+    assert stock.trees == 0
+    assert stock.canopy is None

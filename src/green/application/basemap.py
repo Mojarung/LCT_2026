@@ -16,7 +16,9 @@ import shapely
 from shapely.errors import GEOSException
 
 from green.application.semantic_names import base_name
+from green.application.shrub_strips import SHRUB_STRIP_SOURCE
 from green.application.surfaces import Material, label_material
+from green.application.tree_strips import STRIP_SOURCE
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -63,6 +65,7 @@ class BasemapFeature:
     geometry: BaseGeometry
     # Существующее дерево со знаком хвойного (CONIFER_SYMBOLS): на карте - зелёное кольцо.
     conifer: bool = False
+    vegetation_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,11 +155,21 @@ def build_basemap(
         if _is_small(simplified, min_span_m):
             dropped[SMALL] += 1
             continue
+        vegetation_kind = None
+        if feature.object_class in {ObjectClass.EXISTING_TREE, ObjectClass.EXISTING_SHRUB}:
+            vegetation_kind = (
+                "shrub_strip"
+                if feature.source_entity_type == SHRUB_STRIP_SOURCE
+                else "strip"
+                if feature.source_entity_type == STRIP_SOURCE
+                else "individual"
+            )
         kept.append(
             BasemapFeature(
                 object_class=feature.object_class,
                 geometry=simplified,
                 conifer=_is_conifer(feature),
+                vegetation_kind=vegetation_kind,
             )
         )
 

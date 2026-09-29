@@ -689,9 +689,12 @@ def _basemap_properties(feature: BasemapFeature) -> dict[str, Any]:
     Признак пишется только там, где он есть: у десятков тысяч объектов подосновы лишний
     ключ утяжелил бы выгрузку, которую браузер разбирает при открытии прогона.
     """
+    properties: dict[str, Any] = {"class": feature.object_class.value}
     if feature.conifer:
-        return {"class": feature.object_class.value, "conifer": True}
-    return {"class": feature.object_class.value}
+        properties["conifer"] = True
+    if feature.vegetation_kind:
+        properties["vegetation_kind"] = feature.vegetation_kind
+    return properties
 
 
 # Цвета карты покрытий: грунт - зеленоватый, твёрдое - серый, полупрозрачные, чтобы линии

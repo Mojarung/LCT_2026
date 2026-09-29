@@ -19,8 +19,9 @@ from green.application.basemap import (
     SPAN_FLOOR_M,
     build_basemap,
 )
+from green.application.tree_strips import chain_tree_strips
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.infrastructure.reports.artifacts import FileArtifactSink
+from green.infrastructure.reports.artifacts import FileArtifactSink, _basemap
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -217,6 +218,23 @@ def test_the_conifer_mark_is_written_only_where_it_is(tmp_path: Path) -> None:
 
     features = json.loads(path.read_text(encoding="utf-8"))["features"]
     assert [f["properties"] for f in features] == [
-        {"class": "existing_tree", "conifer": True},
-        {"class": "existing_tree"},
+        {"class": "existing_tree", "conifer": True, "vegetation_kind": "individual"},
+        {"class": "existing_tree", "vegetation_kind": "individual"},
     ]
+
+
+def test_tree_strip_semantics_survive_basemap_export() -> None:
+    features = [
+        replace(
+            _feature(str(i), ObjectClass.EXISTING_TREE, Point(i * 0.8, 0)), layer="Полоса деревьев"
+        )
+        for i in range(4)
+    ]
+    features.append(_feature("single", ObjectClass.EXISTING_TREE, Point(20, 10)))
+    payload = _basemap(build_basemap(chain_tree_strips(features)))
+    strips = [f for f in payload["features"] if f["properties"]["vegetation_kind"] == "strip"]
+    singles = [f for f in payload["features"] if f["properties"]["vegetation_kind"] == "individual"]
+    assert len(strips) == len(singles) == 1
+    assert strips[0]["geometry"]["type"] == "MultiPoint"
+    assert len(strips[0]["geometry"]["coordinates"]) == 4
+    assert singles[0]["geometry"]["coordinates"] == [20, 10]

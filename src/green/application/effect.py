@@ -712,8 +712,8 @@ def _notes(site: Site) -> tuple[str, ...]:
         )
     if len(stock.strips_xy):
         notes.append(
-            f"Полосы деревьев подосновы ({len(stock.strips_xy)} точек знака) учтены кронами, "
-            "но не в счёте деревьев."
+            f"Неопределённые полосы насаждений ({len(stock.strips_xy)} точек знака) "
+            "не задают число деревьев и размеры крон; их вклад в тень не оценён."
         )
     return tuple(notes)
 

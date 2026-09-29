@@ -365,7 +365,11 @@ export function ScenePage() {
               <div className="hud-scroll scene-facts">
                 <p>
                   {counts.trees} деревьев и {counts.shrubs} кустарников плана, {counts.existing}{' '}
-                  существующих насаждений, {counts.buildings} зданий.
+                  отдельных отметок насаждений, {counts.buildings} зданий.
+                  {!!world.shrubStrips?.length &&
+                    ` Кустарниковые полосы: ${world.shrubStrips.length}. Высота и ширина показаны условно; порода и число кустов не заданы.`}
+                  {!!world.treeStrips?.length &&
+                    ` Полосы насаждений: ${world.treeStrips.length}. Показаны условными знаками на земле; число стволов не задано.`}
                 </p>
                 <p className="hint">
                   Этажность: по подписи чертежа у {world.floorsBy.label}, от соседнего корпуса у{' '}

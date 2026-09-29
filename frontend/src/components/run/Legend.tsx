@@ -301,6 +301,12 @@ export function Legend({
             </span>
           </div>
         )}
+        <div className="legend">
+          <span>
+            <i className="swatch" style={{ background: 'var(--c-existing)', height: 6 }} />
+            <b>существующая кустарниковая полоса; ширина условная</b>
+          </span>
+        </div>
         {/* Раскрытие с «+», как остальные в панелях. Фраза про нетронутые исходные слои здесь
             повторяла штамп консоли и подсказку у «Скачать DXF» (жюри, итерация 7). */}
         <details className="legend-dxf fold">

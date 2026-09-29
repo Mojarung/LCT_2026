@@ -5,6 +5,7 @@ import { buildChunks } from './chunks';
 
 // В jsdom нет Path2D: для нарезки важны только ключи кусков и их габариты.
 class FakePath {
+  arc = vi.fn();
   moveTo() {}
   lineTo() {}
   closePath() {}
@@ -79,4 +80,52 @@ describe('нарезка подосновы', () => {
     );
     expect(chunk?.span).toBe(Infinity);
   });
+});
+
+it('полоса остаётся условными кружками, не попадает в модели крон', () => {
+  const existing: import('./existing').ExistingPlant[] = [];
+  const chunks = buildChunks(
+    [
+      {
+        type: 'Feature',
+        properties: { class: 'existing_tree', vegetation_kind: 'strip' },
+        geometry: {
+          type: 'MultiPoint',
+          coordinates: [
+            [0, 0],
+            [0.8, 0],
+            [1.6, 0],
+          ],
+        },
+      },
+    ],
+    [0, 0, 10, 10],
+    existing,
+  );
+  expect(existing).toHaveLength(0);
+  expect(chunks).toHaveLength(1);
+  expect(chunks[0]?.path.arc).toHaveBeenCalledTimes(3);
+  expect(chunks[0]?.path.arc).toHaveBeenCalledWith(0, 0, 0.25, 0, Math.PI * 2);
+});
+
+it('recognised shrub strip is a filled band, never a list of crowns', () => {
+  const feature: BasemapFeature = {
+    type: 'Feature',
+    properties: { class: 'existing_shrub', vegetation_kind: 'shrub_strip' },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+      ],
+    },
+  };
+  const existing: import('./existing').ExistingPlant[] = [];
+  const chunks = buildChunks([feature], [0, 0, 10, 10], existing);
+  expect(existing).toEqual([]);
+  expect(chunks).toHaveLength(1);
+  expect(chunks[0]?.fillVar).toBe('--c-existing');
+  expect(chunks[0]?.minX).toBeLessThan(0);
+  expect(chunks[0]?.maxY).toBeGreaterThan(4);
 });

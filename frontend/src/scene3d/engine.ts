@@ -5,6 +5,7 @@
  * от WebGL, живёт здесь; чистая логика - в соседних модулях с тестами. */
 
 import * as THREE from 'three';
+import { SHRUB_STRIP_HEIGHT_M, SHRUB_STRIP_WIDTH_M } from '../map/existing';
 
 import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
 import { Walls } from './collide';
@@ -22,7 +23,7 @@ import {
 import { pick } from './pick';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import { asphalt, concrete, fenceBars, grass, noiseTexture, pavers } from './textures';
+import { asphalt, concrete, fenceBars, grass, hedgeLeaves, noiseTexture, pavers } from './textures';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
 import { atmosphereOf, Weather } from './weather';
@@ -240,6 +241,39 @@ export class SceneEngine {
     const ground = groundMesh(this.world, mask, tex, this.groundWeather);
     this.add(ground);
     this.addStreetFurniture();
+    if (this.world.shrubStrips?.length) {
+      const leaves = hedgeLeaves();
+      this.disposables.push(leaves);
+      const hedge = new THREE.Mesh(
+        ribbonBox(this.world.shrubStrips, SHRUB_STRIP_WIDTH_M, SHRUB_STRIP_HEIGHT_M),
+        new THREE.MeshStandardMaterial({
+          map: leaves,
+          bumpMap: leaves,
+          bumpScale: 0.035,
+          roughness: 1,
+        }),
+      );
+      hedge.name = 'shrub-strip-bands';
+      hedge.receiveShadow = true;
+      this.add(hedge);
+    }
+    const stripMarks = (this.world.treeStrips ?? []).flat();
+    if (stripMarks.length) {
+      const geometry = new THREE.RingGeometry(0.18, 0.25, 12);
+      geometry.rotateX(-Math.PI / 2);
+      const marks = new THREE.InstancedMesh(
+        geometry,
+        new THREE.MeshBasicMaterial({ color: 0x48633e, depthWrite: false }),
+        stripMarks.length,
+      );
+      const matrix = new THREE.Matrix4();
+      stripMarks.forEach((point, index) => {
+        marks.setMatrixAt(index, matrix.makeTranslation(point.x, 0.06, point.z));
+      });
+      marks.name = 'tree-strip-symbols';
+      this.add(marks);
+      this.disposables.push(marks);
+    }
     this.people = new People(placePeople({ ...mask }, PEOPLE_MAX));
     this.scene.add(this.people.root, this.weather.root);
     await this.step('buildings');
@@ -328,6 +362,10 @@ export class SceneEngine {
   apply(settings: Partial<ViewSettings>): void {
     this.settings = { ...this.settings, ...settings };
     const s = this.settings;
+    const shrubBands = this.scene.getObjectByName('shrub-strip-bands');
+    if (shrubBands) shrubBands.visible = s.showExisting;
+    const stripMarks = this.scene.getObjectByName('tree-strip-symbols');
+    if (stripMarks) stripMarks.visible = s.showExisting;
     const q = QUALITY[s.quality];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
     this.resize();

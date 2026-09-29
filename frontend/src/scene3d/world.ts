@@ -9,7 +9,7 @@
  * fallback, и интерфейс обязан его показать: такая сцена грубее, чем могла бы быть. */
 
 import type { BasemapFeature, BasemapJson, Geometry, PlanJson, Position } from '../api/artifacts';
-import { plantsOf } from '../map/existing';
+import { plantsOf, stripPoints, shrubStripLines } from '../map/existing';
 import { isShrubType } from '../map/models';
 import type {
   Building,
@@ -183,6 +183,8 @@ function centerOf(geometry: Geometry): Position | null {
 }
 
 interface Linework {
+  treeStrips: Flat[][];
+  shrubStrips: Line[];
   curbs: Line[];
   fences: Line[];
   poles: Flat[];
@@ -200,6 +202,33 @@ const AREA_CLASSES: Record<string, 'lawns' | 'sidewalks' | 'roads'> = {
 function takeFeature(feature: BasemapFeature, box: Box, frame: Frame, into: Linework): void {
   const kind = feature.properties.class;
   const geometry = feature.geometry;
+  const shrubLines = shrubStripLines(feature);
+  if (shrubLines.length) {
+    for (const line of shrubLines) {
+      // Preserve the axis as a whole: filtering individual vertices can bridge gaps.
+      if (
+        line.length > 1 &&
+        line.some((a, i) => {
+          const b = line[i + 1];
+          return (
+            b &&
+            Math.max(a[0], b[0]) >= box[0] &&
+            Math.min(a[0], b[0]) <= box[2] &&
+            Math.max(a[1], b[1]) >= box[1] &&
+            Math.min(a[1], b[1]) <= box[3]
+          );
+        })
+      )
+        into.shrubStrips.push({ points: line.map(([x, y]) => frame.toFlat(x, y)) });
+    }
+    return;
+  }
+  const strip = stripPoints(feature);
+  if (strip) {
+    const visible = strip.filter((point) => inBox([point], box));
+    if (visible.length) into.treeStrips.push(visible.map(([x, y]) => frame.toFlat(x, y)));
+    return;
+  }
   if (kind === 'pole') {
     const center = centerOf(geometry);
     if (center && inBox([center], box)) into.poles.push(frame.toFlat(center[0], center[1]));
@@ -374,6 +403,8 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     seed: hashOf(p.id),
   }));
   const linework: Linework = {
+    treeStrips: [],
+    shrubStrips: [],
     curbs: [],
     fences: [],
     poles: [],

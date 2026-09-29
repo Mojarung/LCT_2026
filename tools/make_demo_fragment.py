@@ -7,8 +7,8 @@
 Почему нельзя просто вырезать сущности. В модельном пространстве генплана 95 объектов -
 всё остальное лежит внутри блоков и внешних ссылок. Поэтому фрагмент собирается из уже
 развёрнутой сцены: загрузчик сервиса раскрывает блоки и чинит строки, после чего геометрия
-переносится в новый чертёж с исходными именами слоёв. Это перенос, а не перерисовка:
-координаты и слои те же, теряется только блочная структура, которая сервису не нужна.
+переносится в новый чертёж с исходными именами слоёв. Окружности сохраняют исходные центры и радиусы; POINT остаётся POINT. Прочие кривые
+аппроксимируются геометрией сцены, блочная структура не сохраняется.
 
     uv run python tools/make_demo_fragment.py исходный.dxf out.dxf --size 420 --auto
     uv run python tools/make_demo_fragment.py исходный.dxf out.dxf --x0 ... --y0 ... --x1 ... --y1 ...
@@ -82,10 +82,14 @@ def write_fragment(
     for feature in features:
         geometry = feature.geometry
         attribs = {"layer": feature.layer or "0"}
+        if feature.circle_radius_m is not None and feature.circle_center_m is not None:
+            msp.add_circle(feature.circle_center_m, feature.circle_radius_m, dxfattribs=attribs)
+            written["CIRCLE"] += 1
+            continue
         for part in _parts(geometry):
             kind = part.geom_type
             if kind == "Point":
-                msp.add_circle((part.x, part.y), 0.25, dxfattribs=attribs)
+                msp.add_point((part.x, part.y), dxfattribs=attribs)
             elif kind == "LineString":
                 coords = [(x, y) for x, y, *_ in part.coords]
                 if len(coords) >= 2:

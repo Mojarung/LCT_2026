@@ -90,3 +90,32 @@ describe('существующие насаждения с подосновы', 
     expect(feature('building', { type: 'Point', coordinates: [0, 0] })).toBeNull();
   });
 });
+
+describe('полосы деревьев не становятся отдельными кронами', () => {
+  const geometry = {
+    type: 'MultiPoint' as const,
+    coordinates: [
+      [0, 0],
+      [0.8, 0],
+      [1.6, 0],
+    ] as [number, number][],
+  };
+  it.each([undefined, 'strip'] as const)('новые и старые артефакты: %s', (vegetation_kind) => {
+    expect(
+      plantsOf({
+        type: 'Feature',
+        properties: { class: 'existing_tree', vegetation_kind },
+        geometry,
+      }),
+    ).toBeNull();
+  });
+  it('явная группа отдельных деревьев сохраняется', () => {
+    expect(
+      plantsOf({
+        type: 'Feature',
+        properties: { class: 'existing_tree', vegetation_kind: 'individual' },
+        geometry,
+      }),
+    ).toHaveLength(3);
+  });
+});

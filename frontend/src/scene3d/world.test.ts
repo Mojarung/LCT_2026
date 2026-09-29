@@ -215,3 +215,100 @@ describe('вспомогательные числа', () => {
     expect(hashOf('a')).not.toBe(hashOf('b'));
   });
 });
+
+it.each([undefined, 'strip'] as const)(
+  'полоса %s сохраняет знаки, но не создаёт стволы и не меняет план',
+  (vegetation_kind) => {
+    const world = buildWorld({
+      scene: scene(),
+      plan: null,
+      basemap: {
+        ...basemap,
+        features: [
+          {
+            type: 'Feature',
+            properties: { class: 'existing_tree', vegetation_kind },
+            geometry: {
+              type: 'MultiPoint',
+              coordinates: [
+                [1100, 2100],
+                [1100.8, 2100],
+                [1101.6, 2100],
+              ],
+            },
+          },
+          {
+            type: 'Feature',
+            properties: { class: 'existing_tree' },
+            geometry: { type: 'Point', coordinates: [1200, 2100] },
+          },
+        ],
+      },
+    });
+    expect(world.plants.filter((p) => p.existing)).toHaveLength(1);
+    expect(world.plants.filter((p) => !p.existing)).toHaveLength(3);
+    expect(world.treeStrips).toHaveLength(1);
+    expect(world.treeStrips?.[0]).toHaveLength(3);
+  },
+);
+
+it('shrub strips become continuous axes, without invented individual plants', () => {
+  const world = buildWorld({
+    scene: null,
+    plan: null,
+    basemap: {
+      type: 'FeatureCollection',
+      bbox: [0, 0, 20, 20],
+      features: [
+        {
+          type: 'Feature',
+          properties: { class: 'existing_shrub', vegetation_kind: 'shrub_strip' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [1, 2],
+              [5, 2],
+              [8, 3],
+            ],
+          },
+        },
+      ],
+    },
+  });
+  expect(world.plants).toHaveLength(0);
+  expect(world.treeStrips).toHaveLength(0);
+  expect(world.shrubStrips).toEqual([
+    {
+      points: [
+        { x: -9, z: 8 },
+        { x: -5, z: 8 },
+        { x: -2, z: 7 },
+      ],
+    },
+  ]);
+});
+
+it('does not drop a shrub axis crossing the scene with both ends outside', () => {
+  const world = buildWorld({
+    scene: scene({ extent: [0, 0, 10, 10], plants: [], buildings: [] }),
+    plan: null,
+    basemap: {
+      type: 'FeatureCollection',
+      bbox: [-20, -20, 20, 20],
+      features: [
+        {
+          type: 'Feature',
+          properties: { class: 'existing_shrub', vegetation_kind: 'shrub_strip' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [-20, 5],
+              [20, 5],
+            ],
+          },
+        },
+      ],
+    },
+  });
+  expect(world.shrubStrips).toHaveLength(1);
+});

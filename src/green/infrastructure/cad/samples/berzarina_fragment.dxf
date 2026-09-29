@@ -493,7 +493,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461306.0122916666
+2461313.23474537
   9
 $TDUCREATE
  40
@@ -501,7 +501,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461306.0123032406
+2461313.23474537
   9
 $TDUUPDATE
  40
@@ -937,7 +937,7 @@ $FINGERPRINTGUID
   9
 $VERSIONGUID
   2
-{EFD1684C-94F5-4BEA-91EE-14C7D27CF481}
+{B37F67DD-64A7-4AE7-91FF-8622570438C1}
   9
 $EXTNAMES
 290
@@ -5233,7 +5233,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -5253,7 +5253,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -5649,7 +5649,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -6153,7 +6153,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 LWPOLYLINE
   5
@@ -7233,7 +7233,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7253,7 +7253,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7273,7 +7273,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7293,7 +7293,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.20004
   0
 CIRCLE
   5
@@ -7313,7 +7313,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7333,7 +7333,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7353,7 +7353,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7393,7 +7393,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7413,7 +7413,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -7433,7 +7433,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8153,7 +8153,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8393,7 +8393,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8433,7 +8433,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8453,7 +8453,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8473,7 +8473,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -8493,7 +8493,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 LWPOLYLINE
   5
@@ -13609,7 +13609,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13629,7 +13629,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13649,7 +13649,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13669,7 +13669,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13689,7 +13689,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13709,7 +13709,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13729,7 +13729,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -13749,7 +13749,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 LWPOLYLINE
   5
@@ -18861,7 +18861,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 CIRCLE
   5
@@ -18881,7 +18881,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.0625
   0
 LWPOLYLINE
   5
@@ -27949,7 +27949,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -28353,7 +28353,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -28757,7 +28757,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -29161,7 +29161,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -29565,7 +29565,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -29969,7 +29969,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -30373,7 +30373,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -30777,7 +30777,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -31181,7 +31181,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -31585,7 +31585,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -31989,7 +31989,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -32393,7 +32393,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -32797,7 +32797,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -33201,7 +33201,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -33605,7 +33605,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -34009,7 +34009,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -34413,7 +34413,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -34817,7 +34817,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -35221,7 +35221,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -35625,7 +35625,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -36029,7 +36029,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -36433,7 +36433,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -36837,7 +36837,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -37241,7 +37241,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -37645,7 +37645,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -38049,7 +38049,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -38453,7 +38453,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -38857,7 +38857,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -39261,7 +39261,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -39665,7 +39665,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -40069,7 +40069,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -59437,7 +59437,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -68201,7 +68201,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 CIRCLE
   5
@@ -68221,7 +68221,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -77873,7 +77873,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.20004
   0
 LWPOLYLINE
   5
@@ -78173,7 +78173,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -78577,7 +78577,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -112609,7 +112609,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -113013,7 +113013,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -113417,7 +113417,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -113821,7 +113821,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -114225,7 +114225,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -114629,7 +114629,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -114649,7 +114649,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -114689,7 +114689,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -115093,7 +115093,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -115497,7 +115497,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -115901,7 +115901,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -116305,7 +116305,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -116709,7 +116709,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -116729,7 +116729,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -116769,7 +116769,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -117173,7 +117173,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -117577,7 +117577,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -117981,7 +117981,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -118385,7 +118385,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -118789,7 +118789,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -118809,7 +118809,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -118849,7 +118849,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -119253,7 +119253,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -119657,7 +119657,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -120613,7 +120613,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120633,7 +120633,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120653,7 +120653,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120673,7 +120673,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120693,7 +120693,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120713,7 +120713,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120733,7 +120733,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120753,7 +120753,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120773,7 +120773,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120793,7 +120793,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120813,7 +120813,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120833,7 +120833,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120853,7 +120853,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -120873,7 +120873,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 LWPOLYLINE
   5
@@ -121001,7 +121001,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 LWPOLYLINE
   5
@@ -124277,7 +124277,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -124681,7 +124681,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -125085,7 +125085,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -125489,7 +125489,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -125893,7 +125893,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -126297,7 +126297,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -126701,7 +126701,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -127105,7 +127105,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -127509,7 +127509,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -127913,7 +127913,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -128317,7 +128317,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -128721,7 +128721,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -129125,7 +129125,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -129529,7 +129529,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -129933,7 +129933,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -130337,7 +130337,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -130741,7 +130741,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -131145,7 +131145,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -131549,7 +131549,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -131953,7 +131953,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -132357,7 +132357,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -132761,7 +132761,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -133165,7 +133165,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -133569,7 +133569,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -133973,7 +133973,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -134377,7 +134377,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -134781,7 +134781,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -135185,7 +135185,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -135589,7 +135589,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -135993,7 +135993,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -136397,7 +136397,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -136801,7 +136801,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -137205,7 +137205,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -137609,7 +137609,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -138013,7 +138013,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -148413,7 +148413,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -150893,7 +150893,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -151433,7 +151433,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -151453,7 +151453,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -151493,7 +151493,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 LWPOLYLINE
   5
@@ -154741,7 +154741,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -155145,7 +155145,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -155549,7 +155549,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -155953,7 +155953,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -156357,7 +156357,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -156761,7 +156761,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -157165,7 +157165,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -167801,7 +167801,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 LWPOLYLINE
   5
@@ -168265,7 +168265,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -170837,7 +170837,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -171433,7 +171433,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -171837,7 +171837,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -172241,7 +172241,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -172645,7 +172645,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -173049,7 +173049,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -173453,7 +173453,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -173857,7 +173857,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -174261,7 +174261,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -174665,7 +174665,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -175069,7 +175069,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -175473,7 +175473,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -175877,7 +175877,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -176281,7 +176281,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -176685,7 +176685,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -177089,7 +177089,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -177493,7 +177493,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -177897,7 +177897,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -178301,7 +178301,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -178705,7 +178705,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -179109,7 +179109,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -179513,7 +179513,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -179917,7 +179917,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -180137,7 +180137,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -182465,7 +182465,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182485,7 +182485,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182505,7 +182505,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182525,7 +182525,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182545,7 +182545,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182565,7 +182565,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182585,7 +182585,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182605,7 +182605,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182625,7 +182625,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182645,7 +182645,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 CIRCLE
   5
@@ -182665,7 +182665,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 LWPOLYLINE
   5
@@ -182793,7 +182793,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.21
   0
 LWPOLYLINE
   5
@@ -182921,7 +182921,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -183597,7 +183597,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -184001,7 +184001,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -184405,7 +184405,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -184809,7 +184809,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -185213,7 +185213,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -185617,7 +185617,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -185637,7 +185637,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -185677,7 +185677,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -186081,7 +186081,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -186485,7 +186485,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -186889,7 +186889,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -187293,7 +187293,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -187697,7 +187697,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -187717,7 +187717,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -187757,7 +187757,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -188161,7 +188161,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -188565,7 +188565,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -188969,7 +188969,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -189373,7 +189373,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -189777,7 +189777,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -189797,7 +189797,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -189837,7 +189837,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -190241,7 +190241,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -190645,7 +190645,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -191049,7 +191049,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -191453,7 +191453,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -191857,7 +191857,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -191877,7 +191877,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -191917,7 +191917,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -192321,7 +192321,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -192725,7 +192725,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -193129,7 +193129,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -193533,7 +193533,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -193937,7 +193937,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -193957,7 +193957,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -193997,7 +193997,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -194401,7 +194401,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -194805,7 +194805,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -195209,7 +195209,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -195613,7 +195613,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -196017,7 +196017,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -196037,7 +196037,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -196077,7 +196077,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -196481,7 +196481,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -196885,7 +196885,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -197289,7 +197289,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -197693,7 +197693,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -198097,7 +198097,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -198117,7 +198117,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.175
   0
 CIRCLE
   5
@@ -198157,7 +198157,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -198561,7 +198561,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -198965,7 +198965,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -199369,7 +199369,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -199773,7 +199773,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -219977,7 +219977,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -219997,7 +219997,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -220017,7 +220017,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -220037,7 +220037,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.2000225
   0
 CIRCLE
   5
@@ -231077,7 +231077,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -231481,7 +231481,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -231885,7 +231885,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.04
   0
 LWPOLYLINE
   5
@@ -273173,7 +273173,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.45000061
   0
 CIRCLE
   5
@@ -287801,7 +287801,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 CIRCLE
   5
@@ -287821,7 +287821,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -288109,7 +288109,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -288225,7 +288225,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -288341,7 +288341,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 CIRCLE
   5
@@ -288361,7 +288361,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -288501,7 +288501,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -288649,7 +288649,7 @@ AcDbCircle
  30
 0.0
  40
-0.25
+0.05
   0
 LWPOLYLINE
   5
@@ -368929,7 +368929,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-09-21T21:17:43.254292+00:00
+1.4.4 @ 2026-09-29T02:38:02.597760+00:00
   0
 ENDSEC
   0

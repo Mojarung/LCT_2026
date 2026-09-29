@@ -150,6 +150,30 @@ export function grass(): THREE.CanvasTexture {
   return texture(c, true);
 }
 
+/** Неспецифичная листва условной изгороди: рисунок не задаёт породу или число кустов. */
+export function hedgeLeaves(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(256);
+  const random = rng(239);
+  ctx.fillStyle = '#334426';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2400; i++) {
+    const shade = random();
+    ctx.fillStyle = `rgb(${42 + shade * 38},${62 + shade * 48},${26 + shade * 25})`;
+    ctx.beginPath();
+    ctx.ellipse(
+      random() * 256,
+      random() * 256,
+      2 + random() * 4,
+      1 + random() * 2,
+      random() * Math.PI,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  return texture(c, true);
+}
+
 /** Бетон бортового камня и цоколей: светло-серый с кавернами. */
 export function concrete(): THREE.CanvasTexture {
   const size = 512;
