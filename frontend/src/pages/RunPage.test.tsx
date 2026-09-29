@@ -1,18 +1,24 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BasemapJson, PlanJson, QualityJson, RulesJson } from '../api/artifacts';
-import type { ArtifactOut, RunOut } from '../api/types';
+import type { ArtifactOut, PlanSummaryOut, RunOut } from '../api/types';
 import { toMapItems } from '../map/items';
+import type { EngineHooks } from '../map/types';
 import { useWorkspace } from '../state/workspace';
 import { mockApi, run } from '../test/api';
 import { renderApp } from '../test/render';
 
 // Холст и движок в jsdom не рисуют: их проверяют модульные тесты движка и живой браузер.
-// Здесь - всё вокруг карты: панели, сводка, объяснения, выгрузка.
+// Здесь - всё вокруг карты: панели, сводка, объяснения, выгрузка. Обработчики карты
+// (удаление, перенос) тест вызывает сам, как их вызвал бы движок.
+const map = vi.hoisted(() => ({ hooks: null as { current: EngineHooks } | null }));
 vi.mock('../components/run/PlanMap', () => ({
-  PlanMap: () => <canvas aria-label="План посадок" />,
+  PlanMap: ({ hooks }: { hooks: { current: EngineHooks } }) => {
+    map.hooks = hooks;
+    return <canvas aria-label="План посадок" />;
+  },
 }));
 
 const artifact = (name: string, size: number | null = 2048): ArtifactOut => ({
@@ -188,6 +194,115 @@ describe('RunPage: finished run', () => {
     expect(await within(right).findByText('0,81')).toBeInTheDocument();
     expect(within(left).queryByText('0,81')).toBeNull();
     expect(document.body).toHaveClass('shell-map');
+  });
+
+  // Ответ сервиса на правку: число посадок черновика и посадки, которые правка перевела в отказ.
+  const edited = (
+    placements: number,
+    rejected: PlanSummaryOut['rejected_by_edit'] = [],
+  ): PlanSummaryOut => ({
+    placements,
+    allowed: placements,
+    needs_approval: 0,
+    rejections: rejected.length,
+    stale: true,
+    rejected_by_edit: rejected,
+  });
+  const three = done({
+    summary: { placements: 3, needs_approval: 0, rejections: 0, integrity_ok: true },
+  });
+  const metric = () => {
+    const left = screen.getByRole('complementary', { name: 'Прогон' });
+    const node = left.querySelector<HTMLElement>('.metric');
+    if (!node) throw new Error('нет числа посадок в панели прогона');
+    return node;
+  };
+
+  it('counts the edit draft on the left, as the plan composition does, until the DXF is rebuilt', async () => {
+    // Жюри (этап 21, R-20): после удаления посадки слева «1278 посадок в плане», справа
+    // «Состав плана: 1277».
+    let rebuilt = false;
+    const after = {
+      ...three,
+      updated_at: '2026-09-23T09:20:00Z',
+      summary: { ...three.summary, placements: 2 },
+    };
+    const trimmed: PlanJson = { ...plan, placements: plan.placements.slice(1) };
+    mockApi({
+      ...succeededRoutes(three),
+      '/api/v1/runs/r1': () => Response.json(rebuilt ? after : three),
+      '/api/v1/runs/r1/artifacts/plan.json': () => Response.json(rebuilt ? trimmed : plan),
+      'POST /api/v1/runs/r1/edits': edited(2),
+      'POST /api/v1/runs/r1/rebuild': () => {
+        rebuilt = true;
+        return Response.json({ ...edited(2), stale: false });
+      },
+    });
+    renderApp('/runs/r1');
+    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    await within(right).findByRole('heading', { name: 'Состав плана: 3' });
+    expect(metric()).toHaveTextContent(/^3посадки в плане$/);
+
+    const target = toMapItems(plan).placements[0];
+    if (!target) throw new Error('нет посадки в плане');
+    act(() => {
+      map.hooks?.current.remove(target);
+    });
+
+    await within(right).findByRole('heading', { name: 'Состав плана: 2' });
+    // Слева то же число, что справа, и видно, что это черновик правок, а не итог прогона.
+    await waitFor(() => {
+      expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
+    });
+    // Разбивка сходится с числом черновика и не пропадает.
+    const breakdown = left.querySelector('.run-breakdown');
+    expect(breakdown).toHaveTextContent('Деревья2');
+    expect(breakdown).toHaveTextContent('Кустарники0');
+
+    // После пересборки число - итог прогона, метки черновика нет.
+    await userEvent.click(within(left).getByRole('button', { name: 'Пересобрать DXF' }));
+    await waitFor(
+      () => {
+        expect(metric()).toHaveTextContent(/^2посадки в плане$/);
+      },
+      { timeout: 6000 },
+    );
+    expect(within(right).getByRole('heading', { name: 'Состав плана: 2' })).toBeVisible();
+    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
+  }, 10_000);
+
+  it('leaves out of both counts a placement the edit moved into a rejection', async () => {
+    mockApi({
+      ...succeededRoutes(three),
+      'POST /api/v1/runs/r1/edits': edited(2, [
+        { placement_id: 'p2', reason: 'Ближе 2,0 м к водопроводу.' },
+      ]),
+      'POST /api/v1/runs/r1/check': {
+        verdict: 'forbidden',
+        plantable: true,
+        needs_barrier: false,
+        note: '',
+        checks: [],
+      },
+    });
+    renderApp('/runs/r1');
+    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    await within(right).findByRole('heading', { name: 'Состав плана: 3' });
+
+    const target = toMapItems(plan).placements[1];
+    if (!target) throw new Error('нет посадки в плане');
+    act(() => {
+      map.hooks?.current.move(target, 130, 50, { x: target.x, y: target.y });
+    });
+
+    // Сервис держит перенесённую посадку в отказах черновика: её нет ни слева, ни справа.
+    await within(right).findByRole('heading', { name: 'Состав плана: 2' });
+    await waitFor(() => {
+      expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
+    });
+    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
   });
 
   it('shows what the plan is made of until a placement is picked', async () => {

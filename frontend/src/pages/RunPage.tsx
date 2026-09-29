@@ -139,6 +139,22 @@ export function RunPage() {
     () => (items ? items.placements.filter((p) => !removedIds.has(p.id)) : NO_ITEMS),
     [items, removedIds],
   );
+  // Посадки, которые правка перевела в отказ: на карте они стоят там, куда их перенесли, но в
+  // черновике сервиса они уже в отказах. План черновика - без них; его число и слева, и в
+  // составе справа (жюри, этап 21: после правки слева было число прогона, справа - черновика).
+  const [movedOut, setMovedOut] = useState<{
+    source: PlanJson | undefined;
+    ids: ReadonlySet<string>;
+  }>({
+    source: undefined,
+    ids: NO_IDS,
+  });
+  const outIds = movedOut.source === plan.data ? movedOut.ids : NO_IDS;
+  const planned = useMemo(
+    () => (outIds.size ? placements.filter((p) => !outIds.has(p.id)) : placements),
+    [placements, outIds],
+  );
+  const stale = useWorkspace((s) => s.stale);
   const rejections = items?.rejections ?? NO_ITEMS;
   // Образец «кустарник» в обозначениях - самый частый куст этого плана, а не один на все.
   const shrub = useMemo(
@@ -177,6 +193,14 @@ export function RunPage() {
             const source = planData.current;
             const ids = new Set(previous.source === source ? previous.ids : NO_IDS);
             ids.add(item.id);
+            return { source, ids };
+          });
+        },
+        rejected: (rejectedIds) => {
+          setMovedOut((previous) => {
+            const source = planData.current;
+            const ids = new Set(previous.source === source ? previous.ids : NO_IDS);
+            for (const id of rejectedIds) ids.add(id);
             return { source, ids };
           });
         },
@@ -332,11 +356,12 @@ export function RunPage() {
                   // Только когда план загружен целиком: число сверяется с числом прогона.
                   items
                     ? {
-                        trees: placements.filter((p) => p.planting_type === 'tree').length,
-                        planted: placements.length,
+                        trees: planned.filter((p) => p.planting_type === 'tree').length,
+                        planted: planned.length,
                       }
                     : null
                 }
+                draft={stale}
               />
             ) : broken ? null : (
               <p className="metric">
@@ -358,7 +383,7 @@ export function RunPage() {
           >
             <PanelToggle panel="right" label="панель состава плана" />
             <DetailPanel
-              placements={placements}
+              placements={planned}
               rules={rules.data?.rules ?? {}}
               quality={quality.data}
             />

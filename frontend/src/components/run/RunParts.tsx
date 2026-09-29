@@ -88,14 +88,19 @@ export function RunHeader({ run }: { run: RunOut }) {
 export function RunMetrics({
   run,
   trees,
+  draft = false,
 }: {
   run: RunOut;
   /** Деревья среди посадок плана; null - план ещё не загружен. Число деревьев - первое, что
    *  спрашивает заказчик, а «994 посадки» его не называли (жюри по дизайну, итерация 9). */
   trees?: { trees: number; planted: number } | null;
+  /** Правки ещё не пересобраны в DXF: число посадок - черновика (trees.planted, как в составе
+   *  плана справа), а не итог прогона, и рядом сказано, что это черновик (жюри, этап 21). */
+  draft?: boolean;
 }) {
   const summary = run.summary ?? {};
-  const total = num(summary.placements);
+  const drafted = draft && trees != null;
+  const total = drafted ? trees.planted : num(summary.placements);
   const approval = num(summary.needs_approval);
   const rejected = num(summary.rejections);
   const integrity = summary.integrity_ok === true;
@@ -113,7 +118,10 @@ export function RunMetrics({
     <>
       <p className="metric">
         <b>{integer(total)}</b>
-        <span>{plural(total, 'посадка', 'посадки', 'посадок')} в плане</span>
+        <span>
+          {plural(total, 'посадка', 'посадки', 'посадок')} в плане
+          {drafted ? ' · черновик правок' : null}
+        </span>
       </p>
       {trees != null && trees.planted === total ? (
         <dl className="run-breakdown">
