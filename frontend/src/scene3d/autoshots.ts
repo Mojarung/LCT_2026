@@ -5,7 +5,7 @@
  * кронам в текущем возрасте, зданиям и солнцу. Виды в кадре идут в промпт фото латинскими
  * названиями, деревья и кустарники раздельно: так модель рисует липу липой, а спирею - кустом. */
 
-import type { Pose } from './freecam';
+import { EYE_M, type Pose } from './freecam';
 import {
   bounds,
   compass,
@@ -44,6 +44,8 @@ export interface AutoShot {
 export const SHOT_WIDTH = 1024;
 export const SHOT_HEIGHT = 576;
 export const SHOT_FOV = (55 * Math.PI) / 180;
+/** Дальше этого соседние кроны кадр посадки не заслоняют: камера так далеко не уходит. */
+const OCCLUDER_REACH_M = 60;
 /** Потолок высоты кадров улицы: выше улица превращается в план сверху. */
 export const SHOT_CEILING_M = 40;
 
@@ -96,7 +98,14 @@ export function plantShots(
 ): AutoShot[] {
   const body = bodies.find((b) => b.plant.id === id);
   if (!body) return [];
-  const request = { subject: [body], obstacles, framing: framing(), sun };
+  // Соседи, что могут заслонить кадр: выше глаз и не дальше, чем уходит камера.
+  const occluders = bodies.filter(
+    (b) =>
+      b !== body &&
+      b.height > EYE_M + 0.3 &&
+      Math.hypot(b.x - body.x, b.z - body.z) < OCCLUDER_REACH_M,
+  );
+  const request = { subject: [body], obstacles, framing: framing(), sun, occluders };
   const ground = planShots({ ...request, viewpoint: 'ground', count: 3 });
   const aerial = planShots({ ...request, viewpoint: 'aerial', count: 1 });
   return [...ground, ...aerial].map((s, i) => ({

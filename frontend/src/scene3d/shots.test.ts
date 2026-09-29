@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { EYE_M } from './freecam';
 import {
   aim,
+  inCrown,
   compass,
   project,
   bounds,
@@ -119,6 +120,25 @@ describe('planShots', () => {
     for (const s of shots) {
       expect(s.visible).toBe(1);
       expect(s.pose.x).toBeLessThan(4);
+    }
+  });
+
+  it('keeps the camera out of a neighbour crown and looks past it', () => {
+    // Сосед - крупная крона в 8 м к югу: кадр с юга закрыт, из кроны снимать нельзя.
+    const neighbour = { x: 0, z: 8, height: 14, radius: 5 };
+    const shots = planShots({
+      subject: [TREE],
+      obstacles: [],
+      occluders: [neighbour],
+      framing: FRAMING,
+      viewpoint: 'ground',
+      count: 3,
+    });
+
+    expect(shots.length).toBeGreaterThan(0);
+    for (const s of shots) {
+      expect(inCrown([neighbour], s.pose.x, s.pose.y, s.pose.z)).toBe(false);
+      expect(Math.abs(wrap(s.azimuth))).toBeGreaterThan(0.3);
     }
   });
 

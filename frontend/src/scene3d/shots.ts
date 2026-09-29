@@ -57,6 +57,8 @@ export interface ShotRequest {
   framing: Framing;
   viewpoint: Viewpoint;
   count: number;
+  /** Кроны соседей: камера внутри кроны даёт кадр из листвы, крона на луче закрывает объект. */
+  occluders?: readonly ShotBody[];
   /** Куда светит солнце по горизонтали (от сцены к солнцу); нет - ночь или неважно. */
   sun?: Flat | null;
 }
@@ -170,18 +172,48 @@ export function fitDistance(r: number, framing: Framing): number {
 function probes(subject: readonly ShotBody[]): { x: number; y: number; z: number }[] {
   const step = Math.max(1, Math.ceil(subject.length / PROBES));
   const out: { x: number; y: number; z: number }[] = [];
+  // У одного-двух растений точек мало: берём и края кроны, иначе видимость - «всё или ничего».
+  const sides = subject.length <= 2;
   for (let i = 0; i < subject.length; i += step) {
     const b = subject[i];
-    if (b) out.push({ x: b.x, y: Math.max(0.5, b.height - b.radius), z: b.z });
+    if (!b) continue;
+    const y = Math.max(0.5, b.height - b.radius);
+    out.push({ x: b.x, y, z: b.z });
+    if (!sides) continue;
+    const r = b.radius * 0.7;
+    out.push(
+      { x: b.x, y: Math.max(0.5, b.height - b.radius * 0.3), z: b.z },
+      { x: b.x + r, y, z: b.z },
+      { x: b.x - r, y, z: b.z },
+      { x: b.x, y, z: b.z + r },
+      { x: b.x, y, z: b.z - r },
+    );
   }
   return out;
 }
 
-/** Доля точек, до которых луч из камеры не проходит сквозь здания. */
+/** Доля кроны, которую считаем плотной: на краях шара листва редкая и вид сквозь неё есть. */
+const CROWN_CORE = 0.8;
+
+/** Точка внутри плотной части кроны: шар радиуса кроны с центром на высоте - радиус. */
+export function inCrown(crowns: readonly ShotBody[], x: number, y: number, z: number): boolean {
+  for (const c of crowns) {
+    const r = c.radius * CROWN_CORE;
+    const dx = x - c.x;
+    const dz = z - c.z;
+    if (Math.abs(dx) > r || Math.abs(dz) > r) continue;
+    const dy = y - (c.height - c.radius);
+    if (dx * dx + dy * dy + dz * dz < r * r) return true;
+  }
+  return false;
+}
+
+/** Доля точек, до которых луч из камеры не проходит сквозь здания и чужие кроны. */
 export function visibility(
   eye: { x: number; y: number; z: number },
   points: readonly { x: number; y: number; z: number }[],
   obstacles: readonly ShotObstacle[],
+  crowns: readonly ShotBody[] = [],
 ): number {
   if (!points.length) return 0;
   let seen = 0;
@@ -190,12 +222,10 @@ export function visibility(
     // Концы не проверяются: точка кроны может стоять вплотную к стене.
     for (let i = 1; i < RAY_SAMPLES && !blocked; i++) {
       const t = i / RAY_SAMPLES;
-      blocked = solid(
-        obstacles,
-        eye.x + (p.x - eye.x) * t,
-        eye.y + (p.y - eye.y) * t,
-        eye.z + (p.z - eye.z) * t,
-      );
+      const x = eye.x + (p.x - eye.x) * t;
+      const y = eye.y + (p.y - eye.y) * t;
+      const z = eye.z + (p.z - eye.z) * t;
+      blocked = solid(obstacles, x, y, z) || inCrown(crowns, x, y, z);
     }
     if (!blocked) seen += 1;
   }
@@ -225,8 +255,10 @@ function candidate(
     };
     target = { x: sphere.x, y: sphere.y, z: sphere.z };
   }
-  if (solid(request.obstacles, eye.x, eye.y, eye.z)) return null;
-  const visible = visibility(eye, points, request.obstacles);
+  const crowns = request.occluders ?? [];
+  if (solid(request.obstacles, eye.x, eye.y, eye.z) || inCrown(crowns, eye.x, eye.y, eye.z))
+    return null;
+  const visible = visibility(eye, points, request.obstacles, crowns);
   // Солнце за спиной - кроны освещены; в лицо - силуэты на засвеченном небе.
   const sun = request.sun;
   const light = sun ? -(dirX * sun.x + dirZ * sun.z) / (Math.hypot(sun.x, sun.z) || 1) : 0;
