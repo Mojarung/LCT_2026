@@ -1,14 +1,17 @@
 /* Снимки и фото - отдельной панелью слева: всё, что снято, одним столбцом крупных карточек.
  *
- * Действия видны на самой карточке: открыть, скачать, отправить снимок в нейросеть. В шапке -
- * чем снимать: снимок кадра, снимок вдвое крупнее, фото нейросетью этого вида и режим фото.
+ * Действия видны на самой карточке: открыть, скачать, удалить, отправить снимок в нейросеть.
+ * В шапке - три способа снять (снимок, фото нейросетью, кадры улицы), под ними настройки
+ * каждого переключателями: снимок крупнее, фон и деревья, новые фасады, промпт в своём окне.
  * Фото в работе видно по карточке: кадр, полоса хода и сколько осталось. */
 
 import { type ReactNode, useEffect, useState } from 'react';
 
 import type { PhotoOut } from '../../api/types';
 import { mediaBadge, type MediaItem, mediaTitle, type Shot } from '../../lib/media';
+import { SceneIcon } from '../icons';
 import { BarButton } from './BarButton';
+import { SideToggle } from './SideToggle';
 import { expectedSeconds, photoProgress } from '../../lib/photos';
 
 export interface MediaPanelProps {
@@ -20,11 +23,18 @@ export interface MediaPanelProps {
   onScenery: (value: boolean) => void;
   modern: boolean;
   onModern: (value: boolean) => void;
-  /** Редактор промпта фото нейросетью. */
-  editor: ReactNode;
+  /** Промпт поправлен руками: кнопка «промпт» это показывает. */
+  customPrompt: boolean;
+  onPrompt: () => void;
+  /** Свёрнута ли панель к левому краю. */
+  collapsed: boolean;
+  onToggle: () => void;
+  /** Во сколько раз снимок крупнее экрана: 1 или 2, общий для кнопки и клавиши P. */
+  shotScale: number;
+  onShotScale: (scale: number) => void;
   shooting: boolean;
   sending: boolean;
-  onShot: (scale: number) => void;
+  onShot: () => void;
   onPhotoView: () => void;
   /** Сколько фото в очереди и в работе: значок крутится, пока модель рисует. */
   photoBusy: number;
@@ -33,6 +43,24 @@ export interface MediaPanelProps {
   onDeletePhoto: (id: string) => void;
   onPhoto: (shot: Shot) => void;
   onOpen: (index: number) => void;
+}
+
+function Chip({
+  pressed,
+  title,
+  onClick,
+  children,
+}: {
+  pressed: boolean;
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" className="chip" aria-pressed={pressed} title={title} onClick={onClick}>
+      {children}
+    </button>
+  );
 }
 
 function thumbOf(item: MediaItem): string {
@@ -50,7 +78,12 @@ export function MediaPanel({
   onScenery,
   modern,
   onModern,
-  editor,
+  customPrompt,
+  onPrompt,
+  collapsed,
+  onToggle,
+  shotScale,
+  onShotScale,
   shooting,
   sending,
   onShot,
@@ -77,7 +110,18 @@ export function MediaPanel({
   const expected = expectedSeconds(photos);
 
   return (
-    <section className="hud scene-media" aria-label="Снимки и фото">
+    <section
+      className={collapsed ? 'hud scene-media collapsed' : 'hud scene-media'}
+      aria-label="Снимки и фото"
+    >
+      <SideToggle
+        side="left"
+        collapsed={collapsed}
+        label="снимки и фото"
+        icon="snapshot"
+        count={items.length}
+        onToggle={onToggle}
+      />
       <header className="media-head">
         <h2>
           Снимки и фото <span className="media-count">{items.length}</span>
@@ -86,22 +130,11 @@ export function MediaPanel({
       <div className="media-actions">
         <BarButton
           icon="snapshot"
-          label="снимок"
+          label={shotScale > 1 ? 'снимок ×2' : 'снимок'}
           keyHint="P"
           disabled={shooting}
-          title="Снимок кадра в PNG"
-          onClick={() => {
-            onShot(1);
-          }}
-        />
-        <BarButton
-          icon="snapshot"
-          label="×2"
-          disabled={shooting}
-          title="Снимок вдвое крупнее по каждой стороне, для слайда"
-          onClick={() => {
-            onShot(2);
-          }}
+          title={shotScale > 1 ? 'Снимок кадра в PNG, вдвое крупнее' : 'Снимок кадра в PNG'}
+          onClick={onShot}
         />
         <BarButton
           icon={photoBusy ? 'spinner' : 'photo'}
@@ -125,33 +158,60 @@ export function MediaPanel({
           onClick={onShots}
         />
       </div>
-      {available ? (
-        <label className="check media-mode">
-          <input
-            type="checkbox"
-            checked={scenery}
-            onChange={(e) => {
-              onScenery(e.target.checked);
-            }}
-          />
-          Фото ИИ: дорисовать фон и деревья, которых нет в плане
-        </label>
-      ) : null}
-      {available ? (
-        <label className="check media-mode">
-          <input
-            type="checkbox"
-            checked={modern}
-            onChange={(e) => {
-              onModern(e.target.checked);
-            }}
-          />
-          Современные московские фасады: объём и этажность те же
-        </label>
-      ) : null}
-      {available ? (
-        editor
-      ) : (
+      <dl className="media-options">
+        <div className="media-option-row">
+          <dt>снимок</dt>
+          <dd>
+            <Chip
+              pressed={shotScale > 1}
+              title="Снимок вдвое крупнее по каждой стороне, для слайда"
+              onClick={() => {
+                onShotScale(shotScale > 1 ? 1 : 2);
+              }}
+            >
+              крупнее ×2
+            </Chip>
+          </dd>
+        </div>
+        {available ? (
+          <div>
+            <dt>
+              фото ИИ
+              <button
+                type="button"
+                className="chip chip-prompt"
+                data-custom={customPrompt || undefined}
+                title="Открыть промпт: что нарисовать и чего не рисовать"
+                onClick={onPrompt}
+              >
+                <SceneIcon name="prompt" />
+                {customPrompt ? 'свой промпт' : 'промпт'}
+              </button>
+            </dt>
+            <dd>
+              <Chip
+                pressed={scenery}
+                title="Дорисовать фон и деревья, которых нет в плане"
+                onClick={() => {
+                  onScenery(!scenery);
+                }}
+              >
+                фон и деревья
+              </Chip>
+              <Chip
+                pressed={modern}
+                title="Современные московские фасады: объём и этажность те же"
+                onClick={() => {
+                  onModern(!modern);
+                }}
+              >
+                новые фасады
+              </Chip>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+      {available ? null : (
         <p className="hint">Фото нейросетью недоступно: {reason ?? 'не настроено'}.</p>
       )}
       {items.length ? (

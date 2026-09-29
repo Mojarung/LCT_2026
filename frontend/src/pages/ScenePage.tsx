@@ -21,7 +21,7 @@ import {
 import { BarButton } from '../components/scene/BarButton';
 import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
-import { type PromptDraft, PromptEditor } from '../components/scene/PromptEditor';
+import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -233,7 +233,10 @@ export function ScenePage() {
   } | null>(null);
   const [scenery, setScenery] = useState(false);
   const [modern, setModern] = useState(true);
-  const [leftCollapsed, toggleLeft] = useSideCollapsed('green-scene-left');
+  const [headCollapsed, toggleHead] = useSideCollapsed('green-scene-head');
+  const [mediaCollapsed, toggleMedia] = useSideCollapsed('green-scene-media');
+  const [shotScale, setShotScale] = useState(1);
+  const [promptOpen, setPromptOpen] = useState(false);
   const [promptDraft, setPromptDraft] = useState<PromptDraft | null>(null);
   const [requested, setRequested] = useState<Record<string, string>>({});
   const lastPlant = useRef<Plant | null>(null);
@@ -469,9 +472,11 @@ export function ScenePage() {
   };
 
   const shootRef = useRef(shoot);
+  const shotScaleRef = useRef(shotScale);
   const photoViewRef = useRef(photoFromView);
   useEffect(() => {
     shootRef.current = shoot;
+    shotScaleRef.current = shotScale;
     photoViewRef.current = photoFromView;
   });
 
@@ -502,7 +507,7 @@ export function ScenePage() {
           plant ? plantTitle(plant) : 'Кадры улицы',
         );
       } else if (event.code === 'KeyF') void photoViewRef.current();
-      else if (event.code === 'KeyP') void shootRef.current(1);
+      else if (event.code === 'KeyP') void shootRef.current(shotScaleRef.current);
       else if (event.code === 'KeyH') setHudHidden((v) => !v);
       else if (event.code === 'KeyG') e.setMode(e.freecam.mode === 'walk' ? 'fly' : 'walk');
       else if (event.code === 'KeyR') e.resetView();
@@ -567,15 +572,16 @@ export function ScenePage() {
           <div className="scene-left">
             <aside
               className={
-                leftCollapsed ? 'hud hud-left scene-head collapsed' : 'hud hud-left scene-head'
+                headCollapsed ? 'hud hud-left scene-head collapsed' : 'hud hud-left scene-head'
               }
               aria-label="Прогон"
             >
               <SideToggle
                 side="left"
-                collapsed={leftCollapsed}
-                label="панель прогона и снимков"
-                onToggle={toggleLeft}
+                collapsed={headCollapsed}
+                label="карточку улицы"
+                icon="street"
+                onToggle={toggleHead}
               />
               <div className="hud-head">
                 <Link className="back" to={`/runs/${encodeURIComponent(runId)}`}>
@@ -612,7 +618,7 @@ export function ScenePage() {
                 </div>
               ) : null}
             </aside>
-            {readyToFly && !leftCollapsed ? (
+            {readyToFly ? (
               <MediaPanel
                 items={media}
                 photos={photos.data?.photos ?? []}
@@ -622,17 +628,18 @@ export function ScenePage() {
                 onScenery={setScenery}
                 modern={modern}
                 onModern={setModern}
-                editor={
-                  <PromptEditor
-                    auto={promptPreview.data}
-                    draft={promptDraft}
-                    onDraft={setPromptDraft}
-                  />
-                }
+                customPrompt={promptDraft !== null}
+                onPrompt={() => {
+                  setPromptOpen(true);
+                }}
+                collapsed={mediaCollapsed}
+                onToggle={toggleMedia}
+                shotScale={shotScale}
+                onShotScale={setShotScale}
                 shooting={shooting}
                 sending={sendingView}
-                onShot={(scale) => {
-                  void shoot(scale);
+                onShot={() => {
+                  void shoot(shotScale);
                 }}
                 onPhotoView={() => {
                   void photoFromView();
@@ -787,6 +794,16 @@ export function ScenePage() {
           }
           onClose={() => {
             setGallery(null);
+          }}
+        />
+      ) : null}
+      {promptOpen && photosAvailable ? (
+        <PromptDialog
+          auto={promptPreview.data}
+          draft={promptDraft}
+          onDraft={setPromptDraft}
+          onClose={() => {
+            setPromptOpen(false);
           }}
         />
       ) : null}

@@ -13,7 +13,9 @@ import {
   IconLayoutGrid,
   IconLoader2,
   IconMoon as TablerMoon,
+  IconPencil,
   IconPlane,
+  IconRoad,
   IconSparkles,
   IconSun as TablerSun,
   IconWalk,
@@ -62,6 +64,8 @@ const SCENE_GLYPHS = {
   shots: IconLayoutGrid,
   hide: IconEyeOff,
   spinner: IconLoader2,
+  prompt: IconPencil,
+  street: IconRoad,
 } satisfies Record<string, Icon>;
 
 export type SceneGlyph = keyof typeof SCENE_GLYPHS;
