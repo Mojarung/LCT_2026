@@ -11,6 +11,8 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
 import { artifactUrl } from '../api/client';
 import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
+import { BarButton } from '../components/scene/BarButton';
+import { PhotoTray } from '../components/scene/PhotoTray';
 import { ScenePanel, type Shot } from '../components/scene/ScenePanel';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
 import { plural } from '../lib/format';
@@ -27,6 +29,7 @@ import {
 } from '../scene3d/engine';
 import { FLY_SPEED_DEFAULT } from '../scene3d/freecam';
 import type { SurfaceImage } from '../scene3d/ground';
+import { fitForPhoto } from '../lib/photos';
 import { clock } from '../scene3d/solar';
 import { formatView, parseView } from '../scene3d/viewHash';
 import type { Plant, SceneJson } from '../scene3d/types';
@@ -47,6 +50,21 @@ const TYPE_TITLES: Record<string, string> = {
   existing_tree: 'существующее дерево',
   existing_shrub: 'существующий кустарник',
 };
+
+/** Сколько держится строка уведомления над полосой. */
+const NOTICE_MS = 6000;
+
+/** Кадр для нейросети: картинка и что в ней, из галереи, снимка или текущего вида. */
+interface PhotoFrame {
+  blob: Blob;
+  viewpoint: 'aerial' | 'ground';
+  trees: string[];
+  shrubs: string[];
+}
+
+function timeOfDay(date: Date): string {
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
 
 /** Сколько последних снимков держит лента пульта. */
 const MAX_SHOTS = 12;
@@ -205,6 +223,19 @@ export function ScenePage() {
   const [requested, setRequested] = useState<Record<string, string>>({});
   const lastPlant = useRef<Plant | null>(null);
   const photos = usePhotos(runId, done);
+  const photosAvailable = photos.data?.available ?? false;
+  const photoBusy = (photos.data?.photos ?? []).filter(
+    (p) => p.state === 'queued' || p.state === 'running',
+  ).length;
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef(0);
+  const toast = (text: string) => {
+    setNotice(text);
+    window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => {
+      setNotice(null);
+    }, NOTICE_MS);
+  };
   const createPhoto = useCreatePhoto(runId);
   const settingsRef = useRef(settings);
   useEffect(() => {
@@ -285,8 +316,9 @@ export function ScenePage() {
         b.close();
         return out;
       });
+      const here = e.speciesHere();
       setShots((list) => {
-        const next = [{ id: Date.now(), url, name, ...size }, ...list];
+        const next = [{ id: Date.now(), url, name, blob, ...here, ...size }, ...list];
         // Снимок, выпавший из ленты, файлом уже скачан: его адрес в памяти больше не нужен.
         for (const old of next.slice(MAX_SHOTS)) URL.revokeObjectURL(old.url);
         return next.slice(0, MAX_SHOTS);
@@ -297,7 +329,8 @@ export function ScenePage() {
       a.download = name;
       a.click();
     } catch (error: unknown) {
-      setFailure(error instanceof Error ? error.message : String(error));
+      // Сбой снимка - строка поверх сцены, а не «3D-вид не собрался»: сцена цела.
+      toast(error instanceof Error ? error.message : String(error));
     } finally {
       setShooting(false);
     }
@@ -355,32 +388,65 @@ export function ScenePage() {
     [],
   );
 
-  const orderPhoto = (shot: GalleryShot) => {
-    createPhoto.mutate(
-      {
-        image: shot.blob,
+  /** Все три пути в нейросеть - галерея, снимок, текущий вид - одной очередью сервера. */
+  const sendPhoto = (
+    frame: PhotoFrame,
+    label: string,
+    done?: (photoId: string) => void,
+  ): Promise<void> =>
+    createPhoto
+      .mutateAsync({
+        image: frame.blob,
         scenery,
         season: settings.season,
         hour: settings.hour,
-        viewpoint: shot.viewpoint,
-        species: shot.trees,
-        shrubs: shot.shrubs,
-        shot: `${gallery?.title ?? ''}. ${shot.label}`,
-      },
-      {
-        onSuccess: (photo) => {
-          setRequested((r) => ({ ...r, [shot.key]: photo.id }));
-        },
-        onError: (error) => {
-          setGallery((g) => (g ? { ...g, error: error.message } : g));
-        },
-      },
-    );
+        viewpoint: frame.viewpoint,
+        species: frame.trees,
+        shrubs: frame.shrubs,
+        shot: label,
+      })
+      .then((photo) => {
+        done?.(photo.id);
+        toast('Кадр ушёл в нейросеть: ход и готовое фото - на пульте, «Фото нейросетью».');
+      })
+      .catch((error: unknown) => {
+        toast(error instanceof Error ? error.message : String(error));
+      });
+
+  const orderPhoto = (shot: GalleryShot) => {
+    void sendPhoto(shot, `${gallery?.title ?? ''}. ${shot.label}`, (id) => {
+      setRequested((r) => ({ ...r, [shot.key]: id }));
+    });
+  };
+
+  const [sendingView, setSendingView] = useState(false);
+  const photoFromView = async () => {
+    const e = engine.current;
+    if (!e || sendingView || !photosAvailable) return;
+    setSendingView(true);
+    try {
+      await sendPhoto(await e.viewShot(), `Вид из 3D, ${timeOfDay(new Date())}`);
+    } catch (error: unknown) {
+      toast(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSendingView(false);
+    }
+  };
+
+  const photoFromSnapshot = async (shot: Shot) => {
+    try {
+      const blob = await fitForPhoto(shot.blob);
+      await sendPhoto({ ...shot, blob }, `Снимок ${timeOfDay(new Date(shot.id))}`);
+    } catch (error: unknown) {
+      toast(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const shootRef = useRef(shoot);
+  const photoViewRef = useRef(photoFromView);
   useEffect(() => {
     shootRef.current = shoot;
+    photoViewRef.current = photoFromView;
   });
 
   // Ракурс из адреса: ссылку вставили в ту же вкладку - камера переезжает без перезагрузки.
@@ -407,7 +473,8 @@ export function ScenePage() {
           plant ? { kind: 'plant', id: plant.id } : { kind: 'street' },
           plant ? plantTitle(plant) : 'Кадры улицы',
         );
-      } else if (event.code === 'KeyP') void shootRef.current(1);
+      } else if (event.code === 'KeyF') void photoViewRef.current();
+      else if (event.code === 'KeyP') void shootRef.current(1);
       else if (event.code === 'KeyH') setHudHidden((v) => !v);
       else if (event.code === 'KeyG') e.setMode(e.freecam.mode === 'walk' ? 'fly' : 'walk');
       else if (event.code === 'KeyR') e.resetView();
@@ -489,9 +556,12 @@ export function ScenePage() {
                   {plural(counts.existing, 'насаждение', 'насаждения', 'насаждений')},{' '}
                   {count(counts.buildings, 'здание', 'здания', 'зданий')}.
                 </p>
-                <p className="hint">
-                  {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
-                </p>
+                <details className="scene-more">
+                  <summary>Этажность и допущения</summary>
+                  <p className="hint">
+                    {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
+                  </p>
+                </details>
                 {world.fallback ? (
                   <p className="notice">
                     Прогон сделан прежней версией сервиса: здания только замкнутые, этажность по
@@ -513,90 +583,136 @@ export function ScenePage() {
               busy={shooting}
               speed={cam.speed}
               onSpeed={(speed) => engine.current?.setSpeed(speed)}
+              onPhoto={
+                photosAvailable
+                  ? (shot) => {
+                      void photoFromSnapshot(shot);
+                    }
+                  : undefined
+              }
+              photos={
+                <PhotoTray
+                  photos={photos.data?.photos ?? []}
+                  available={photosAvailable}
+                  reason={photos.data?.reason ?? null}
+                  scenery={scenery}
+                  onScenery={setScenery}
+                />
+              }
             />
           ) : null}
           {readyToFly ? (
-            <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера">
-              <button
-                type="button"
-                aria-pressed={cam.mode === 'fly'}
-                title="Свободный полёт, клавиша G"
-                onClick={() => engine.current?.setMode('fly')}
-              >
-                полёт
-              </button>
-              <button
-                type="button"
-                aria-pressed={cam.mode === 'walk'}
-                title="Пешеход на высоте глаз 1,7 м, клавиша G"
-                onClick={() => engine.current?.setMode('walk')}
-              >
-                пешеход
-              </button>
-              <button
-                type="button"
-                title="Общий вид, клавиша R"
-                onClick={() => engine.current?.resetView()}
-              >
-                общий вид
-              </button>
-              <button
-                type="button"
-                aria-pressed={cam.touring}
-                title="Облёт над улицей туда и обратно, клавиша T; мышь или WASD - взять управление"
-                onClick={() => {
-                  const e = engine.current;
-                  if (!e) return;
-                  if (cam.touring) e.stopTour();
-                  else e.startTour();
-                }}
-              >
-                облёт
-              </button>
-              <button
-                type="button"
-                title="Кадры улицы и фото по ним; K - кадры растения под курсором"
-                onClick={() => {
-                  void openGallery({ kind: 'street' }, 'Кадры улицы');
-                }}
-              >
-                кадры
-              </button>
-              <button
-                type="button"
-                title="Скрыть панели для чистого кадра, клавиша H"
-                onClick={() => {
-                  setHudHidden(true);
-                }}
-              >
-                без панелей
-              </button>
-              <span className="scene-speed" title="Скорость полёта: колесо мыши">
-                {cam.mode === 'fly' ? `${Math.round(cam.speed)} м/с` : 'шаг'}
+            <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
+              <div className="bar-group" role="group" aria-label="Режим камеры">
+                <BarButton
+                  icon="fly"
+                  label="полёт"
+                  keyHint="G"
+                  pressed={cam.mode === 'fly'}
+                  title="Свободный полёт"
+                  onClick={() => engine.current?.setMode('fly')}
+                />
+                <BarButton
+                  icon="walk"
+                  label="пешеход"
+                  keyHint="G"
+                  pressed={cam.mode === 'walk'}
+                  title="Пешеход на высоте глаз 1,7 м"
+                  onClick={() => engine.current?.setMode('walk')}
+                />
+              </div>
+              <div className="bar-group" role="group" aria-label="Куда смотреть">
+                <BarButton
+                  icon="overview"
+                  label="общий вид"
+                  keyHint="R"
+                  title="Вернуться к общему виду"
+                  onClick={() => engine.current?.resetView()}
+                />
+                <BarButton
+                  icon="tour"
+                  label="облёт"
+                  keyHint="T"
+                  pressed={cam.touring}
+                  title="Облёт над улицей; мышь или WASD - взять управление"
+                  onClick={() => {
+                    const e = engine.current;
+                    if (!e) return;
+                    if (cam.touring) e.stopTour();
+                    else e.startTour();
+                  }}
+                />
+              </div>
+              <div className="bar-group" role="group" aria-label="Снимки и фото">
+                <BarButton
+                  icon="snapshot"
+                  label="снимок"
+                  keyHint="P"
+                  disabled={shooting}
+                  title="Снимок кадра в PNG"
+                  onClick={() => {
+                    void shoot(1);
+                  }}
+                />
+                <BarButton
+                  icon={photoBusy ? 'spinner' : 'photo'}
+                  label={photoBusy ? `фото ИИ · ${String(photoBusy)}` : 'фото ИИ'}
+                  keyHint="F"
+                  accent
+                  spin={photoBusy > 0}
+                  disabled={!photosAvailable || sendingView}
+                  title={
+                    photosAvailable
+                      ? 'Отправить этот вид в нейросеть: фото с той же расстановкой, около минуты'
+                      : (photos.data?.reason ?? 'Фото недоступно')
+                  }
+                  onClick={() => {
+                    void photoFromView();
+                  }}
+                />
+                <BarButton
+                  icon="shots"
+                  label="кадры"
+                  keyHint="K"
+                  title="Кадры улицы с автоматических ракурсов; K над растением - его кадры"
+                  onClick={() => {
+                    void openGallery({ kind: 'street' }, 'Кадры улицы');
+                  }}
+                />
+              </div>
+              <div className="bar-group" role="group" aria-label="Панели">
+                <BarButton
+                  icon="hide"
+                  label="без панелей"
+                  keyHint="H"
+                  title="Скрыть панели для чистого кадра"
+                  onClick={() => {
+                    setHudHidden(true);
+                  }}
+                />
+              </div>
+              <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
+                {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
+                {stats ? ` · ${String(stats.fps)} к/с` : ''}
               </span>
-              {stats ? (
-                <span className="scene-speed" title="Кадров в секунду">
-                  {stats.fps} к/с
-                </span>
-              ) : null}
             </div>
           ) : null}
-          {readyToFly && !cam.locked ? (
+          {notice && readyToFly ? (
+            <div className="hud scene-toast" role="status">
+              {notice}
+            </div>
+          ) : null}
+          {readyToFly && !cam.locked && !everLocked ? (
             <div className="hud scene-help" role="note">
               <p>
-                <strong>{everLocked ? 'Камера отпущена.' : 'Щёлкните по сцене'}</strong>{' '}
-                {everLocked
-                  ? 'Щёлкните по сцене, чтобы снова управлять.'
-                  : 'и управляйте мышью, Esc - отпустить.'}
+                <strong>Щёлкните по сцене</strong> и управляйте мышью, Esc - отпустить.
               </p>
               <p className="scene-keys">
                 <kbd>W</kbd>
                 <kbd>A</kbd>
                 <kbd>S</kbd>
-                <kbd>D</kbd> движение · <kbd>E</kbd>/<kbd>Q</kbd> вверх и вниз · <kbd>Shift</kbd>{' '}
-                быстрее · колесо - скорость · <kbd>G</kbd> пешеход · <kbd>P</kbd> снимок ·{' '}
-                <kbd>K</kbd> кадры · <kbd>H</kbd> панели · <kbd>R</kbd> общий вид · <kbd>T</kbd>{' '}
-                облёт · правая кнопка - обзор без захвата мыши.
+                <kbd>D</kbd> движение · <kbd>E</kbd>/<kbd>Q</kbd> высота · <kbd>Shift</kbd> быстрее
+                · колесо - скорость · правая кнопка - обзор без захвата
               </p>
             </div>
           ) : null}

@@ -6,7 +6,16 @@
 
 import * as THREE from 'three';
 
-import { type AutoShot, obstaclesOf, plantShots, type ShotTarget, streetShots } from './autoshots';
+import {
+  type AutoShot,
+  obstaclesOf,
+  plantShots,
+  SHOT_HEIGHT,
+  SHOT_WIDTH,
+  speciesInView,
+  type ShotTarget,
+  streetShots,
+} from './autoshots';
 import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
 import { Walls } from './collide';
 import { Freecam, type Mode, type Pose } from './freecam';
@@ -33,6 +42,16 @@ import { GRASS_PRESETS, GrassField } from './grass';
 import type { Plant, World } from './types';
 
 export type Quality = 'low' | 'medium' | 'high';
+
+/** Выше этой высоты камера для промпта фото - дрон, ниже - человек на тротуаре. */
+const DRONE_FROM_M = 6;
+
+export interface ViewShot {
+  blob: Blob;
+  viewpoint: 'aerial' | 'ground';
+  trees: string[];
+  shrubs: string[];
+}
 
 /** Снежный покров зимой без снегопада: белое, но с проталинами у проезжей части. */
 const WINTER_COVER = 0.85;
@@ -606,6 +625,26 @@ export class SceneEngine {
     delta = Math.atan2(Math.sin(delta), Math.cos(delta));
     tour.yaw += delta * (1 - Math.exp(-dt / 0.9));
     this.freecam.setPose({ ...pose, yaw: tour.yaw });
+  }
+
+  /** Кадр текущего вида для фото нейросетью: 1024 x 576 с позы камеры человека и виды в
+   *  нём. Выше 6 м - съёмка с дрона, ниже - с тротуара: от этого зависит промпт. */
+  async viewShot(): Promise<ViewShot> {
+    const pose = { ...this.freecam.pose };
+    const [blob] = await this.renderViews([pose], SHOT_WIDTH, SHOT_HEIGHT);
+    if (!blob) throw new Error('Браузер не отдал кадр: фото не получится');
+    return {
+      blob,
+      viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground',
+      ...speciesInView(this.forest.bodies(), pose),
+    };
+  }
+
+  /** Виды плана в кадре с текущей позы: подпись снимка, который потом уйдёт на фото. */
+  speciesHere(): { trees: string[]; shrubs: string[]; viewpoint: 'aerial' | 'ground' } {
+    const pose = this.freecam.pose;
+    const { trees, shrubs } = speciesInView(this.forest.bodies(), pose);
+    return { trees, shrubs, viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground' };
   }
 
   /** Ракурсы для галереи: улица отрезками или посадка по кругу. Солнце ночью не учитывается. */

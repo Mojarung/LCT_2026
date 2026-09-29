@@ -511,3 +511,285 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Полоса камеры: группы действий, значок и подпись на каждой кнопке, клавиша меткой --- */
+.scene-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+}
+.bar-group {
+  display: flex;
+  gap: 2px;
+  padding-right: 4px;
+  margin-right: 2px;
+  border-right: 1px solid var(--hair);
+}
+.bar-group:last-of-type {
+  border-right: 0;
+}
+.scene-bar .bar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--bone);
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.scene-bar .bar-button .icon {
+  flex: none;
+  color: var(--bone-2);
+}
+.scene-bar .bar-button:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.scene-bar .bar-button[aria-pressed='true'] {
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1.5px var(--bone);
+  font-weight: 600;
+}
+.scene-bar .bar-button[aria-pressed='true'] .icon {
+  color: var(--bone);
+}
+.scene-bar .bar-button.accent {
+  background: var(--bone);
+  color: var(--inverse);
+}
+.scene-bar .bar-button.accent .icon {
+  color: var(--inverse);
+}
+.scene-bar .bar-button.accent .bar-key {
+  color: var(--inverse);
+  border-color: color-mix(in srgb, var(--inverse) 40%, transparent);
+}
+.scene-bar .bar-button.accent:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bone) 85%, var(--inverse));
+}
+.scene-bar .bar-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.scene-bar .bar-button:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 1px;
+}
+.bar-key {
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--hair-2);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--bone-3);
+  background: transparent;
+}
+.bar-meta {
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+  white-space: nowrap;
+}
+.icon.spin {
+  animation: bar-spin 1s linear infinite;
+}
+@keyframes bar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .icon.spin {
+    animation: none;
+  }
+}
+
+/* Уведомление сверху по центру: кадр ушёл в нейросеть, снимок не получился. Внизу его
+   перекрывала подсказка по управлению. */
+.scene-toast {
+  left: 50%;
+  top: calc(var(--inset) * 2 + var(--bar));
+  transform: translateX(-50%);
+  max-width: min(620px, calc(100% - var(--inset) * 2));
+  padding: 10px 14px;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+}
+
+/* --- Снимки: у каждого кнопка «в фото» --- */
+.scene-shots li {
+  display: grid;
+  gap: 4px;
+}
+.scene-shots li .ghost.small {
+  justify-self: start;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: var(--fs-micro);
+}
+
+/* --- Фото нейросетью: режим, очередь, полоса хода, готовое фото --- */
+.photo-mode {
+  margin: 6px 0 10px;
+  font-size: var(--fs-small);
+}
+.photo-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photo-item {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.photo-item img {
+  display: block;
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border: 1px solid var(--hair-2);
+  border-radius: 4px;
+}
+.photo-item[data-state='queued'] img,
+.photo-item[data-state='running'] img {
+  opacity: 0.7;
+}
+.photo-state {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.photo-shot {
+  overflow: hidden;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--bone);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.photo-bar {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-radius: 3px;
+}
+.photo-bar span {
+  display: block;
+  height: 100%;
+  background: var(--bone);
+  border-radius: 3px;
+  transition: width 1s linear;
+}
+.photo-note {
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.photo-note a {
+  color: var(--bone);
+  font-weight: 600;
+}
+.photo-note.bad {
+  color: var(--bad);
+}
+
+/* --- Пульт: шапка со сворачиванием и разделы по смыслу --- */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+.panel-title {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: var(--bone);
+}
+.scene-panel[data-collapsed='true'] {
+  width: auto;
+}
+.scene-panel[data-collapsed='true'] .panel-head {
+  border-bottom: 0;
+  gap: 12px;
+}
+.scene-section {
+  border-bottom: 1px solid var(--hair);
+}
+.scene-section:last-child {
+  border-bottom: 0;
+}
+.scene-section > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 0;
+  list-style: none;
+  cursor: pointer;
+}
+.scene-section > summary::-webkit-details-marker {
+  display: none;
+}
+.scene-section > summary::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--bone-2);
+  border-bottom: 1.6px solid var(--bone-2);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.scene-section[open] > summary::before {
+  transform: rotate(45deg);
+}
+.scene-section > summary:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.section-title {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: var(--bone);
+}
+.section-summary {
+  margin-left: auto;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-body {
+  padding-bottom: 6px;
+}
+.scene-more summary {
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+  cursor: pointer;
+}
+.scene-more[open] summary {
+  margin-bottom: 6px;
+}
+.section-body .photo-tray {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}

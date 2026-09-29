@@ -2,11 +2,21 @@
  * CDN не нужен. Один размер и одна толщина штриха на всё приложение. */
 
 import {
+  type Icon,
   IconBook as TablerBook,
+  IconCamera,
   IconChevronLeft,
   IconChevronRight,
+  IconDrone,
+  IconEyeOff,
+  IconHome,
+  IconLayoutGrid,
+  IconLoader2,
   IconMoon as TablerMoon,
+  IconPlane,
+  IconSparkles,
   IconSun as TablerSun,
+  IconWalk,
   IconX,
 } from '@tabler/icons-react';
 
@@ -38,5 +48,25 @@ export function IconChevron({
   className = 'icon chev',
 }: IconProps & { direction: 'left' | 'right' }) {
   const Glyph = direction === 'left' ? IconChevronLeft : IconChevronRight;
+  return <Glyph className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
+}
+
+/** Значки полосы 3D-вида: режим камеры, облёт, снимок, фото нейросетью, кадры, панели. */
+const SCENE_GLYPHS = {
+  fly: IconPlane,
+  walk: IconWalk,
+  overview: IconHome,
+  tour: IconDrone,
+  snapshot: IconCamera,
+  photo: IconSparkles,
+  shots: IconLayoutGrid,
+  hide: IconEyeOff,
+  spinner: IconLoader2,
+} satisfies Record<string, Icon>;
+
+export type SceneGlyph = keyof typeof SCENE_GLYPHS;
+
+export function SceneIcon({ name, className = 'icon' }: IconProps & { name: SceneGlyph }) {
+  const Glyph = SCENE_GLYPHS[name];
   return <Glyph className={className} size={SIZE} stroke={STROKE} aria-hidden="true" />;
 }
