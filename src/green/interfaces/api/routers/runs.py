@@ -194,6 +194,9 @@ def delete_run(run_id: str, container: ContainerDep) -> None:
 def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
     """Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
 
+    У прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с
+    которым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.
+
     Текстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian
     умеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие
     middleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо

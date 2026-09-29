@@ -427,6 +427,14 @@
             "title": "Placements",
             "type": "integer"
           },
+          "rejected_by_edit": {
+            "description": "Посадки, которые именно эта правка перевела в отказ (перенос или добавление в место, запрещённое нормами), с причиной; пусто, если таких нет",
+            "items": {
+              "$ref": "#/components/schemas/RejectedByEditOut"
+            },
+            "title": "Rejected By Edit",
+            "type": "array"
+          },
           "rejections": {
             "title": "Rejections",
             "type": "integer"
@@ -441,7 +449,8 @@
           "allowed",
           "needs_approval",
           "rejections",
-          "stale"
+          "stale",
+          "rejected_by_edit"
         ],
         "title": "PlanSummaryOut",
         "type": "object"
@@ -639,6 +648,27 @@
           "steps"
         ],
         "title": "ProgressOut",
+        "type": "object"
+      },
+      "RejectedByEditOut": {
+        "description": "Посадка, которую правка перевела в отказ.",
+        "properties": {
+          "placement_id": {
+            "description": "Идентификатор посадки; под ним же она в отказах плана",
+            "title": "Placement Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Причина по-русски - то же, что ответ проверки точки для этого вида: note (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placement_id",
+          "reason"
+        ],
+        "title": "RejectedByEditOut",
         "type": "object"
       },
       "RuleCheckOut": {
@@ -1413,7 +1443,7 @@
     },
     "/api/v1/runs/{run_id}/artifacts/{name}": {
       "get": {
-        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.\n\nТекстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian\nумеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие\nmiddleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо\n1,3 МБ. Крупный result.dxf, наоборот, скачивают целиком и жать его незачем.",
+        "description": "Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.\n\nУ прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с\nкоторым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.\n\nТекстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian\nумеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие\nmiddleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо\n1,3 МБ. Крупный result.dxf, наоборот, скачивают целиком и жать его незачем.",
         "operationId": "get_artifact_api_v1_runs__run_id__artifacts__name__get",
         "parameters": [
           {
@@ -1663,7 +1693,7 @@
     },
     "/api/v1/runs/{run_id}/edits": {
       "post": {
-        "description": "Применить правки к плану прогона. DXF при этом не переписывается.",
+        "description": "Применить правки к плану прогона. DXF при этом не переписывается.\n\nПосадка, которая после правки не проходит нормы (перенос или добавление в запретное\nместо), уходит в отказы плана, а не остаётся на слое посадок. Правка при этом принята и\nответ остаётся 200, но такие посадки перечислены в rejected_by_edit с причиной - той же,\nчто даёт проверка точки: нарушенные нормы с пунктами актов или непригодное место. В список\nпопадают только посадки этого запроса; пустой список - правка никого в отказ не увела.",
         "operationId": "edit_api_v1_runs__run_id__edits_post",
         "parameters": [
           {

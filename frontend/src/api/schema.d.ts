@@ -147,6 +147,9 @@ export interface paths {
          * Скачать артефакт прогона
          * @description Скачать артефакт: result.dxf, plan.json, interpretations.csv и другие.
          *
+         *     У прогона комплекта из нескольких DXF есть и merged_source.dxf - склеенный исходник, с
+         *     которым сверен результат: `green verify merged_source.dxf result.dxf` повторяет сверку.
+         *
          *     Текстовые артефакты отдаются обычным ответом, а не FileResponse, намеренно. Granian
          *     умеет отправлять файл в обход ASGI-конвейера (расширение pathsend), и тогда сжатие
          *     middleware не применяется: подоснова Берзарина уехала бы в браузер на 12,9 МБ вместо
@@ -210,6 +213,12 @@ export interface paths {
         /**
          * Применить правки плана
          * @description Применить правки к плану прогона. DXF при этом не переписывается.
+         *
+         *     Посадка, которая после правки не проходит нормы (перенос или добавление в запретное
+         *     место), уходит в отказы плана, а не остаётся на слое посадок. Правка при этом принята и
+         *     ответ остаётся 200, но такие посадки перечислены в rejected_by_edit с причиной - той же,
+         *     что даёт проверка точки: нарушенные нормы с пунктами актов или непригодное место. В список
+         *     попадают только посадки этого запроса; пустой список - правка никого в отказ не увела.
          */
         post: operations["edit_api_v1_runs__run_id__edits_post"];
         delete?: never;
@@ -449,6 +458,11 @@ export interface components {
             needs_approval: number;
             /** Placements */
             placements: number;
+            /**
+             * Rejected By Edit
+             * @description Посадки, которые именно эта правка перевела в отказ (перенос или добавление в место, запрещённое нормами), с причиной; пусто, если таких нет
+             */
+            rejected_by_edit: components["schemas"]["RejectedByEditOut"][];
             /** Rejections */
             rejections: number;
             /** Stale */
@@ -555,6 +569,22 @@ export interface components {
              * @description Название этапа для человека
              */
             title: string;
+        };
+        /**
+         * RejectedByEditOut
+         * @description Посадка, которую правка перевела в отказ.
+         */
+        RejectedByEditOut: {
+            /**
+             * Placement Id
+             * @description Идентификатор посадки; под ним же она в отказах плана
+             */
+            placement_id: string;
+            /**
+             * Reason
+             * @description Причина по-русски - то же, что ответ проверки точки для этого вида: note (место непригодно, вид здесь запрещён) и нарушенные нормы с пунктами актов
+             */
+            reason: string;
         };
         /** RuleCheckOut */
         RuleCheckOut: {

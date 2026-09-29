@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
-from test_pipeline_synthetic import ROOT, _street
+from test_pipeline_synthetic import PIPE_Y, ROOT, _street
 
 from green.application.editing import Edit, EditKind, RunContextCache
 from green.application.errors import InputError
@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 SPECIES = YamlSpeciesCatalog(ROOT / "config" / "species.yaml")
 # Точка на газоне синтетической улицы, куда можно добавить дерево (как в test_editing).
 FREE_POINT = (100.0, 40.0)
+# Точка на оси водопровода: посадка сюда нарушает отступ и уходит в отказ.
+ON_PIPE = (60.0, PIPE_Y)
 
 
 @pytest.fixture(scope="module")
@@ -225,6 +227,27 @@ def test_edit_overtaken_by_another_process_is_rechecked_on_the_new_plan(
     assert [seq for seq, _ in _store(runs).edits_since(run_id, 0)] == [1, 2]
     assert _layout(first, run_id) == _layout(second, run_id) == _layout(_process(runs), run_id)
     assert {one, two}.isdisjoint(p for p, _, _ in _layout(first, run_id))
+
+
+def test_rejections_of_an_edit_are_its_own_not_those_it_caught_up_with(
+    runs: Path, run_id: str
+) -> None:
+    """Другой процесс перенёс посадку на трубу - она ушла в отказ его правкой. Правка этого
+    процесса догоняет журнал и удаляет другую посадку: в её итоге чужого отказа нет."""
+    first, second = _process(runs), _process(runs)
+    layout = _layout(first, run_id)
+    moved, deleted = layout[0][0], layout[1][0]
+
+    theirs = second.edit(
+        run_id, [Edit(EditKind.MOVE, placement_id=moved, x=ON_PIPE[0], y=ON_PIPE[1])]
+    )
+    ours = first.edit(run_id, [Edit(EditKind.DELETE, deleted)])
+
+    assert theirs is not None
+    assert ours is not None
+    assert [r.placement_id for r in theirs.rejected] == [moved]
+    assert moved in {r.rejection_id for r in ours.plan.rejections}, "журнал не догнан"
+    assert ours.rejected == ()
 
 
 def test_edit_of_a_planting_just_deleted_elsewhere_is_refused(runs: Path, run_id: str) -> None:

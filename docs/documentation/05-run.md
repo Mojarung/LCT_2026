@@ -102,12 +102,27 @@ docker compose run --rm -v "$PWD/out:/out" api \
 1. **Сводка прогона** (`GET /runs/<id>`, поле `summary`): `integrity_ok: true`,
    `plan_valid: true`, `export_matches_plan: true`. Посадки, отказы, газоны, условия допуска.
 2. **Исходник не изменён.** Команда перечитывает оба файла и сверяет отпечатки всех исходных
-   сущностей. Для одиночного DXF исходником служит сам файл; для комплекта и DWG -
-   `merged_source.dxf` из каталога прогона, от него строится `result.dxf`:
+   сущностей. Для одиночного DXF исходником служит сам файл; для комплекта из нескольких
+   чертежей - склеенный `merged_source.dxf` из каталога прогона, от него строится
+   `result.dxf`; для одиночного DWG - DXF после конвертации (`converted/` в каталоге прогона):
 
    ```bash
    docker compose run --rm -v "$PWD/out:/out" api green verify "/dataset/улица.dxf" /out/street/result.dxf
    ```
+
+   Сверку комплекта, посчитанного через API, повторяют по двум артефактам прогона:
+   `merged_source.dxf` есть в списке `artifacts` только у комплекта (у одиночного файла
+   исходник - сам входной файл, и ссылки нет). Ожидается `"ok": true` и пустые `changed`,
+   `missing`, `added_outside_result_layers`:
+
+   ```bash
+   curl -s -o merged_source.dxf http://localhost:8000/api/v1/runs/<id>/artifacts/merged_source.dxf
+   curl -s -o result.dxf        http://localhost:8000/api/v1/runs/<id>/artifacts/result.dxf
+   docker compose run --rm -v "$PWD:/check" api green verify /check/merged_source.dxf /check/result.dxf
+   ```
+
+   Сверка того же `result.dxf` с одним генпланом комплекта не сходится: сети и остальные
+   чертежи комплекта в результате есть, а в генплане их нет.
 
 3. **Объяснения.** В `interpretations.csv` строка на пару «решение - правило», в
    `report.html` - отчёт с определяющей нормой каждой посадки.

@@ -17,10 +17,11 @@ Swagger UI («Try it out») без чтения кода: у полей форм
 | POST | `/api/v1/runs/demo` | прогон на встроенном фрагменте улицы |
 | GET | `/api/v1/runs` | реестр прогонов |
 | GET | `/api/v1/runs/{run_id}` | статус: `state`, этап и доля, `summary`, список артефактов с адресами и размерами |
-| GET | `/api/v1/runs/{run_id}/artifacts/{name}` | файл прогона: `result.dxf`, `interpretations.csv`, `report.html` и др. (приложение C) |
+| DELETE | `/api/v1/runs/{run_id}` | удалить законченный прогон целиком: исходник, артефакты, состояние правки; идущий прогон не удаляется (409) |
+| GET | `/api/v1/runs/{run_id}/artifacts/{name}` | файл прогона: `result.dxf`, `interpretations.csv`, `report.html` и др. (приложение C); у комплекта - и `merged_source.dxf`, исходник для `green verify` |
 | POST | `/api/v1/runs/{run_id}/check` | проверка точки `{x, y, species}` теми же нормами: вердикт, трасса правил |
 | GET | `/api/v1/runs/{run_id}/draft` | текущий черновик плана после правок и признак «не пересобран» |
-| POST | `/api/v1/runs/{run_id}/edits` | правки: `move`, `delete`, `add` |
+| POST | `/api/v1/runs/{run_id}/edits` | правки: `move`, `delete`, `add`; посадки, которые правка перевела в отказ, - в `rejected_by_edit` с причиной |
 | POST | `/api/v1/runs/{run_id}/rebuild` | пересборка DXF и артефактов по черновику |
 
 ### 7.2. Пример

@@ -153,6 +153,9 @@ class FileArtifactSink:
                 asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
             ),
             **_surface(directory, report.surface),
+            # Исходник сверки комплекта (склеенный чертёж): с ним `green verify` повторяет
+            # сверку результата. У одиночного файла исходник - сам входной файл, ссылки нет.
+            **({report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else {}),
         }
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:

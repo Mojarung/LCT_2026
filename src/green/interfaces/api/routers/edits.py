@@ -80,7 +80,14 @@ def check(run_id: str, payload: CheckIn, container: ContainerDep) -> CheckOut:
 
 @router.post("/{run_id}/edits", summary="Применить правки плана")
 def edit(run_id: str, payload: EditsIn, container: ContainerDep) -> PlanSummaryOut:
-    """Применить правки к плану прогона. DXF при этом не переписывается."""
+    """Применить правки к плану прогона. DXF при этом не переписывается.
+
+    Посадка, которая после правки не проходит нормы (перенос или добавление в запретное
+    место), уходит в отказы плана, а не остаётся на слое посадок. Правка при этом принята и
+    ответ остаётся 200, но такие посадки перечислены в rejected_by_edit с причиной - той же,
+    что даёт проверка точки: нарушенные нормы с пунктами актов или непригодное место. В список
+    попадают только посадки этого запроса; пустой список - правка никого в отказ не увела.
+    """
     edits = [
         Edit(
             kind=EditKind(item.kind),
@@ -91,10 +98,10 @@ def edit(run_id: str, payload: EditsIn, container: ContainerDep) -> PlanSummaryO
         )
         for item in payload.edits
     ]
-    plan = container.contexts.edit(run_id, edits)
-    if plan is None:
+    result = container.contexts.edit(run_id, edits)
+    if result is None:
         raise EditContextLostError(CONTEXT_LOST)
-    return PlanSummaryOut.from_plan(plan, stale=True)
+    return PlanSummaryOut.from_plan(result.plan, stale=True, rejected=result.rejected)
 
 
 @router.post("/{run_id}/rebuild", status_code=202, summary="Пересобрать DXF и отчёты по правкам")

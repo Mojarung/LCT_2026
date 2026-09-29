@@ -192,7 +192,9 @@ def test_finished_run_is_listed(client: TestClient, finished: dict[str, object])
     assert finished["id"] in {item["id"] for item in listed}
 
 
-def test_kit_of_two_drawings_is_merged(client: TestClient, work: Path) -> None:
+@pytest.fixture(scope="module")
+def kit(client: TestClient, work: Path) -> dict[str, object]:
+    """Прогон комплекта из двух чертежей: генплан и сети отдельными файлами."""
     genplan, utilities = work / "genplan.dxf", work / "utilities.dxf"
     _genplan(genplan)
     _utilities(utilities)
@@ -205,12 +207,49 @@ def test_kit_of_two_drawings_is_merged(client: TestClient, work: Path) -> None:
         data={"overrides": OVERRIDES},
     )
     assert response.status_code == 202, response.text
-    run = client.get(response.headers["Location"]).json()
-    assert run["state"] == "succeeded", run
-    merged = next(w for w in run["summary"]["load_notes"] if "Склейка комплекта" in w)
+    return client.get(response.headers["Location"]).json()
+
+
+def test_kit_of_two_drawings_is_merged(kit: dict[str, object]) -> None:
+    assert kit["state"] == "succeeded", kit
+    merged = next(w for w in kit["summary"]["load_notes"] if "Склейка комплекта" in w)  # type: ignore[index]
     # Имена, под которыми файлы пришли, а не имена хранения на диске (extra_1.dxf).
     assert "utilities.dxf" in merged
     assert "extra_" not in merged
+
+
+def test_kit_source_is_served_and_verifies_against_the_result(
+    client: TestClient, kit: dict[str, object], work: Path
+) -> None:
+    """Исходник сверки комплекта - склеенный чертёж: без него эксперт не повторит
+    `green verify`. Сверка с одним генпланом комплекта не сходится - сети из второго файла
+    в результате есть, а в генплане нет, - поэтому нужен именно merged_source.dxf."""
+    urls = {a["name"]: a["url"] for a in kit["artifacts"]}  # type: ignore[union-attr]
+    assert "merged_source.dxf" in urls
+    downloaded = {}
+    for name in ("merged_source.dxf", "result.dxf"):
+        response = client.get(urls[name])
+        assert response.status_code == 200, name
+        downloaded[name] = work / f"kit_{name}"
+        downloaded[name].write_bytes(response.content)
+    integrity = build_container(
+        Settings(config_dir=ROOT / "config", runs_dir=work / "verify_runs")
+    ).integrity
+
+    report = integrity.verify_files(downloaded["merged_source.dxf"], downloaded["result.dxf"])
+
+    assert report.ok, report
+    assert report.changed == report.missing == report.added_outside_result_layers == ()
+    assert report.unchanged == report.source_entities > 0
+    # Негативный контроль: исходник одного файла комплекта сверку не проходит.
+    assert not integrity.verify_files(work / "genplan.dxf", downloaded["result.dxf"]).ok
+
+
+def test_single_file_run_has_no_merged_source(finished: dict[str, object]) -> None:
+    """Склейки не было - и ссылки нет, а не битая ссылка на несуществующий файл."""
+    names = {a["name"] for a in finished["artifacts"]}  # type: ignore[union-attr]
+    assert "result.dxf" in names
+    assert "merged_source.dxf" not in names
 
 
 @pytest.mark.parametrize(

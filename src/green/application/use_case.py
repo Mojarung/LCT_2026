@@ -191,6 +191,7 @@ class PlanSite:
         merge_notes: tuple[str, ...] = ()
         gis_notes: tuple[str, ...] = ()
         assembly = None
+        merged_dxf: Path | None = None
         merge_warnings: tuple[str, ...] = ()
         if extras:
             if self._merger is None:
@@ -207,6 +208,9 @@ class PlanSite:
                 source, merge_notes = merged.path, merged.notes
                 assembly = merged.assembly
                 merge_warnings = merged.warnings
+                # Результат сверяется со склеенным чертежом, а не с одним из файлов комплекта:
+                # он и есть исходник для повторной сверки.
+                merged_dxf = merged.path
         with watch.stage("load_config"):
             rulebook = self._rules.load().for_sp42_edition(params.sp42_edition)
             layer_map = self._layers.load()
@@ -483,6 +487,7 @@ class PlanSite:
             export_validation=export_validation,
             assembly=assembly,
             classification=semantics,
+            merged_dxf=merged_dxf,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и
