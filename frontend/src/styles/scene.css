@@ -351,7 +351,7 @@
   outline: none;
 }
 /* Пока открыта галерея, панели сцены под ней не нужны и не должны просвечивать. */
-.page-scene[data-gallery='open'] .scene-head,
+.page-scene[data-gallery='open'] .scene-left,
 .page-scene[data-gallery='open'] .scene-panel,
 .page-scene[data-gallery='open'] .scene-help,
 .page-scene[data-gallery='open'] .scene-bar {
@@ -726,41 +726,6 @@
   margin-bottom: 6px;
 }
 
-/* --- Общая галерея на пульте: снимки и фото нейросетью одной сеткой --- */
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.media-thumb {
-  position: relative;
-  display: block;
-  width: 100%;
-  padding: 0;
-  overflow: hidden;
-  background: var(--panel-2);
-  border: 1px solid var(--hair-2);
-  border-radius: 6px;
-  cursor: zoom-in;
-}
-.media-thumb img {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-}
-.media-thumb:hover,
-.media-thumb:focus-visible {
-  border-color: var(--bone);
-  outline: none;
-}
-.media-thumb[data-pending='true'] img {
-  opacity: 0.55;
-}
 .media-badge {
   position: absolute;
   left: 4px;
@@ -795,33 +760,165 @@
   transition: width 1s linear;
 }
 
-/* --- Просмотр: кадр по центру, листание по бокам, действия внизу --- */
+/* --- Левый столбец: карточка улицы и панель «Снимки и фото» друг под другом --- */
+.scene-left {
+  position: absolute;
+  left: var(--inset);
+  top: var(--inset);
+  bottom: calc(var(--inset) * 2 + 46px);
+  width: var(--hud-left-w);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.scene-left > .hud {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: auto;
+  pointer-events: auto;
+}
+.scene-left .scene-head {
+  flex: none;
+  max-height: none;
+}
+.scene-media {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 12px 14px;
+}
+.scene-media[data-collapsed='true'] {
+  flex: none;
+}
+.media-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.media-head h2 {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: var(--bone);
+}
+.media-count {
+  margin-left: 4px;
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--bone-3);
+}
+.media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.media-mode {
+  margin: 8px 0 4px;
+  font-size: var(--fs-micro);
+}
+.media-list {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  margin: 10px -4px 0 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.media-empty {
+  margin-top: 10px;
+}
+.media-card {
+  display: grid;
+  gap: 6px;
+}
+.media-open {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--hair-2);
+  border-radius: 8px;
+  cursor: zoom-in;
+}
+.media-open img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.media-open:hover,
+.media-open:focus-visible {
+  border-color: var(--bone);
+  outline: none;
+}
+.media-card[data-pending='true'] .media-open img {
+  opacity: 0.55;
+}
+.media-info {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.media-info strong {
+  overflow: hidden;
+  font-size: var(--fs-small);
+  color: var(--bone);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-info .bad {
+  color: var(--bad);
+}
+.media-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.media-card-actions .button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* --- Просмотр: непрозрачный экран, кадр вписан в окно, листание по бокам --- */
 .media-viewer {
   position: fixed;
   inset: 0;
-  width: 100%;
+  width: 100vw;
   max-width: none;
-  height: 100%;
+  height: 100vh;
   max-height: none;
   margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: #0f0e0d;
   color: #fff;
 }
 .media-viewer::backdrop {
-  background: rgb(12 11 10 / 95%);
+  background: #0f0e0d;
 }
 .media-viewer[open] {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
 }
 .viewer-head,
 .viewer-foot {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 16px;
-  padding: 16px 24px;
+  padding: 14px 24px;
 }
 .viewer-head h2 {
   margin: 0;
@@ -833,6 +930,10 @@
   font-size: var(--fs-small);
   color: rgb(255 255 255 / 75%);
 }
+.viewer-meta .media-badge {
+  position: static;
+  margin-right: 6px;
+}
 .viewer-count {
   margin-left: auto;
   font-family: var(--mono);
@@ -842,43 +943,46 @@
 .media-viewer .ghost.small,
 .media-viewer .ghost.small.button {
   color: #fff;
-  border-color: rgb(255 255 255 / 40%);
+  border-color: rgb(255 255 255 / 45%);
 }
 .viewer-stage {
   position: relative;
-  display: grid;
-  grid-template-columns: 64px 1fr 64px;
+  display: flex;
+  flex: 1 1 auto;
   align-items: center;
+  justify-content: center;
+  gap: 16px;
   min-height: 0;
-  padding: 0 8px;
+  padding: 0 16px;
 }
 .viewer-stage img {
-  justify-self: center;
-  max-width: 100%;
-  /* Кадр вписывается между шапкой и подвалом: иначе крупное фото закрывало кнопки. */
-  max-height: calc(100dvh - 190px);
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  max-width: calc(100vw - 180px);
+  max-height: calc(100vh - 180px);
   object-fit: contain;
   border-radius: 6px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 45%);
 }
 .viewer-nav {
+  flex: none;
   width: 48px;
   height: 48px;
-  justify-self: center;
   border: 0;
   border-radius: 50%;
-  background: rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 14%);
   color: #fff;
   font-size: 30px;
   line-height: 1;
   cursor: pointer;
 }
 .viewer-nav:hover:not(:disabled) {
-  background: rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 26%);
 }
 .viewer-nav:disabled {
-  opacity: 0.25;
-  cursor: default;
+  visibility: hidden;
 }
 .viewer-status {
   position: absolute;
@@ -888,11 +992,8 @@
   margin: 0;
   padding: 8px 14px;
   border-radius: 8px;
-  background: rgb(12 11 10 / 75%);
+  background: rgb(15 14 13 / 80%);
   font-size: var(--fs-small);
-}
-.viewer-foot {
-  justify-content: space-between;
 }
 .viewer-sides {
   width: 240px;
@@ -903,8 +1004,8 @@
   margin-left: auto;
 }
 @media (max-width: 640px) {
-  .viewer-stage {
-    grid-template-columns: 40px 1fr 40px;
+  .viewer-stage img {
+    max-width: calc(100vw - 110px);
   }
   .viewer-nav {
     width: 36px;
@@ -912,5 +1013,24 @@
   }
   .viewer-foot {
     flex-wrap: wrap;
+  }
+}
+
+/* Узкий экран: левый столбец разбирается в поток страницы, как остальные панели. */
+@media (max-width: 1080px) {
+  .scene-left {
+    display: contents;
+  }
+  .scene-left > .hud {
+    width: auto;
+  }
+  .scene-media {
+    order: 4;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .media-list {
+    overflow: visible;
   }
 }

@@ -12,7 +12,7 @@ import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
 import { artifactUrl } from '../api/client';
 import { useArtifact, useCreatePhoto, usePhotos, useRun } from '../api/queries';
 import { BarButton } from '../components/scene/BarButton';
-import { MediaGallery } from '../components/scene/MediaGallery';
+import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
@@ -330,7 +330,7 @@ export function ScenePage() {
         return next.slice(0, MAX_SHOTS);
       });
       setFlash((n) => n + 1);
-      toast('Снимок в галерее на пульте: там просмотр, скачивание и «в фото ИИ».');
+      toast('Снимок - в панели «Снимки и фото» слева.');
     } catch (error: unknown) {
       // Сбой снимка - строка поверх сцены, а не «3D-вид не собрался»: сцена цела.
       toast(error instanceof Error ? error.message : String(error));
@@ -411,7 +411,7 @@ export function ScenePage() {
       })
       .then((photo) => {
         done?.(photo.id);
-        toast('Кадр ушёл в нейросеть: ход и готовое фото - на пульте, «Фото нейросетью».');
+        toast('Кадр ушёл в нейросеть: ход и готовое фото - в панели «Снимки и фото» слева.');
       })
       .catch((error: unknown) => {
         toast(error instanceof Error ? error.message : String(error));
@@ -542,64 +542,72 @@ export function ScenePage() {
       {cam.locked && readyToFly ? <div className="scene-crosshair" aria-hidden="true" /> : null}
       {!hudHidden ? (
         <>
-          <aside className="hud hud-left scene-head" aria-label="Прогон">
-            <div className="hud-head">
-              <Link className="back" to={`/runs/${encodeURIComponent(runId)}`}>
-                ← план прогона
-              </Link>
-              <h1 title={data?.source_name}>{title}</h1>
-              <p className="run-sub">
-                <span>3D-вид</span>
-                <span>{runId.slice(0, 8)}</span>
-              </p>
-            </div>
-            {counts && world ? (
-              <div className="hud-scroll scene-facts">
-                <p>
-                  {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
-                  {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}
-                  {count(counts.existing, 'существующее', 'существующих', 'существующих')}{' '}
-                  {plural(counts.existing, 'насаждение', 'насаждения', 'насаждений')},{' '}
-                  {count(counts.buildings, 'здание', 'здания', 'зданий')}.
+          <div className="scene-left">
+            <aside className="hud hud-left scene-head" aria-label="Прогон">
+              <div className="hud-head">
+                <Link className="back" to={`/runs/${encodeURIComponent(runId)}`}>
+                  ← план прогона
+                </Link>
+                <h1 title={data?.source_name}>{title}</h1>
+                <p className="run-sub">
+                  <span>3D-вид</span>
+                  <span>{runId.slice(0, 8)}</span>
                 </p>
-                <details className="scene-more">
-                  <summary>Этажность и допущения</summary>
-                  <p className="hint">
-                    {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
-                  </p>
-                </details>
-                {world.fallback ? (
-                  <p className="notice">
-                    Прогон сделан прежней версией сервиса: здания только замкнутые, этажность по
-                    площади, размеры растений по жизненной форме. Перезапустите прогон для точной
-                    сцены.
-                  </p>
-                ) : null}
               </div>
+              {counts && world ? (
+                <div className="hud-scroll scene-facts">
+                  <p>
+                    {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
+                    {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}
+                    {count(counts.existing, 'существующее', 'существующих', 'существующих')}{' '}
+                    {plural(counts.existing, 'насаждение', 'насаждения', 'насаждений')},{' '}
+                    {count(counts.buildings, 'здание', 'здания', 'зданий')}.
+                  </p>
+                  <details className="scene-more">
+                    <summary>Этажность и допущения</summary>
+                    <p className="hint">
+                      {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
+                    </p>
+                  </details>
+                  {world.fallback ? (
+                    <p className="notice">
+                      Прогон сделан прежней версией сервиса: здания только замкнутые, этажность по
+                      площади, размеры растений по жизненной форме. Перезапустите прогон для точной
+                      сцены.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </aside>
+            {readyToFly ? (
+              <MediaPanel
+                items={media}
+                photos={photos.data?.photos ?? []}
+                available={photosAvailable}
+                reason={photos.data?.reason ?? null}
+                scenery={scenery}
+                onScenery={setScenery}
+                shooting={shooting}
+                sending={sendingView}
+                onShot={(scale) => {
+                  void shoot(scale);
+                }}
+                onPhotoView={() => {
+                  void photoFromView();
+                }}
+                onPhoto={(shot) => {
+                  void photoFromSnapshot(shot);
+                }}
+                onOpen={setViewer}
+              />
             ) : null}
-          </aside>
+          </div>
           {readyToFly ? (
             <ScenePanel
               settings={settings}
               onChange={change}
-              onShot={(scale) => {
-                void shoot(scale);
-              }}
-              busy={shooting}
               speed={cam.speed}
               onSpeed={(speed) => engine.current?.setSpeed(speed)}
-              galleryCount={media.length}
-              gallery={
-                <MediaGallery
-                  items={media}
-                  photos={photos.data?.photos ?? []}
-                  available={photosAvailable}
-                  reason={photos.data?.reason ?? null}
-                  scenery={scenery}
-                  onScenery={setScenery}
-                  onOpen={setViewer}
-                />
-              }
             />
           ) : null}
           {readyToFly ? (

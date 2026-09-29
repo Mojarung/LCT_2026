@@ -104,14 +104,8 @@ const fromSlider = (value: number) => FLY_SPEED_MIN * Math.exp((value / SPEED_ST
 export interface ScenePanelProps {
   settings: ViewSettings;
   onChange: (patch: Partial<ViewSettings>) => void;
-  onShot: (scale: number) => void;
-  busy: boolean;
   speed: number;
   onSpeed: (speed: number) => void;
-  /** Общая галерея снимков и фото нейросетью. */
-  gallery: ReactNode;
-  /** Сколько в галерее, для сводки в заголовке раздела. */
-  galleryCount: number;
 }
 
 /** Какие разделы пульта открыты: запоминается в браузере, без хранилища - по умолчанию. */
@@ -167,16 +161,7 @@ function Section({
 
 const pct = (v: number) => `${String(Math.round(v * 100))}%`;
 
-export function ScenePanel({
-  settings,
-  onChange,
-  onShot,
-  busy,
-  speed,
-  onSpeed,
-  gallery,
-  galleryCount,
-}: ScenePanelProps) {
+export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const season = SEASONS.find((o) => o.value === settings.season)?.label ?? '';
   const age = AGES.find((o) => o.value === settings.age)?.label ?? '';
@@ -207,38 +192,6 @@ export function ScenePanel({
       </div>
       {collapsed ? null : (
         <div className="hud-scroll">
-          <Section
-            id="shots"
-            title="Снимки и фото"
-            summary={galleryCount ? `в галерее ${String(galleryCount)}` : undefined}
-            defaultOpen
-          >
-            <div className="scene-shot-buttons">
-              <button
-                type="button"
-                className="primary small"
-                disabled={busy}
-                title="Снимок кадра, клавиша P"
-                onClick={() => {
-                  onShot(1);
-                }}
-              >
-                снимок
-              </button>
-              <button
-                type="button"
-                className="ghost small"
-                disabled={busy}
-                title="Вдвое больше по каждой стороне, для слайда"
-                onClick={() => {
-                  onShot(2);
-                }}
-              >
-                снимок ×2
-              </button>
-            </div>
-            {gallery}
-          </Section>
           <Section
             id="time"
             title="Время и сезон"
