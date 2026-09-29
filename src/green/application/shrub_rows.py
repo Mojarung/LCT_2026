@@ -34,6 +34,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass, replace
+from itertools import pairwise
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -141,7 +142,7 @@ def fill_shrub_rows(  # noqa: PLR0913 - сценарий передаёт всё
     planted, skipped = _plant(segments, species, plan, rulebook, shrub_params)
     warnings = list(plan.warnings)
     if planted:
-        length = sum(s.length_m for s in segments)
+        length = row_length_m(planted)
         summary = (
             "Ряды кустарника у борта под кронами аллеи: "
             f"{counted(len(segments) - skipped, 'участок', 'участка', 'участков')}, "
@@ -211,7 +212,7 @@ def _curb_hedges(  # noqa: PLR0913 - этап получает всё, что у
     )
     if not planted:
         return plan
-    length = sum(s.length_m for s in segments)
+    length = row_length_m(planted)
     summary = (
         "Живая изгородь вдоль бортов: "
         f"{counted(len(segments) - skipped, 'участок', 'участка', 'участков')}, "
@@ -634,3 +635,17 @@ def row_step(params: PlanParams) -> float:
     """Шаг кустов в ряду: норма ряда (743-ПП, табл. 3.6.2), но не меньше двух радиусов
     посадочного места куста - ямы соседних кустов не перекрываются, как требует проверка."""
     return max(params.shrub_row_spacing_m, 2 * params.shrub_planting_radius_m + _PIT_RESERVE_M)
+
+
+def row_length_m(placements: Sequence[Placement]) -> float:
+    """Длина по центрам соседних кустов каждого фактически посаженного ряда."""
+    rows: dict[str, list[Placement]] = {}
+    for placement in placements:
+        structure = placement.assortment.structure_id if placement.assortment else None
+        key = structure or placement.placement_id.rpartition("-")[0] or "legacy"
+        rows.setdefault(key, []).append(placement)
+    return sum(
+        math.dist((a.x, a.y), (b.x, b.y))
+        for members in rows.values()
+        for a, b in pairwise(sorted(members, key=lambda member: member.placement_id))
+    )

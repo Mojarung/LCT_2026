@@ -24,6 +24,7 @@ from green.domain.planting import Lawn, Plan
 
 PARAMS = PlanParams()
 HEDGE = MODE_LABELS["curb_hedge"]
+ROW = MODE_LABELS["shrub_row"]
 ALLEY = MODE_LABELS["alley"]
 
 
@@ -129,13 +130,31 @@ def test_planting_kinds_with_hedge_length_and_lawns() -> None:
     effect = street_effect(_plan(*hedge, *trees, lawns=(lawn, kept)), _site(), PARAMS)
     kinds = {k.key: k for k in effect.kinds}
     assert kinds["curb_hedge"].count == 10
-    assert kinds["curb_hedge"].length_m == pytest.approx(10.0)
+    assert kinds["curb_hedge"].length_m == pytest.approx(9.0)
     assert kinds["alley"].count == 3
     assert kinds["lawn_new"].area_m2 == pytest.approx(100.0)
     assert effect.area_m2 == pytest.approx(200.0 * 40.0)
     assert effect.curb_m == pytest.approx(200.0)
     lawn_m2 = _m(effect, "lawn_m2")
     assert (lawn_m2.before, lawn_m2.after) == (pytest.approx(50.0), pytest.approx(150.0))
+
+
+def test_shrub_row_length_uses_actual_one_metre_centres() -> None:
+    shrubs = [_place(i, float(i), 1.0, SPIREA, structure="hedge-1", note=ROW) for i in range(1, 40)]
+    kinds = {kind.key: kind for kind in street_effect(_plan(*shrubs), _site(), PARAMS).kinds}
+    assert kinds["shrub_row"].count == 39
+    assert kinds["shrub_row"].length_m == pytest.approx(38.0)
+
+
+def test_row_length_sums_each_segment_without_crossing_gaps() -> None:
+    shrubs = [
+        _place(row * 10 + i, float(row * 100 + i), 1.0, SPIREA, structure=f"hedge-{row}", note=ROW)
+        for row in range(1, 9)
+        for i in range(1, 6)
+    ]
+    kinds = {kind.key: kind for kind in street_effect(_plan(*shrubs), _site(), PARAMS).kinds}
+    assert kinds["shrub_row"].count == 40
+    assert kinds["shrub_row"].length_m == pytest.approx(32.0)
 
 
 def test_inventory_gives_the_balance_of_the_survey() -> None:

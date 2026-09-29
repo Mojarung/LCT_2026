@@ -37,6 +37,7 @@ from green.application.placement import (
 from green.application.quality.coverage import FixedCrowns, fixed_crowns, measure_crowns
 from green.application.quality.site import site_length, split_segments
 from green.application.quality.terms import Layout
+from green.application.shrub_rows import row_length_m
 from green.application.stock import CIRCLE_SEGMENTS
 from green.application.surfaces import Material
 from green.application.wording import decimal
@@ -61,37 +62,37 @@ if TYPE_CHECKING:
     from green.application.ports import InventoryCounts
     from green.application.quality.site import Site
     from green.application.surfaces import SurfaceMap
-    from green.domain.planting import Plan, Species
+    from green.domain.planting import Placement, Plan, Species
 
-# Вид посадки по приёму: ключ, заголовок, основание термина, параметр шага для длины ряда.
+# Вид посадки по приёму: ключ, заголовок, основание термина, есть ли фактическая длина ряда.
 _KINDS = (
     (
         MODE_ALLEY,
         "Аллея: рядовая посадка деревьев вдоль борта",
         "743-ПП, табл. 3.6.2; ГОСТ Р 71473-2024, п. 2.2.2.16",
-        None,
+        False,
     ),
-    (MODE_LAWN, "Группы и одиночные деревья на газоне", "743-ПП, п. 10.8.1", None),
-    (MODE_SHRUB_GROUP, "Группы кустарника на местах деревьев", "743-ПП, табл. 3.6.2, прим.", None),
+    (MODE_LAWN, "Группы и одиночные деревья на газоне", "743-ПП, п. 10.8.1", False),
+    (MODE_SHRUB_GROUP, "Группы кустарника на местах деревьев", "743-ПП, табл. 3.6.2, прим.", False),
     (
         MODE_SHRUB_ROW,
         "Ряд кустарника под кронами аллеи",
         "МГСН 1.02-02, п. 4.2.9.2",
-        "shrub_row_spacing_m",
+        True,
     ),
     (
         MODE_CURB_HEDGE,
         "Живая изгородь вдоль борта",
         "743-ПП, п. 2.1.13(1); ГОСТ Р 71473-2024, п. 2.2.2.27",
-        "curb_hedge_spacing_m",
+        True,
     ),
     (
         MODE_UNDERSTORY,
         "Кустарник под кронами деревьев: второй ярус",
         "МГСН 1.02-02, п. 4.2.9.2; СП 276.1325800, п. 7.8.2",
-        None,
+        False,
     ),
-    (MODE_SHRUB_FILL, "Группы кустарника на газоне", "743-ПП, п. 10.8.1", None),
+    (MODE_SHRUB_FILL, "Группы кустарника на газоне", "743-ПП, п. 10.8.1", False),
 )
 _BY_LABEL = {MODE_LABELS[key]: key for key, *_ in _KINDS}
 _LAWN_BASIS = "743-ПП, п. 2.1.13; 770-ПП, прил. 3"
@@ -122,7 +123,7 @@ def street_effect(  # noqa: PLR0913 - план, участок, параметр
     catalog: Sequence[Species] = (),
 ) -> StreetEffect:
     if site.boundary is None:
-        return _without_boundary(plan, params)
+        return _without_boundary(plan)
     stock = site.stock
     layout = Layout.of(plan.placements)
     trees_new = int(layout.is_tree.sum())
@@ -226,7 +227,7 @@ def street_effect(  # noqa: PLR0913 - план, участок, параметр
     ]
     return StreetEffect(
         measures=tuple(measures),
-        kinds=_kinds(plan, params),
+        kinds=_kinds(plan),
         noise=noise,
         notes=_notes(site),
         stock_source=stock.source,
@@ -274,7 +275,7 @@ def _survey(inventory: InventoryCounts | None, catalog: Sequence[Species]) -> _S
     return _Survey(trees=total - shrubs + removed, shrubs=shrubs, removed=removed)
 
 
-def _without_boundary(plan: Plan, params: PlanParams) -> StreetEffect:
+def _without_boundary(plan: Plan) -> StreetEffect:
     """Без границы работ «было» не от чего считать: нет данных, а не ноль."""
     note = "нет данных: в чертеже не найдена граница работ"
     keys = (
@@ -290,7 +291,7 @@ def _without_boundary(plan: Plan, params: PlanParams) -> StreetEffect:
             EffectMeasure(key, title, unit, None, None, "", REQUIREMENT, note)
             for key, title, unit in keys
         ),
-        kinds=_kinds(plan, params),
+        kinds=_kinds(plan),
         noise=(),
         notes=(note,),
     )
@@ -653,18 +654,19 @@ def _belt_width(
     return width
 
 
-def _kinds(plan: Plan, params: PlanParams) -> tuple[PlantingKind, ...]:
-    groups: dict[str, list[str]] = {}
+def _kinds(plan: Plan) -> tuple[PlantingKind, ...]:
+    groups: dict[str, list[Placement]] = {}
     places: dict[str, Counter[str]] = {}
     for p in plan.placements:
         key = next((_BY_LABEL[n] for n in p.notes if n in _BY_LABEL), "other")
-        groups.setdefault(key, []).append(p.planting_type.value)
+        groups.setdefault(key, []).append(p)
         places.setdefault(key, Counter())[p.place or "unknown"] += 1
     kinds = []
-    for key, title, basis, step in _KINDS:
-        types = groups.get(key)
-        if not types:
+    for key, title, basis, is_row in _KINDS:
+        members = groups.get(key)
+        if not members:
             continue
+        types = [p.planting_type.value for p in members]
         kinds.append(
             PlantingKind(
                 key=key,
@@ -672,12 +674,12 @@ def _kinds(plan: Plan, params: PlanParams) -> tuple[PlantingKind, ...]:
                 planting_type=Counter(types).most_common(1)[0][0],
                 count=len(types),
                 basis=basis,
-                length_m=round(len(types) * float(getattr(params, step)), 1) if step else None,
+                length_m=round(row_length_m(members), 1) if is_row else None,
                 places=dict(places[key]),
             )
         )
     if groups.get("other"):
-        types = groups["other"]
+        types = [p.planting_type.value for p in groups["other"]]
         kinds.append(
             PlantingKind(
                 "other", "Прочие посадки", Counter(types).most_common(1)[0][0], len(types), ""

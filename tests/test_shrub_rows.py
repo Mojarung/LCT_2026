@@ -86,6 +86,16 @@ def test_a_segment_is_one_species_with_an_even_step(plans: dict[bool, Plan]) -> 
         assert sum(steps) >= 3.0 - 1e-6  # короче - одиночные кусты у борта (SR-13)
 
 
+def test_planner_warning_and_effect_use_the_same_planted_row_length(
+    plans: dict[bool, Plan],
+) -> None:
+    plan = plans[True]
+    assert plan.effect is not None
+    row = next(kind for kind in plan.effect.kinds if kind.key == "shrub_row")
+    warning = next(text for text in plan.warnings if text.startswith("Ряды кустарника у борта"))
+    assert f"{row.length_m:.0f} м ряда" in warning
+
+
 def test_only_hardy_species_stand_at_the_curb(plans: dict[bool, Plan]) -> None:
     for shrub in _hedge(plans[True]):
         species = shrub.species
