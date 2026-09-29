@@ -25,6 +25,11 @@ function title(measure: EffectMeasure): string {
 
 const estimate = (measure: EffectMeasure): boolean => measure.note.includes('оценка');
 
+function noteSentence(note: string): string {
+  const text = note.trim();
+  return text && !text.endsWith('.') ? `${text}.` : text;
+}
+
 function value(measure: EffectMeasure): string {
   if (measure.before == null && measure.after == null) return 'не определяется';
   const share = measure.unit === '%';
@@ -75,8 +80,9 @@ export function EffectBlock({ effect }: { effect: EffectJson | null | undefined 
             <div key={m.key}>
               <dt>{fullTitle(m)}</dt>
               <dd>
-                {m.note}
-                {m.basis ? ` Основание: ${m.basis}.` : ''}
+                {[noteSentence(m.note), m.basis ? `Основание: ${m.basis}.` : '']
+                  .filter(Boolean)
+                  .join(' ')}
               </dd>
             </div>
           ))}
