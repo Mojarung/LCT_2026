@@ -1,6 +1,13 @@
 /* Условные знаки инженерного стиля карты: как на дендроплане и разбивочно-посадочном чертеже
- * проектировщиков пилота. Геометрия - из библиотеки знаков, собранной по файлам организаторов
- * (шаблон значков, дендропланы и РПЧ пяти бюро, подоснова Мосгеотреста; docs/notes/40):
+ * проектировщиков пилота.
+ *
+ * Вид посадки - знаком своей строки из «Шаблонов значков» заказчика (templateSigns.ts): у липы
+ * свой знак, у клёна свой, у спиреи свой. Дерево - знаком по взрослой кроне вида и ямой в
+ * центре, куст - знаком размера знака куста. Вид, которого в шаблоне нет (ясень, маакия,
+ * скумпия), и все посадки, пока файл знаков не пришёл, - общими знаками ниже. Существующие
+ * насаждения - знаками раздела «существующие» того же шаблона.
+ *
+ * Общие знаки - из файлов организаторов (дендропланы и РПЧ пяти бюро; docs/notes/40):
  *
  * - new_tree_pit - место посадки дерева: Грузинская, РПЧ, блок «Дерево_Л_Пр», слой
  *   ГП_посадочный - залитый чёрный круг r 0,42 м. Тот же знак у Старого Гая, Камчатской,
@@ -23,11 +30,23 @@
  * цвет), а не спрайтами: кругов тысячи, а заливка одного пути дешевле тысячи drawImage. Цвета -
  * из токенов --sign-* (tokens.css): в тёмной теме чернила светлые, как в модели CAD. */
 
-import type { ExistingPlant } from './existing';
+import type { Position } from '../api/artifacts';
+import { type ExistingPlant, SHRUB_STRIP_WIDTH_M } from './existing';
 import type { Box } from './geometry';
 import { type Form, isShrubType, MODELS } from './models';
 import type { Palette } from './palette';
 import { pinToScreen } from './paper';
+import { stamp } from './sprites';
+import {
+  EXISTING_SIGNS,
+  paintSign,
+  signColor,
+  signSprite,
+  speciesSign,
+  type TemplateSign,
+  templateSignOf,
+  TONE_PX,
+} from './templateSigns';
 import type { MapItem, ViewState } from './types';
 import { toScreen } from './view';
 
@@ -68,7 +87,26 @@ export const DIM_ALPHA = 0.26;
 
 export type PlanSign = 'tree' | 'conifer' | 'shrub';
 export type SwatchSign =
-  PlanSign | 'hedge' | 'existing-tree' | 'existing-conifer' | 'existing-shrub';
+  PlanSign | 'hedge' | 'existing-tree' | 'existing-conifer' | 'existing-shrub' | 'existing-hedge';
+
+/** Знак шаблона у существующего растения: хвойное - по знаку съёмки из подосновы. */
+export function existingSignName(plant: ExistingPlant): string {
+  if (plant.shrub) return EXISTING_SIGNS.shrub;
+  return plant.conifer ? EXISTING_SIGNS.conifer : EXISTING_SIGNS.tree;
+}
+
+const EXISTING_SWATCH: Partial<Record<SwatchSign, string>> = {
+  'existing-tree': EXISTING_SIGNS.tree,
+  'existing-conifer': EXISTING_SIGNS.conifer,
+  'existing-shrub': EXISTING_SIGNS.shrub,
+  'existing-hedge': EXISTING_SIGNS.hedge,
+};
+
+/** Точка главного цвета знака на общем виде не бледнее этого: полупрозрачная заливка знака
+ *  («Жимолость», 0,7) точкой в три пикселя иначе не видна. */
+const TONE_MIN_ALPHA = 0.6;
+/** Знак шаблона у ямы на общем виде - кольцо цвета вида вокруг ямы такой ширины, пиксели. */
+const TONE_RING_PX = 1.4;
 
 export interface SignInk {
   ink: string;
@@ -236,6 +274,15 @@ class PlanBatch {
       : Math.max(HEDGE_W_M * scale, HEDGE_MIN_PX);
   }
 
+  /** Яма дерева без контура кроны: крону рисует знак шаблона. */
+  pit(sx: number, sy: number): void {
+    circle(this.pits, sx, sy, this.pitR);
+  }
+
+  get farShrubs(): boolean {
+    return this.far;
+  }
+
   tree(sx: number, sy: number, crownPx: number, conifer: boolean): void {
     circle(this.pits, sx, sy, this.pitR);
     if (crownPx < this.pitR + CROWN_GAP_PX) return;
@@ -326,6 +373,54 @@ class PlanBatch {
   }
 }
 
+/** Знаки шаблона одного прохода: спрайты знаков и точки главного цвета на общем виде. */
+class TemplateBatch {
+  private readonly stamps: { sign: TemplateSign; sx: number; sy: number; r: number }[] = [];
+  private readonly tones = new Map<string, { color: string; alpha: number; path: Path2D }>();
+  private readonly halos = new Path2D();
+  private hasHalo = false;
+
+  /** Знак радиуса r пикселей; мельче TONE_PX - точка главного цвета с непрозрачностью alpha. */
+  add(sign: TemplateSign, sx: number, sy: number, r: number, lifted: boolean, alpha = 1): void {
+    if (r < TONE_PX) this.tone(sign, sx, sy, r, alpha);
+    else this.stamps.push({ sign, sx, sy, r });
+    if (lifted) {
+      circle(this.halos, sx, sy, r + 1);
+      this.hasHalo = true;
+    }
+  }
+
+  tone(sign: TemplateSign, sx: number, sy: number, r: number, alpha: number): void {
+    const [color, own] = sign.tone;
+    const a = Math.max(TONE_MIN_ALPHA, own) * alpha;
+    const key = `${color}|${String(a)}`;
+    let entry = this.tones.get(key);
+    if (!entry) {
+      entry = { color, alpha: a, path: new Path2D() };
+      this.tones.set(key, entry);
+    }
+    circle(entry.path, sx, sy, r);
+  }
+
+  draw(ctx: CanvasRenderingContext2D, ink: SignInk, dpr: number): void {
+    const base = ctx.globalAlpha;
+    if (this.hasHalo) {
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = ink.halo;
+      ctx.stroke(this.halos);
+    }
+    for (const { color, alpha, path } of this.tones.values()) {
+      ctx.globalAlpha = base * alpha;
+      ctx.fillStyle = signColor(color, ink);
+      ctx.fill(path);
+    }
+    ctx.globalAlpha = base;
+    for (const { sign, sx, sy, r } of this.stamps) {
+      stamp(ctx, signSprite(sign, r, ink, dpr), sx, sy, r);
+    }
+  }
+}
+
 export type SignLook = 'plan' | 'dim' | 'lift';
 
 /** Посадки одного прохода знаками плана. include - попадает ли посадка в этот проход;
@@ -343,6 +438,7 @@ export function drawPlanSigns(
 ): void {
   const lifted = look === 'lift';
   const batch = new PlanBatch(view.scale, lifted);
+  const templates = new TemplateBatch();
   const near = (p: MapItem) => {
     const pad = p.radius + 2;
     return (
@@ -384,9 +480,18 @@ export function drawPlanSigns(
     const { sx, sy } = toScreen(view, p.x, p.y);
     const sign = planSign(p.planting_type, p.species_code);
     const crownPx = p.radius * view.scale;
+    const template = speciesSign(p.species_code);
     if (sign === 'shrub') {
-      batch.shrub(sx, sy);
+      if (!template) batch.shrub(sx, sy);
+      else if (batch.farShrubs) templates.tone(template, sx, sy, batch.shrubR, 0.8);
+      else templates.add(template, sx, sy, batch.shrubR, lifted);
       onItem(p, sx, sy, Math.max(crownPx, batch.shrubR));
+    } else if (template) {
+      // Знак по кроне вида; на общем виде - кольцо цвета вида вокруг ямы.
+      const r = Math.max(crownPx, batch.pitR + TONE_RING_PX);
+      templates.add(template, sx, sy, r, lifted);
+      batch.pit(sx, sy);
+      onItem(p, sx, sy, Math.max(crownPx, batch.pitR));
     } else {
       batch.tree(sx, sy, crownPx, sign === 'conifer');
       onItem(p, sx, sy, Math.max(crownPx, batch.pitR));
@@ -394,13 +499,124 @@ export function drawPlanSigns(
   }
   ctx.save();
   if (look === 'dim') ctx.globalAlpha = DIM_ALPHA;
+  // Знаки шаблона - под ямами и полосами изгородей: яма дерева читается поверх кроны.
+  templates.draw(ctx, ink, dpr);
   batch.draw(ctx, ink, dpr, lifted);
   ctx.restore();
 }
 
-/** Существующие насаждения знаками дендроплана «сохраняемое» - сервис ничего не вырубает.
- *  Пиксели CSS, матрицу со сдвигом кэша ставит вызывающий. */
+/** Существующие насаждения знаками раздела «существующие» шаблона: серая крона дерева, хвойного
+ *  (по знаку съёмки в подоснове) и кустарника размером кроны по съёмке. Сервис ничего не
+ *  вырубает, поэтому других состояний нет. Пиксели CSS, матрицу со сдвигом кэша ставит
+ *  вызывающий. Пока файл знаков не пришёл - кольца дендроплана «сохраняемое». */
 export function drawExistingSigns(
+  ctx: CanvasRenderingContext2D,
+  plants: readonly ExistingPlant[],
+  visible: Box,
+  view: ViewState,
+  ink: SignInk,
+  dpr = 1,
+): void {
+  const signs = new Map<string, TemplateSign>();
+  for (const name of [EXISTING_SIGNS.tree, EXISTING_SIGNS.conifer, EXISTING_SIGNS.shrub]) {
+    const sign = templateSignOf(name);
+    if (sign) signs.set(name, sign);
+  }
+  if (signs.size < 3) {
+    drawExistingRings(ctx, plants, visible, view, ink);
+    return;
+  }
+  const templates = new TemplateBatch();
+  for (const plant of plants) {
+    if (plant.x < visible[0] - plant.r || plant.x > visible[2] + plant.r) continue;
+    if (plant.y < visible[1] - plant.r || plant.y > visible[3] + plant.r) continue;
+    const sign = signs.get(existingSignName(plant));
+    if (!sign) continue;
+    const { sx, sy } = toScreen(view, plant.x, plant.y);
+    const r = plant.r * view.scale;
+    // На общем виде - бледная точка не мельче пары пикселей: тысячи крон съёмки иначе
+    // заливают план серым, а главное на нём - наши посадки. Серая крона мельче
+    // EXISTING_TONE_PX и так читается точкой, а спрайт на каждую из двух тысяч крон
+    // Куликовской удлинял перерисовку карты на пятую часть.
+    if (r < EXISTING_TONE_PX)
+      templates.tone(sign, sx, sy, Math.max(r, RING_FAR_PX), EXISTING_FAR_ALPHA);
+    else templates.add(sign, sx, sy, r, false);
+  }
+  templates.draw(ctx, ink, dpr);
+}
+
+/** Полоса живой изгороди на экране тоньше этого - залитой полосой подосновы, а не знаком. */
+const HEDGE_SIGN_MIN_PX = 4;
+
+/** Хватает ли масштаба, чтобы рисовать полосу кустарника съёмки знаком шаблона. */
+export function hedgeSignFits(view: ViewState): boolean {
+  return (
+    templateSignOf(EXISTING_SIGNS.hedge) !== undefined &&
+    SHRUB_STRIP_WIDTH_M * view.scale >= HEDGE_SIGN_MIN_PX
+  );
+}
+
+/** Существующая живая изгородь знаком «З9» шаблона: облака вдоль оси полосы, высота знака -
+ *  условная ширина полосы, каждый повёрнут по своему отрезку. Пиксели CSS. */
+export function drawExistingHedges(
+  ctx: CanvasRenderingContext2D,
+  lines: readonly Position[][],
+  visible: Box,
+  view: ViewState,
+  ink: SignInk,
+  dpr = 1,
+): void {
+  const sign = templateSignOf(EXISTING_SIGNS.hedge);
+  if (!sign) return;
+  const height = SHRUB_STRIP_WIDTH_M * view.scale;
+  // Нормированный знак вписан в круг радиуса 1 по ширине; его высота - aspect от ширины.
+  const r = height / (2 * Math.max(sign.aspect, 0.2));
+  const sprite = signSprite(sign, r, ink, dpr);
+  // Шаг чуть меньше ширины знака: облака соседних знаков смыкаются, как у секций «ЖИ_С».
+  const step = (2 * r * 0.92) / view.scale;
+  const pad = SHRUB_STRIP_WIDTH_M + step;
+  for (const line of lines) {
+    if (
+      !line.some(
+        ([x, y]) =>
+          x >= visible[0] - pad &&
+          x <= visible[2] + pad &&
+          y >= visible[1] - pad &&
+          y <= visible[3] + pad,
+      )
+    )
+      continue;
+    let carry = step / 2;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1];
+      const b = line[i];
+      if (!a || !b) continue;
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (!length) continue;
+      const from = toScreen(view, a[0], a[1]);
+      const to = toScreen(view, b[0], b[1]);
+      const angle = Math.atan2(to.sy - from.sy, to.sx - from.sx);
+      for (let at = carry; at <= length; at += step) {
+        const k = at / length;
+        ctx.save();
+        ctx.translate(from.sx + (to.sx - from.sx) * k, from.sy + (to.sy - from.sy) * k);
+        ctx.rotate(angle);
+        stamp(ctx, sprite, 0, 0, r);
+        ctx.restore();
+      }
+      carry = carry > length ? carry - length : step - ((length - carry) % step);
+    }
+  }
+}
+
+/** Непрозрачность точки существующего растения на общем виде. */
+const EXISTING_FAR_ALPHA = 0.45;
+/** Существующее растение мельче этого радиуса на экране - точкой, пиксели CSS. */
+const EXISTING_TONE_PX = 6;
+
+/** Кольца дендроплана «сохраняемое» (Камчатская_ДИ): запасной вид существующих насаждений,
+ *  пока файл знаков шаблона не пришёл. */
+function drawExistingRings(
   ctx: CanvasRenderingContext2D,
   plants: readonly ExistingPlant[],
   visible: Box,
@@ -467,6 +683,12 @@ export function drawSignSwatch(
   alpha = 1,
 ): void {
   const c = size / 2;
+  const template = EXISTING_SWATCH[sign];
+  const existing = template ? templateSignOf(template) : undefined;
+  if (existing) {
+    drawTemplateSwatch(ctx, existing, size, ink, alpha);
+    return;
+  }
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.lineJoin = 'round';
@@ -533,7 +755,8 @@ export function drawSignSwatch(
       }
       break;
     }
-    case 'existing-shrub': {
+    case 'existing-shrub':
+    case 'existing-hedge': {
       const body = new Path2D();
       scallop(body, c, c, size * 0.34);
       ctx.fillStyle = ink.paper;
@@ -544,6 +767,21 @@ export function drawSignSwatch(
       break;
     }
   }
+  ctx.restore();
+}
+
+/** Образец знака шаблона: тот же рисунок, что на карте, вписанный в квадрат size. */
+export function drawTemplateSwatch(
+  ctx: CanvasRenderingContext2D,
+  sign: TemplateSign,
+  size: number,
+  ink: SignInk,
+  alpha = 1,
+): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(size / 2, size / 2);
+  paintSign(ctx, sign, size * 0.46, ink);
   ctx.restore();
 }
 

@@ -6,7 +6,7 @@
  * картинку (4 мс). Начисто карта перерисовывается, когда рука остановилась. Посадки и отказы
  * остаются живыми: их двигают и подсвечивают. */
 
-import type { MaterialLabel } from '../api/artifacts';
+import type { MaterialLabel, Position } from '../api/artifacts';
 import type { Chunk } from './chunks';
 import { MIN_PX } from './chunks';
 import type { ExistingPlant } from './existing';
@@ -15,7 +15,14 @@ import { EXISTING_SHRUB, EXISTING_TREE, modelKey, modelOf } from './models';
 import { type Palette, VERDICT_TOKEN } from './palette';
 import { paintMaterial, pinToScreen, type Textures, texturesFor } from './paper';
 import { isWeak } from './picking';
-import { drawExistingSigns, drawPlanSigns, signInk, type SignLook } from './signs';
+import {
+  drawExistingHedges,
+  drawExistingSigns,
+  drawPlanSigns,
+  hedgeSignFits,
+  signInk,
+  type SignLook,
+} from './signs';
 import { type Look, sprite, stamp } from './sprites';
 import type { MapStyle } from './style';
 import type { Area, Layers, MapItem, SurfaceImage, ViewState } from './types';
@@ -40,6 +47,8 @@ export interface Scene {
   surface: SurfaceImage | null;
   /** Существующие деревья и кустарники подосновы: рисуются моделями, а не знаками съёмки. */
   existing: ExistingPlant[];
+  /** Оси полос кустарника съёмки (живая изгородь): в стиле чертежа - знак шаблона вдоль оси. */
+  hedges: Position[][];
   placements: MapItem[];
   rejections: MapItem[];
   /** Участок работ: контуры границы в координатах чертежа. Подоснова дальше CONTEXT_M от
@@ -154,10 +163,14 @@ export function renderBase(
     for (const chunk of shown) if (chunk.shadow) ctx.fill(chunk.path);
   }
   place(ctx);
+  // Полоса кустарника съёмки в стиле чертежа на приближении - знаком живой изгороди шаблона
+  // вдоль оси, на общем виде - залитой полосой подосновы.
+  const hedgeSigns = flat && layers.existing && scene.hedges.length > 0 && hedgeSignFits(view);
   // Сети на бумаге тише, чем в CAD: на слайдах план - это газон, здания и посадки, а
   // сети - справка под ними. Насколько тише, решает тема (--utility-opacity).
   const utilityAlpha = Number.parseFloat(palette.get('--utility-opacity')) || 1;
   for (const chunk of shown) {
+    if (hedgeSigns && chunk.hedge) continue;
     ctx.globalAlpha = chunk.group === 'utilities' ? utilityAlpha : 1;
     if (chunk.fillVar) {
       ctx.fillStyle = palette.get(chunk.fillVar);
@@ -177,11 +190,17 @@ export function renderBase(
     }
   }
   ctx.globalAlpha = 1;
+  if (hedgeSigns) {
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    drawExistingHedges(ctx, scene.hedges, visible, view, signInk(palette), dpr);
+    ctx.restore();
+  }
   if (layers.existing && scene.existing.length) {
     if (flat) {
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-      drawExistingSigns(ctx, scene.existing, visible, view, signInk(palette));
+      drawExistingSigns(ctx, scene.existing, visible, view, signInk(palette), dpr);
       ctx.restore();
     } else {
       drawExisting(ctx, visible, dpr, view, scene.existing, palette);

@@ -7,6 +7,8 @@
  * посадки. У существующих насаждений своя приглушённая модель: на плане сразу видно, что
  * сажаем мы, а что уже росло. */
 
+import type { MapItem } from './types';
+
 export type Form =
   /** Крупное лиственное дерево: крона-облако с лопастями. */
   | 'broadleaf'
@@ -434,4 +436,26 @@ export function commonest(codes: Iterable<string | undefined>, form: Form): stri
 export function modelKey(code: string | undefined, plantingType: string): string {
   if (code && MODELS.has(code)) return code;
   return isShrubType(plantingType) ? '~shrub' : '~tree';
+}
+
+/** Вид плана для легенды: знак в легенде - тот же, что на карте. */
+export interface PlanSpecies {
+  code: string;
+  name: string;
+  plantingType: string;
+}
+
+/** Виды плана по убыванию числа посадок, как в составе плана. */
+export function planSpecies(placements: readonly MapItem[]): PlanSpecies[] {
+  const counts = new Map<string, [PlanSpecies, number]>();
+  for (const item of placements) {
+    const code = item.species_code ?? '';
+    const entry = counts.get(code) ?? [
+      { code, name: item.species_ru || 'вид не назначен', plantingType: item.planting_type },
+      0,
+    ];
+    entry[1] += 1;
+    counts.set(code, entry);
+  }
+  return [...counts.values()].sort((a, b) => b[1] - a[1]).map(([row]) => row);
 }

@@ -5,7 +5,7 @@
  * на Камчатской), а мелко нарезанный позволяет не трогать то, чего нет в кадре, и то, что мельче
  * пикселя. */
 
-import type { BasemapFeature } from '../api/artifacts';
+import type { BasemapFeature, Position } from '../api/artifacts';
 import {
   type ExistingPlant,
   plantsOf,
@@ -31,6 +31,8 @@ export interface Chunk {
   dash: number[];
   texture: ClassStyle['texture'];
   shadow: boolean;
+  /** Полоса кустарника съёмки: в стиле чертежа на приближении её рисует знак шаблона. */
+  hedge: boolean;
   path: Path2D;
   span: number;
   minX: number;
@@ -40,11 +42,13 @@ export interface Chunk {
 }
 
 /** Куски подосновы и существующие насаждения. Одиночная крона уходит в модели (existing.ts),
- *  а не в линии: иначе под бледной кроной модели проступал бы знак съёмки. */
+ *  а не в линии: иначе под бледной кроной модели проступал бы знак съёмки. Оси полос
+ *  кустарника съёмки - ещё и в hedges: по ним стиль чертежа ставит знак живой изгороди. */
 export function buildChunks(
   features: readonly BasemapFeature[],
   bbox: Box | null,
   existing: ExistingPlant[] = [],
+  hedges: Position[][] = [],
 ): Chunk[] {
   const [x0, y0, x1, y1] = bbox ?? [0, 0, 0, 0];
   const cell = Math.max(x1 - x0, y1 - y0) / GRID || 1;
@@ -61,6 +65,7 @@ export function buildChunks(
       existing.push(...plants);
       continue;
     }
+    hedges.push(...shrubLines);
     box[0] = Infinity;
     box[1] = Infinity;
     box[2] = -Infinity;
@@ -87,6 +92,7 @@ export function buildChunks(
         dash: style.dash ?? [],
         texture: style.texture,
         shadow: style.shadow ?? false,
+        hedge: shrubLines.length > 0,
         path: new Path2D(),
         span: 0,
         minX: Infinity,

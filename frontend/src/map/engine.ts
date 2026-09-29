@@ -27,6 +27,7 @@ import { zoneChunks } from './zones';
 import { Palette } from './palette';
 import { candidatesAt, orderItems, pick, preferSelected, shown } from './picking';
 import { documentMapStyle, type MapStyle } from './style';
+import { loadTemplateSigns, onTemplateSigns } from './templateSigns';
 import {
   type BaseCache,
   drawGrid,
@@ -101,6 +102,7 @@ export class PlanEngine {
     labels: [],
     surface: null,
     existing: [],
+    hedges: [],
     placements: [],
     rejections: [],
     focus: null,
@@ -190,9 +192,16 @@ export class PlanEngine {
       this.repaint();
     };
     scheme.addEventListener('change', onScheme);
+    // Знаки видов из шаблона заказчика - отдельный файл: пришёл - карта и кэш подосновы
+    // (там существующие насаждения) перерисовываются уже знаками шаблона.
+    const signs = onTemplateSigns(() => {
+      this.repaint();
+    });
+    void loadTemplateSigns();
     this.cleanup.push(() => {
       theme.disconnect();
       scheme.removeEventListener('change', onScheme);
+      signs();
     });
     this.resize();
   }
@@ -210,9 +219,11 @@ export class PlanEngine {
   /** Подоснова: чертёж становится картой, по которой можно ездить, пока считаются посадки. */
   setBasemap(basemap: BasemapJson): void {
     const existing: ExistingPlant[] = [];
-    this.baseChunks = buildChunks(basemap.features, basemap.bbox, existing);
+    const hedges: Position[][] = [];
+    this.baseChunks = buildChunks(basemap.features, basemap.bbox, existing, hedges);
     this.scene.chunks = this.planChunks();
     this.scene.existing = existing;
+    this.scene.hedges = hedges;
     this.classIndex = new ClassIndex(basemap.features);
     this.dims = { key: '', checks: null, list: [] };
     this.scene.labels = basemap.labels ?? [];

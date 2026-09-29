@@ -49,7 +49,8 @@ describe('стиль карты', () => {
     const { unmount } = render(<Legend done />);
     expect(screen.getByText('Проектируемое дерево (место посадки, контур кроны)')).toBeVisible();
     expect(screen.getByText('Живая изгородь, ряд кустарника')).toBeVisible();
-    expect(screen.getByText('Существующее дерево хвойное, сохраняемое')).toBeVisible();
+    expect(screen.getByText('Существующее хвойное насаждение')).toBeVisible();
+    expect(screen.getByText('Существующая живая изгородь, ширина условная')).toBeVisible();
     expect(screen.queryByText('дерево по съёмке')).toBeNull();
     unmount();
 
@@ -58,6 +59,28 @@ describe('стиль карты', () => {
     });
     render(<Legend done />);
     expect(screen.getByText('дерево по съёмке')).toBeVisible();
-    expect(screen.queryByText('Существующее дерево хвойное, сохраняемое')).toBeNull();
+    expect(screen.queryByText('Существующее хвойное насаждение')).toBeNull();
+  });
+
+  it('легенда чертежа с видами плана - знак каждого вида, а не три общих', () => {
+    act(() => {
+      useWorkspace.getState().setLegend(true);
+    });
+    render(
+      <Legend
+        done
+        species={[
+          { code: 'tilia_cordata', name: 'Липа мелколистная', plantingType: 'tree' },
+          { code: 'spiraea_japonica', name: 'Спирея японская', plantingType: 'shrub' },
+          { code: 'fraxinus_excelsior', name: 'Ясень обыкновенный', plantingType: 'tree' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Липа мелколистная')).toBeVisible();
+    expect(screen.getByText('Спирея японская')).toBeVisible();
+    // Вид без знака в шаблоне остаётся в легенде - общим знаком дерева.
+    expect(screen.getByText('Ясень обыкновенный')).toBeVisible();
+    expect(screen.getByText('Живая изгородь, ряд кустарника')).toBeVisible();
+    expect(screen.queryByText('Проектируемое дерево (место посадки, контур кроны)')).toBeNull();
   });
 });

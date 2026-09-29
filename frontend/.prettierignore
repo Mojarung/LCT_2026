@@ -5,3 +5,5 @@ test-results
 src/api/schema.d.ts
 src/lib/__fixtures__
 package-lock.json
+# Знаки видов из шаблона заказчика: пишет tools/extract_template_signs.py, знак - одна строка.
+src/map/templateSigns.json

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { plantsOf } from './existing';
-import { hedgeRows, planSign } from './signs';
+import { existingSignName, hedgeRows, planSign } from './signs';
 import { documentMapStyle, parseMapStyle } from './style';
 import type { MapItem } from './types';
 
@@ -87,8 +87,17 @@ describe('существующее дерево со знаком хвойног
     expect(conifers).toHaveLength(2);
     expect(conifers?.every((plant) => plant.conifer === true)).toBe(true);
     expect(feature('existing_tree')?.some((plant) => plant.conifer)).toBe(false);
-    // Кустарник хвойным кольцом не рисуется, даже если признак пришёл.
+    // Кустарник хвойным знаком не рисуется, даже если признак пришёл.
     expect(feature('existing_shrub', true)?.some((plant) => plant.conifer)).toBe(false);
+  });
+
+  it('знак существующего насаждения - строка раздела «существующие» шаблона', () => {
+    const [conifer] = feature('existing_tree', true) ?? [];
+    const [tree] = feature('existing_tree') ?? [];
+    const [shrub] = feature('existing_shrub', true) ?? [];
+    expect(conifer && existingSignName(conifer)).toBe('Существующие хвойное насаждение');
+    expect(tree && existingSignName(tree)).toBe('Существующие древесное насаждение');
+    expect(shrub && existingSignName(shrub)).toBe('Существующие кустарниковое насаждение');
   });
 
   it('точки старой выгрузки без vegetation_kind - полоса, а не отдельные деревья', () => {

@@ -2,9 +2,16 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import type { Form, PlantModel } from '../../map/models';
 import { Palette } from '../../map/palette';
-import { drawSignSwatch, signInk, type SwatchSign } from '../../map/signs';
+import { drawSignSwatch, drawTemplateSwatch, signInk, type SwatchSign } from '../../map/signs';
 import { type Look, sprite, stamp } from '../../map/sprites';
 import type { MapStyle } from '../../map/style';
+import {
+  loadTemplateSigns,
+  onTemplateSigns,
+  speciesSign,
+  type TemplateSign,
+  templateSignsVersion,
+} from '../../map/templateSigns';
 import { useWorkspace } from '../../state/workspace';
 
 /** Тема документа: знаки чертежа берут чернила из токенов, и в тёмной теме они светлые.
@@ -21,6 +28,16 @@ function useTheme(): string {
   return useSyncExternalStore(subscribeTheme, () => document.documentElement.dataset.theme ?? '');
 }
 
+/** Знаки видов из шаблона заказчика приходят отдельным файлом: образец перерисовывается,
+ *  когда он пришёл. */
+function useTemplateSigns(): number {
+  const version = useSyncExternalStore(onTemplateSigns, templateSignsVersion);
+  useEffect(() => {
+    void loadTemplateSigns();
+  }, []);
+  return version;
+}
+
 const SHRUB_FORMS: ReadonlySet<Form> = new Set(['shrub', 'creeper']);
 const CONIFER_FORMS: ReadonlySet<Form> = new Set(['conifer', 'dwarf_conifer']);
 
@@ -32,10 +49,20 @@ function signOf(model: PlantModel, look: Look, shrub: boolean | undefined): Swat
   return CONIFER_FORMS.has(model.form) ? 'conifer' : 'tree';
 }
 
-/** Образец знака чертежа: легенда инженерного стиля. */
-export function SignSwatch({ sign, size = 26 }: { sign: SwatchSign; size?: number }) {
+/** Образец знака чертежа: легенда инженерного стиля. template - знак вида из шаблона
+ *  заказчика, тот же, что на карте; без него - общий знак sign. */
+export function SignSwatch({
+  sign,
+  template,
+  size = 26,
+}: {
+  sign: SwatchSign;
+  template?: TemplateSign | undefined;
+  size?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useTheme();
+  const version = useTemplateSigns();
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -46,8 +73,10 @@ export function SignSwatch({ sign, size = 26 }: { sign: SwatchSign; size?: numbe
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size, size);
-    drawSignSwatch(ctx, sign, size, signInk(new Palette()), dpr);
-  }, [sign, size, theme]);
+    const ink = signInk(new Palette());
+    if (template) drawTemplateSwatch(ctx, template, size, ink);
+    else drawSignSwatch(ctx, sign, size, ink, dpr);
+  }, [sign, template, size, theme, version]);
   return (
     <canvas
       ref={ref}
@@ -78,8 +107,13 @@ export function ModelSwatch({
   style?: MapStyle;
 }) {
   const current = useWorkspace((s) => s.mapStyle);
+  useTemplateSigns();
   const drawn = style ?? current;
-  if (drawn === 'engineering') return <SignSwatch sign={signOf(model, look, shrub)} size={size} />;
+  if (drawn === 'engineering') {
+    // Посадка вида из каталога - знак его строки шаблона, как на карте.
+    const template = look === 'existing' ? undefined : speciesSign(modelKey);
+    return <SignSwatch sign={signOf(model, look, shrub)} template={template} size={size} />;
+  }
   return <ModelSprite model={model} modelKey={modelKey} look={look} size={size} />;
 }
 

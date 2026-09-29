@@ -1,6 +1,15 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
-import { EXISTING_SHRUB, EXISTING_TREE, MODELS, type PlantModel } from '../../map/models';
+import {
+  EXISTING_SHRUB,
+  EXISTING_TREE,
+  isShrubType,
+  MODELS,
+  modelKey,
+  modelOf,
+  type PlanSpecies,
+  type PlantModel,
+} from '../../map/models';
 import type { SwatchSign } from '../../map/signs';
 import type { LayerKey } from '../../map/types';
 import { useWorkspace } from '../../state/workspace';
@@ -29,12 +38,37 @@ const PLAN_SIGNS: readonly [SwatchSign, string][] = [
   ['hedge', 'Живая изгородь, ряд кустарника'],
 ];
 
-/** Существующие насаждения: сервис ничего не вырубает, поэтому все - сохраняемые. */
-const EXISTING_SIGNS: readonly [SwatchSign, string][] = [
-  ['existing-tree', 'Существующее дерево лиственное, сохраняемое'],
-  ['existing-conifer', 'Существующее дерево хвойное, сохраняемое'],
-  ['existing-shrub', 'Существующий кустарник, сохраняемый'],
+/** Существующие насаждения - знаки раздела «Существующие зеленые насаждения» шаблона
+ *  заказчика. Сервис ничего не вырубает, поэтому все - сохраняемые. */
+const EXISTING_LEGEND: readonly [SwatchSign, string][] = [
+  ['existing-tree', 'Существующее древесное насаждение'],
+  ['existing-conifer', 'Существующее хвойное насаждение'],
+  ['existing-shrub', 'Существующее кустарниковое насаждение'],
+  ['existing-hedge', 'Существующая живая изгородь, ширина условная'],
 ];
+
+/** Знаки видов плана - строки «Шаблонов значков» заказчика, у вида без строки - общий знак. */
+function SpeciesSigns({ list }: { list: readonly PlanSpecies[] }) {
+  return (
+    <>
+      {list.map((row) => (
+        <span key={row.code}>
+          <ModelSwatch
+            model={modelOf(row.code, row.plantingType)}
+            modelKey={modelKey(row.code, row.plantingType)}
+            shrub={isShrubType(row.plantingType)}
+            size={24}
+          />
+          <b>{row.name}</b>
+        </span>
+      ))}
+      <span>
+        <SignSwatch sign="hedge" size={24} />
+        <b>Живая изгородь, ряд кустарника</b>
+      </span>
+    </>
+  );
+}
 
 function Signs({ list }: { list: readonly [SwatchSign, string][] }) {
   return (
@@ -99,10 +133,13 @@ const line = (token: string): CSSProperties => ({ borderColor: `var(${token})` }
 export function Legend({
   done,
   shrub = null,
+  species = [],
 }: {
   done: boolean;
   /** Код самого частого лиственного кустарника плана (models.commonest). */
   shrub?: string | null;
+  /** Виды плана (models.planSpecies): в стиле чертежа легенда показывает знак каждого. */
+  species?: readonly PlanSpecies[];
 }) {
   const open = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
@@ -161,7 +198,9 @@ export function Legend({
             {/* Цвет кроны - это вид (состав плана справа), вердикт показан кольцом: иначе
                 два смысла спорили бы за один цвет. */}
             <div className={drawing ? 'legend legend-models legend-signs' : 'legend legend-models'}>
-              {drawing ? (
+              {drawing && species.length ? (
+                <SpeciesSigns list={species} />
+              ) : drawing ? (
                 <Signs list={PLAN_SIGNS} />
               ) : (
                 samples(shrub).map(([code, name]) => (
@@ -277,7 +316,7 @@ export function Legend({
         </LayerCheck>
         {drawing ? (
           <div className="legend legend-models legend-signs">
-            <Signs list={EXISTING_SIGNS} />
+            <Signs list={EXISTING_LEGEND} />
           </div>
         ) : (
           <div className="legend legend-models">
@@ -301,12 +340,14 @@ export function Legend({
             </span>
           </div>
         )}
-        <div className="legend">
-          <span>
-            <i className="swatch" style={{ background: 'var(--c-existing)', height: 6 }} />
-            <b>существующая кустарниковая полоса; ширина условная</b>
-          </span>
-        </div>
+        {drawing ? null : (
+          <div className="legend">
+            <span>
+              <i className="swatch" style={{ background: 'var(--c-existing)', height: 6 }} />
+              <b>существующая кустарниковая полоса; ширина условная</b>
+            </span>
+          </div>
+        )}
         {/* Раскрытие с «+», как остальные в панелях. Фраза про нетронутые исходные слои здесь
             повторяла штамп консоли и подсказку у «Скачать DXF» (жюри, итерация 7). */}
         <details className="legend-dxf fold">

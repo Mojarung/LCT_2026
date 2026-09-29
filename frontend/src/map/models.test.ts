@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import catalog from '../../../config/species.yaml?raw';
 import { plantsOf } from './existing';
-import { ALL_MODELS, commonest, MODELS, modelKey, modelOf } from './models';
+import { ALL_MODELS, commonest, MODELS, modelKey, modelOf, planSpecies } from './models';
+import type { MapItem } from './types';
 
 /** Коды видов каталога прямо из config/species.yaml: база моделей обязана идти за ним. */
 function catalogCodes(): string[] {
@@ -117,5 +118,38 @@ describe('полосы деревьев не становятся отдельн
         geometry,
       }),
     ).toHaveLength(3);
+  });
+});
+
+describe('виды плана для легенды', () => {
+  it('по убыванию числа посадок, без вида - своей строкой', () => {
+    const item = (code: string | undefined, name: string, type = 'tree') =>
+      ({
+        kind: 'placement',
+        id: `${code ?? '-'}-${name}`,
+        number: 1,
+        planting_type: type,
+        x: 0,
+        y: 0,
+        radius: 1,
+        verdict: 'allowed',
+        species_code: code,
+        species_ru: name,
+        explanation: '',
+        value: null,
+        checks: [],
+      }) satisfies MapItem;
+    const rows = planSpecies([
+      item('tilia_cordata', 'Липа мелколистная'),
+      item('spiraea_japonica', 'Спирея японская', 'shrub'),
+      item('spiraea_japonica', 'Спирея японская', 'shrub'),
+      item(undefined, ''),
+    ]);
+    expect(rows.map((row) => row.name)).toEqual([
+      'Спирея японская',
+      'Липа мелколистная',
+      'вид не назначен',
+    ]);
+    expect(rows[0]?.plantingType).toBe('shrub');
   });
 });

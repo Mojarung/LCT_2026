@@ -108,6 +108,7 @@ it('полоса остаётся условными кружками, не по
   expect(existing).toHaveLength(0);
   expect(chunks).toHaveLength(1);
   expect(chunks[0]?.path).toBeInstanceOf(FakePath);
+  const arc = (chunks[0]?.path as unknown as FakePath | undefined)?.arc;
   expect(arc).toHaveBeenCalledTimes(3);
   expect(arc).toHaveBeenCalledWith(0, 0, 0.25, 0, Math.PI * 2);
 });
@@ -126,10 +127,20 @@ it('recognised shrub strip is a filled band, never a list of crowns', () => {
     },
   };
   const existing: import('./existing').ExistingPlant[] = [];
-  const chunks = buildChunks([feature], [0, 0, 10, 10], existing);
+  const hedges: import('../api/artifacts').Position[][] = [];
+  const chunks = buildChunks([feature], [0, 0, 10, 10], existing, hedges);
   expect(existing).toEqual([]);
   expect(chunks).toHaveLength(1);
   expect(chunks[0]?.fillVar).toBe('--c-existing');
+  // Ось полосы - для знака живой изгороди шаблона в стиле чертежа, кусок помечен.
+  expect(hedges).toEqual([
+    [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+    ],
+  ]);
+  expect(chunks[0]?.hedge).toBe(true);
   expect(chunks[0]?.minX).toBeLessThan(0);
   expect(chunks[0]?.maxY).toBeGreaterThan(4);
 });
