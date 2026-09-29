@@ -194,8 +194,7 @@ describe('консоль запуска', () => {
     await waitFor(() => {
       expect(within(facts).getByText('76')).toBeInTheDocument();
     });
-    expect(within(facts).getByText('75')).toBeInTheDocument();
-    expect(within(facts).getByText('1')).toBeInTheDocument();
+    expect(within(facts).getByRole('link', { name: '1' })).toHaveAttribute('href', '/models');
   });
 
   it('последние прогоны - ссылками на их страницы, имя чертежа без «.dxf»', async () => {

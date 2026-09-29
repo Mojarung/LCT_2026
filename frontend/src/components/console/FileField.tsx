@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface FileFieldProps {
   id: string;
@@ -6,6 +6,8 @@ interface FileFieldProps {
   accept: string;
   hint?: string;
   multiple?: boolean;
+  /** Главное поле формы: крупная зона, файл можно перетащить. */
+  drop?: boolean;
   files: File[];
   onChange: (files: File[]) => void;
 }
@@ -19,10 +21,12 @@ export function FileField({
   accept,
   hint,
   multiple = false,
+  drop = false,
   files,
   onChange,
 }: FileFieldProps) {
   const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
 
   // Выбор улицы сбрасывает файл: поле обязано показать пустоту, а не прежний выбор браузера.
   useEffect(() => {
@@ -35,7 +39,21 @@ export function FileField({
       <span className="field-title" id={`${id}-label`}>
         {label}
       </span>
-      <div className="filefield">
+      {/* Зона перетаскивания - тот же прозрачный input на всё поле: браузер сам принимает
+          брошенный на него файл, подсветка только показывает, что бросать можно. */}
+      <div
+        className={drop ? 'filefield drop' : 'filefield'}
+        data-over={over || undefined}
+        onDragEnter={() => {
+          setOver(true);
+        }}
+        onDragLeave={() => {
+          setOver(false);
+        }}
+        onDrop={() => {
+          setOver(false);
+        }}
+      >
         <input
           ref={input}
           type="file"
@@ -48,8 +66,13 @@ export function FileField({
             onChange([...(event.target.files ?? [])]);
           }}
         />
+        {drop && !files.length ? (
+          <span className="drop-hint" aria-hidden="true">
+            Перетащите чертёж сюда
+          </span>
+        ) : null}
         <span className="pick" aria-hidden="true">
-          Выбрать
+          {drop ? 'Выбрать файл' : 'Выбрать'}
         </span>
         <span className="chosen" data-chosen={files.length ? '1' : '0'}>
           {chosen}
