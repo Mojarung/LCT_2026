@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
 import { useOverflowMark } from '../../hooks/useOverflowMark';
@@ -67,7 +67,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
             select(null);
           }}
         >
-          к составу плана
+          ← К плану
         </button>
       </p>
       <h2 className="detail-name">{title}</h2>
@@ -75,16 +75,20 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <span className={`verdict verdict-${item.verdict}`}>
         {VERDICT_RU[item.verdict] ?? item.verdict}
       </span>
-      <p className="hint mono">
-        {kind ? `${kind}, ` : ''}x {meters(item.x)}, y {meters(item.y)}
-      </p>
+      {kind ? <p className="detail-note">{kind}</p> : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
       {item.note ? <p className="detail-explain">{item.note}</p> : null}
       {/* Норма - первым: это ответ на вопрос «можно ли здесь сажать», ценность и вид - после. */}
       <ChecksBlock checks={item.checks} rules={rules} />
       <BarrierBlock item={item} />
-      <ValueBlock value={item.value} speciesShown={Boolean(item.assortment)} />
-      <SpeciesBlock assortment={item.assortment} />
+      <details className="detail-full">
+        <summary>О растении и его выборе</summary>
+        <ValueBlock value={item.value} speciesShown={Boolean(item.assortment)} />
+        <SpeciesBlock assortment={item.assortment} />
+        <p className="hint mono">
+          x {meters(item.x)}, y {meters(item.y)}
+        </p>
+      </details>
       {item.explanation ? (
         <details className="detail-full">
           <summary>Объяснение целиком, как в выгрузке</summary>
@@ -99,6 +103,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
  *  посажено»), с выбором - норма, по которой стоит посадка или отказ. */
 export function DetailPanel({ placements, rules, quality }: DetailProps) {
   const selected = useWorkspace((s) => s.selected);
+  const [section, setSection] = useState<'plants' | 'effect'>('plants');
   // Отметка изменяемая: после переноса у неё новый вердикт и проверки.
   useWorkspace((s) => s.revision);
   const scrollRef = useOverflowMark<HTMLDivElement>();
@@ -115,9 +120,34 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
         <PlacementDetail item={selected} rules={rules} />
       ) : (
         <>
-          <QualityBlock quality={quality} />
-          <EffectBlock effect={quality?.effect} />
-          <Composition placements={placements} />
+          <div className="plan-sections" role="group" aria-label="Раздел плана">
+            <button
+              type="button"
+              aria-pressed={section === 'plants'}
+              onClick={() => setSection('plants')}
+            >
+              Посадки
+            </button>
+            <button
+              type="button"
+              aria-pressed={section === 'effect'}
+              onClick={() => setSection('effect')}
+            >
+              Эффект
+            </button>
+          </div>
+          {section === 'plants' ? (
+            <>
+              <p className="composition-guide">Выберите вид, чтобы найти его на плане.</p>
+              <Composition placements={placements} />
+            </>
+          ) : (
+            <>
+              <EffectBlock effect={quality?.effect} />
+              <QualityBlock quality={quality} />
+              {!quality ? <p className="detail-note">Показатели эффекта пока недоступны.</p> : null}
+            </>
+          )}
         </>
       )}
     </div>

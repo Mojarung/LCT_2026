@@ -317,3 +317,57 @@
   margin: 5px 0 0;
   color: var(--bone-3);
 }
+
+/* Простая навигация над составом плана. */
+.plan-sections {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--hair);
+  margin: 0 0 18px;
+}
+.plan-sections button {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  padding: 0 0 10px;
+  color: var(--bone-3);
+  font-size: var(--fs-small);
+}
+.plan-sections button[aria-pressed='true'] {
+  border-bottom-color: var(--bone);
+  color: var(--bone);
+  font-weight: 600;
+}
+.plan-sections button:hover {
+  color: var(--bone);
+}
+.composition-guide {
+  margin: 0 0 16px;
+  color: var(--bone-3);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+.check-source {
+  margin-top: 7px;
+}
+.check-source > summary {
+  cursor: pointer;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.download-plan {
+  width: 100%;
+}
+.download-format {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  opacity: 0.7;
+}
+.download-more {
+  margin-top: 12px;
+}
+.download-more > .fold {
+  margin-top: 12px;
+}

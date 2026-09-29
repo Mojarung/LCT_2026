@@ -47,7 +47,12 @@ export function CheckRow({ check, rules, quote = false, also = [] }: RowProps) {
       {[check, ...also].map((c) => (
         <div key={c.rule_id}>
           <Clause check={c} rules={rules} />
-          {quote ? <QuoteBlock rule={rules[c.rule_id]} /> : null}
+          {quote && rules[c.rule_id] ? (
+            <details className="check-source">
+              <summary>Текст нормы</summary>
+              <QuoteBlock rule={rules[c.rule_id]} />
+            </details>
+          ) : null}
         </div>
       ))}
     </li>
