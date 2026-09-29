@@ -483,11 +483,6 @@
   gap: clamp(24px, 4vw, 64px);
   align-items: center;
 }
-.eyebrow {
-  margin: 0 0 16px;
-  font: 500 var(--fs-small) / 1.3 var(--mono);
-  color: var(--bone-3);
-}
 .hero h1 {
   margin: 0;
   font-size: clamp(32px, 1.4rem + 2.4vw, 58px);
@@ -504,47 +499,12 @@
   line-height: 1.55;
   color: var(--bone-2);
 }
-.hero-facts {
-  display: flex;
-  margin: 28px 0 0;
-  border-top: 1px solid var(--hair-2);
-  border-bottom: 1px solid var(--hair-2);
-}
-.hero-facts div {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 16px 14px 0;
-}
-.hero-facts div + div {
-  padding-left: 16px;
-  border-left: 1px solid var(--hair);
-}
-.hero-facts dt {
-  font-size: var(--fs-micro);
-  color: var(--bone-3);
-}
-.hero-facts dd {
-  margin: 6px 0 0;
-  font: 500 32px / 1 var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--bone);
-}
-.hero-facts dd a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-decoration-color: var(--hair-2);
-  text-underline-offset: 6px;
-}
-.hero-facts dd a:hover {
-  text-decoration-color: var(--bone);
-}
 .hero-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 22px;
-  margin: 26px 0 0;
+  margin: 32px 0 0;
   font-size: var(--fs-body);
 }
 .hero-links .primary {
@@ -638,6 +598,37 @@
 .launch-panel {
   scroll-margin-top: 24px;
 }
+/* Заголовок раздела страницы: крупнее заголовков панелей, раздел стоит сам по себе. */
+.landing-title {
+  margin: 0 0 20px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--bone);
+}
+.steps-strip {
+  scroll-margin-top: 24px;
+}
+.how a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--hair-2);
+  text-underline-offset: 3px;
+}
+.how a:hover {
+  text-decoration-color: var(--bone);
+}
+/* Заголовок реестра со значком пояснения: значок у слова, а не у края панели. */
+.runs-head {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: 0 0 18px;
+}
+.runs-head .panel-title {
+  margin: 0;
+}
 .how {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -653,7 +644,7 @@
   counter-increment: how;
 }
 .how li::before {
-  content: counter(how, decimal-leading-zero);
+  content: counter(how);
   display: block;
   margin-bottom: 10px;
   font: 500 var(--fs-small) var(--mono);
@@ -714,8 +705,16 @@
   .how {
     grid-template-columns: 1fr;
   }
-  .hero-facts dd {
-    font-size: 24px;
+  /* Номер шага - колонкой слева: отдельной строкой он растягивал четыре шага на экран. */
+  .how li {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    column-gap: 6px;
+    padding-top: 12px;
+  }
+  .how li::before {
+    grid-row: span 2;
+    margin: 1px 0 0;
   }
   .hero-plan {
     display: none;

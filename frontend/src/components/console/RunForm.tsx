@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type SyntheticEvent } from 'react';
+import { useId, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { postForm } from '../../api/client';
@@ -12,25 +12,79 @@ import {
   type RunFormValues,
   type Switch,
 } from '../../lib/overrides';
+import { orderProfiles, PROFILES, profileTitle } from '../../lib/profiles';
+import { InfoTip } from '../InfoTip';
 import { useDemoStart } from './DemoStart';
 import { FileField } from './FileField';
 
 /** Приёмы по порядку работы конвейера: деревья, потом кустарник от борта к газону. Две строки
  *  про группы кустарника различаются тем, откуда место: пустое после квот деревьев или
- *  свободный газон. */
-const SWITCH_LABELS: { name: Switch | 'fill'; label: string }[] = [
-  { name: 'fill', label: 'Добор узких полос и карманов газона' },
-  { name: 'shrub_rows', label: 'Ряд кустарника у борта под кронами аллеи' },
-  { name: 'curb_hedges', label: 'Живая изгородь вдоль остальных бортов, до 720 кустов на 1 км' },
-  { name: 'understory', label: 'Кустарник под кроной дерева, где ряда нет' },
-  { name: 'shrub_groups', label: 'Кустарник там, где квоты не пустили дерево' },
-  { name: 'shrub_fill', label: 'Группы кустарника на свободном газоне' },
-  { name: 'lawns', label: 'Газоны на грунте, свободном от посадок' },
-  { name: 'root_barriers', label: 'Прикорневые барьеры' },
+ *  свободный газон. Определение каждого приёма - в окошке рядом с подписью, основания - из
+ *  приложения D документации. */
+const SWITCHES: { name: Switch | 'fill'; label: string; info: string }[] = [
+  {
+    name: 'fill',
+    label: 'Добор узких полос и карманов газона',
+    info: 'После аллеи вдоль борта и сетки на газоне сервис ищет узкие полосы и карманы, куда сетка не легла, и ставит туда деревья, если все отступы соблюдены.',
+  },
+  {
+    name: 'shrub_rows',
+    label: 'Ряд кустарника у борта под кронами аллеи',
+    info: 'Нижний ярус под деревьями аллеи вдоль борта: задерживает пыль и соль с проезжей части.',
+  },
+  {
+    name: 'curb_hedges',
+    label: 'Живая изгородь вдоль остальных бортов, до 720 кустов на 1 км',
+    info: 'Изгородь вдоль бортов с грунтом, где нет аллеи (СП 82.13330, п. 9.38). Не больше 720 кустов на 1 км улицы.',
+  },
+  {
+    name: 'understory',
+    label: 'Кустарник под кроной дерева, где ряда нет',
+    info: 'Небольшая группа кустарника под деревом без нижнего яруса (МГСН 1.02-02, п. 4.2.9.2). Даёт ярусность там, где ряда у борта нет.',
+  },
+  {
+    name: 'shrub_groups',
+    label: 'Кустарник там, где квоты не пустили дерево',
+    info: 'Место прошло все нормы, но породы для дерева не нашлось из-за квот разнообразия: доля одной породы в посадках ограничена. Чтобы место не пустовало, туда сажается группа кустарника.',
+  },
+  {
+    name: 'shrub_fill',
+    label: 'Группы кустарника на свободном газоне',
+    info: 'Группы кустарника на газоне, пока на улице не наберётся 600 кустов на 1 км (МГСН 1.02-02, табл. В.1).',
+  },
+  {
+    name: 'lawns',
+    label: 'Газоны на грунте, свободном от посадок',
+    info: 'Новый газон на грунте, который остался свободным после посадок. Только внутри замкнутых контуров чертежа.',
+  },
+  {
+    name: 'root_barriers',
+    label: 'Прикорневые барьеры',
+    info: 'Барьер в яме защищает сеть от корней. С ним дерево допускается ближе табличного отступа к сетям и борту (СП 42.13330, табл. 9.1, прим. 5 и 7), а барьер становится условием посадки. Без барьеров такие места уходят в отказы с объяснением.',
+  },
 ];
 
 const NEED_SOURCE = 'Выберите улицу пилотного проекта или свой чертёж.';
 const NEED_FILE = 'Выберите чертёж или запустите встроенный участок.';
+
+/** Подпись поля со значком определения. Значок - соседом подписи, а не внутри неё: кнопка
+ *  внутри label - недопустимая разметка, и клик по ней переключал бы поле. */
+function FieldHead({
+  htmlFor,
+  label,
+  children,
+}: {
+  htmlFor: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="field-head">
+      <label htmlFor={htmlFor}>{label}</label>
+      <InfoTip term={label}>{children}</InfoTip>
+    </div>
+  );
+}
 
 /** Форма запуска. Параметры свёрнуты: по умолчанию работает профиль целиком, и путь «выбрал
  *  улицу - запустил» не требует ни одного решения; развернуть их нужно для повторного прогона
@@ -127,18 +181,22 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
     }
   })();
 
+  const profiles = orderProfiles(meta.data?.profiles ?? []);
+
   return (
     <form className="start-form" onSubmit={(event) => void submit(event)} noValidate>
       {hasStreets ? (
         <>
           <div className="field">
-            <label htmlFor={`${ids}-street`}>Улица пилотного проекта</label>
+            <FieldHead htmlFor={`${ids}-street`} label="Улица пилотного проекта">
+              Улицы пилотного проекта ДПиООС: подоснова, сети и граница работ уже собраны в
+              комплект, загружать файлы не нужно. Улица больше 50 МБ считается несколько минут.
+            </FieldHead>
             <select
               id={`${ids}-street`}
               name="street"
               ref={streetField}
               value={street}
-              aria-describedby={`${ids}-street-hint`}
               onChange={(event) => {
                 setStreet(event.target.value);
                 // Улица и свой чертёж - два разных прогона: выбор улицы снимает выбор файла.
@@ -152,9 +210,6 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
                 </option>
               ))}
             </select>
-            <p className="hint" id={`${ids}-street-hint`}>
-              Чертёж больше 50 МБ считается несколько минут.
-            </p>
           </div>
           <p className="or">или</p>
         </>
@@ -175,7 +230,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
         label="Свой чертёж подосновы"
         drop
         accept=".dxf,.dwg"
-        hint="DXF или DWG: выгрузка Мосгеотреста, генплан, дендроплан."
+        info="Выгрузка Мосгеотреста, генплан или дендроплан в DXF или DWG. Исходные слои не меняются: план ложится на отдельные слои GREEN_*. Сети и другие файлы того же участка добавляются в параметрах."
         files={files}
         onChange={(next) => {
           setFiles(next);
@@ -185,13 +240,26 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
 
       <details className="advanced params">
         <summary>
-          Параметры: {profileChosen ?? 'профиль'}
+          Параметры: {profileChosen ? profileTitle(profileChosen) : 'профиль'}
           {values ? `, шаг ${plain(values.spacing_m)} м` : ''}
           {changed ? ', изменены' : ''}
         </summary>
+        <p className="params-lead">
+          Без изменений работает весь профиль. Меняйте параметры, чтобы пересчитать улицу при других
+          условиях.
+        </p>
         <div className="field-row">
           <div className="field">
-            <label htmlFor={`${ids}-profile`}>Профиль норм</label>
+            <FieldHead htmlFor={`${ids}-profile`} label="Профиль норм">
+              <span className="tip-lead">Готовый набор параметров под исходные данные:</span>
+              <span className="tip-list">
+                {profiles.map((name) => (
+                  <span key={name}>
+                    <b>{profileTitle(name)}.</b> {PROFILES[name]?.text ?? ''}
+                  </span>
+                ))}
+              </span>
+            </FieldHead>
             <select
               id={`${ids}-profile`}
               name="profile"
@@ -200,15 +268,19 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
                 setProfileName(event.target.value);
               }}
             >
-              {meta.data?.profiles.map((name) => (
+              {profiles.map((name) => (
                 <option key={name} value={name}>
-                  {name}
+                  {profileTitle(name)}
                 </option>
               ))}
             </select>
           </div>
           <div className="field">
-            <label htmlFor={`${ids}-spacing`}>Шаг посадки, м</label>
+            <FieldHead htmlFor={`${ids}-spacing`} label="Шаг посадки, м">
+              Расстояние между соседними посадками в ряду вдоль борта. Для деревьев 743-ПП, табл.
+              3.6.2: однорядная посадка 5-6 м, групповая 5-7 м. Вне ряда деревья разносятся по
+              размеру взрослых крон.
+            </FieldHead>
             <input
               id={`${ids}-spacing`}
               name="spacing_m"
@@ -220,49 +292,50 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
               step={0.5}
               value={values?.spacing_m ?? ''}
               disabled={!values}
-              aria-describedby={`${ids}-spacing-hint`}
               onChange={(event) => {
                 if (values) update({ ...values, spacing_m: Number(event.target.value) });
               }}
             />
-            <p className="hint" id={`${ids}-spacing-hint`}>
-              743-ПП, табл. 3.6.2: однорядная посадка 5-6 м, групповая 5-7 м.
-            </p>
           </div>
         </div>
 
         <fieldset className="field">
-          <legend>Приёмы размещения</legend>
-          {SWITCH_LABELS.map(({ name, label }) => (
-            <label className="check" key={name}>
-              <input
-                type="checkbox"
-                checked={values ? (name === 'fill' ? values.fill : values.switches[name]) : false}
-                disabled={!values}
-                aria-describedby={name === 'root_barriers' ? `${ids}-barriers-hint` : undefined}
-                onChange={(event) => {
-                  if (!values) return;
-                  const checked = event.target.checked;
-                  update(
-                    name === 'fill'
-                      ? { ...values, fill: checked }
-                      : { ...values, switches: { ...values.switches, [name]: checked } },
-                  );
-                }}
-              />
-              {label}
-            </label>
+          <legend>
+            Приёмы размещения
+            <InfoTip term="Приёмы размещения">
+              Шаги, которыми сервис заполняет участок: сначала деревья, потом кустарник от борта к
+              газону. Снятая галочка пропускает приём, остальные работают как прежде.
+            </InfoTip>
+          </legend>
+          {SWITCHES.map(({ name, label, info }) => (
+            <div className="check-row" key={name}>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={values ? (name === 'fill' ? values.fill : values.switches[name]) : false}
+                  disabled={!values}
+                  onChange={(event) => {
+                    if (!values) return;
+                    const checked = event.target.checked;
+                    update(
+                      name === 'fill'
+                        ? { ...values, fill: checked }
+                        : { ...values, switches: { ...values.switches, [name]: checked } },
+                    );
+                  }}
+                />
+                {label}
+              </label>
+              <InfoTip term={label}>{info}</InfoTip>
+            </div>
           ))}
-          <p className="hint" id={`${ids}-barriers-hint`}>
-            Барьеры сокращают отступы по прим. 5 и 7 табл. 9.1 СП 42.13330.
-          </p>
         </fieldset>
 
         <FileField
           id={`${ids}-extra`}
           label="Остальные чертежи комплекта"
           accept=".dxf,.dwg"
-          hint="Склеиваются с основным: сети, дендроизыскания, генплан. С улицей из каталога не нужны."
+          info="Если участок разбит на несколько файлов (сети, дендроизыскания, генплан), добавьте их сюда: сервис склеит их с основным чертежом по координатам. Для улицы из каталога комплект уже собран."
           multiple
           files={extra}
           onChange={setExtra}
@@ -271,7 +344,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
           id={`${ids}-inventory`}
           label="Перечётная ведомость"
           accept=".xls,.xlsx"
-          hint="Растущие деревья входят в квоты разнообразия."
+          info="Опись растущих деревьев в .xls или .xlsx. Существующие породы входят в квоты разнообразия, чтобы сервис не досаживал породу, которой на улице и так много."
           files={inventory}
           onChange={setInventory}
         />
@@ -279,13 +352,17 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
           id={`${ids}-layers`}
           label="Слои ГИС"
           accept=".geojson,.json,.zip"
-          hint="GeoJSON или SHP в .zip: охранные зоны, здания и границы data.mos.ru, кадастр. Координаты WGS 84 пересчитываются в систему чертежа."
+          info="GeoJSON или SHP в .zip: охранные зоны, здания и границы с data.mos.ru или из кадастра. Координаты WGS 84 пересчитываются в систему координат чертежа."
           multiple
           files={layers}
           onChange={setLayers}
         />
         <div className="field">
-          <label htmlFor={`${ids}-overrides`}>Параметры поверх профиля, JSON</label>
+          <FieldHead htmlFor={`${ids}-overrides`} label="Параметры поверх профиля, JSON">
+            Для точной настройки: любой параметр профиля в JSON, как --set в командной строке.
+            Пример в поле: клён остролистный и только аллея вдоль борта. Все параметры перечислены в
+            приложении D документации.
+          </FieldHead>
           <textarea
             id={`${ids}-overrides`}
             name="overrides"

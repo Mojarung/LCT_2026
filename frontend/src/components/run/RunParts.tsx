@@ -8,20 +8,12 @@ import type { RunOut } from '../../api/types';
 import { explainFailure } from '../../lib/failure';
 import { drawingName, integer, plural } from '../../lib/format';
 import { overrideLabel } from '../../lib/overrides';
+import { profileTitle } from '../../lib/profiles';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron } from '../icons';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
-
-/** Профиль норм словами (config/profiles): код 'strict' в шапке ничего не говорил. */
-const PROFILE_NAMES: Record<string, string> = {
-  strict: 'строгие нормы',
-  barriers: 'нормы с барьерами',
-  no_utilities: 'без сетей',
-  review: 'проверка входа',
-  shrubs: 'ряд кустарника',
-};
 
 /** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
  *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
@@ -75,7 +67,7 @@ export function RunHeader({ run }: { run: RunOut }) {
       </Link>
       <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
       <p className="run-sub" title={`Прогон ${run.id}`}>
-        <span>{PROFILE_NAMES[run.profile] ?? run.profile}</span>
+        <span>{profileTitle(run.profile)}</span>
         {Object.entries(run.overrides).map(([key, value]) => (
           <span key={key}>{overrideLabel(key, value)}</span>
         ))}

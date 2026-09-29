@@ -116,7 +116,7 @@ describe('уточнение объектов чертежа', () => {
     renderApp('/runs/r1/review');
     const link = await screen.findByRole('link', { name: 'этот DXF' });
     expect(link).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/review-input.dxf');
-    expect(screen.getByText(/с тем же профилем «strict»/)).toBeInTheDocument();
+    expect(screen.getByText(/с тем же профилем «Строгий»/)).toBeInTheDocument();
   });
 
   it('без геометрии - одна строка и дорога к прогону, формы нет', async () => {
