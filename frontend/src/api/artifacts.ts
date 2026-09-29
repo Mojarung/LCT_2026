@@ -222,12 +222,33 @@ export interface ZonesJson {
   features: ZoneFeature[];
 }
 
+/** Совпадения стволов с явными площадями исходника; не проверка новых посадок. */
+export interface SourceConflict {
+  id: string;
+  x: number;
+  y: number;
+  tree_refs: string[];
+  targets: { object_class: string; ref: string; layer: string; depth_m: number }[];
+}
+
+export interface SourceConflicts {
+  version: number;
+  basis: 'source' | 'saved_basemap';
+  checked_trees: number;
+  checked_areas: number;
+  skipped_tree_features: number;
+  skipped_area_features: number;
+  boundary_tolerance_m: number;
+  items: SourceConflict[];
+}
+
 export interface BasemapJson {
   type: 'FeatureCollection';
   bbox: [number, number, number, number];
   labels?: MaterialLabel[];
   features: BasemapFeature[];
   counts?: Record<string, unknown>;
+  source_conflicts?: SourceConflicts | null;
 }
 
 export interface SurfaceMeta {

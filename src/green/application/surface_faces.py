@@ -29,15 +29,18 @@ class FaceMaterials:
     woodland: BaseGeometry | None = None
     # Contrary labels in one face are not permission for a distance-based split.
     conflicting_area: BaseGeometry | None = None
+    functional_area: BaseGeometry | None = None
 
 
-def closed_face_materials(
+def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
     lines: NDArray[np.object_],
     soil_xy: NDArray[np.float64],
     paved_xy: NDArray[np.float64],
     *,
     material_lines: NDArray[np.object_],
     woodland_xy: NDArray[np.float64] | None = None,
+    functional_xy: NDArray[np.float64] | None = None,
+    functional_max_area_m2: float = 3000.0,
 ) -> FaceMaterials:
     # Noding only splits actual intersections. No snapping or arbitrary bridge
     # may turn an unfinished contour into a positive planting region.
@@ -59,6 +62,8 @@ def closed_face_materials(
     soil, missed_soil = assigned(soil_xy)
     paved, missed_paved = assigned(paved_xy)
     woodland, _ = assigned(woodland_xy if woodland_xy is not None else np.empty((0, 2)))
+    functional, _ = assigned(functional_xy if functional_xy is not None else np.empty((0, 2)))
+    functional &= supported & (shapely.area(faces) < functional_max_area_m2)
     # An unfinished material separator inside an otherwise closed face means
     # the outer face may contain several materials. Outside tails are harmless.
     incomplete = shapely.get_parts(shapely.union_all([cuts, dangles, invalid]))
@@ -74,6 +79,10 @@ def closed_face_materials(
         shapely.prepare(faces)
         inside = shapely.relate_pattern(faces[pairs[1]], incomplete[pairs[0]], "1********")
         affected[pairs[1][inside]] = True
+    # Назначение небольшой площадки важнее подписи её материала («ГРУНТ»).
+    # Большие грани остаются газонами: подпись площадки не вырезает весь сквер.
+    soil &= ~functional
+    paved |= functional
     unresolved = (soil & paved) | affected | ~supported
     return FaceMaterials(
         soil=shapely.union_all(faces[soil & ~unresolved]),
@@ -89,6 +98,7 @@ def closed_face_materials(
         unsupported_boundaries=int((~supported).sum()),
         woodland=shapely.union_all(faces[woodland]),
         conflicting_area=shapely.union_all(faces[soil & paved]),
+        functional_area=shapely.union_all(faces[functional]),
     )
 
 

@@ -9,7 +9,7 @@ from shapely.geometry import LineString, box
 
 from green.application import surfaces
 from green.application.surfaces import Material, build_surface_map, label_material
-from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
+from green.domain.objects import ClassificationEvidence, Feature, ObjectClass, SourceRef, TextLabel
 
 
 @pytest.mark.parametrize(
@@ -52,6 +52,72 @@ def test_a_playground_inside_a_lawn_is_paved_not_soil() -> None:
     inside, outside = shapely.points(np.array([(15.0, 12.0), (30.0, 5.0)]))
     assert surface.material(np.array([inside]))[0] == Material.PAVED
     assert surface.material(np.array([outside]))[0] == Material.SOIL
+
+
+def test_functional_ground_playground_excludes_both_planting_kinds() -> None:
+    ref = SourceRef("f", "x", "ground-playground")
+    lawn = box(0, 0, 60, 40)
+    playground = box(10, 10, 30, 25)
+    features = [
+        Feature(ref, "Леса и газоны", lawn, object_class=ObjectClass.LAWN),
+        Feature(
+            ref, "Граница площадки", playground.exterior, object_class=ObjectClass.PAVEMENT_EDGE
+        ),
+    ]
+    labels = [
+        TextLabel(
+            ref,
+            "Пояснительные подписи",
+            15,
+            15,
+            "ДЕТ.ПЛ.",
+            surface_role="ignore",
+            surface_evidence=ClassificationEvidence("annotation_label"),
+        ),
+        TextLabel(ref, "Подписи", 25, 20, "ГРУНТ"),
+        TextLabel(ref, "Подписи", 45, 20, "ГАЗОН"),
+    ]
+    surface = build_surface_map(features, labels, lawn, 0.5, inference_mode="hybrid")
+    assert surface is not None
+    inside = np.array([shapely.Point(20, 17)], dtype=object)
+    outside = np.array([shapely.Point(45, 20)], dtype=object)
+    assert surface.material(inside)[0] == Material.PAVED
+    assert not surface.fits_soil(inside, 1.6)[0]  # дерево
+    assert not surface.fits_soil(inside, 0.4)[0]  # кустарник
+    assert surface.fits_soil(outside, 1.6)[0]
+    assert surface.functional_reason(inside[0]) == "функциональная площадка: ДЕТ.ПЛ."
+
+
+def test_functional_label_does_not_exclude_a_large_lawn() -> None:
+    ref = SourceRef("f", "x", "large-lawn")
+    lawn = box(0, 0, 100, 50)
+    surface = build_surface_map(
+        [Feature(ref, "Газон", lawn, object_class=ObjectClass.LAWN)],
+        [TextLabel(ref, "Подписи", 10, 10, "ДЕТ.ПЛ."), TextLabel(ref, "Подписи", 50, 25, "ГАЗОН")],
+        lawn,
+        0.5,
+    )
+    assert surface is not None
+    assert surface.material(np.array([shapely.Point(50, 25)], dtype=object))[0] == Material.SOIL
+
+
+def test_functional_label_excludes_a_small_inferred_soil_component() -> None:
+    ref = SourceRef("f", "x", "open-ground")
+    extent = box(0, 0, 100, 100)
+    surface = build_surface_map(
+        [],
+        [
+            TextLabel(ref, "Пояснительные", 52, 50, "СПОРТ ПЛ.", surface_role="ignore"),
+            TextLabel(ref, "Материал покрытия", 50, 50, "ГРУНТ"),
+        ],
+        extent,
+        0.5,
+        inference_mode="hybrid",
+    )
+    assert surface is not None
+    inside = np.array([shapely.Point(55, 50)], dtype=object)
+    assert surface.material(inside)[0] == Material.PAVED
+    assert not surface.fits_soil(inside, 0.4)[0]
 
 
 def test_a_paved_hatch_seeds_its_own_area() -> None:

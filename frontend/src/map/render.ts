@@ -160,7 +160,7 @@ export function renderBase(
   if (!flat) {
     worldTransform(ctx, view, dpr, PAD + SHADOW_PX, PAD + SHADOW_PX);
     ctx.fillStyle = palette.get('--c-shadow');
-    for (const chunk of shown) if (chunk.shadow) ctx.fill(chunk.path);
+    for (const chunk of shown) if (chunk.shadow && chunk.fillPath) ctx.fill(chunk.fillPath);
   }
   place(ctx);
   // Полоса кустарника съёмки в стиле чертежа на приближении - знаком живой изгороди шаблона
@@ -172,13 +172,13 @@ export function renderBase(
   for (const chunk of shown) {
     if (hedgeSigns && chunk.hedge) continue;
     ctx.globalAlpha = chunk.group === 'utilities' ? utilityAlpha : 1;
-    if (chunk.fillVar) {
+    if (chunk.fillVar && chunk.fillPath) {
       ctx.fillStyle = palette.get(chunk.fillVar);
-      ctx.fill(chunk.path);
+      ctx.fill(chunk.fillPath);
       const texture = textureOf(chunk, textures);
       if (texture) {
         ctx.fillStyle = pinToScreen(ctx, texture);
-        ctx.fill(chunk.path);
+        ctx.fill(chunk.fillPath);
       }
     }
     if (chunk.strokeVar && chunk.width) {

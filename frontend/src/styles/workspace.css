@@ -1481,3 +1481,77 @@ body.shell-map .topbar {
   margin: 3px 0 0;
   color: var(--bone-3);
 }
+
+/* Input overlaps are advisory and remain separate from editable planting verdicts. */
+.source-conflicts {
+  margin: 12px 0;
+}
+.source-conflicts .notice-title {
+  font-size: 1rem;
+}
+.source-conflicts-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0;
+}
+.source-conflict-list {
+  padding-left: 22px;
+}
+.source-conflict-list > li {
+  margin: 12px 0;
+}
+.source-conflict-list details {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.source-conflict-focus {
+  text-align: left;
+  white-space: normal;
+}
+.source-conflict-focus[aria-pressed='true'] {
+  outline: 2px solid #ac3e08;
+  outline-offset: 2px;
+}
+.source-conflicts-clear {
+  margin: 12px 0;
+}
+
+.source-conflicts-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #ac3e0866;
+  border-radius: 6px;
+  background: #ac3e0810;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.source-conflicts-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--bone-3);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--bone);
+  box-shadow: 0 16px 64px #0004;
+}
+.source-conflicts-dialog::backdrop {
+  background: #0005;
+}
+.source-conflicts-close {
+  display: flex;
+  justify-content: flex-end;
+}
+.source-conflicts-dialog .source-conflicts {
+  margin-bottom: 0;
+}

@@ -84,6 +84,19 @@ describe('EffectBlock', () => {
     expect(rows.queryByText('Газон')).toBeNull();
   });
 
+  it('separates the note from its basis with one full stop', () => {
+    const withNotes: EffectJson = {
+      ...effect,
+      measures: [
+        measure('trees', 'Деревья', 'шт.', 1, 2, 'посадки в лунках не считаются'),
+        measure('shrubs', 'Кустарники', 'шт.', 1, 2, 'ряд посажен.'),
+      ],
+    };
+    render(<EffectBlock effect={withNotes} />);
+    expect(screen.getByText('посадки в лунках не считаются. Основание: основание.')).toBeInTheDocument();
+    expect(screen.getByText('ряд посажен. Основание: основание.')).toBeInTheDocument();
+  });
+
   it('renders nothing for runs made before the balance existed', () => {
     const { container } = render(<EffectBlock effect={undefined} />);
     expect(container).toBeEmptyDOMElement();

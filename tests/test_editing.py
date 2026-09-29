@@ -181,11 +181,14 @@ def test_rebuild_writes_the_edited_plan_into_the_dxf(client: TestClient, run_id:
         json={"edits": [{"kind": "delete", "placement_id": pid} for pid in removed]},
     )
 
+    # Черновик с нарушением не уходит в очередь: 422 с причиной, прогон остаётся готовым, а
+    # прежний DXF не трогается - раньше такая пересборка роняла весь прогон в «ошибку».
     response = client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
-    assert response.status_code == 202
+    assert response.status_code == 422
+    assert "quota" in response.json()["detail"]
+    assert "прогон и прежний DXF не изменены" in response.json()["detail"]
     status = client.get(f"{API_PREFIX}/runs/{run_id}").json()
-    assert status["state"] == "failed"
-    assert "quota" in status["error"]
+    assert status["state"] == "succeeded"
     assert len(_plan(client, run_id)["placements"]) == len(before["placements"])
 
     remaining = len(trees) - len(removed)

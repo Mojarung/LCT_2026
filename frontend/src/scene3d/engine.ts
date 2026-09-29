@@ -77,6 +77,10 @@ export interface ViewSettings {
   people: number;
 }
 
+/** Скорость, с которой свет догоняет час с пульта (1/с), и порог, после которого он встаёт. */
+const HOUR_EASE = 4;
+const HOUR_SNAP = 0.01;
+
 export const DEFAULT_SETTINGS: ViewSettings = {
   hour: 11,
   season: 'summer',
@@ -186,6 +190,8 @@ export class SceneEngine {
   };
   private readonly disposables: { dispose(): void }[] = [];
   private settings: ViewSettings = { ...DEFAULT_SETTINGS };
+  /** Час, который сейчас показан светом: догоняет выбранный на пульте плавно, а не скачком. */
+  private hourShown = DEFAULT_SETTINGS.hour;
   private readonly clock = new THREE.Timer();
   private resizeObserver: ResizeObserver | null = null;
   private frames = 0;
@@ -225,6 +231,8 @@ export class SceneEngine {
       antialias: true,
       powerPreference: 'high-performance',
     });
+    // getProgramInfoLog на каждую программу блокировал страницу на 1,3 с при первом кадре.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
@@ -340,6 +348,9 @@ export class SceneEngine {
     if (this.canvas.parentElement) this.resizeObserver.observe(this.canvas.parentElement);
     this.trackPointer();
     this.apply(this.settings);
+    // Программы шейдеров собираются параллельно (KHR_parallel_shader_compile), а не в первом
+    // кадре одной длинной задачей.
+    await this.renderer.compileAsync(this.scene, this.camera);
     this.events.progress?.('ready', 1, 1);
     this.running = true;
     this.startLoop();
@@ -425,6 +436,11 @@ export class SceneEngine {
   apply(settings: Partial<ViewSettings>): void {
     this.settings = { ...this.settings, ...settings };
     const s = this.settings;
+    // Ползунок часа меняет только свет: лес, трава и разрешение не пересобираются, а солнце
+    // доезжает до нового часа в кадрах (stepHour). Остальные настройки ставят час сразу.
+    const keys = Object.keys(settings);
+    if (keys.length === 1 && keys[0] === 'hour') return;
+    this.hourShown = s.hour;
     const shrubBands = this.scene.getObjectByName('shrub-strip-bands');
     if (shrubBands) shrubBands.visible = s.showExisting;
     const stripMarks = this.scene.getObjectByName('tree-strip-symbols');
@@ -438,16 +454,7 @@ export class SceneEngine {
       this.postprocessing.dispose();
       this.postprocessing = null;
     }
-    const weather = atmosphereOf(s, s.clouds);
-    this.atmosphere.apply({
-      hour: s.hour,
-      season: s.season,
-      clouds: weather.clouds,
-      shadowSize: q.shadowSize,
-      shadowExtent: q.shadowExtent,
-      fog: weather.fog,
-      wind: s.wind,
-    });
+    const weather = this.lightAt(s.hour);
     this.weather.apply(s, weather);
     this.groundWeather.uWet.value = weather.wet;
     // Зимой снег лежит и без снегопада: московский январь белый.
@@ -456,23 +463,54 @@ export class SceneEngine {
     this.forest.wind.uWind.value = weather.sway;
     this.forest.wind.uSnow.value = cover;
     this.people?.setDensity(s.people);
-    this.facade.uNight.value = this.atmosphere.state.night;
-    this.lights?.setNight(this.atmosphere.state.night);
     this.forest.apply({
       age: s.age,
       season: s.season,
       showExisting: s.showExisting,
       lodDistance: q.lodDistance,
     });
-    this.forest.wind.uSunColor.value
-      .copy(this.atmosphere.state.color)
-      .multiplyScalar(this.atmosphere.state.intensity * 0.35);
     this.setGrass(s.quality);
     if (this.grassField) {
       this.grassField.uniforms.uWind.value = s.wind;
       // Под снегом травинок не видно: газон белый, поле травы уходит вместе с ним.
       this.grassField.uniforms.uGrow.value = Math.max(0, 1 - cover * 1.4);
     }
+  }
+
+  /** Свет, небо и ночная подсветка на заданный час; погода - по текущему пульту. */
+  private lightAt(hour: number): ReturnType<typeof atmosphereOf> {
+    const s = { ...this.settings, hour };
+    const q = QUALITY[s.quality];
+    const weather = atmosphereOf(s, s.clouds);
+    this.atmosphere.apply({
+      hour,
+      season: s.season,
+      clouds: weather.clouds,
+      shadowSize: q.shadowSize,
+      shadowExtent: q.shadowExtent,
+      fog: weather.fog,
+      wind: s.wind,
+    });
+    this.facade.uNight.value = this.atmosphere.state.night;
+    this.lights?.setNight(this.atmosphere.state.night);
+    this.forest.wind.uSunColor.value
+      .copy(this.atmosphere.state.color)
+      .multiplyScalar(this.atmosphere.state.intensity * 0.35);
+    return weather;
+  }
+
+  /** Час на свету догоняет выбранный: около секунды на любой сдвиг, через полночь - короче. */
+  private stepHour(dt: number): void {
+    const target = this.settings.hour;
+    if (this.hourShown === target) return;
+    let diff = target - this.hourShown;
+    if (diff > 12) diff -= 24;
+    else if (diff < -12) diff += 24;
+    this.hourShown =
+      Math.abs(diff) < HOUR_SNAP
+        ? target
+        : (this.hourShown + diff * (1 - Math.exp(-dt * HOUR_EASE)) + 24) % 24;
+    this.lightAt(this.hourShown);
   }
 
   /** Поле травинок по качеству: на «быстро» газон - только фактура земли. */
@@ -562,6 +600,7 @@ export class SceneEngine {
     const t = this.clock.getElapsed();
     if (this.tour) this.stepTour(dt);
     else this.freecam.update(dt);
+    this.stepHour(dt);
     this.applyPose();
     this.prepare(t);
     this.render();

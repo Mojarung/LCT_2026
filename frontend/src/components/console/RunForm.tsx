@@ -173,6 +173,7 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
       <FileField
         id={`${ids}-file`}
         label="Свой чертёж подосновы"
+        drop
         accept=".dxf,.dwg"
         hint="DXF или DWG: выгрузка Мосгеотреста, генплан, дендроплан."
         files={files}

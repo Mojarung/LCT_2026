@@ -8,9 +8,16 @@ import { buildChunks } from './chunks';
 const arc = vi.fn();
 class FakePath {
   arc = arc;
-  moveTo() {}
-  lineTo() {}
-  closePath() {}
+  commands: string[] = [];
+  moveTo(x: number, y: number) {
+    this.commands.push(`M${x},${y}`);
+  }
+  lineTo(x: number, y: number) {
+    this.commands.push(`L${x},${y}`);
+  }
+  closePath() {
+    this.commands.push('Z');
+  }
 }
 
 beforeEach(() => {
@@ -28,6 +35,70 @@ const line = (klass: string, from: [number, number], to: [number, number]): Base
 });
 
 describe('нарезка подосновы', () => {
+  it('открытая линия здания обводится без заливки, замкнутая заливается', () => {
+    const open: BasemapFeature = {
+      type: 'Feature',
+      properties: { class: 'building' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [5, 0],
+          [5, 5],
+        ],
+      },
+    };
+    const closed: BasemapFeature = {
+      type: 'Feature',
+      properties: { class: 'building' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [5, 0],
+          [5, 5],
+          [0, 0],
+        ],
+      },
+    };
+    const [openChunk] = buildChunks([open], [0, 0, 20, 20]);
+    const [closedChunk] = buildChunks([closed], [0, 0, 20, 20]);
+    expect((openChunk?.path as unknown as FakePath).commands).toHaveLength(3);
+    expect(openChunk?.fillPath).toBeNull();
+    expect((closedChunk?.fillPath as unknown as FakePath).commands).toHaveLength(4);
+  });
+
+  it('смешанный кусок заливает только замкнутую линию', () => {
+    const open: BasemapFeature = {
+      type: 'Feature',
+      properties: { class: 'building' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [5, 0],
+          [5, 5],
+        ],
+      },
+    };
+    const closed: BasemapFeature = {
+      type: 'Feature',
+      properties: { class: 'building' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [5, 0],
+          [5, 5],
+          [0, 0],
+        ],
+      },
+    };
+    const [chunk] = buildChunks([open, closed], [0, 0, 20, 20]);
+    expect((chunk?.path as unknown as FakePath).commands).toHaveLength(7);
+    expect((chunk?.fillPath as unknown as FakePath).commands).toHaveLength(4);
+  });
+
   it('один кусок на класс, полку размера и ячейку сетки', () => {
     const chunks = buildChunks(
       [

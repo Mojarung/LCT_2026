@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import gzip
+from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
@@ -31,6 +33,29 @@ MEDIA = {
     ".json": "application/json",
     ".map": "application/json",
 }
+# Текст бандла сжимается один раз на процесс: файлы в assets/ не меняются, а FileResponse
+# под Granian уходит в обход GZipMiddleware (pathsend), и статика шла несжатой.
+COMPRESSIBLE = {".js", ".mjs", ".css", ".svg", ".json", ".map", ".html"}
+MIN_COMPRESS = 1024
+
+
+@lru_cache(maxsize=256)
+def _gzipped(path: Path, mtime_ns: int, size: int) -> bytes:
+    del mtime_ns, size  # часть ключа кэша: файл заменили - сжимается заново
+    return gzip.compress(path.read_bytes(), compresslevel=6)
+
+
+def _file(target: Path, request: Request, cache: str) -> Response:
+    media = MEDIA.get(target.suffix.lower())
+    headers = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
+    stat = target.stat()
+    accepts = "gzip" in request.headers.get("accept-encoding", "")
+    if accepts and target.suffix.lower() in COMPRESSIBLE and stat.st_size >= MIN_COMPRESS:
+        body = _gzipped(target, stat.st_mtime_ns, stat.st_size)
+        return Response(body, media_type=media, headers={**headers, "Content-Encoding": "gzip"})
+    return FileResponse(target, media_type=media, headers=headers)
+
+
 NOT_BUILT = (
     "Веб-интерфейс не собран. Соберите его: cd frontend && npm ci && npm run build "
     "(или укажите готовую сборку в GREEN_WEB_DIR). API работает: /api/v1, Swagger: /docs."
@@ -62,22 +87,18 @@ def mount_spa(app: FastAPI, web_dir: Path) -> None:
         )
 
     @app.get("/{path:path}", include_in_schema=False)
-    def spa(path: str) -> Response:
+    def spa(path: str, request: Request) -> Response:
         if path == "api" or path.startswith("api/"):
             msg = f"Адреса /{path} в API нет. Список адресов: /docs"
             raise NotFoundError(msg)
         target = (root / path).resolve()
         if path and target.is_relative_to(root) and target.is_file():
             cache = FOREVER if path.startswith("assets/") else "no-cache"
-            return FileResponse(
-                target,
-                media_type=MEDIA.get(target.suffix.lower()),
-                headers={"Cache-Control": cache},
-            )
+            return _file(target, request, cache)
         # Запрос называет файл (есть расширение или это каталог бандла), а файла нет.
         if "." in path.rsplit("/", 1)[-1] or path.startswith(("assets/", "vendor/")):
             msg = f"Файла /{path} в сборке интерфейса нет"
             raise NotFoundError(msg)
         if not index.is_file():
             return PlainTextResponse(NOT_BUILT, status_code=503)
-        return FileResponse(index, media_type=MEDIA[".html"], headers={"Cache-Control": "no-cache"})
+        return _file(index, request, "no-cache")

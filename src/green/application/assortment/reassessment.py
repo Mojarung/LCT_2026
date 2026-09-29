@@ -105,9 +105,15 @@ def _choices(
         for i, placement in enumerate(placements):
             candidate = replace(placement, species=species, checks=batch.checks(i), assortment=None)
             verdict = species_verdict(species, site_context(candidate), rulebook, params)
-            notes = tuple(n for n in placement.notes if n not in {NOT_ON_SOIL, BARRIER_NOTE})
+            notes = tuple(
+                n
+                for n in placement.notes
+                if n not in {NOT_ON_SOIL, BARRIER_NOTE}
+                and not n.startswith("функциональная площадка:")
+            )
             if not fits[i]:
-                notes = (*notes, NOT_ON_SOIL)
+                reason = index.surface.functional_reason(points[i]) if index.surface else None
+                notes = (*notes, reason or NOT_ON_SOIL)
             if verdict.blocking is not None:
                 notes = (*notes, verdict.blocking.text)
             if batch.needs_barrier(i):

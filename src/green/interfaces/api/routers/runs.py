@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import mimetypes
 from typing import TYPE_CHECKING, Annotated
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, Query, Request, Resp
 from fastapi.responses import FileResponse
 
 from green.application.errors import InputError, NotFoundError
+from green.application.source_conflicts import enrich_saved_basemap
 from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.errors import PROBLEM_RESPONSES, conflict_response
@@ -210,8 +212,14 @@ def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
     )
     if path.suffix in COMPRESSIBLE:
         disposition = "inline" if path.suffix in INLINE else f'attachment; filename="{name}"'
+        content = path.read_bytes()
+        if name == "basemap.geojson":
+            original = json.loads(content)
+            enriched = enrich_saved_basemap(original)
+            if enriched is not original:
+                content = json.dumps(enriched, ensure_ascii=False).encode()
         return Response(
-            path.read_bytes(),
+            content,
             media_type=media_type,
             headers={"Content-Disposition": disposition},
         )

@@ -8,11 +8,13 @@ import type {
   QualityJson,
   RulesJson,
   SurfaceMeta,
+  SourceConflict,
   ZonesJson,
 } from '../api/artifacts';
 import { ApiError } from '../api/client';
 import { keys, useArtifact, useRun } from '../api/queries';
 import { DetailPanel } from '../components/detail/DetailPanel';
+import { SourceConflictNotice } from '../components/run/SourceConflictNotice';
 import { Downloads } from '../components/run/Downloads';
 import { EditBar } from '../components/run/EditBar';
 import { Legend } from '../components/run/Legend';
@@ -174,6 +176,24 @@ export function RunPage() {
   const leftScroll = useOverflowMark<HTMLDivElement>();
   const planData = useRef(plan.data);
   const hashApplied = useRef(false);
+  const [sourceSelection, setSourceSelection] = useState<{
+    runId: string;
+    id: string;
+    hash: string;
+  } | null>(null);
+  const [sourceVisible, setSourceVisible] = useState(true);
+  const conflictHash = new URLSearchParams(location.hash.slice(1)).get('conflict');
+  const selectedConflict =
+    sourceSelection?.runId === runId && sourceSelection.hash === location.hash
+      ? sourceSelection.id
+      : conflictHash;
+  const conflictHashApplied = useRef('');
+  const focusConflict = (item: SourceConflict) => {
+    setSourceSelection({ runId, id: item.id, hash: location.hash });
+    setSourceVisible(true);
+    engine.current?.focusSourceConflict(item);
+  };
+
   // Спорный щелчок: под курсором стволы нескольких посадок. id меняется на каждый щелчок, и
   // список монтируется заново с первого пункта.
   const [choice, setChoice] = useState<(Choice & { id: number }) | null>(null);
@@ -249,6 +269,22 @@ export function RunPage() {
       hashApplied.current = true;
     useWorkspace.getState().setOrientation(engine.current?.orientation() ?? 'street');
   }, [items, placements, rejections, location.hash]);
+
+  useEffect(() => {
+    engine.current?.setSourceConflicts(
+      sourceVisible ? (basemap.data?.source_conflicts?.items ?? []) : [],
+      selectedConflict,
+    );
+  }, [basemap.data, sourceVisible, selectedConflict]);
+
+  useEffect(() => {
+    const key = `${runId}:${location.hash}`;
+    const item = basemap.data?.source_conflicts?.items.find((c) => c.id === conflictHash);
+    if (items && item && conflictHashApplied.current !== key) {
+      engine.current?.focusSourceConflict(item);
+      conflictHashApplied.current = key;
+    }
+  }, [runId, items, basemap.data, conflictHash, location.hash]);
 
   useEffect(() => {
     engine.current?.setLawns(plan.data?.lawns ?? []);
@@ -351,6 +387,15 @@ export function RunPage() {
           <PanelToggle panel="left" label="панель прогона" />
           {data ? <RunHeader run={data} /> : null}
           <div className="hud-scroll" ref={leftScroll} hidden={broken}>
+            <SourceConflictNotice
+              report={basemap.data?.source_conflicts}
+              runId={runId}
+              onFocus={focusConflict}
+              selected={selectedConflict}
+              visible={sourceVisible}
+              onVisibilityChange={setSourceVisible}
+            />
+
             {done && data ? (
               <RunMetrics
                 run={data}

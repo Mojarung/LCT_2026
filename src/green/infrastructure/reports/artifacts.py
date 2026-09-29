@@ -690,6 +690,9 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             "min_span_m": basemap.min_span_m,
         },
         "bbox": list(basemap.bbox),
+        "source_conflicts": basemap.source_conflicts.payload()
+        if basemap.source_conflicts
+        else None,
         # Подписи материала отдельным списком, а не объектами GeoJSON: они не участвуют в
         # балансе отбора и рисуются текстом, а не геометрией.
         "labels": [

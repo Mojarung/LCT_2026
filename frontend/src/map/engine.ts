@@ -7,8 +7,16 @@
  * 2. Цвета берутся из CSS-переменных: тема переключается в одном месте, карта следует за ней.
  * 3. Вид разворачивается вдоль улицы: участок работ - лента. */
 
-import type { BasemapJson, LawnJson, Position, RuleCheck, ZonesJson } from '../api/artifacts';
+import type {
+  BasemapJson,
+  LawnJson,
+  Position,
+  RuleCheck,
+  SourceConflict,
+  ZonesJson,
+} from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
+import { drawSourceConflicts } from './sourceConflicts';
 import { buildChunks, type Chunk } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
 import type { ExistingPlant } from './existing';
@@ -96,6 +104,8 @@ const validBox = (box: Box | null | undefined): Box | null =>
   box && (box[2] - box[0] > 0 || box[3] - box[1] > 0) ? box : null;
 
 export class PlanEngine {
+  private sourceConflicts: readonly SourceConflict[] = [];
+  private sourceConflictSelected: string | null = null;
   private readonly view: ViewState = { scale: 1, tx: 0, ty: 0, rot: 0 };
   private readonly scene: Scene = {
     chunks: [],
@@ -490,6 +500,24 @@ export class PlanEngine {
     this.revealSelected();
   }
 
+  setSourceConflicts(items: readonly SourceConflict[], selected: string | null): void {
+    this.sourceConflicts = items;
+    this.sourceConflictSelected = selected;
+    this.schedule();
+  }
+
+  focusSourceConflict(item: SourceConflict): void {
+    const area = this.clearArea();
+    this.view.scale = Math.max(18, this.view.scale);
+    const { sx, sy } = toScreen(this.view, item.x, item.y);
+    this.view.tx += area.left + area.width / 2 - sx;
+    this.view.ty += area.top + area.height / 2 - sy;
+    this.touched = true;
+    this.invalidate();
+    this.schedule();
+    this.hooks.viewChanged();
+  }
+
   centerSelected(): void {
     const item = this.marks.selected;
     if (!item) return;
@@ -685,6 +713,14 @@ export class PlanEngine {
     const area = this.clearArea();
     const font = this.palette.get('--sans');
     drawSelection(ctx, this.view, this.marks, this.palette);
+    drawSourceConflicts(
+      ctx,
+      this.view,
+      this.sourceConflicts,
+      this.sourceConflictSelected,
+      rect.width,
+      rect.height,
+    );
     if (this.pending.size) {
       const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const phase = still ? 0 : (performance.now() / 40) % PENDING_DASH;

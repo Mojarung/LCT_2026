@@ -62,8 +62,10 @@ def test_draft_survives_failed_export_and_becomes_saved_only_after_success(tmp_p
         assert current["x"] == left["x"]
         assert current["assortment"]["status"] == "manual"
         assert client.get(url + "/artifacts/plan.json").json() == saved
-        client.post(url + "/rebuild")
-        assert client.get(url).json()["state"] == "failed"
+        refused = client.post(url + "/rebuild")
+        assert refused.status_code == 422
+        assert "spacing" in refused.json()["detail"]
+        assert client.get(url).json()["state"] == "succeeded"
         assert client.get(url + "/artifacts/result.dxf").content == original_dxf
         assert client.get(url + "/draft").json()["stale"] is True
         # Страницу прогона рисует React-приложение (frontend/), его разметку проверяют тесты
