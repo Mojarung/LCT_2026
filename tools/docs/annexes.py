@@ -457,10 +457,160 @@ def street_facts() -> list[dict]:
     return rows
 
 
+# Прогоны профиля `barriers` (29.09.2026, тот же образ Docker, что у строгого пакета) на улицах,
+# где сети оставляют деревьям меньше всего мест. В SOURCES не входят: строка улицы в приложении B
+# остаётся строгой, барьер - отдельное сравнение.
+BARRIERS = ROOT / "out" / "docker-barriers-0929"
+# Практика принятых проектов пилота (docs/notes/34-designer-practice.md): барьер у 6 улиц из 20.
+BARRIER_PRACTICE = "6 улиц из 20"
+
+
+def barrier_runs() -> dict[str, dict]:
+    """Прогоны профиля barriers по улицам: деревьев, из них с барьером, проверка плана."""
+    found: dict[str, dict] = {}
+    for path in sorted(BARRIERS.glob("*.json")) if BARRIERS.is_dir() else ():
+        row = json.loads(path.read_text(encoding="utf-8"))
+        if "slug" not in row or "state" not in row:
+            continue
+        if row.get("profile", "barriers") != "barriers":
+            msg = f"{path}: прогон профиля {row['profile']}, а не barriers"
+            raise SystemExit(msg)
+        facts: dict = {"row": row}
+        output = BARRIERS / "runs" / str(row.get("run_id")) / "output"
+        if row["state"] == "succeeded" and (output / "plan.json").is_file():
+            plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+            trees = [p for p in plan["placements"] if p["planting_type"] == "tree"]
+            validation = json.loads((output / "validation.json").read_text(encoding="utf-8"))
+            quality = json.loads((output / "quality.json").read_text(encoding="utf-8"))
+            length = (quality.get("effect") or {}).get("length_m")
+            facts |= {
+                "trees": len(trees),
+                "with_barrier": sum(
+                    1 for p in trees if any(c["outcome"] == "barrier" for c in p["checks"])
+                ),
+                "per_km": len(trees) / (length / 1000) if length else None,
+                "plan_valid": bool((row.get("summary") or {}).get("plan_valid"))
+                and bool(validation.get("ok")),
+                "violations": len(validation["issues"]),
+            }
+        found[str(row["slug"])] = facts
+    return found
+
+
+def _per_km(value: float | None) -> str:
+    return "-" if value is None else str(round(value))
+
+
+def _barrier_where(rows: list[dict], slugs: set[str]) -> str:
+    """Какие улицы прогнаны с барьером: «где меньше всего деревьев», только если это так."""
+    done = [f for f in rows if f.get("per_km") is not None]
+    lowest = {f["row"]["slug"] for f in sorted(done, key=lambda f: f["per_km"])[: len(slugs)]}
+    streets = f"на {counted(len(slugs), 'улице', 'улицах', 'улицах')}"
+    if slugs == lowest:
+        return f"{streets}, где в строгом профиле меньше всего деревьев на 1 км"
+    return f"{streets} пилота"
+
+
+def barrier_section(rows: list[dict]) -> list[str]:
+    """Подраздел приложения B: строгий профиль против профиля barriers и проекта улицы."""
+    runs = barrier_runs()
+    if not runs:
+        return []
+    where = _barrier_where(rows, set(runs))
+    profiles = YamlProfileSource(ROOT / "config" / "profiles")
+    strict_p, barrier_p = profiles.load("strict"), profiles.load("barriers")
+
+    def metres(values: tuple[float, ...]) -> str:
+        return "; ".join(number(v, 1) for v in values)
+
+    lines = [
+        "",
+        "### Прикорневой барьер {#annex-streets-barriers}",
+        "",
+        "Барьер - проектное решение, а не норма: СП 42.13330.2016, табл. 9.1, прим. 5 и 7 "
+        "допускают дерево ближе табличного отступа к сетям и борту при защитном прикорневом "
+        "барьере или других мероприятиях, но не требуют их. В принятых проектах пилота барьер "
+        f"ставят {BARRIER_PRACTICE} (`docs/notes/34-designer-practice.md`). Поэтому профиль "
+        "`strict` барьер не ставит, а профиль `barriers` (`root_barriers: true`) допускает место, "
+        "если барьер делает отступ достаточным: условие записано в объяснении посадки, дерево - "
+        "на слое `GREEN_TREES_BARRIER`. Прогон профиля `barriers` 29.09.2026 тем же образом "
+        f"Docker {where}. Деревья - все деревья плана, из них с барьером - те, у которых барьер "
+        "стал условием посадки; нарушений - по независимой проверке плана профиля `barriers`.",
+        "",
+        "Столбец «Ещё мест с барьером» выше считает только места, которым строгий прогон "
+        "отказал. Профиль `barriers` проверяет и места ближе к борту (отступы от борта "
+        f"{metres(barrier_p.curb_offsets_m)} м против {metres(strict_p.curb_offsets_m)} м в "
+        f"`strict`), шаг деревьев в ряду - {number(barrier_p.spacing_m, 1)} м против "
+        f"{number(strict_p.spacing_m, 1)} м, поэтому прибавка деревьев может отличаться от числа "
+        "в том столбце.",
+        "",
+        "| № | Улица | Деревьев, `strict` | Деревьев, `barriers` | Из них с барьером | "
+        "Деревьев на 1 км, `strict` → `barriers` | Нарушений, `barriers` | Деревьев в проекте |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    by_slug = {str(f["row"]["slug"]): f for f in rows}
+    for slug, run in sorted(runs.items(), key=lambda item: int(item[0].split("-")[0])):
+        strict = by_slug.get(slug, {"row": run["row"], "title": run["row"].get("title", slug)})
+        project = (strict.get("designer", {}).get("trees") or {}).get("total")
+        head = f"| {run['row'].get('number', '-')} | {cell(strict['title'])} | "
+        head += f"{thousands(strict['trees']) if 'trees' in strict else '-'} | "
+        if "trees" not in run:
+            lines.append(
+                head + f"прогон не завершён ({cell(run['row']['state'])}) |  |  |  | "
+                f"{thousands(project) if project is not None else '-'} |"
+            )
+            continue
+        violations = str(run["violations"]) + ("" if run["plan_valid"] else ", план не принят")
+        lines.append(
+            head + f"{thousands(run['trees'])} | {thousands(run['with_barrier'])} | "
+            f"{_per_km(strict.get('per_km'))} → {_per_km(run['per_km'])} | {violations} | "
+            f"{thousands(project) if project is not None else '-'} |"
+        )
+    return lines
+
+
+def barrier_texts(rows: list[dict]) -> dict[str, str]:
+    """Сводная фраза о прогонах с барьером для глав: числа из тех же артефактов, что прил. B."""
+    every = barrier_runs()
+    runs = {slug: r for slug, r in every.items() if "trees" in r}
+    if not runs:
+        return {"barrier_summary": "прогонов профиля `barriers` в пакете нет"}
+    by_slug = {str(f["row"]["slug"]): f for f in rows}
+
+    def title(slug: str) -> str:
+        return str(by_slug[slug]["title"]) if slug in by_slug else slug
+
+    strict = sum(int(by_slug.get(slug, {}).get("trees", 0)) for slug in runs)
+    barrier = sum(int(r["trees"]) for r in runs.values())
+    project = sum(
+        int((by_slug.get(slug, {}).get("designer", {}).get("trees") or {}).get("total") or 0)
+        for slug in runs
+    )
+    violations = sum(int(r["violations"]) for r in runs.values())
+    names = ", ".join(title(s) for s in sorted(runs, key=lambda s: int(s.split("-")[0])))
+    summary = (
+        f"{_barrier_where(rows, set(runs))} ({names}) деревьев в профиле `barriers` - "
+        f"{thousands(barrier)}, в `strict` - {thousands(strict)}, в принятых проектах этих улиц - "
+        f"{thousands(project)}; нарушений по независимой проверке - {violations}"
+    )
+    unfinished = [title(s) for s in every if s not in runs]
+    if unfinished:
+        summary += "; прогон с барьером не завершён: " + ", ".join(unfinished)
+    return {
+        "barrier_streets": str(len(runs)),
+        "barrier_trees_strict": thousands(strict),
+        "barrier_trees": thousands(barrier),
+        "barrier_trees_project": thousands(project),
+        "barrier_violations": str(violations),
+        "barrier_summary": summary + " (приложение B, «Прикорневой барьер»)",
+    }
+
+
 def streets_annex() -> str:
     rows = street_facts()
     done = [f for f in rows if "trees" in f]
     issues = sum(len((f.get("validation") or {}).get("issues", [])) for f in done)
+    barriers = barrier_section(rows)
     lines = [
         "## Приложение B. Результаты по улицам пилота {#annex-streets}",
         "",
@@ -513,7 +663,8 @@ def streets_annex() -> str:
         "сохраняет все существующие насаждения и не назначает вырубку. Доли - от мест деревьев, "
         "которые сервис проверил и не занял; у места бывает несколько причин. Прикорневой барьер "
         "(СП 42.13330.2016, табл. 9.1, прим. 5, 7) - параметр `root_barriers`, по умолчанию "
-        "выключен; места, которые он открыл бы, видны на карте.",
+        "выключен; места, которые он открыл бы, видны на карте"
+        + (", прогон с барьером - в подразделе «Прикорневой барьер» ниже." if barriers else "."),
         "",
         "| № | Улица | Деревьев на 1 км | Что мешает местам деревьев | Ещё мест с барьером |",
         "|---|---|---|---|---|",
@@ -533,6 +684,7 @@ def streets_annex() -> str:
             + ", ".join(f"{f['title']} - {round(f['per_km'])}" for f in over)
             + ".",
         ]
+    lines += barriers
     lines += [
         "",
         "### Сравнение с примерами выхода набора {#annex-streets-examples}",
@@ -1037,7 +1189,10 @@ PARAMS: list[tuple[str, list[tuple[str, str]]]] = [
                 "modes",
                 "приёмы по порядку: `alley` - аллея вдоль борта, `lawn` - сетка по грунту, `fill` - добор зоны",
             ),
-            ("spacing_m", "шаг деревьев, м (743-ПП, табл. 3.6.2: однорядная 5-6 м); в ряду аллеи - этот шаг, вне ряда - шаг пары по взрослым кронам (crown_spacing)"),
+            (
+                "spacing_m",
+                "шаг деревьев, м (743-ПП, табл. 3.6.2: однорядная 5-6 м); в ряду аллеи - этот шаг, вне ряда - шаг пары по взрослым кронам (crown_spacing)",
+            ),
             (
                 "crown_spacing",
                 "шаг между деревьями вне ряда по взрослым кронам пары: средняя крона x (1 - crown_overlap) в вилке spacing_m - spacing_group_max_m; `false` - один шаг на все породы",
@@ -1359,6 +1514,7 @@ def facts() -> dict[str, str]:
         }
     found |= _street_texts(runs, int(str(found.get("streets_total", len(runs)))))
     found["streets_tech_table"] = tech_table()
+    found |= barrier_texts(street_facts())
     found |= effect_facts(runs)
     found |= _audit_texts()
     return {key: str(value) for key, value in found.items()}

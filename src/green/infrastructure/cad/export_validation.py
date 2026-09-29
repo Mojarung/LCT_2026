@@ -11,7 +11,7 @@ import math
 from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
-from ezdxf.entities import Hatch, Insert
+from ezdxf.entities import Hatch, Insert, Text
 from ezdxf.entities.boundary_paths import PolylinePath
 from ezdxf.lldxf.const import BOUNDARY_PATH_EXTERNAL
 from ezdxf.lldxf.encoding import decode_dxf_unicode
@@ -40,6 +40,10 @@ _LAYERS = frozenset(
     }
 )
 _LAWN_LAYER = "GREEN_LAWN"
+_LABELS_LAYER = "GREEN_LABELS"
+# Подпись позиции ведомости - справа сверху от точки посадки, как пишет writer.POSITION_OFFSET_M
+# (импорт из writer замкнул бы круг writer -> integrity -> export_validation).
+_POSITION_OFFSET_M = (0.4, 0.4)
 _TOLERANCE_M = 1e-6
 # Площадь участка в XDATA и координаты штриховки - те же числа плана; допуск - на округление.
 _AREA_TOLERANCE_M2 = 0.01
@@ -94,6 +98,7 @@ def check_written_plan(
         for identity in expected
         if counts[identity] != 1
     )
+    issues.extend(_check_position_labels(doc, expected, positions, unit_m))
     lawn_issues, found_lawns = _check_lawns(doc, plan, unit_m)
     issues.extend(lawn_issues)
     return PlanExportReport(
@@ -103,6 +108,55 @@ def check_written_plan(
         expected_lawns=len(plan.lawns),
         found_lawns=found_lawns,
     )
+
+
+def _check_position_labels(
+    doc: Drawing, expected: dict[str, Placement], positions: dict[str, str], unit: float
+) -> list[str]:
+    """У каждой посадки ровно одна подпись позиции ведомости (TEXT) с её номером у её точки.
+
+    Подпись - то, что видно в любом просмотрщике: LibreCAD атрибуты вставок не рисует.
+    """
+    labels: defaultdict[str, list[Text]] = defaultdict(list)
+    issues = []
+    for entity in doc.modelspace().query(f"TEXT[layer=='{_LABELS_LAYER}']"):
+        strings = (
+            [t.value for t in entity.get_xdata(APPID) if t.code == _XDATA_STRING]
+            if entity.has_xdata(APPID)
+            else []
+        )
+        if not isinstance(entity, Text) or not strings:
+            issues.append(
+                f"{entity.dxf.handle}: подпись позиции на слое {_LABELS_LAYER} без XDATA"
+                " с идентификатором посадки"
+            )
+            continue
+        labels[strings[0]].append(entity)
+    issues.extend(
+        f"{identity}: подпись позиции у посадки, которой нет в проверенном плане"
+        for identity in labels.keys() - expected.keys()
+    )
+    dx, dy = _POSITION_OFFSET_M
+    for identity, placement in expected.items():
+        found = labels.get(identity, [])
+        if len(found) != 1:
+            issues.append(
+                f"{identity}: у посадки должна быть одна подпись позиции ведомости, найдено"
+                f" {len(found)}"
+            )
+            continue
+        label = found[0]
+        if decode_dxf_unicode(label.dxf.text) != positions.get(placement.species.code, ""):
+            issues.append(
+                f"{identity}: подпись позиции не совпадает с позицией ведомости посадочного"
+                " материала"
+            )
+        location = label.dxf.insert
+        if not _near(location.x * unit, placement.x + dx) or not _near(
+            location.y * unit, placement.y + dy
+        ):
+            issues.append(f"{identity}: подпись позиции стоит не у точки посадки")
+    return issues
 
 
 def _check_lawns(doc: Drawing, plan: Plan, unit: float) -> tuple[list[str], int]:

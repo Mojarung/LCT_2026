@@ -77,6 +77,8 @@ NPA_REFS = 2
 NPA_MAX = 250  # длиннее значение атрибута старые просмотрщики режут
 # Отметка отказа - крест 1 x 1 м в метрах чертежа.
 REJECT_HALF_M = 0.5
+# Номер позиции ведомости у посадки: справа сверху от точки посадки, в метрах от неё.
+POSITION_OFFSET_M = (0.4, 0.4)
 # Лист результата в высотах текста таблицы: ведомость правее габарита плана, легенда правил
 # колонкой заданной ширины правее ведомости - ни одна из них не ложится на план.
 SCHEDULE_GAP_HEIGHTS = 20.0
@@ -172,13 +174,12 @@ class EzdxfPlanWriter:
             block.add_circle((0, 0), radius=species.crown_diameter_m / 2)
             block.add_line((-0.3, 0), (0.3, 0))
             block.add_line((0, -0.3), (0, 0.3))
-            # На плане видна только позиция ведомости, как у проектировщика (ГОСТ 21.508-2020,
-            # форма 9): одна-две цифры у куста не наезжают на соседа при шаге 1 м. Номер, вид и
-            # нормы остаются скрытыми атрибутами - по ним отчёт и сверка экспорта связывают
-            # вставку с объяснением.
-            attribs = {"height": self._height, "style": TEXT_STYLE}
-            hidden = {**attribs, "flags": 1}
-            block.add_attdef("POS", (0.4, 0.4), dxfattribs=attribs)
+            # Все атрибуты скрыты: по ним отчёт и сверка экспорта связывают вставку с планом и
+            # объяснением. Позицию ведомости на плане рисует обычный TEXT на месте атрибута POS
+            # (_placement): LibreCAD атрибуты вставок не рисует, а видимый POS рядом с текстом
+            # nanoCAD показал бы дважды.
+            hidden = {"height": self._height, "style": TEXT_STYLE, "flags": 1}
+            block.add_attdef("POS", POSITION_OFFSET_M, dxfattribs=hidden)
             block.add_attdef("NUM", (0.4, -0.4 - self._height), dxfattribs=hidden)
             block.add_attdef("SPECIES", (0.4, -0.8 - 2 * self._height), dxfattribs=hidden)
             block.add_attdef("NPA", (0.4, -1.2 - 3 * self._height), dxfattribs=hidden)
@@ -220,6 +221,22 @@ class EzdxfPlanWriter:
         )
         for attrib in ref.attribs:
             attrib.dxf.layer = LAYER_LABELS
+            # Блок вида мог прийти из исходника с видимым POS прежней версии - скрываем явно.
+            attrib.is_invisible = True
+        # На плане видна только позиция ведомости, как у проектировщика (ГОСТ 21.508-2020,
+        # форма 9): одна-две цифры у куста не наезжают на соседа при шаге 1 м. XDATA связывает
+        # подпись с посадкой для сверки экспорта.
+        dx, dy = POSITION_OFFSET_M
+        label = msp.add_text(
+            position,
+            height=self._height * scale,
+            dxfattribs={
+                "layer": LAYER_LABELS,
+                "style": TEXT_STYLE,
+                "insert": ((placement.x + dx) * scale, (placement.y + dy) * scale),
+            },
+        )
+        label.set_xdata(APPID, [(1000, placement.placement_id)])
         rule_ids = ";".join(c.rule_id for c in placement.checks)
         ref.set_xdata(
             APPID,
