@@ -76,18 +76,14 @@ const write = (key: string, value: string): void => {
   }
 };
 
-/** Панели - как их оставили. Обозначения по умолчанию открыты только на высоком экране: на
- *  1440 x 900 и ниже панель занимала треть высоты, и пульт срезал сводку прогона посередине
- *  (жюри, итерация 4). Кнопка «обозначения» у кромки карты открывает их одним нажатием. */
+/** Панели - как их оставили. Обозначения по умолчанию закрыты на любом экране: открытые, они
+ *  ложились на сводку прогона, а виды плана и так перечислены со своими знаками в составе справа.
+ *  Кнопка «легенда» у кромки карты открывает их одним нажатием. */
 function savedPanels(): Panels {
-  const roomy =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(min-width: 1081px) and (min-height: 1000px)').matches;
-  const legend = read('green-legend');
   return {
     left: read('green-panel-left') === '1',
     right: read('green-panel-right') === '1',
-    legend: legend === null ? roomy : legend !== '0',
+    legend: read('green-legend') === '1',
   };
 }
 

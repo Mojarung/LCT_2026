@@ -171,6 +171,30 @@ body.shell-map .topbar {
   color: var(--bone);
   background: var(--panel-2);
 }
+/* Пара вариантов: оба названы, выбранный нажат. Разделитель отделяет группы кнопок. */
+.hud-pair {
+  display: flex;
+  gap: 1px;
+}
+.hud-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 6px 4px;
+  background: var(--hair-2);
+}
+/* Правка меняет план - кнопка заметна и нажатая выделена цветом, а не только фоном. */
+.hud-bottom .hud-edit {
+  color: var(--bone);
+  font-weight: 600;
+}
+.hud-bottom .hud-edit[aria-pressed='true'] {
+  color: var(--ground);
+  background: var(--accent, var(--bone));
+}
+/* Строка правки пустая - её нет, пульт не держит пустую полосу под сводкой. */
+#edit-bar[data-empty='1'] {
+  display: none;
+}
 
 /* Ползунок масштаба рядом с «+» и «−»: колесо есть не у всякой мыши, а на тачпаде масштаб
    ловится плохо. Дорожка и бегунок рисуются вручную - у браузеров они разные. */
@@ -1394,17 +1418,19 @@ body.shell-map .topbar {
   font: 500 var(--fs-strong) var(--mono);
   font-variant-numeric: tabular-nums;
 }
-.run-approval {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 16px;
-  font-size: var(--fs-small);
-  color: var(--bone-2);
+/* Блок «Проверить»: строки - то, что человек идёт смотреть на карте. Согласование - первое
+   и заметнее остальных; число не переносится («750 из 1205» одной строкой). */
+.check-block .run-facts {
+  margin: 8px 0 4px;
 }
-.run-approval b {
+.check-block .run-facts dd {
   font-family: var(--mono);
-  font-weight: 500;
+  white-space: nowrap;
+}
+.check-block .run-approval dt,
+.check-block .run-approval dd {
+  color: var(--bone);
+  font-weight: 600;
 }
 .notice .notice-title {
   color: var(--bone);

@@ -82,7 +82,7 @@ export function SourceConflictNotice({
           dialog.current?.showModal();
         }}
       >
-        Конфликты подосновы · {count} <span aria-hidden="true">↗</span>
+        Конфликты подосновы · {count}
       </button>
       {createPortal(
         <dialog ref={dialog} className="source-conflicts-dialog" aria-label="Конфликты подосновы">

@@ -3,11 +3,10 @@ import { useEffect, useState } from 'react';
 import type { PlanEditor } from '../../state/editor';
 import { useWorkspace } from '../../state/workspace';
 
-/** Правка плана: переключатель режима, сообщение и пересборка DXF. Режим правки выключен по
- *  умолчанию: случайно сдвинуть дерево во время осмотра плана не должно быть возможно. */
+/** Правка плана: сообщение и пересборка DXF. Режим включает кнопка «править» у карты (MapHud),
+ *  по умолчанию он выключен: случайно сдвинуть дерево во время осмотра плана нельзя. Пока
+ *  сказать нечего и пересобирать нечего, строки в пульте нет. */
 export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: () => void }) {
-  const editing = useWorkspace((s) => s.editing);
-  const setEditing = useWorkspace((s) => s.setEditing);
   const stale = useWorkspace((s) => s.stale);
   const setStale = useWorkspace((s) => s.setStale);
   const message = useWorkspace((s) => s.message);
@@ -43,17 +42,12 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
   };
 
   return (
-    <div className="hud-foot" id="edit-bar" data-stale={stale ? '1' : '0'}>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={editing}
-          onChange={(event) => {
-            setEditing(event.target.checked);
-          }}
-        />
-        Переносить и удалять посадки
-      </label>
+    <div
+      className="hud-foot"
+      id="edit-bar"
+      data-stale={stale ? '1' : '0'}
+      data-empty={message.text || stale || busy ? '0' : '1'}
+    >
       {/* Живая область в разметке всегда: читалка объявляет только изменения в области,
           существовавшей до сообщения. */}
       <p className="edit-message" role="status" aria-live="polite" data-kind={message.kind}>

@@ -9,7 +9,13 @@
  * fallback, и интерфейс обязан его показать: такая сцена грубее, чем могла бы быть. */
 
 import type { BasemapFeature, BasemapJson, Geometry, PlanJson, Position } from '../api/artifacts';
-import { plantsOf, stripPoints, shrubStripLines } from '../map/existing';
+import {
+  mergePlants,
+  plantsOf,
+  stripPoints,
+  shrubStripLines,
+  type ExistingPlant,
+} from '../map/existing';
 import { isShrubType } from '../map/models';
 import type {
   Building,
@@ -254,27 +260,27 @@ function takeFeature(feature: BasemapFeature, box: Box, frame: Frame, into: Line
 }
 
 function existingPlants(basemap: BasemapJson, box: Box, frame: Frame): Plant[] {
-  const out: Plant[] = [];
+  const marks: ExistingPlant[] = [];
   for (const feature of basemap.features) {
     const found = plantsOf(feature);
-    if (!found) continue;
-    for (const p of found) {
-      if (!inBox([[p.x, p.y]], box)) continue;
-      const code = p.shrub ? 'existing_shrub' : 'existing_tree';
-      const seed = hashOf(`${p.x.toFixed(2)}:${p.y.toFixed(2)}`);
-      const crown = p.r * 2;
-      out.push({
-        id: `existing-${out.length}`,
-        ...frame.toFlat(p.x, p.y),
-        type: code,
-        code,
-        name: p.shrub ? 'Существующий кустарник' : 'Существующее дерево',
-        species: speciesFallback(code, p.shrub ? 'shrub_tall' : 'tree_large', '', crown),
-        existing: true,
-        existingRadius: p.r,
-        seed,
-      });
-    }
+    if (found) marks.push(...found.filter((p) => inBox([[p.x, p.y]], box)));
+  }
+  const out: Plant[] = [];
+  for (const p of mergePlants(marks)) {
+    const code = p.shrub ? 'existing_shrub' : 'existing_tree';
+    const seed = hashOf(`${p.x.toFixed(2)}:${p.y.toFixed(2)}`);
+    const crown = p.r * 2;
+    out.push({
+      id: `existing-${out.length}`,
+      ...frame.toFlat(p.x, p.y),
+      type: code,
+      code,
+      name: p.shrub ? 'Существующий кустарник' : 'Существующее дерево',
+      species: speciesFallback(code, p.shrub ? 'shrub_tall' : 'tree_large', '', crown),
+      existing: true,
+      existingRadius: p.r,
+      seed,
+    });
   }
   return out;
 }
