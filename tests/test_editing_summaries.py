@@ -100,7 +100,10 @@ def test_standalone_shrubs_use_primary_summary_and_quotas(kind: PlantingType) ->
     assert result.assortment_summary is not None
     assert result.assortment_summary.counts == {"s": 3}
     assert result.shrub_assortment_summary is None
-    assert "code s: 3 > 1" in result.assortment_summary.quota_violations
+    assert (
+        "Превышена квота разнообразия: вид s - 3 при пределе 1"
+        in result.assortment_summary.quota_violations
+    )
 
 
 def test_added_shrubs_get_a_summary_even_if_original_plan_had_none() -> None:
@@ -127,4 +130,7 @@ def test_inventory_can_block_new_plants_even_with_small_current_counts() -> None
     result = refresh_summaries(plan, PlanParams(), CATALOG)
     assert result.assortment_summary is not None
     assert result.assortment_summary.existing == {"t": 2}
-    assert "code t: 1 > 0" in result.assortment_summary.quota_violations
+    assert (
+        "Превышена квота разнообразия: вид t - 1 при пределе 0"
+        in result.assortment_summary.quota_violations
+    )
