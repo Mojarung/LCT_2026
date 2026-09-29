@@ -243,12 +243,11 @@ const slides = [
   {
     bg: 'light',
     html: `
-<h1 class="title">Фото по кадру 3D-вида</h1>
-<div class="trio" style="top:280px">
-  <figure><div class="crop framed big">${img('photo-false-src.png', 'fill')}</div><figcaption>кадр 3D-вида</figcaption></figure>
-  <span class="arrow ink">→</span>
-  <figure><div class="crop framed big">${img('photo-false.jpg', 'fill')}</div><figcaption>фото: только то, что есть в плане</figcaption></figure>
-</div>
+<h1 class="title">Улица после посадки</h1>
+<div class="crop framed" style="left:96px;top:250px;width:1130px;height:636px">${img('street-photo-1.jpg', 'fill')}
+  <div class="inset">${img('street-src-1.jpg', 'fill')}<span>кадр 3D-вида</span></div></div>
+<div class="crop framed" style="left:1260px;top:250px;width:564px;height:304px">${img('street-photo-2.jpg', 'fill')}<span class="tag">режим «фон и деревья»</span></div>
+<div class="crop framed" style="left:1260px;top:582px;width:564px;height:304px">${img('street-photo-3.jpg', 'fill')}<span class="tag">только по плану</span></div>
 <p class="foot dark-ink">Qwen-Image-2.1 на локальной видеокарте 6 ГБ, около 80 с на кадр; модели вне Docker-образа, план от них не зависит. Деревья стоят в точках 3D-кадра, фото - иллюстрация, норм на нём нет. Фон и деревья вне плана - только в режиме «фон и деревья».</p>`,
   },
   // 11. Новые фасады. Снимки modern-*.jpg - фото сервиса с галочкой «новые фасады» из
@@ -411,6 +410,10 @@ svg .donut-l { font: 600 20px Montserrat; fill: #3c3548 }
 .trio figure { margin: 0 }
 .trio .crop { position: relative; width: 520px; height: 292px }
 .trio .crop.big { width: 820px; height: 461px }
+.inset { position: absolute; left: 22px; bottom: 22px; width: 352px; height: 198px; border-radius: 12px; overflow: hidden;
+  border: 3px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35) }
+.inset span, .tag { position: absolute; left: 12px; bottom: 10px; padding: 4px 12px; border-radius: 999px;
+  background: rgba(28,29,34,.8); color: #fff; font-size: 18px; font-weight: 600 }
 .trio figcaption { margin-top: 12px; font-size: 20px; font-weight: 600; color: ${C.mute} }
 .trio .arrow.ink { align-self: center; margin-top: -34px; font-size: 48px }
 .trio-note { width: 520px; margin: 0 0 0 20px; align-self: center; font-size: 24px; font-weight: 500; line-height: 1.45; color: #3c3548 }
