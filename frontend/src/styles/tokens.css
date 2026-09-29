@@ -77,6 +77,16 @@
   /* Сетка чертёжного листа под планом: заметна только как фактура бумаги, спорить с линиями
      подосновы ей нельзя. */
   --grid: rgba(140, 116, 78, 0.16);
+  /* Лист под картой плана: в иллюстрации - фон страницы, в инженерном стиле - белый лист. */
+  --map-sheet: var(--ground);
+  /* Условные знаки инженерного стиля (src/map/signs.ts): чернила и белая заливка знака, контур
+     кроны проектируемого дерева #007f00 (слой ГП_зелень_ОПС), кольцо хвойного сохраняемого
+     #00ff00 (ACI 3) - на светлом листе темнее, иначе не читается. */
+  --sign-ink: #141414;
+  --sign-paper: #ffffff;
+  --sign-crown: #1f7f2c;
+  --sign-crown-conifer: #0c4424;
+  --sign-conifer: #14b814;
 
   --sans: 'Plex', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'PlexMono', ui-monospace, Consolas, 'Liberation Mono', monospace;
@@ -182,10 +192,73 @@
   --review-label: #c3cbc6;
   --review-label-active: #86a8ff;
   --grid: rgba(233, 230, 224, 0.052);
+  --map-sheet: var(--ground);
+  --sign-ink: #ecebe6;
+  --sign-paper: #16191d;
+  --sign-crown: #5cbf6a;
+  --sign-crown-conifer: #a8e6b2;
+  --sign-conifer: #3ee63e;
 
   --r-panel: 16px;
   --r-control: 10px;
   --glass: color-mix(in srgb, var(--panel) 84%, transparent);
   --glass-filter: blur(18px) saturate(140%);
   --lift: 0 1px 1px rgba(5, 7, 10, 0.34), 0 14px 34px -14px rgba(5, 7, 10, 0.62);
+}
+
+/* Инженерный стиль карты - по умолчанию (атрибут data-map-style на <html> ставит index.html и
+   кнопка у кромки карты; без атрибута стиль тоже инженерный, src/map/style.ts). Подоснова - как
+   чертёж: плоские заливки без фактур и теней, линии приглушённым серым, цвета площадных - по
+   легенде проектировщиков пилота (Грузинская): газон #65ed7c, асфальт проезда #b2b2b3, борт
+   #4c2600, граница работ #ff0000 - на экране смягчены, но узнаваемы. Блок тёмной темы обязан
+   переопределять все те же токены: у него специфичность выше, а у светлого - та же, что у
+   тёмной темы. */
+:root:not([data-map-style='illustrated']) {
+  --map-sheet: #f7f7f4;
+  --c-curb: #5a3616;
+  --c-pavement: #8e8e8e;
+  --c-road: #7c7c7c;
+  --c-building: #4d4d4d;
+  --c-building-fill: #e4e4e1;
+  --c-building-hatch: transparent;
+  --c-shadow: transparent;
+  --c-lawn: #bde7c2;
+  --c-lawn-fill: #bde7c2;
+  --c-lawn-blade: transparent;
+  --c-asphalt: #d5d5d6;
+  --c-asphalt-speck: transparent;
+  --c-fence: #6b6b6b;
+  --c-slope: #8f7a5a;
+  --c-boundary: #e3261e;
+  --c-existing: #505050;
+  --utility-opacity: 0.8;
+  --c-plan-lawn: rgba(64, 200, 92, 0.32);
+  --c-plan-lawn-new: rgba(226, 247, 219, 0.94);
+  --c-plan-lawn-edge: #2f7d3f;
+  --grid: rgba(60, 60, 60, 0.05);
+}
+
+:root[data-theme='dark']:not([data-map-style='illustrated']) {
+  --map-sheet: var(--ground);
+  --c-curb: #b48c64;
+  --c-pavement: #6c727a;
+  --c-road: #5d636a;
+  --c-building: #8b9097;
+  --c-building-fill: #22262b;
+  --c-building-hatch: transparent;
+  --c-shadow: transparent;
+  --c-lawn: #1d3322;
+  --c-lawn-fill: #1d3322;
+  --c-lawn-blade: transparent;
+  --c-asphalt: #23272c;
+  --c-asphalt-speck: transparent;
+  --c-fence: #7a8088;
+  --c-slope: #a38c6d;
+  --c-boundary: #ff5a4a;
+  --c-existing: #9aa0a8;
+  --utility-opacity: 1;
+  --c-plan-lawn: rgba(90, 200, 110, 0.2);
+  --c-plan-lawn-new: rgba(170, 210, 160, 0.16);
+  --c-plan-lawn-edge: #6fbf7e;
+  --grid: rgba(233, 230, 224, 0.045);
 }

@@ -12,6 +12,9 @@ export interface ExistingPlant {
   /** Радиус кроны, метры. */
   r: number;
   shrub: boolean;
+  /** Дерево со знаком хвойного в съёмке: в инженерном стиле - зелёное кольцо. Ключа нет у
+   *  лиственных и у деревьев без знака (кружок кроны, полоса деревьев). */
+  conifer?: true;
 }
 
 /** Крона существующего дерева по умолчанию: знак съёмки размера кроны не несёт. */
@@ -28,7 +31,11 @@ export function plantsOf(feature: BasemapFeature): ExistingPlant[] | null {
   if (!EXISTING_CLASSES.has(kind)) return null;
   const shrub = kind === 'existing_shrub';
   const fallback = shrub ? SHRUB_R : TREE_R;
-  return collect(feature.geometry, fallback, shrub);
+  const plants = collect(feature.geometry, fallback, shrub);
+  if (plants && !shrub && feature.properties.conifer === true) {
+    for (const plant of plants) plant.conifer = true;
+  }
+  return plants;
 }
 
 function collect(geometry: Geometry, fallback: number, shrub: boolean): ExistingPlant[] | null {

@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 
 import { VERDICT_RU } from '../../lib/checks';
 import { placeNear } from '../../lib/popover';
-import { modelKey, modelOf } from '../../map/models';
+import { isShrubType, modelKey, modelOf } from '../../map/models';
 import { MAX_CANDIDATES } from '../../map/picking';
 import type { MapItem } from '../../map/types';
 import { ModelSwatch } from './ModelSwatch';
@@ -145,6 +145,7 @@ export function PickChooser({
               <ModelSwatch
                 model={modelOf(item.species_code, item.planting_type)}
                 modelKey={modelKey(item.species_code, item.planting_type)}
+                shrub={isShrubType(item.planting_type)}
                 size={24}
               />
             ) : (

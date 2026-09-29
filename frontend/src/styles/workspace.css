@@ -19,7 +19,7 @@ body.shell-map .topbar {
 .workspace {
   position: fixed;
   inset: 0;
-  background: var(--ground);
+  background: var(--map-sheet);
   overflow: hidden;
 }
 .workspace .canvas-holder {
@@ -1158,6 +1158,12 @@ body.shell-map .topbar {
 }
 .hud-legend .legend-models span {
   align-items: center;
+}
+/* Знаки чертежа подписаны формулировками легенд проектировщиков: длинно, поэтому в одну
+   колонку. */
+.legend.legend-signs {
+  grid-template-columns: 1fr;
+  gap: 2px;
 }
 .hud-legend .legend-models i {
   margin-top: 0;

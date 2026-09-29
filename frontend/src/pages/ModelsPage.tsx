@@ -59,7 +59,12 @@ export function ModelsPage() {
                     const known = species.get(model.code);
                     return (
                       <li key={model.code}>
-                        <ModelSwatch model={model} modelKey={model.code} size={60} />
+                        <ModelSwatch
+                          model={model}
+                          modelKey={model.code}
+                          size={60}
+                          style="illustrated"
+                        />
                         <div>
                           <b>{model.name}</b>
                           {known ? <i>{known.name_lat}</i> : null}
@@ -86,6 +91,7 @@ export function ModelsPage() {
                   modelKey="~existing-tree"
                   look="existing"
                   size={60}
+                  style="illustrated"
                 />
                 <div>
                   <b>Дерево по съёмке</b>
@@ -98,6 +104,7 @@ export function ModelsPage() {
                   modelKey="~existing-shrub"
                   look="existing"
                   size={60}
+                  style="illustrated"
                 />
                 <div>
                   <b>Кустарник по съёмке</b>

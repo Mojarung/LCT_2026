@@ -25,6 +25,15 @@
       } catch {
         /* приватный режим: остаёмся на бумаге */
       }
+      // Стиль карты - тоже до отрисовки: инженерный чертёж по умолчанию, иллюстрация по кнопке
+      // (src/map/style.ts, ключ green-map-style).
+      try {
+        const style = localStorage.getItem('green-map-style');
+        document.documentElement.dataset.mapStyle =
+          style === 'illustrated' ? 'illustrated' : 'engineering';
+      } catch {
+        document.documentElement.dataset.mapStyle = 'engineering';
+      }
     </script>
   </head>
   <body>

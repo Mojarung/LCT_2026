@@ -199,7 +199,9 @@ export type Geometry =
 
 export interface BasemapFeature {
   type: 'Feature';
-  properties: { class: string };
+  /** conifer - существующее дерево со знаком хвойного из съёмки (application/basemap.py);
+   *  у остальных объектов ключа нет. */
+  properties: { class: string; conifer?: boolean };
   geometry: Geometry;
 }
 

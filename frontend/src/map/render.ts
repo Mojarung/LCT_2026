@@ -15,7 +15,9 @@ import { EXISTING_SHRUB, EXISTING_TREE, modelKey, modelOf } from './models';
 import { type Palette, VERDICT_TOKEN } from './palette';
 import { paintMaterial, pinToScreen, type Textures, texturesFor } from './paper';
 import { isWeak } from './picking';
+import { drawExistingSigns, drawPlanSigns, signInk, type SignLook } from './signs';
 import { type Look, sprite, stamp } from './sprites';
+import type { MapStyle } from './style';
 import type { Area, Layers, MapItem, SurfaceImage, ViewState } from './types';
 import { niceLength, toScreen, worldBounds } from './view';
 
@@ -94,7 +96,10 @@ export function renderBase(
   scene: Scene,
   layers: Layers,
   palette: Palette,
+  style: MapStyle = 'illustrated',
 ): BaseCache {
+  // Инженерный стиль - плоский чертёж: без фактур травы и асфальта, без теней зданий.
+  const flat = style === 'engineering';
   const width = rect.width + PAD * 2;
   const height = rect.height + PAD * 2;
   if (base.width !== Math.round(width * dpr) || base.height !== Math.round(height * dpr)) {
@@ -112,7 +117,7 @@ export function renderBase(
   ctx.lineCap = 'butt';
 
   const visible = worldBounds(view, -PAD, -PAD, width, height);
-  const textures = texturesFor(ctx, palette, dpr);
+  const textures = flat ? null : texturesFor(ctx, palette, dpr);
   const place = (target: CanvasRenderingContext2D) => {
     worldTransform(target, view, dpr, PAD, PAD);
   };
@@ -125,6 +130,9 @@ export function renderBase(
     if (textures && soil && paved) {
       paintMaterial(ctx, paved, scene.surface, textures.asphalt, place);
       paintMaterial(ctx, soil, scene.surface, textures.grass, place);
+    } else if (flat && soil && paved) {
+      paintMaterial(ctx, paved, scene.surface, palette.get('--c-asphalt'), place);
+      paintMaterial(ctx, soil, scene.surface, palette.get('--c-lawn-fill'), place);
     } else {
       ctx.drawImage(img, x, y, w, h);
     }
@@ -140,9 +148,11 @@ export function renderBase(
   );
   // Тени зданий - отдельным проходом до заливок: тень соседнего куска не ложится на крышу.
   // Сдвиг в экранных пикселях: свет на слайдах всегда слева сверху.
-  worldTransform(ctx, view, dpr, PAD + SHADOW_PX, PAD + SHADOW_PX);
-  ctx.fillStyle = palette.get('--c-shadow');
-  for (const chunk of shown) if (chunk.shadow) ctx.fill(chunk.path);
+  if (!flat) {
+    worldTransform(ctx, view, dpr, PAD + SHADOW_PX, PAD + SHADOW_PX);
+    ctx.fillStyle = palette.get('--c-shadow');
+    for (const chunk of shown) if (chunk.shadow) ctx.fill(chunk.path);
+  }
   place(ctx);
   // Сети на бумаге тише, чем в CAD: на слайдах план - это газон, здания и посадки, а
   // сети - справка под ними. Насколько тише, решает тема (--utility-opacity).
@@ -168,7 +178,14 @@ export function renderBase(
   }
   ctx.globalAlpha = 1;
   if (layers.existing && scene.existing.length) {
-    drawExisting(ctx, visible, dpr, view, scene.existing, palette);
+    if (flat) {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+      drawExistingSigns(ctx, scene.existing, visible, view, signInk(palette));
+      ctx.restore();
+    } else {
+      drawExisting(ctx, visible, dpr, view, scene.existing, palette);
+    }
   }
   if (layers.labels && scene.labels.length && view.scale >= LABEL_MIN_SCALE) {
     drawLabels(ctx, visible, dpr, view, scene.labels, palette);
@@ -458,10 +475,14 @@ export function drawPlan(
   marks: Marks,
   palette: Palette,
   dpr: number,
+  style: MapStyle = 'illustrated',
 ): void {
   if (marks.layers.rejections) drawRejections(ctx, visible, view, scene, palette);
   if (marks.layers.barrier) drawBarrierPlaces(ctx, visible, view, scene, palette);
-  if (marks.layers.placements) drawPlacements(ctx, visible, view, scene, marks, palette, dpr);
+  if (marks.layers.placements) {
+    if (style === 'engineering') drawPlacementSigns(ctx, visible, view, scene, marks, palette, dpr);
+    else drawPlacements(ctx, visible, view, scene, marks, palette, dpr);
+  }
   if (marks.layers.placements && marks.layers.weak)
     drawWeak(ctx, visible, view, scene, marks, palette);
 }
@@ -497,16 +518,7 @@ function drawPlacements(
     const s = sprite(key, modelOf(p.species_code, p.planting_type), radius, look, dpr);
     const { sx, sy } = toScreen(view, p.x, p.y);
     stamp(ctx, s, sx, sy, radius);
-    if (look !== 'dim' && p.verdict !== 'allowed') {
-      const token = VERDICT_TOKEN[p.verdict] ?? '--warn';
-      let ring = rings.get(token);
-      if (!ring) {
-        ring = new Path2D();
-        rings.set(token, ring);
-      }
-      ring.moveTo(sx + radius + 3, sy);
-      ring.arc(sx, sy, radius + 3, 0, Math.PI * 2);
-    }
+    if (look !== 'dim') addVerdictRing(rings, p, sx, sy, radius);
   };
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -528,6 +540,34 @@ function drawPlacements(
     if (!inView(p, visible, p.radius + liftRadius)) continue;
     put(p, 'plan', false);
   }
+  strokeVerdictRings(ctx, rings, palette);
+  ctx.restore();
+}
+
+/** Кольцо вердикта вокруг знака: needs_approval - янтарное, запрет после переноса - красное. */
+function addVerdictRing(
+  rings: Map<string, Path2D>,
+  p: MapItem,
+  sx: number,
+  sy: number,
+  radius: number,
+): void {
+  if (p.verdict === 'allowed') return;
+  const token = VERDICT_TOKEN[p.verdict] ?? '--warn';
+  let ring = rings.get(token);
+  if (!ring) {
+    ring = new Path2D();
+    rings.set(token, ring);
+  }
+  ring.moveTo(sx + radius + 3, sy);
+  ring.arc(sx, sy, radius + 3, 0, Math.PI * 2);
+}
+
+function strokeVerdictRings(
+  ctx: CanvasRenderingContext2D,
+  rings: ReadonlyMap<string, Path2D>,
+  palette: Palette,
+): void {
   ctx.setLineDash([4, 3]);
   for (const [token, ring] of rings) {
     ctx.lineWidth = 3.5;
@@ -538,6 +578,50 @@ function drawPlacements(
     ctx.stroke(ring);
   }
   ctx.setLineDash([]);
+}
+
+/** Посадки знаками чертежа (signs.ts): яма дерева с контуром кроны, заштрихованный куст,
+ *  полоса живой изгороди. Проходы те же, что у моделей: приглушённые виды снизу, подсвеченный
+ *  вид поверх, выбранная и перетаскиваемая в режиме правки - последними. */
+function drawPlacementSigns(
+  ctx: CanvasRenderingContext2D,
+  visible: Box,
+  view: ViewState,
+  scene: Scene,
+  marks: Marks,
+  palette: Palette,
+  dpr: number,
+): void {
+  const ink = signInk(palette);
+  const rings = new Map<string, Path2D>();
+  const top = new Set<MapItem>();
+  if (marks.editing) {
+    if (marks.selected?.kind === 'placement') top.add(marks.selected);
+    if (marks.dragging) top.add(marks.dragging);
+  }
+  const hidden = (p: MapItem) => marks.speciesOff.has(p.species_code ?? '');
+  const dim = (p: MapItem) => marks.highlight !== null && p.species_code !== marks.highlight;
+  const ring = (p: MapItem, sx: number, sy: number, radius: number) => {
+    addVerdictRing(rings, p, sx, sy, radius);
+  };
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const bright: SignLook = marks.highlight !== null ? 'lift' : 'plan';
+  const passes: [SignLook, (p: MapItem) => boolean][] = [
+    ['dim', (p) => !hidden(p) && !top.has(p) && dim(p)],
+    [bright, (p) => !hidden(p) && !top.has(p) && !dim(p)],
+  ];
+  for (const [look, include] of passes) {
+    // Кольца вердикта у приглушённых не рисуются, как и у моделей.
+    drawPlanSigns(ctx, scene.placements, visible, view, ink, dpr, look, include, (p, sx, sy, r) => {
+      if (look !== 'dim') ring(p, sx, sy, r);
+    });
+  }
+  if (top.size) {
+    const list = [...top].filter((p) => !hidden(p));
+    drawPlanSigns(ctx, list, visible, view, ink, dpr, 'plan', () => true, ring);
+  }
+  strokeVerdictRings(ctx, rings, palette);
   ctx.restore();
 }
 

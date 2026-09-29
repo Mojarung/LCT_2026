@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from shapely.geometry.base import BaseGeometry
 
-    from green.application.basemap import Basemap
+    from green.application.basemap import Basemap, BasemapFeature
     from green.application.classification import ClassificationReport
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
@@ -675,12 +675,23 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
         "features": [
             {
                 "type": "Feature",
-                "properties": {"class": feature.object_class.value},
+                "properties": _basemap_properties(feature),
                 "geometry": orjson.loads(shapely.to_geojson(feature.geometry)),
             }
             for feature in basemap.features
         ],
     }
+
+
+def _basemap_properties(feature: BasemapFeature) -> dict[str, Any]:
+    """Класс объекта и, у хвойного существующего дерева, признак хвойного знака.
+
+    Признак пишется только там, где он есть: у десятков тысяч объектов подосновы лишний
+    ключ утяжелил бы выгрузку, которую браузер разбирает при открытии прогона.
+    """
+    if feature.conifer:
+        return {"class": feature.object_class.value, "conifer": True}
+    return {"class": feature.object_class.value}
 
 
 # Цвета карты покрытий: грунт - зеленоватый, твёрдое - серый, полупрозрачные, чтобы линии
