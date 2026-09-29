@@ -57,6 +57,57 @@ export function shrubStripLines(feature: BasemapFeature): Position[][] {
 export const SHRUB_STRIP_WIDTH_M = 0.8;
 export const SHRUB_STRIP_HEIGHT_M = 0.8;
 
+/** Метки ближе друг к другу - одно растение (как MERGE_M в application/stock.py). */
+export const MERGE_M = 1;
+
+/** Склеить отметки одного растения. Съёмка рисует одно дерево несколькими объектами: знаком,
+ *  кружком кроны, копией блока. Каждый объект даёт отметку, и в 3D-виде в одной точке встают
+ *  два-три ствола разных пород. Одиночная связь при MERGE_M, как на сервере: центр компоненты,
+ *  крона - наибольшая из склеенных. Деревья и кусты склеиваются раздельно. */
+export function mergePlants(plants: readonly ExistingPlant[]): ExistingPlant[] {
+  const parent = plants.map((_, i) => i);
+  const root = (i: number): number => {
+    let r = i;
+    while ((parent[r] ?? r) !== r) r = parent[r] ?? r;
+    parent[i] = r;
+    return r;
+  };
+  const cell = (v: number) => Math.floor(v / MERGE_M);
+  const grid = new Map<string, number[]>();
+  plants.forEach((p, i) => {
+    const cx = cell(p.x);
+    const cy = cell(p.y);
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (const j of grid.get(`${cx + dx}:${cy + dy}`) ?? []) {
+          const q = plants[j];
+          if (q && q.shrub === p.shrub && Math.hypot(q.x - p.x, q.y - p.y) <= MERGE_M)
+            parent[root(i)] = root(j);
+        }
+    const key = `${cx}:${cy}`;
+    const list = grid.get(key);
+    if (list) list.push(i);
+    else grid.set(key, [i]);
+  });
+  const groups = new Map<number, ExistingPlant[]>();
+  plants.forEach((p, i) => {
+    const r = root(i);
+    const list = groups.get(r);
+    if (list) list.push(p);
+    else groups.set(r, [p]);
+  });
+  return [...groups.values()].map((group) => {
+    const merged: ExistingPlant = {
+      x: group.reduce((s, p) => s + p.x, 0) / group.length,
+      y: group.reduce((s, p) => s + p.y, 0) / group.length,
+      r: Math.max(...group.map((p) => p.r)),
+      shrub: group.some((p) => p.shrub),
+    };
+    if (group.some((p) => p.conifer)) merged.conifer = true;
+    return merged;
+  });
+}
+
 /** Отметки существующих насаждений объекта или null, если объект - не одиночная крона. */
 export function plantsOf(feature: BasemapFeature): ExistingPlant[] | null {
   const kind = feature.properties.class;
