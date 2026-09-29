@@ -166,7 +166,7 @@ describe('RunPage: finished run', () => {
     expect(await within(left).findByText(/требуется проверка/)).toBeVisible();
     expect(left).not.toHaveTextContent('все без ограничений');
     expect(left).toHaveTextContent(
-      'У 40 из 40 посадок грунт под всей ямой не подтверждён замкнутыми контурами',
+      'Грунт под ямой не подтверждён у 40 из 40 посадок: уточните границы покрытий.',
     );
   });
 

@@ -108,7 +108,8 @@ export function plantShots(
   const request = { subject: [body], obstacles, framing: framing(), sun, occluders };
   const ground = planShots({ ...request, viewpoint: 'ground', count: 3 });
   const aerial = planShots({ ...request, viewpoint: 'aerial', count: 1 });
-  return [...ground, ...aerial].map((s, i) => ({
+  // Кадр сверху - первым: крону в густой посадке с тротуара часто заслоняют кусты и соседи.
+  return [...aerial, ...ground].map((s, i) => ({
     key: `${id}-${i}`,
     pose: s.pose,
     viewpoint: s.viewpoint,

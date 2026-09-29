@@ -296,7 +296,7 @@
   .scene-bar {
     position: static;
     order: 3;
-    margin: 12px var(--gutter) 0;
+    margin: 12px var(--gutter) 16px;
     align-self: flex-start;
   }
   /* Пульт - полосой под сведениями, как правая панель рабочего места: поверх сцены он
@@ -315,9 +315,10 @@
 
 @media (max-width: 620px) {
   /* Полоса камеры в 390 px не помещается: прокрутка внутри полосы, а не у всей страницы. */
+  /* В 390 px кнопки переносятся на вторую строку: прокрутку внутри полосы никто не замечал. */
   .scene-bar {
-    max-width: calc(100% - var(--inset) * 2);
-    overflow-x: auto;
+    max-width: calc(100% - var(--gutter) * 2);
+    flex-wrap: wrap;
   }
   .scene-bar button,
   .scene-bar .scene-speed {
@@ -483,5 +484,30 @@
     margin: var(--inset);
     width: auto;
     max-height: calc(100% - var(--inset) * 2);
+  }
+}
+
+/* Четыре кадра посадки - два на два, а не три и один. Карточка - колонка, кнопки прижаты к низу:
+   разная длина списка видов не сдвигает их. */
+.gallery-grid[data-count='4'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+}
+.gallery-species {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.gallery-actions {
+  margin-top: auto;
+  padding-top: 8px;
+}
+@media (max-width: 640px) {
+  .gallery-grid[data-count='4'] {
+    grid-template-columns: 1fr;
   }
 }

@@ -168,7 +168,7 @@ export function ShotGallery({
       )}
       {error ? <p className="notice">{error}</p> : null}
       {busy && !shots.length ? <p role="status">Снимаю кадры…</p> : null}
-      <ul className="gallery-grid">
+      <ul className="gallery-grid" data-count={shots.length}>
         {shots.map((shot) => {
           const photo = requested[shot.key] ? byId.get(requested[shot.key] ?? '') : undefined;
           return (
