@@ -41,7 +41,7 @@ from green.application.params import active_distance_rules, species_distance_rul
 from green.application.places import place_map, with_places
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
-from green.application.validation import validate_plan
+from green.application.validation import PlanValidation, validate_plan
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome, Placement, Rejection, Verdict
 
@@ -325,6 +325,28 @@ class RunContextCache:
         msg = "План прогона сейчас правят из другого окна или процесса. Повторите правку."
         raise ConflictError(msg)
 
+    def rebuildable(self, run_id: str) -> RunContext | None:
+        """Контекст для пересборки, если черновик проходит финальную проверку плана.
+
+        Пересборка пишет DXF только по плану без нарушений. Черновик с нарушением (перенос
+        впритык к кусту подлеска соседнего дерева) иначе упал бы в очереди и перевёл прогон
+        в «ошибку», а готовый результат пропал бы. Такой черновик отклоняется сразу, с
+        перечнем нарушений: прогон и прежний DXF не меняются. None - контекста нет.
+        """
+        context = self.get(run_id)
+        if context is None:
+            return None
+        validation = _validate_draft(context, context.plan, self._species.all())
+        if not validation.ok:
+            detail = "; ".join(f"{i.code}: {i.message}" for i in validation.issues[:5])
+            msg = (
+                "Черновик правок не проходит проверку плана, пересборка не запущена: "
+                f"{detail}. Перенесите посадку дальше или удалите её; прогон и прежний DXF "
+                "не изменены."
+            )
+            raise InputError(msg)
+        return context
+
     def _catch_up(self, context: RunContext) -> bool:
         """Применить правки журнала, которых в плане ещё нет. False - прогон удалён."""
         if self._store is None:
@@ -448,16 +470,7 @@ def apply_edits_detailed(
 def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> Plan:
     # Перенесённая и добавленная посадки - в новой точке: место и категория В.6 заново.
     plan = with_places(plan, place_map(context.features))
-    validation = validate_plan(
-        plan,
-        context.features,
-        context.labels,
-        context.rulebook,
-        context.params,
-        catalog=catalog,
-        existing=plan.assortment_summary.existing if plan.assortment_summary else None,
-        surface=context.surface_map(),
-    )
+    validation = _validate_draft(context, plan, catalog)
     # Keep the draft editable when spacing/quotas need further changes, but do
     # not advertise a quality index or removal advice for an invalid plan.
     plan = assess(plan, context.site(), context.params)
@@ -484,6 +497,20 @@ def _assess_edited(context: RunContext, plan: Plan, catalog: Sequence[Species]) 
             ),
         )
     return plan
+
+
+def _validate_draft(context: RunContext, plan: Plan, catalog: Sequence[Species]) -> PlanValidation:
+    """Проверка черновика теми же правилами, что финальная проверка пересборки."""
+    return validate_plan(
+        plan,
+        context.features,
+        context.labels,
+        context.rulebook,
+        context.params,
+        catalog=catalog,
+        existing=plan.assortment_summary.existing if plan.assortment_summary else None,
+        surface=context.surface_map(),
+    )
 
 
 def _rebuild_plan(

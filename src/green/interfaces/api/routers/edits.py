@@ -108,8 +108,14 @@ def edit(run_id: str, payload: EditsIn, container: ContainerDep) -> PlanSummaryO
 def rebuild(
     run_id: str, response: Response, background: BackgroundTasks, container: ContainerDep
 ) -> PlanSummaryOut:
-    """Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}."""
-    context = _context(container, run_id)
+    """Переписать result.dxf и все артефакты по исправленному плану. Статус: GET /runs/{id}.
+
+    Черновик с нарушением финальной проверки (например, шаг до соседней посадки меньше
+    нормы) не ставится в очередь: 422 с перечнем нарушений, прогон остаётся готовым.
+    """
+    context = container.contexts.rebuildable(run_id)
+    if context is None:
+        raise EditContextLostError(CONTEXT_LOST)
     background.add_task(container.runs.rebuild, run_id)
     response.headers["Location"] = f"/api/v1/runs/{run_id}"
     return PlanSummaryOut.from_plan(context.plan, stale=True)
