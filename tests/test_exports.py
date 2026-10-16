@@ -18,6 +18,8 @@ from green.infrastructure.reports.artifacts import write_result_layers, write_wo
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
 
 def test_workbook_has_the_schedule_and_every_check_with_numbers(tmp_path: Path) -> None:
     plan = _mixed_plan()
@@ -54,3 +56,30 @@ def test_result_layers_file_keeps_only_green_layers_in_source_coordinates(tmp_pa
         for e in doc.modelspace().query("INSERT")
     )
     assert copied == inserts
+
+
+def test_layers_file_saved_under_the_pending_name_is_reused_not_reread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Сценарий пишет результат во временный «.result.pending.dxf» и потом переименовывает;
+    писатель кладёт рядом «.result.pending_layers.dxf». Профиль Камчатской 17.10.2026: файл не
+    находился, и результат на сотни мегабайт читался заново (18 с из 210)."""
+    plan = _mixed_plan()
+    source = tmp_path / "source.dxf"
+    doc = ezdxf.new("R2018")
+    doc.modelspace().add_line((0, 0), (100, 0))
+    doc.saveas(source)
+    from green.infrastructure.cad.writer import EzdxfPlanWriter  # noqa: PLC0415
+
+    pending = tmp_path / ".result.pending.dxf"
+    EzdxfPlanWriter(text_font="DejaVuSans").write(source, plan, BOOK, pending, unit_m=1.0)
+    result = tmp_path / "result.dxf"
+    pending.replace(result)
+
+    def no_reread(*_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("result.dxf read again")
+
+    monkeypatch.setattr(ezdxf, "readfile", no_reread)
+    light = write_result_layers(result, tmp_path / "result_layers.dxf")
+    assert light.exists()
+    assert not (tmp_path / ".result.pending_layers.dxf").exists()  # служебный файл не остаётся

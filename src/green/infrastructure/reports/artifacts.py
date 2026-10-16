@@ -931,10 +931,20 @@ def write_result_layers(result: Path, target: Path) -> Path:
     Писатель плана сохраняет его рядом с result.dxf, пока чертёж в памяти; читать заново
     результат на сотни мегабайт приходится, только если такого файла нет.
     """
-    ready = result.with_name(f"{result.stem}{RESULT_LAYERS_SUFFIX}")
-    if ready.exists():
+    # Сценарий пишет результат во временный скрытый файл и переименовывает его: слои тогда
+    # лежат под временным именем («.result.pending_layers.dxf») и переезжают на место.
+    candidates = [
+        result.with_name(f"{result.stem}{RESULT_LAYERS_SUFFIX}"),
+        *sorted(
+            result.parent.glob(f".*{RESULT_LAYERS_SUFFIX}"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        ),
+    ]
+    ready = next((path for path in candidates if path.exists()), None)
+    if ready is not None:
         if ready != target:
-            target.write_bytes(ready.read_bytes())
+            ready.replace(target)
         return target
     return save_result_layers(ezdxf.readfile(result), target)
 
