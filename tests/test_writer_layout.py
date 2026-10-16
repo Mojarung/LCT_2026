@@ -447,3 +447,18 @@ def test_legend_says_which_norms_closed_the_soil(tmp_path: Path) -> None:
     legend = " ".join(e.text for e in doc.modelspace().query("MTEXT"))
     assert "Почему пусто" in legend
     assert "R-WATER-TREE-001 412" in legend
+
+
+def test_source_style_named_unicode_is_left_alone(tmp_path: Path) -> None:
+    """Ревью 16.10.2026: у исходника может быть свой «Unicode» (имена стилей без регистра) со
+    шрифтом без кириллицы - стиль исходника не меняется, подписи идут стилем «cyrillic_ii»."""
+    source = tmp_path / "source.dxf"
+    doc = ezdxf.new("R2018")
+    doc.styles.add("Unicode", font="simplex.shx")
+    doc.modelspace().add_line((0, 0), (100, 0))
+    doc.saveas(source)
+    out = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
+    assert out.styles.get("Unicode").dxf.font == "simplex.shx"
+    labels = [e for e in out.modelspace().query("TEXT") if e.dxf.layer.startswith("GREEN_")]
+    assert labels
+    assert {e.dxf.style for e in labels} == {"cyrillic_ii"}

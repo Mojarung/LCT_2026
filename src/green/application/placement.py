@@ -30,6 +30,7 @@ from green.application.constraints import (
     work_boundary,
 )
 from green.application.errors import InputError
+from green.application.kerbs import is_kerb
 from green.application.params import (
     REJECTIONS_CEILING,
     active_distance_rules,
@@ -400,7 +401,7 @@ def _curb_lines(
 ) -> list[LineString]:
     parts = []
     for feature in features:
-        if feature.object_class is not ObjectClass.CURB:
+        if not is_kerb(feature):
             continue
         geometry = feature.geometry
         if geometry.geom_type in {"Polygon", "MultiPolygon"}:
@@ -985,7 +986,7 @@ def _warnings(
         warnings.append(
             "Заполнение газона пропущено: без карты покрытий сервис не знает, где грунт."
         )
-    if MODE_ALLEY in params.modes and not any(f.object_class is ObjectClass.CURB for f in features):
+    if MODE_ALLEY in params.modes and not any(is_kerb(f) for f in features):
         warnings.append("В чертеже не найден бортовой камень: рядовая посадка не построена.")
     if not index.has_utility_data:
         warnings.append(

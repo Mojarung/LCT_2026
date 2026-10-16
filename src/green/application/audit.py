@@ -322,6 +322,8 @@ class AuditSite:
             features, kerb_note = refine_kerbs(features)
             if kerb_note:
                 notes = (*notes, kerb_note)
+            # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
+            semantics = classification_report(replace(base, features=features), layer_map, params)
             found, skipped = _plantings(on_layers)
         with watch.stage("check"):
             plantings = _check(found, features, rulebook, params, typer)

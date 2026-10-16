@@ -257,6 +257,8 @@ class PlanSite:
             features, kerb_note = refine_kerbs(features)
             if kerb_note:
                 scene = replace(scene, warnings=(*scene.warnings, kerb_note))
+            # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
+            semantics = classification_report(replace(scene, features=features), layer_map, params)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):

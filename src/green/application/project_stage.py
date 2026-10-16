@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import shapely
 
-from green.domain.objects import ObjectClass
+from green.domain.objects import ClassificationEvidence, ObjectClass
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from green.domain.objects import Feature
 
 EDGE_INSIDE_LAWN_M = 0.15  # глубже внутрь газона - линия не его край
-MIN_PIECE_M = 0.5
+METHOD = "context:inside_project_lawn"
 
 
 def drop_edges_inside_lawn(features: Sequence[Feature]) -> tuple[tuple[Feature, ...], int]:
@@ -35,7 +35,16 @@ def drop_edges_inside_lawn(features: Sequence[Feature]) -> tuple[tuple[Feature, 
     ]
     if not lawns:
         return tuple(features), 0
-    inner = shapely.union_all(lawns).buffer(-EDGE_INSIDE_LAWN_M)
+    hard = [
+        f.geometry
+        for f in features
+        if f.object_class in {ObjectClass.SIDEWALK, ObjectClass.ROAD} and f.geometry.area > 0
+    ]
+    merged = shapely.union_all(lawns)
+    if hard:
+        # Газон съёмки под новым тротуаром - уже не газон: край нового покрытия остаётся.
+        merged = merged.difference(shapely.union_all(hard))
+    inner = merged.buffer(-EDGE_INSIDE_LAWN_M)
     if inner.is_empty:
         return tuple(features), 0
     shapely.prepare(inner)
@@ -48,9 +57,20 @@ def drop_edges_inside_lawn(features: Sequence[Feature]) -> tuple[tuple[Feature, 
             out.append(feature)
             continue
         rest = _lines(feature.geometry.difference(inner))
+        gone = _lines(feature.geometry.intersection(inner))
         touched += 1
-        if rest.length >= MIN_PIECE_M:
+        if rest.length > 0:
             out.append(replace(feature, geometry=rest))
+        if gone.length > 0:
+            # Снятая часть остаётся в отчёте классификации с основанием, но отступа не даёт.
+            out.append(
+                replace(
+                    feature,
+                    geometry=gone,
+                    object_class=ObjectClass.IGNORE,
+                    classification=ClassificationEvidence(METHOD),
+                )
+            )
     return tuple(out), touched
 
 

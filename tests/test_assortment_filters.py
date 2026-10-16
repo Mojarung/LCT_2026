@@ -365,3 +365,10 @@ def test_assortment_filter_can_be_switched_off() -> None:
     params = replace(PARAMS, mos_assortment=False)
     verdict = species_verdict(thuja, replace(_ctx_of(), category="streets"), RULEBOOK, params)
     assert verdict.allowed
+
+
+def test_given_assortment_is_not_cut_by_the_recommendation() -> None:
+    thuja = CATALOG.get("thuja_occidentalis")
+    params = replace(PARAMS, assortment_mode="given", given_assortment={thuja.code: 10})
+    verdict = species_verdict(thuja, replace(_ctx_of(), category="streets"), RULEBOOK, params)
+    assert verdict.allowed

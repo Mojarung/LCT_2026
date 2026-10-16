@@ -915,6 +915,10 @@ def write_workbook(path: Path, plan: Plan, rulebook: RuleBook) -> Path:
 
 
 def _cell(value: object) -> object:
+    """Текст, начинающийся с «=», Excel прочёл бы формулой (имена слоёв чужого DXF): апостроф
+    впереди делает его текстом."""
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return "'" + value
     if value is None or isinstance(value, (int, float, str)):
         return value
     return str(value)

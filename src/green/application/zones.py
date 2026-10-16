@@ -62,7 +62,30 @@ def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
     return tuple(zones)
 
 
+# Варианты портфеля строят свой индекс, а грунт и правила у них одни: доли считаются один раз
+# на прогон (ревью 16.10.2026 - вторая пачка проверок на весь грунт в каждом варианте).
+_BLOCKED_CACHE: dict[tuple[object, ...], dict[str, float]] = {}
+_BLOCKED_CACHE_SIZE = 4
+
+
 def blocked_shares(index: ConstraintIndex, cell_m: float) -> dict[str, float]:
+    surface = index.surface
+    # id объекта переиспользуется после сборки мусора: ключ держит и сам растр грунта.
+    shape = (
+        None
+        if surface is None
+        else (surface.origin, surface.cell, surface.grid.shape, int(surface.grid.sum()))
+    )
+    bounds = None if index.boundary is None else index.boundary.bounds
+    key = (id(surface), shape, bounds, cell_m, index._rules_key)  # noqa: SLF001
+    if key not in _BLOCKED_CACHE:
+        if len(_BLOCKED_CACHE) >= _BLOCKED_CACHE_SIZE:
+            _BLOCKED_CACHE.pop(next(iter(_BLOCKED_CACHE)))
+        _BLOCKED_CACHE[key] = _blocked_shares(index, cell_m)
+    return dict(_BLOCKED_CACHE[key])
+
+
+def _blocked_shares(index: ConstraintIndex, cell_m: float) -> dict[str, float]:
     """Сколько грунта закрыла каждая норма: «почему здесь пусто» (идея LPN1KoL, `blocked_by`).
 
     Те же ячейки грунта, что у зон. Ячейка закрыта нормой, если в её центре норма не пройдена;

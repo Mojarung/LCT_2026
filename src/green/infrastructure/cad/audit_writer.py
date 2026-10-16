@@ -9,6 +9,7 @@ from green.application.results import SourceSnapshot
 from green.domain.planting import Verdict
 from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
 from green.infrastructure.cad.integrity import fingerprints
+from green.infrastructure.cad.writer import text_style
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
 # LibreCAD ищет штриховой шрифт по имени стиля: «unicode» - его unicode.lff с кириллицей;
 # AutoCAD и nanoCAD берут файл шрифта стиля (TTF). Стиль «GREEN_TEXT» LibreCAD рисовал
 # ромбиками (docker/cadcheck, 16.10.2026).
-TEXT_STYLE = "unicode"
 LAYER_VIOLATION = f"{RESULT_PREFIX}AUDIT_VIOLATION"
 LAYER_BARRIER = f"{RESULT_PREFIX}AUDIT_BARRIER"
 LAYER_APPROVAL = f"{RESULT_PREFIX}AUDIT_APPROVAL"
@@ -53,6 +53,7 @@ class EzdxfAuditWriter:
         documents: DocumentCache | None = None,
     ) -> None:
         self._font = text_font
+        self._style = "unicode"
         self._height = label_height_m
         self._documents = documents
 
@@ -86,9 +87,8 @@ class EzdxfAuditWriter:
         for name, color in AUDIT_LAYER_COLORS.items():
             if name not in doc.layers:
                 doc.layers.add(name, color=color)
-        if TEXT_STYLE not in doc.styles:
-            doc.styles.add(TEXT_STYLE, font=self._font)
-        attribs = {"height": self._height, "style": TEXT_STYLE}
+        self._style = text_style(doc, self._font)
+        attribs = {"height": self._height, "style": self._style}
         if MARK_BLOCK not in doc.blocks:
             block = doc.blocks.new(MARK_BLOCK)
             block.add_circle((0, 0), radius=MARK_RADIUS_M)
@@ -153,7 +153,7 @@ class EzdxfAuditWriter:
             "\\P".join(lines),
             dxfattribs={
                 "layer": LAYER_LABELS,
-                "style": TEXT_STYLE,
+                "style": self._style,
                 "char_height": self._height * 2 * scale,
             },
         )

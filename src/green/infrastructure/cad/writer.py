@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 # AutoCAD и nanoCAD берут файл шрифта стиля (TTF). Стиль «GREEN_TEXT» LibreCAD рисовал
 # ромбиками (docker/cadcheck, 16.10.2026).
 TEXT_STYLE = "unicode"
+FALLBACK_STYLE = "cyrillic_ii"
 LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
 LAYER_TREES_BARRIER = f"{RESULT_PREFIX}TREES_BARRIER"
@@ -118,6 +119,7 @@ class EzdxfPlanWriter:
         documents: DocumentCache | None = None,
     ) -> None:
         self._font = text_font
+        self._style = "unicode"
         self._height = label_height_m
         self._documents = documents
 
@@ -174,15 +176,14 @@ class EzdxfPlanWriter:
         for name, color in LAYER_COLORS.items():
             if name not in doc.layers:
                 doc.layers.add(name, color=color)
-        if TEXT_STYLE not in doc.styles:
-            doc.styles.add(TEXT_STYLE, font=self._font)
+        self._style = text_style(doc, self._font)
         if REJECT_BLOCK not in doc.blocks:
             block = doc.blocks.new(REJECT_BLOCK)
             half = REJECT_HALF_M
             block.add_line((-half, -half), (half, half))
             block.add_line((-half, half), (half, -half))
             block.add_attdef(
-                "NUM", (0.6, 0.2), dxfattribs={"height": self._height, "style": TEXT_STYLE}
+                "NUM", (0.6, 0.2), dxfattribs={"height": self._height, "style": self._style}
             )
 
     def _tree_block(self, doc: Drawing, species: Species) -> str:
@@ -197,7 +198,7 @@ class EzdxfPlanWriter:
             # объяснением. Позицию ведомости на плане рисует обычный TEXT на месте атрибута POS
             # (_placement): LibreCAD атрибуты вставок не рисует, а видимый POS рядом с текстом
             # nanoCAD показал бы дважды.
-            hidden = {"height": self._height, "style": TEXT_STYLE, "flags": 1}
+            hidden = {"height": self._height, "style": self._style, "flags": 1}
             block.add_attdef("POS", POSITION_OFFSET_M, dxfattribs=hidden)
             block.add_attdef("NUM", (0.4, -0.4 - self._height), dxfattribs=hidden)
             block.add_attdef("SPECIES", (0.4, -0.8 - 2 * self._height), dxfattribs=hidden)
@@ -251,7 +252,7 @@ class EzdxfPlanWriter:
             height=self._height * scale,
             dxfattribs={
                 "layer": LAYER_LABELS,
-                "style": TEXT_STYLE,
+                "style": self._style,
                 "insert": ((placement.x + dx) * scale, (placement.y + dy) * scale),
             },
         )
@@ -364,7 +365,7 @@ class EzdxfPlanWriter:
             text = f"добавлена вручную: {mark.species_ru}"
         label = msp.add_text(
             text,
-            dxfattribs={**attribs, "height": self._height * scale, "style": TEXT_STYLE},
+            dxfattribs={**attribs, "height": self._height * scale, "style": self._style},
         )
         label.set_placement((x + half, y - half - self._height * scale))
         label.set_xdata(APPID, [(1000, mark.placement_id)])
@@ -413,7 +414,7 @@ class EzdxfPlanWriter:
             "\\P".join(lines),
             dxfattribs={
                 "layer": LAYER_LABELS,
-                "style": TEXT_STYLE,
+                "style": self._style,
                 "char_height": height,
                 # Ширина колонки: CAD переносит длинные цитаты внутри неё, а не тянет строку
                 # на десятки метров поверх чертежа.
@@ -444,7 +445,7 @@ class EzdxfPlanWriter:
         y0 = extent[3] * scale
         widths = [w * height for _, w in SCHEDULE_COLUMNS]
         right = x0 + sum(widths)
-        attribs = {"layer": LAYER_SCHEDULE, "style": TEXT_STYLE, "height": height}
+        attribs = {"layer": LAYER_SCHEDULE, "style": self._style, "height": height}
         msp.add_text("Ведомость элементов озеленения", dxfattribs=attribs).set_placement(
             (x0, y0 + height)
         )
@@ -513,6 +514,19 @@ def save_result_layers(source: Drawing, target: Path) -> Path:
     importer.finalize()
     light.saveas(target)
     return target
+
+
+def text_style(doc: Drawing, font: str) -> str:
+    """Стиль подписей результата: «unicode», а если в исходнике уже есть свой «unicode» с другим
+    шрифтом (имена стилей в DXF без регистра) - «cyrillic_ii»: оба имени LibreCAD сопоставляет
+    своему шрифту с кириллицей, а стиль исходника не трогается (ревью 16.10.2026)."""
+    for name in (TEXT_STYLE, FALLBACK_STYLE):
+        if name not in doc.styles:
+            doc.styles.add(name, font=font)
+            return name
+        if str(doc.styles.get(name).dxf.font).lower() == font.lower():
+            return name
+    return TEXT_STYLE
 
 
 def plan_extent(plan: Plan) -> tuple[float, float, float, float] | None:

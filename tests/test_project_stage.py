@@ -58,3 +58,13 @@ def test_kerb_inside_a_lawn_is_not_touched() -> None:
     refined, dropped = drop_edges_inside_lawn((LAWN_A, kerb))
     assert _length(refined, "K", C.CURB) == pytest.approx(6.0)
     assert dropped == 0
+
+
+def test_dropped_part_stays_visible_with_its_reason() -> None:
+    """Ревью 16.10.2026: пересмотр класса виден в classification.json с основанием."""
+    old = _f("E", C.PAVEMENT_EDGE, LineString([(2, 5), (18, 5)]))
+    refined, _ = drop_edges_inside_lawn((LAWN_A, LAWN_B, WALK, old))
+    ignored = [f for f in refined if f.ref.handle == "E" and f.object_class is C.IGNORE]
+    assert ignored
+    assert ignored[0].classification is not None
+    assert ignored[0].classification.method == "context:inside_project_lawn"

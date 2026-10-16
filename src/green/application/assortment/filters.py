@@ -123,6 +123,8 @@ def _mos_assortment(
     column = _MOS_COLUMN.get(ctx.category or params.planting_category)
     if not params.mos_assortment or column is None or column not in species.mos_marks:
         return None
+    if params.assortment_mode == "given":
+        return None  # заданный пользователем ассортимент рекомендация не режет
     where = f"ассортимент Москвы для {_MOS_LABEL[column]} ({species.mos_ref})"
     if not species.mos_marks[column]:
         return Reason(REFERENCE, f"не рекомендован: {where}", source=MOS_SOURCE)
