@@ -16,17 +16,25 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from ezdxf.entities import LWPolyline
-from ezdxf.entities.boundary_paths import ArcEdge, EdgePath, EllipseEdge, LineEdge, PolylinePath
+from ezdxf.entities import LWPolyline, Spline
+from ezdxf.entities.boundary_paths import (
+    ArcEdge,
+    EdgePath,
+    EllipseEdge,
+    LineEdge,
+    PolylinePath,
+    SplineEdge,
+)
 from ezdxf.math import Vec2
 from shapely import STRtree
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import LineString, MultiPolygon, Polygon
 
 from green.infrastructure.cad.curve_paths import (
     MAX_VERTICES,
     arc_tool_vertices,
     ellipse_tool_vertices,
     polyline_vertices,
+    spline_vertices,
 )
 
 if TYPE_CHECKING:
@@ -38,6 +46,8 @@ if TYPE_CHECKING:
 EVEN_ODD = "hatch-even-odd"
 GAP_CLOSED = "hatch-gap-closed"
 OUTLINE = "hatch-outline"
+# Контур без площади (одно ребро-отрезок, фрагмент после конвертера): CAD его не заливает.
+DEGENERATE = "hatch-degenerate-ring"
 
 
 class HatchGeometryError(ValueError):
@@ -49,7 +59,11 @@ def hatch_geometry(
 ) -> tuple[BaseGeometry, float, tuple[str, ...]]:
     """Область штриховки, наибольшая погрешность и починки контура (пусто - контур точен)."""
     _require_supported(entity)
-    rings, errors, repairs = _rings(entity, distance)
+    rings, errors, repairs, lines = _rings(entity, distance)
+    if not rings:
+        # Ни одного контура с площадью: CAD рисует только линии контуров - они и читаются.
+        repairs |= {DEGENERATE, OUTLINE}
+        return shapely.union_all(lines), max(errors), tuple(sorted(repairs))
     if all(ring.is_valid and ring.area > 0 for ring in rings):
         try:
             return _nested_area(rings), max(errors), tuple(sorted(repairs))
@@ -76,10 +90,13 @@ def _require_supported(entity: DXFPolygon) -> None:
         raise HatchGeometryError("hatch-style-not-supported")
 
 
-def _rings(entity: DXFPolygon, distance: float) -> tuple[list[Polygon], list[float], set[str]]:
-    """Контуры, которые CAD заливает при стиле штриховки, в координатах чертежа."""
+def _rings(
+    entity: DXFPolygon, distance: float
+) -> tuple[list[Polygon], list[float], set[str], list[LineString]]:
+    """Контуры, которые CAD заливает при стиле штриховки, в координатах чертежа, и линии
+    контуров без площади (меньше трёх вершин), которые CAD не заливает."""
     ocs, elevation = entity.ocs(), entity.dxf.elevation.z
-    rings, errors, repairs = [], [], set()
+    rings, errors, repairs, lines = [], [], set(), []
     vertices_used = 0
     for path in entity.paths.rendering_paths(entity.dxf.hatch_style):
         points, error, closed_gap = _ring(path, distance)
@@ -89,6 +106,13 @@ def _rings(entity: DXFPolygon, distance: float) -> tuple[list[Polygon], list[flo
         if vertices_used > MAX_VERTICES:
             raise HatchGeometryError("hatch-vertex-budget-exceeded")
         vertices = [ocs.to_wcs((x, y, elevation)) for x, y in points]
+        unique = {(round(v.x, 9), round(v.y, 9)) for v in vertices}
+        if len(unique) < 3:  # noqa: PLR2004 - minimum polygon vertex count
+            repairs.add(DEGENERATE)
+            errors.append(error)
+            if len(unique) == 2:  # noqa: PLR2004 - a segment, a point draws nothing
+                lines.append(LineString([(v.x, v.y) for v in vertices]))
+            continue
         polygon = Polygon([(v.x, v.y) for v in vertices])
         if not np.isfinite(shapely.get_coordinates(polygon)).all():
             raise HatchGeometryError("hatch-non-finite-coordinates")
@@ -96,9 +120,9 @@ def _rings(entity: DXFPolygon, distance: float) -> tuple[list[Polygon], list[flo
             raise HatchGeometryError("hatch-invalid-ring")
         rings.append(polygon)
         errors.append(error)
-    if not rings:
+    if not rings and not lines:
         raise HatchGeometryError("hatch-no-rendered-boundary")
-    return rings, errors, repairs
+    return rings, errors, repairs, lines
 
 
 def _ring(
@@ -114,7 +138,7 @@ def _ring(
         points, error, closed_gap = _edge_ring(path, distance)
     else:
         raise HatchGeometryError("hatch-boundary-type-not-supported")
-    if len(points) < 3:  # noqa: PLR2004 - minimum polygon vertex count
+    if len(points) < 2:  # noqa: PLR2004 - a loop needs at least a segment
         raise HatchGeometryError("hatch-degenerate-ring")
     gap = Vec2(points[0]).distance(Vec2(points[-1]))
     # A closed polyline includes its closing edge by definition. A real gap is closed by a
@@ -155,11 +179,31 @@ def _edge_vertices(edge: AbstractEdge, distance: float) -> tuple[list[Vec2], flo
     elif isinstance(edge, EllipseEdge):
         sampled, _ = ellipse_tool_vertices(edge.construction_tool(), distance)
         vertices, tolerance = [Vec2(v) for v in sampled], distance
+    elif isinstance(edge, SplineEdge):
+        # Сплайн ребра идёт в своём направлении, флага ccw у него нет.
+        return _spline_edge_vertices(edge, distance)
     else:
         raise HatchGeometryError("hatch-curve-bound-not-supported")
     if not edge.ccw:
         vertices.reverse()
     return vertices, tolerance
+
+
+def _spline_edge_vertices(edge: SplineEdge, distance: float) -> tuple[list[Vec2], float]:
+    """Ребро-сплайн контура - та же кривая, что сущность SPLINE: та же строгая оценка.
+
+    Сплайн только из точек прохождения CAD строит своей интерполяцией - он остаётся пробелом.
+    """
+    spline = Spline.new(dxfattribs={"degree": edge.degree})
+    spline.control_points = [(p.x, p.y, 0.0) for p in map(Vec2, edge.control_points)]
+    spline.knots = list(edge.knot_values)
+    if edge.weights:
+        spline.weights = list(edge.weights)
+    try:
+        points, tolerance = spline_vertices(spline, distance)
+    except ValueError as error:
+        raise HatchGeometryError("hatch-curve-bound-not-supported") from error
+    return [Vec2(point) for point in points], tolerance
 
 
 def _even_odd_area(rings: list[Polygon]) -> Polygon | MultiPolygon:

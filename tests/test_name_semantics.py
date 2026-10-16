@@ -59,8 +59,8 @@ C = ObjectClass
         ("!!Взлёт_ПОС_Ограждение", C.FENCE),
         ("A-HATCH-WALL", C.BUILDING),
         ("ДВ_ГП_П_Воздуховоды", C.STRUCTURE),
-        ("ДВ_ГП_П_Стела", C.STRUCTURE),
-        ("!Project_road stairs", C.STRUCTURE),
+        ("ДВ_ГП_П_Стела", C.OBSTACLE),  # стела - не подпорная стенка (аудит 16.10.2026)
+        ("!Project_road stairs", C.OBSTACLE),
         ("!Project_construction retaining wall", C.STRUCTURE),
         ("ДВ_ГП_П_МАФ", C.OBSTACLE),
         # Сети, опоры, колодцы.

@@ -75,7 +75,7 @@ symbols:
   STOLBG: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "столб"}
   STOLBM: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "столб металлический (штрихованный кружок)"}
   SVETFR: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "светофор"}
-  DORZN1: {class: pole, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "дорожный знак на стойке"}
+  DORZN1: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "дорожный знак на стойке: не опора освещения, правило 4 м к нему не относится (аудит 16.10.2026)"}
 
   # --- прочие препятствия в точке ---
   AFIS: {class: obstacle, role: point, confirmed: true, source: "УЗ 1:500, рисунок", note: "афишная тумба"}
