@@ -8,6 +8,7 @@ import ezdxf
 import pytest
 from ezdxf.acis import api as acis
 from ezdxf.render import forms
+from shapely.geometry import Point
 from test_pipeline_synthetic import ROOT, _street
 
 from green.application.errors import InputError
@@ -79,19 +80,24 @@ def test_error_headline_names_what_is_missing_in_plain_words() -> None:
     assert "\N{EM DASH}" not in message
 
 
-@pytest.mark.parametrize("kind", ["region", "3dsolid", "body"])
-def test_unread_acis_is_blocking_even_if_payload_is_present(tmp_path: Path, kind: str) -> None:
+@pytest.mark.parametrize("kind", ["3dsolid", "body"])
+def test_volume_with_acis_is_read_as_its_plan_footprint(tmp_path: Path, kind: str) -> None:
+    """Тело (дом, сооружение в 3D-чертеже) - след на плане, а не пробел, останавливающий
+    расчёт: синтетические участки других финалистов (17.10.2026) останавливались на одном
+    теле. Куб 1 x 1 x 1 даёт квадрат 1 м²."""
     doc = ezdxf.new("R2018")
     entity = getattr(doc.modelspace(), f"add_{kind}")()
     acis.export_dxf(entity, [acis.body_from_mesh(forms.cube())])
     path = tmp_path / "solid.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
-    with pytest.raises(InputError, match=kind.upper()):
-        require_complete_geometry(scene)
+    require_complete_geometry(scene)
+    footprints = [f for f in scene.features if f.source_entity_type == kind.upper()]
+    assert len(footprints) == 1
+    assert footprints[0].geometry.area == pytest.approx(1.0, abs=1e-6)
 
 
-def test_spatial_gap_inside_rotated_block_is_not_annotation(tmp_path: Path) -> None:
+def test_mesh_inside_rotated_block_is_read_as_its_footprint(tmp_path: Path) -> None:
     doc = ezdxf.new("R2018")
     block = doc.blocks.new("unknown geometry")
     mesh = block.add_mesh()
@@ -102,9 +108,10 @@ def test_spatial_gap_inside_rotated_block_is_not_annotation(tmp_path: Path) -> N
     path = tmp_path / "mesh.dxf"
     doc.saveas(path)
     scene = EzdxfSceneReader().read(path, unit="m")
-    with pytest.raises(InputError, match="MESH"):
-        require_complete_geometry(scene)
-    assert scene.read_diagnostics.geometry_gaps[0].block == block.name
+    require_complete_geometry(scene)
+    footprint = next(f for f in scene.features if f.source_entity_type == "MESH")
+    assert footprint.geometry.area == pytest.approx(100.0, rel=1e-6)
+    assert footprint.geometry.contains(Point(200 + 5 * 0.866 - 5 * 0.5, 100 + 5 * 0.5 + 5 * 0.866))
 
 
 def test_mask_inside_rotated_block_is_an_accounted_underlay(tmp_path: Path) -> None:

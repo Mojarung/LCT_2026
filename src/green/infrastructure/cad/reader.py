@@ -132,6 +132,11 @@ _SKIPPED = frozenset(
 )
 
 
+# Тела 3D-чертежей: дом или сооружение моделью, а не контуром. На плане они - след (проекция
+# граней), а не пробел чтения (синтетические участки других финалистов, 17.10.2026).
+_VOLUMES = frozenset({"MESH", "3DSOLID", "BODY", "SURFACE"})
+
+
 class EzdxfSceneReader:
     def __init__(
         self, *, flatten_distance_m: float = 0.1, documents: DocumentCache | None = None
@@ -234,6 +239,8 @@ class _Walker:
             outcome = self._drawn(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
         elif kind == "REGION":
             outcome = self._region(entity, ref, layer, parent_block, owner)  # ty: ignore[invalid-argument-type]
+        elif kind in _VOLUMES:
+            outcome = self._volume(entity, ref, layer, parent_block, owner)
         elif kind in _SKIPPED or kind in UNDERLAYS:
             outcome = self._not_drawn(entity, layer, parent_block, ref)
         else:
@@ -405,6 +412,46 @@ class _Walker:
             )
         )
         return "feature"
+
+    def _volume(
+        self, entity: DXFGraphic, ref: SourceRef, layer: str, block: str | None, owner: str | None
+    ) -> str:
+        """Тело - след на плане: объединение проекций граней. Не вышло - пробел с причиной."""
+        kind = entity.dxftype()
+        try:
+            if kind == "MESH":
+                geometry, error = _mesh_footprint(entity), 0.0
+            else:
+                matrix = entity.temporary_transformation().get_matrix()  # ty: ignore[unresolved-attribute]
+                geometry, error = region_polygon(entity, matrix, self.flatten, footprint=True)  # ty: ignore[invalid-argument-type]
+        except RegionGeometryError as exc:
+            return self._not_drawn_reason(entity, layer, block, ref, exc.reason)
+        if geometry.is_empty or geometry.area <= 0:
+            return self._not_drawn_reason(entity, layer, block, ref, "no-plan-footprint")
+        if self.clips:
+            geometry = self._clip(geometry)
+            if geometry.is_empty:
+                return CLIPPED
+        self._feature(
+            Feature(
+                ref=ref,
+                layer=layer,
+                geometry=geometry,
+                block=block,
+                geometry_error_m=error * self.unit_m,
+                source_entity_type=kind,
+                symbol=owner,
+            )
+        )
+        return "feature"
+
+    def _not_drawn_reason(
+        self, entity: DXFGraphic, layer: str, block: str | None, ref: SourceRef, reason: str
+    ) -> str:
+        kind = entity.dxftype()
+        self.skipped[kind] += 1
+        self._gap(kind, layer, block, reason, ref)
+        return f"skipped:{kind}:{reason}"
 
     def _gap(self, kind: str, layer: str, block: str | None, reason: str, ref: SourceRef) -> None:
         key = (kind, layer, block, reason)
@@ -827,3 +874,18 @@ def _chain_hash(chain: tuple[str, ...]) -> str:
 def _sha256(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _mesh_footprint(entity: DXFGraphic) -> Polygon | BaseGeometry:
+    """Объединение проекций граней сетки на план; вертикальные грани площади не дают."""
+    vertices = list(entity.vertices)  # ty: ignore[unresolved-attribute]
+    polygons = []
+    for face in entity.faces:  # ty: ignore[unresolved-attribute]
+        ring = [(vertices[i][0], vertices[i][1]) for i in face]
+        if len(ring) >= 3:  # noqa: PLR2004 - треугольник
+            polygon = shapely.make_valid(Polygon(ring))
+            if polygon.area > 0:
+                polygons.append(polygon)
+    if not polygons:
+        return Polygon()
+    return shapely.union_all(polygons)

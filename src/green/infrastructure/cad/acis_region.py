@@ -127,11 +127,13 @@ def _transform_matrix(values: list[float], scale: float) -> Matrix44:
 
 
 def region_polygon(
-    entity: Body, matrix: Matrix44 | None, flatten: float
+    entity: Body, matrix: Matrix44 | None, flatten: float, *, footprint: bool = False
 ) -> tuple[BaseGeometry, float]:
     """Полигон области в координатах чертежа и наибольшая ошибка аппроксимации дуг.
 
     matrix - преобразование вставки, внутри которой лежит область (None - пространство модели).
+    footprint - тело (3DSOLID, BODY): грани, не лежащие в плане (стены), пропускаются, след -
+    объединение остальных проекций.
     """
     sab, sat = entity.sab, entity.sat
     if not sat and not sab:
@@ -150,19 +152,38 @@ def region_polygon(
         transform = _body_matrix(body)
         if matrix is not None:
             transform = transform @ matrix if transform is not None else matrix
-        for face in _faces(body):
-            rings = []
-            for loop in face.loops():
-                points, loop_error = _loop_points(loop, flatten)
-                error = max(error, loop_error)
-                rings.append(_to_plan(points, transform))
-            polygons.append(_face_polygon(rings))
+        found, body_error = _body_polygons(body, transform, flatten, footprint=footprint)
+        polygons.extend(found)
+        error = max(error, body_error)
     if not polygons:
         raise RegionGeometryError("no-faces")
     area = shapely.union_all(polygons)
     if area.is_empty:
         raise RegionGeometryError("empty-area")
     return area, error
+
+
+def _body_polygons(
+    body: object, transform: Matrix44 | None, flatten: float, *, footprint: bool
+) -> tuple[list[Polygon], float]:
+    """Проекции граней тела на план; у следа тела грани без площади в плане пропускаются."""
+    polygons: list[Polygon] = []
+    error = 0.0
+    for face in _faces(body):  # ty: ignore[invalid-argument-type]
+        try:
+            rings = []
+            for loop in face.loops():
+                points, loop_error = _loop_points(loop, flatten)
+                error = max(error, loop_error)
+                rings.append(_to_plan(points, transform, footprint=footprint))
+            polygon = _face_polygon(rings)
+        except RegionGeometryError:
+            if not footprint:
+                raise
+            continue
+        if not footprint or polygon.area > 0:
+            polygons.append(polygon)
+    return polygons, error
 
 
 def _normalized_sat(lines: Sequence[str]) -> list[str]:
@@ -244,9 +265,15 @@ def _arc(
     return points
 
 
-def _to_plan(points: list[Vec3], transform: Matrix44 | None) -> list[tuple[float, float]]:
+def _to_plan(
+    points: list[Vec3], transform: Matrix44 | None, *, footprint: bool = False
+) -> list[tuple[float, float]]:
     world = list(transform.transform_vertices(points)) if transform is not None else points
     heights = [p.z for p in world]
+    if footprint:
+        # Наклонная грань тела (скат крыши) проецируется на план; отвесная (стена) - отрезок,
+        # её отбрасывает проверка площади.
+        return [(p.x, p.y) for p in world]
     if heights and max(heights) - min(heights) > _FLAT_Z * max(1.0, *map(abs, heights)):
         raise RegionGeometryError("non-planar-to-plan")
     return [(p.x, p.y) for p in world]
