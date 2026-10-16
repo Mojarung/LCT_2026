@@ -37,7 +37,7 @@ from green.infrastructure.cad.curve_paths import (
     polyline_vertices,
     spline_vertices,
 )
-from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.documents import entity_layer, load_document
 from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
 from green.infrastructure.cad.hatch_geometry import GAP_CLOSED, HatchGeometryError, hatch_geometry
@@ -216,7 +216,7 @@ class _Walker:
         parent_block: str | None = None,
         owner: str | None = None,
     ) -> None:
-        layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
+        layer = decode_dxf_unicode(entity_layer(entity))
         if layer == "0" and parent_layer is not None:
             layer = parent_layer
         if parent_block is not None:

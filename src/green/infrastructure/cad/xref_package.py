@@ -18,7 +18,7 @@ from ezdxf.math import Vec3
 from green.application.assembly import PackageAssembly, PackageInput, ReferenceBinding
 from green.application.errors import InputError
 from green.application.semantic_names import slug_key
-from green.infrastructure.cad.documents import load_document
+from green.infrastructure.cad.documents import entity_layer, load_document
 from green.infrastructure.cad.integrity import require_exportable_document
 
 if TYPE_CHECKING:
@@ -374,13 +374,13 @@ def _explode_proxies(doc: Drawing) -> int:
         for proxy in list(layout.query("ACAD_PROXY_ENTITY")):
             if not proxy.proxy_graphic:
                 continue
-            layer = proxy.dxf.get("layer", "0")
+            layer = entity_layer(proxy)
             try:
                 parts = proxy.explode()  # ty: ignore[unresolved-attribute]
             except ValueError, TypeError, ArithmeticError, IndexError, struct.error:
                 continue
             for part in parts:
-                if part.dxf.get("layer", "0") == "0":
+                if entity_layer(part) == "0":
                     part.dxf.layer = layer
             replaced += 1
     return replaced

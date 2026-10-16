@@ -9,7 +9,7 @@ from ezdxf.lldxf.tagwriter import TagCollector
 
 from green.application.errors import InputError
 from green.application.results import IntegrityReport, SourceSnapshot
-from green.infrastructure.cad.documents import RESULT_PREFIX, load_document
+from green.infrastructure.cad.documents import RESULT_PREFIX, entity_layer, load_document
 from green.infrastructure.cad.export_validation import check_written_plan
 
 if TYPE_CHECKING:
@@ -129,7 +129,7 @@ def _result_handles(doc: Drawing) -> set[str]:
         own_block = block.name.upper().startswith(RESULT_PREFIX)
         for entity in block:
             name = entity.dxf.name if entity.dxftype() == "INSERT" else ""
-            if own_block or _is_result(entity.dxf.get("layer", "0"), name):
+            if own_block or _is_result(entity_layer(entity), name):
                 handles.add(entity.dxf.handle)
     return handles
 
