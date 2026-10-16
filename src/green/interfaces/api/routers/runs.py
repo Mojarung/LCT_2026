@@ -34,6 +34,7 @@ MEDIA_TYPES = {
     ".csv": "text/csv; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".html": "text/html; charset=utf-8",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 

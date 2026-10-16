@@ -10,15 +10,19 @@ from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
+import ezdxf
 import numpy as np
 import orjson
 import shapely
+from ezdxf.addons import Importer
+from openpyxl import Workbook
 
 from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
+from green.infrastructure.cad.documents import RESULT_PREFIX, entity_layer
 from green.infrastructure.reports.interpretation_report import (
     write_html,
     write_markdown,
@@ -97,6 +101,12 @@ class FileArtifactSink:
             "interpretations.md": write_markdown(directory / "interpretations.md", report),
             "report.html": write_html(directory / "report.html", report),
             "plantings.csv": write_plantings_csv(directory / "plantings.csv", report),
+            "workbook.xlsx": write_workbook(
+                directory / "workbook.xlsx", report.plan, report.rulebook
+            ),
+            "result_layers.dxf": write_result_layers(
+                report.output_dxf, directory / "result_layers.dxf"
+            ),
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "export_validation.json": _write_json(
@@ -865,6 +875,71 @@ SCHEDULE_COLUMNS = (
 def _area(value: float) -> str:
     """Площадь с десятичной запятой: ведомость открывают в Excel с русской локалью."""
     return f"{value:.2f}".replace(".", ",")
+
+
+def write_workbook(path: Path, plan: Plan, rulebook: RuleBook) -> Path:
+    """Книга Excel: ведомость посадочного материала и строка на каждую проверку нормы.
+
+    Те же данные, что planting_schedule.csv и interpretations.csv, но числа - числами: их
+    сортируют и суммируют в Excel без пересчёта (у Green Leaders так же).
+    """
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Ведомость"
+    sheet.append(list(SCHEDULE_COLUMNS))
+    rows = build_schedule(plan.placements)
+    for section in SECTIONS:
+        members = [row for row in rows if row.section == section]
+        if not members:
+            continue
+        sheet.append(["", section])
+        for row in members:
+            sheet.append(
+                [
+                    row.number,
+                    row.name_ru,
+                    row.name_lat,
+                    row.count,
+                    row.stock.group,
+                    row.stock.ball,
+                    row.stock.pit,
+                    round(row.pit_area_m2, 2),
+                    "; ".join(row.conditions),
+                ]
+            )
+    checks = book.create_sheet("Проверки")
+    checks.append(list(CSV_COLUMNS))
+    for record in build_rows(plan, rulebook):
+        checks.append([_cell(record.get(column)) for column in CSV_COLUMNS])
+    book.save(path)
+    return path
+
+
+def _cell(value: object) -> object:
+    if value is None or isinstance(value, (int, float, str)):
+        return value
+    return str(value)
+
+
+def write_result_layers(result: Path, target: Path) -> Path:
+    """Только слои результата GREEN_* в координатах исходника - для подключения внешней ссылкой
+    к генплану проектировщика (идея konstantikkov): файл лёгкий даже для Олимпийской деревни."""
+    source = ezdxf.readfile(result)
+    light = ezdxf.new(source.dxfversion)
+    light.units = source.units
+    for name in ("$INSUNITS", "$MEASUREMENT", "$DWGCODEPAGE"):
+        if name in source.header:
+            light.header[name] = source.header[name]
+    for app in source.appids:
+        if app.dxf.name not in light.appids:
+            light.appids.add(app.dxf.name)
+    importer = Importer(source, light)
+    importer.import_entities(
+        [e for e in source.modelspace() if entity_layer(e).upper().startswith(RESULT_PREFIX)]
+    )
+    importer.finalize()
+    light.saveas(target)
+    return target
 
 
 def _write_schedule(path: Path, plan: Plan) -> Path:
