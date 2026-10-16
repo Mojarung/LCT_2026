@@ -87,3 +87,9 @@ tools/*.py
 !tools/build_species_catalog.py
 !tools/extract_template_signs.py
 tools/presentation/deck/
+
+# Чужие решения задачи ЛЦТ 2026 №3 для разбора (клоны, у каждого свой .git)
+other/
+
+# Рабочие папки исполнения планов (superpowers)
+.superpowers/
