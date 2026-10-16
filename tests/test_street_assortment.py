@@ -33,7 +33,7 @@ def _tight_street() -> SiteContext:
         ObjectClass.UTILITY_TELECOM: 2.6,
         ObjectClass.BUILDING: 12.0,
     }
-    return SiteContext("p-1", 0.0, 0.0, clearance, False, category="streets")
+    return SiteContext("p-1", 0.0, 0.0, clearance, under_overhead_line=False, category="streets")
 
 
 def _recommended_trees() -> list[str]:
