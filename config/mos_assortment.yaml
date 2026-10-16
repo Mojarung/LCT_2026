@@ -350,6 +350,8 @@ entries:
     parks: true
     industrial: true
   note: ''
+  species_codes:
+  - crataegus_submollis
 - list: main
   group: Лиственные деревья
   row: 8
@@ -679,6 +681,8 @@ entries:
     parks: true
     industrial: true
   note: ''
+  species_codes:
+  - acer_tataricum
 - list: main
   group: Лиственные деревья
   row: 29
@@ -915,6 +919,8 @@ entries:
     parks: true
     industrial: true
   note: ''
+  species_codes:
+  - sorbus_intermedia
 - list: main
   group: Лиственные деревья
   row: 44

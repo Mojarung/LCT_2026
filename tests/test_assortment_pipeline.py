@@ -78,7 +78,8 @@ def test_every_place_is_planted_with_a_card_or_rejected_with_a_reason() -> None:
         assert placement.assortment is not None
         assert placement.assortment.status == "assigned"
     for rejection in plan.rejections:
-        assert "квот" in rejection.note
+        # Квоты или шаг по взрослым кронам выбранного вида (743-ПП, табл. 3.6.2).
+        assert "квот" in rejection.note or "шаг" in rejection.note, rejection.note
     assert [p.number for p in plan.placements] == list(range(1, len(plan.placements) + 1))
     rows = {}
     for placement in plan.placements:

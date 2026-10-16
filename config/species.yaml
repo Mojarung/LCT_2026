@@ -261,6 +261,43 @@ species:
                hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
                decor_months: "осенняя окраска - главный декоративный эффект"}}
 
+  # Добавлены 17.10.2026 (задача 13 плана финала): у борта и кабеля оставалось 3-4 породы, а
+  # эти рекомендуют и МГСН 1.02-02 (табл. В.6) или ассортимент Москвы для магистралей и улиц
+  # (config/mos_assortment.yaml). Экология - справочник по умолчанию и каталоги питомников.
+  - {code: acer_tataricum, name_ru: Клён татарский, name_lat: Acer tataricum, genus: acer,
+     family: Sapindaceae, life_form: tree_small, height_m: 8, crown_diameter_m: 3.0,
+     crown_mature_m: 6, lifespan_years: 100, growth: medium, root_type: mixed,
+     hardiness_zone: 3, light: semi, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 2, allergen: 1,
+     decor_months: [5, 7, 8, 9, 10], uses: [row, group, solitaire, hedge], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     categories: {parks: plus, squares: plus, streets: plus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Клен татарский»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               decor_months: "красные крылатки летом и осенняя окраска"}}
+
+  - {code: crataegus_submollis, name_ru: Боярышник полумягкий, name_lat: Crataegus submollis,
+     genus: crataegus, family: Rosaceae, life_form: tree_small, height_m: 7,
+     crown_diameter_m: 3.0, crown_mature_m: 6, lifespan_years: 100, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic, thorny: true,
+     salt_tolerance: 1, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 6, 8, 9], uses: [row, group, solitaire, hedge], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     categories: {parks: plus, squares: plus, streets: plus, yards: plus, special: plus},
+     sources: {categories: "МГСН 1.02-02, прил. В, табл. В.6, строка «Боярышник полумягкий»",
+               hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               thorny: "колючки - ограничение у детских площадок и путей движения"}}
+
+  - {code: sorbus_intermedia, name_ru: Рябина промежуточная, name_lat: Sorbus intermedia,
+     genus: sorbus, family: Rosaceae, life_form: tree_medium, height_m: 10,
+     crown_diameter_m: 3.0, crown_mature_m: 6, lifespan_years: 100, growth: medium,
+     root_type: mixed, hardiness_zone: 4, light: sun, moisture: mesic,
+     salt_tolerance: 2, gas_tolerance: 2, compaction_tolerance: 1, allergen: 0,
+     decor_months: [5, 8, 9, 10], uses: [row, group, solitaire], care_level: 1,
+     pilot_streets: 0, pilot_count: 0, status: reference,
+     sources: {hardiness_zone: "USDA, каталоги питомников", salt_tolerance: "Колесников 1974",
+               categories: "в табл. В.6 МГСН 1.02-02 строки нет; основной ассортимент Москвы - для магистралей и улиц «+»"}}
+
   - {code: malus_decorative, name_ru: Яблоня декоративная, name_lat: Malus, genus: malus,
      family: Rosaceae, life_form: tree_small, height_m: 6, crown_diameter_m: 3.0,
      crown_mature_m: 5, lifespan_years: 50, growth: medium, root_type: mixed,

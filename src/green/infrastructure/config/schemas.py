@@ -414,7 +414,7 @@ class ProfileModel(_Strict):
     density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
     canopy_target: float = Field(default=0.75, gt=0, le=5)
-    canopy_crown_m: float = Field(default=8.5, gt=0, le=40)
+    canopy_crown_m: float = Field(default=8.0, gt=0, le=40)
     existing_crown_m: float = Field(default=8.5, gt=0, le=40)
     street_length_m: float | None = Field(default=None, gt=0, le=100_000)
     dust_target: float = Field(default=0.50, gt=0, le=1)

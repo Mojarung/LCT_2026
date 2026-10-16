@@ -26,8 +26,8 @@ describe('соответствие видов каталога знакам ша
     const codes = catalogCodes();
     const mapped = codes.filter((code) => code in SPECIES_SIGNS);
     const without = codes.filter((code) => WITHOUT_TEMPLATE_SIGN.includes(code));
-    expect(codes).toHaveLength(55);
-    expect(mapped.length + without.length).toBe(55);
+    expect(codes).toHaveLength(58);
+    expect(mapped.length + without.length).toBe(58);
     expect(mapped.filter((code) => without.includes(code))).toEqual([]);
   });
 
