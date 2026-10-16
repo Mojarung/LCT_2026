@@ -14,6 +14,7 @@ import numpy as np
 import orjson
 import shapely
 
+from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
@@ -188,7 +189,9 @@ class FileArtifactSink:
 
 
 def classification_payload(report: ClassificationReport | None) -> dict[str, Any] | None:
-    return {"ready": report.ready, **asdict(report)} if report is not None else None
+    if report is None:
+        return None
+    return {"ready": report.ready, "recognition": recognition_summary(report), **asdict(report)}
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:
