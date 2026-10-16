@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import fields, replace
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,7 @@ from pydantic import ValidationError
 
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
+from green.application.name_model import NameModel
 from green.application.name_semantics import Vocabulary, build_vocabulary
 from green.application.params import PlanParams
 from green.application.symbols import SymbolCatalog, SymbolEntry
@@ -26,6 +28,7 @@ from green.domain.norms import (
     RuleBook,
     SpeciesRestriction,
 )
+from green.domain.objects import ObjectClass
 from green.domain.planting import LifeForm, Species
 from green.infrastructure.config.errors_ru import describe_validation_error
 from green.infrastructure.config.schemas import (
@@ -244,7 +247,17 @@ class YamlLayerMapSource:
             parsed_words = _validate(VocabularyFile, words_data, self._vocabulary)
             vocabulary = build_vocabulary(parsed_words.model_dump(mode="json"), words_digest)
             digest = hashlib.sha256(f"{digest}:{words_digest}".encode()).hexdigest()
-        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary)
+        names = NameModel()
+        model_path = self._path.with_name("name_model.json")
+        if model_path.exists():
+            data = json.loads(model_path.read_text(encoding="utf-8"))
+            names = NameModel(tuple(data["names"]), tuple(ObjectClass(c) for c in data["classes"]))
+            digest = hashlib.sha256(
+                f"{digest}:{hashlib.sha256(model_path.read_bytes()).hexdigest()}".encode()
+            ).hexdigest()
+        return LayerMap(
+            rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary, names=names
+        )
 
 
 _MOS_LISTS = {"main": "основной ассортимент", "extra": "дополнительный ассортимент"}

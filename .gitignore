@@ -87,6 +87,7 @@ tools/*.py
 !tools/build_species_catalog.py
 !tools/extract_template_signs.py
 !tools/build_mos_assortment.py
+!tools/build_name_model.py
 tools/presentation/deck/
 
 # Чужие решения задачи ЛЦТ 2026 №3 для разбора (клоны, у каждого свой .git)

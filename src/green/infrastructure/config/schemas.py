@@ -358,6 +358,7 @@ class ProfileModel(_Strict):
     territory: Territory = Territory.GREEN_FUND
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
     mos_assortment: bool = True
+    name_model: bool = True
     allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
     sp42_edition: Literal["2016", "2026"] = "2016"
