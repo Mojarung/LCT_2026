@@ -87,11 +87,14 @@ class Vocabulary:
         return bool(self.words or self.phrases)
 
     def infer(self, *names: str | None) -> Inference | None:
-        """Первое имя, по словам которого есть вывод (блок конкретнее слоя)."""
-        for name in names:
-            if name and (found := self._infer(local_name(name))):
-                return found
-        return None
+        """Первое имя, по словам которого есть вывод (блок конкретнее слоя).
+
+        Слабый намёк решает, только если ни в одном имени нет сильного слова: «Покрытия» в имени
+        контейнерного блока не перебивает «Газон» в имени слоя (аудит Берзарина 16.10.2026).
+        """
+        found = [self._infer(local_name(name)) for name in names if name]
+        strong = next((item for item in found if item and item.kind != "weak"), None)
+        return strong or next((item for item in found if item), None)
 
     def _infer(self, name: str) -> Inference | None:
         text = normalize(name)
