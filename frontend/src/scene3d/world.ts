@@ -17,6 +17,7 @@ import {
   type ExistingPlant,
 } from '../map/existing';
 import { isShrubType } from '../map/models';
+import { poleSites } from './poles';
 import type {
   Building,
   Flat,
@@ -169,23 +170,19 @@ function polygons(geometry: Geometry): Position[][][] {
   }
 }
 
-/** Центр знака: у точки - она сама, у кружка опоры - середина габарита. Среднее вершин
- *  врёт: замыкающая точка контура совпадает с первой и тянет центр к ней. */
-function centerOf(geometry: Geometry): Position | null {
-  if (geometry.type === 'Point') return geometry.coordinates;
-  const all = lines(geometry).flat();
-  if (!all.length) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of all) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
+/** Подоснова без точных копий: тот же класс, признаки и координаты. Копии приходят из
+ *  чертежа (слой вставлен дважды, xref наложен на себя) и в 3D дают двойные ограды, газоны
+ *  с мерцанием и лишние мачты. Объекты хоть на миллиметр в стороне остаются: это уже не копия. */
+export function distinctFeatures(features: readonly BasemapFeature[]): BasemapFeature[] {
+  const seen = new Set<string>();
+  const out: BasemapFeature[] = [];
+  for (const feature of features) {
+    const key = JSON.stringify([feature.properties, feature.geometry]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(feature);
   }
-  return [(minX + maxX) / 2, (minY + maxY) / 2];
+  return out;
 }
 
 interface Linework {
@@ -205,7 +202,13 @@ const AREA_CLASSES: Record<string, 'lawns' | 'sidewalks' | 'roads'> = {
   road: 'roads',
 };
 
-function takeFeature(feature: BasemapFeature, box: Box, frame: Frame, into: Linework): void {
+function takeFeature(
+  feature: BasemapFeature,
+  box: Box,
+  frame: Frame,
+  into: Linework,
+  poleParts: Geometry[],
+): void {
   const kind = feature.properties.class;
   const geometry = feature.geometry;
   const shrubLines = shrubStripLines(feature);
@@ -236,8 +239,8 @@ function takeFeature(feature: BasemapFeature, box: Box, frame: Frame, into: Line
     return;
   }
   if (kind === 'pole') {
-    const center = centerOf(geometry);
-    if (center && inBox([center], box)) into.poles.push(frame.toFlat(center[0], center[1]));
+    // Часть знака, а не опора: опоры собираются из всех частей разом (poles.ts).
+    poleParts.push(geometry);
     return;
   }
   if (kind === 'curb' || kind === 'fence') {
@@ -259,9 +262,9 @@ function takeFeature(feature: BasemapFeature, box: Box, frame: Frame, into: Line
   }
 }
 
-function existingPlants(basemap: BasemapJson, box: Box, frame: Frame): Plant[] {
+function existingPlants(features: readonly BasemapFeature[], box: Box, frame: Frame): Plant[] {
   const marks: ExistingPlant[] = [];
-  for (const feature of basemap.features) {
+  for (const feature of features) {
     const found = plantsOf(feature);
     if (found) marks.push(...found.filter((p) => inBox([[p.x, p.y]], box)));
   }
@@ -306,9 +309,9 @@ function sceneBuildings(scene: SceneJson, box: Box, frame: Frame): Building[] {
 }
 
 /** Здания без scene.json: только замкнутые контуры подосновы, этажность по площади. */
-function basemapBuildings(basemap: BasemapJson, box: Box, frame: Frame): Building[] {
+function basemapBuildings(features: readonly BasemapFeature[], box: Box, frame: Frame): Building[] {
   const out: Building[] = [];
-  for (const feature of basemap.features) {
+  for (const feature of features) {
     if (feature.properties.class !== 'building') continue;
     for (const polygon of polygons(feature.geometry)) {
       const outer = polygon[0];
@@ -421,15 +424,16 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     sidewalks: [],
     roads: [],
   };
-  if (basemap) {
-    for (const feature of basemap.features) takeFeature(feature, box, frame, linework);
-    plants.push(...existingPlants(basemap, box, frame));
+  const features = basemap ? distinctFeatures(basemap.features) : [];
+  const poleParts: Geometry[] = [];
+  for (const feature of features) takeFeature(feature, box, frame, linework, poleParts);
+  for (const [x, y] of poleSites(poleParts)) {
+    if (inBox([[x, y]], box)) linework.poles.push(frame.toFlat(x, y));
   }
+  plants.push(...existingPlants(features, box, frame));
   const buildings = scene
     ? sceneBuildings(scene, box, frame)
-    : basemap
-      ? basemapBuildings(basemap, box, frame)
-      : [];
+    : basemapBuildings(features, box, frame);
   const floorsBy: Record<FloorsSource, number> = { label: 0, neighbor: 0, letter: 0, assumed: 0 };
   for (const b of buildings) if (b.kind === 'building') floorsBy[b.source] += 1;
   const a = frame.toFlat(box[0], box[3]);

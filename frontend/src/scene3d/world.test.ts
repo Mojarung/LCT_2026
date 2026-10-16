@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import type { BasemapJson, PlanJson } from '../api/artifacts';
 import type { SceneJson } from './types';
-import { buildWorld, floorsByArea, frameAt, hashOf, heightOf, median, signedArea } from './world';
+import {
+  buildWorld,
+  distinctFeatures,
+  floorsByArea,
+  frameAt,
+  hashOf,
+  heightOf,
+  median,
+  signedArea,
+} from './world';
 
 const species = {
   name_ru: 'Липа мелколистная',
@@ -251,6 +260,33 @@ it.each([undefined, 'strip'] as const)(
     expect(world.treeStrips?.[0]).toHaveLength(3);
   },
 );
+
+it('точная копия объекта подосновы в 3D не задваивается, сдвинутый на миллиметр остаётся', () => {
+  const fence = (dy: number) => ({
+    type: 'Feature' as const,
+    properties: { class: 'fence' },
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: [
+        [1090, 2080 + dy],
+        [1130, 2080 + dy],
+      ] as [number, number][],
+    },
+  });
+  expect(distinctFeatures([fence(0), fence(0), fence(0.001)])).toHaveLength(2);
+  const world = buildWorld({
+    scene: scene(),
+    plan: null,
+    basemap: {
+      ...basemap,
+      features: [...basemap.features, ...basemap.features, fence(0), fence(0)],
+    },
+  });
+  expect(world.fences).toHaveLength(1);
+  expect(world.poles).toHaveLength(1);
+  expect(world.curbs).toHaveLength(1);
+  expect(world.plants.filter((p) => p.existing)).toHaveLength(1);
+});
 
 it('shrub strips become continuous axes, without invented individual plants', () => {
   const world = buildWorld({
