@@ -38,6 +38,86 @@ function ringArea(ring: Ring): number {
   return sum / 2;
 }
 
+export interface Rect {
+  /** Центр, единичное направление длинной стороны, длина и ширина, м. */
+  cx: number;
+  cz: number;
+  ux: number;
+  uz: number;
+  length: number;
+  width: number;
+}
+
+/** Охватывающий прямоугольник наименьшей площади: направление - вдоль одной из сторон
+ *  контура (у выпуклой оболочки так всегда; для контура съёмки этого достаточно). */
+export function minRect(ring: Ring): Rect {
+  let best: Rect & { area: number } = {
+    cx: 0,
+    cz: 0,
+    ux: 1,
+    uz: 0,
+    length: 0,
+    width: 0,
+    area: Infinity,
+  };
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    if (!a || !b) continue;
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 0.5) continue;
+    const ux = (b.x - a.x) / len;
+    const uz = (b.z - a.z) / len;
+    let s0 = Infinity;
+    let s1 = -Infinity;
+    let t0 = Infinity;
+    let t1 = -Infinity;
+    for (const p of ring) {
+      const s = p.x * ux + p.z * uz;
+      const t = -p.x * uz + p.z * ux;
+      s0 = Math.min(s0, s);
+      s1 = Math.max(s1, s);
+      t0 = Math.min(t0, t);
+      t1 = Math.max(t1, t);
+    }
+    const area = (s1 - s0) * (t1 - t0);
+    if (area >= best.area) continue;
+    const sc = (s0 + s1) / 2;
+    const tc = (t0 + t1) / 2;
+    const along = s1 - s0 >= t1 - t0;
+    best = {
+      cx: sc * ux - tc * uz,
+      cz: sc * uz + tc * ux,
+      ux: along ? ux : -uz,
+      uz: along ? uz : ux,
+      length: Math.max(s1 - s0, t1 - t0),
+      width: Math.min(s1 - s0, t1 - t0),
+      area,
+    };
+  }
+  return {
+    cx: best.cx,
+    cz: best.cz,
+    ux: best.ux,
+    uz: best.uz,
+    length: best.length,
+    width: best.width,
+  };
+}
+
+/** Двускатная крыша - у малоэтажного жилого или кирпичного дома почти прямоугольного плана
+ *  шириной 4-20 м: так в Москве выглядят частные и двухэтажные дома; панельные, высокие и
+ *  сложные по плану дома остаются с плоской крышей и парапетом. */
+export function pitchedRoof(b: Building): boolean {
+  const [outer, ...holes] = b.rings;
+  if (!outer || outer.length < 4 || holes.length || b.floors > 3) return false;
+  if (b.kind !== 'building') return false;
+  if (b.use !== 'residential' && b.wall !== 'brick') return false;
+  const rect = minRect(outer);
+  if (rect.width < 4 || rect.width > 20) return false;
+  return Math.abs(ringArea(outer)) >= 0.85 * rect.length * rect.width;
+}
+
 interface Buffers {
   pos: number[];
   nor: number[];
@@ -137,6 +217,62 @@ function pushRoof(out: Buffers, b: Building, info: [number, number, number, numb
   }
 }
 
+/** Свес кровли за стену и уклон: конёк на 0,3 ширины дома выше карниза, в пределах 1,6-4,5 м. */
+const EAVES_M = 0.35;
+const RIDGE_SHARE = 0.3;
+
+/** Двускатная крыша над охватывающим прямоугольником: два ската и два фронтона. */
+function pushGableRoof(out: Buffers, b: Building, info: [number, number, number, number]): void {
+  const outer = b.rings[0];
+  if (!outer) return;
+  const r = minRect(outer);
+  const half = r.length / 2 + EAVES_M;
+  const side = r.width / 2 + EAVES_M;
+  const rise = Math.min(4.5, Math.max(1.6, RIDGE_SHARE * r.width));
+  const vx = -r.uz;
+  const vz = r.ux;
+  const at = (s: number, t: number, y: number): THREE.Vector3 =>
+    new THREE.Vector3(r.cx + r.ux * s + vx * t, y, r.cz + r.uz * s + vz * t);
+  const eave = b.height;
+  const top = b.height + rise;
+  const tri = (a: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, up: boolean): void => {
+    const n = new THREE.Vector3().subVectors(c, a).cross(new THREE.Vector3().subVectors(d, a));
+    const flip = up ? n.y < 0 : false;
+    const pts = flip ? [a, d, c] : [a, c, d];
+    const normal = (flip ? n.negate() : n).normalize();
+    for (const q of pts) {
+      out.pos.push(q.x, q.y, q.z);
+      out.nor.push(normal.x, normal.y, normal.z);
+      out.uv.push(q.x, q.z);
+      out.info.push(...info);
+    }
+  };
+  for (const sign of [-1, 1]) {
+    // Скат: карниз на t = ±side, конёк на t = 0.
+    const a = at(-half, sign * side, eave);
+    const c = at(half, sign * side, eave);
+    const d = at(half, 0, top);
+    const e = at(-half, 0, top);
+    tri(a, c, d, true);
+    tri(a, d, e, true);
+  }
+  for (const sign of [-1, 1]) {
+    // Фронтон: треугольник стены под коньком на торце.
+    const a = at(sign * (half - EAVES_M), -side + EAVES_M, eave);
+    const c = at(sign * (half - EAVES_M), side - EAVES_M, eave);
+    const d = at(sign * (half - EAVES_M), 0, top - (rise * EAVES_M) / side);
+    const n = new THREE.Vector3().subVectors(c, a).cross(new THREE.Vector3().subVectors(d, a));
+    const outward = new THREE.Vector3(r.ux * sign, 0, r.uz * sign);
+    const pts = n.dot(outward) >= 0 ? [a, c, d] : [a, d, c];
+    for (const q of pts) {
+      out.pos.push(q.x, q.y, q.z);
+      out.nor.push(outward.x, 0, outward.z);
+      out.uv.push(q.x, q.z);
+      out.info.push(...info);
+    }
+  }
+}
+
 export interface BuildingMeshes {
   walls: THREE.BufferGeometry;
   roofs: THREE.BufferGeometry;
@@ -160,6 +296,143 @@ const SHADOW = accentColor(0x414748);
 const RAIL = accentColor(0x26323a);
 const GLASS = accentColor(0x526575);
 
+const PARAPET = accentColor(0x8c8a83);
+const PLINTH = accentColor(0x5f5c57);
+const MACHINE = accentColor(0xa19e96);
+/** Парапет плоской крыши: высота и толщина, м. */
+const PARAPET_H = 0.9;
+const PARAPET_T = 0.28;
+
+/** Прямоугольная коробка произвольной ориентации: центр, направление, длина, ширина, высоты. */
+function orientedBox(
+  out: AccentBuffers,
+  r: { cx: number; cz: number; ux: number; uz: number; length: number; width: number },
+  y0: number,
+  y1: number,
+  color: AccentColor,
+): void {
+  const vx = -r.uz;
+  const vz = r.ux;
+  const corner = (s: number, t: number, y: number) =>
+    new THREE.Vector3(
+      r.cx + (r.ux * (s * r.length)) / 2 + (vx * (t * r.width)) / 2,
+      y,
+      r.cz + (r.uz * (s * r.length)) / 2 + (vz * (t * r.width)) / 2,
+    );
+  const quad = (
+    q: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3],
+    n: THREE.Vector3,
+  ) => {
+    const [q0, q1, q2, q3] = q;
+    const cross = new THREE.Vector3()
+      .subVectors(q1, q0)
+      .cross(new THREE.Vector3().subVectors(q2, q0));
+    const order = cross.dot(n) >= 0 ? [q0, q1, q2, q0, q2, q3] : [q0, q2, q1, q0, q3, q2];
+    for (const p of order) {
+      out.pos.push(p.x, p.y, p.z);
+      out.nor.push(n.x, n.y, n.z);
+      out.color.push(...color);
+    }
+  };
+  const u = new THREE.Vector3(r.ux, 0, r.uz);
+  const v = new THREE.Vector3(vx, 0, vz);
+  quad(
+    [corner(-1, -1, y1), corner(1, -1, y1), corner(1, 1, y1), corner(-1, 1, y1)],
+    new THREE.Vector3(0, 1, 0),
+  );
+  quad([corner(1, -1, y0), corner(1, 1, y0), corner(1, 1, y1), corner(1, -1, y1)], u);
+  quad(
+    [corner(-1, -1, y0), corner(-1, 1, y0), corner(-1, 1, y1), corner(-1, -1, y1)],
+    u.clone().negate(),
+  );
+  quad([corner(-1, 1, y0), corner(1, 1, y0), corner(1, 1, y1), corner(-1, 1, y1)], v);
+  quad(
+    [corner(-1, -1, y0), corner(1, -1, y0), corner(1, -1, y1), corner(-1, -1, y1)],
+    v.clone().negate(),
+  );
+}
+
+function inside(ring: Ring, x: number, z: number): boolean {
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (!a || !b) continue;
+    if (a.z > z !== b.z > z && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) hit = !hit;
+  }
+  return hit;
+}
+
+/** То, что делает объём домом, а не коробкой: тёмный цоколь, парапет по краю плоской крыши,
+ *  машинные помещения лифтов на крыше дома от 9 этажей - по одному на каждые 25 м длины. */
+function roofDetails(out: AccentBuffers, b: Building, style: Style): void {
+  const outer = b.rings[0];
+  if (!outer || outer.length < 3 || style === STYLE.porch) return;
+  const clockwise = ringArea(outer) > 0;
+  const outwardSign = clockwise ? 1 : -1;
+  const flat = !pitchedRoof(b) && b.floors >= 2;
+  for (let i = 0; i < outer.length; i++) {
+    const a = outer[i];
+    const c = outer[(i + 1) % outer.length];
+    if (!a || !c) continue;
+    const len = Math.hypot(c.x - a.x, c.z - a.z);
+    if (len < 0.3) continue;
+    const ux = (c.x - a.x) / len;
+    const uz = (c.z - a.z) / len;
+    const nx = uz * outwardSign;
+    const nz = -ux * outwardSign;
+    const mid = { x: (a.x + c.x) / 2, z: (a.z + c.z) / 2 };
+    // Цоколь чуть выступает из стены.
+    orientedBox(
+      out,
+      { cx: mid.x + nx * 0.04, cz: mid.z + nz * 0.04, ux, uz, length: len, width: 0.08 },
+      0,
+      0.9,
+      PLINTH,
+    );
+    if (flat) {
+      const off = -PARAPET_T / 2 + 0.02;
+      orientedBox(
+        out,
+        {
+          cx: mid.x + nx * off,
+          cz: mid.z + nz * off,
+          ux,
+          uz,
+          length: len + PARAPET_T,
+          width: PARAPET_T,
+        },
+        b.height,
+        b.height + PARAPET_H,
+        PARAPET,
+      );
+    }
+  }
+  if (!flat || b.floors < 9) return;
+  const r = minRect(outer);
+  const rooms = Math.max(1, Math.round(r.length / 25));
+  for (let k = 0; k < rooms; k++) {
+    const s = (k - (rooms - 1) / 2) * (r.length / rooms);
+    const cx = r.cx + r.ux * s;
+    const cz = r.cz + r.uz * s;
+    if (!inside(outer, cx, cz)) continue;
+    orientedBox(
+      out,
+      {
+        cx,
+        cz,
+        ux: r.ux,
+        uz: r.uz,
+        length: Math.min(7, r.length / rooms - 2),
+        width: Math.min(4.5, r.width - 3),
+      },
+      b.height,
+      b.height + 3.2,
+      MACHINE,
+    );
+  }
+}
+
 /** A few real projections break the flat building silhouette without one draw call per window. */
 export function facadeAccentsGeometry(buildings: readonly Building[]): THREE.BufferGeometry {
   const out: AccentBuffers = { pos: [], nor: [], color: [] };
@@ -167,6 +440,7 @@ export function facadeAccentsGeometry(buildings: readonly Building[]): THREE.Buf
   const balconyLimit = 1800;
   for (const building of buildings) {
     const style = styleOf(building);
+    roofDetails(out, building, style);
     if (building.floors < 3 || (style !== STYLE.panel && style !== STYLE.brick)) continue;
     const residential = building.use !== 'non_residential';
     const storey = (building.height - 1.2) / building.floors;
@@ -302,7 +576,8 @@ export function buildingGeometry(buildings: readonly Building[]): BuildingMeshes
     b.rings.forEach((ring, i) => {
       if (ring.length >= 3) pushWalls(walls, ring, b.height, i > 0, info);
     });
-    pushRoof(roofs, b, info);
+    if (pitchedRoof(b)) pushGableRoof(roofs, b, info);
+    else pushRoof(roofs, b, info);
   }
   return { walls: geometryOf(walls), roofs: geometryOf(roofs) };
 }
