@@ -52,7 +52,7 @@ VERIFIED = PlanParams(infer_unknown=False)
 NOT_SOIL_IN_PROJECT = {
     "ДВ_ПП_Тип7_ТРОТ за ГАЗОН": ObjectClass.SIDEWALK,
     "ДВ_ПП_Тип4_ПЧ за газон": ObjectClass.ROAD,
-    "ДВ_АКР_Лестница за газон": ObjectClass.STRUCTURE,
+    "ДВ_АКР_Лестница за газон": ObjectClass.OBSTACLE,  # лестница - не подпорная стенка
     "ДВ_ПП_ДО_Тип3_Устройство_уширений_магистральные_на месте газона": ObjectClass.ROAD,
     "ДВ_ПП_ДО_Тип7_Устройство_трот_менее_3м_газон уничтож": ObjectClass.SIDEWALK,
     "Газон под демонтаж": ObjectClass.IGNORE,
