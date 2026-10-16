@@ -283,6 +283,7 @@ class PlanSite:
                     ambiguity_m=params.surface_ambiguity_m,
                     tree_distance_m=params.tree_seed_distance_m,
                     inference_mode=params.surface_inference_mode,
+                    open_ground=params.open_ground,
                 )
                 if params.require_soil
                 else None

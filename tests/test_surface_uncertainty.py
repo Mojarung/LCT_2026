@@ -31,15 +31,21 @@ def material(surface, x: float, y: float) -> Material:  # noqa: ANN001
     return Material(surface.material(shapely.points([(x, y)]))[0])
 
 
-def test_no_surface_evidence_means_no_automatic_planting() -> None:
+def test_no_surface_evidence_plants_only_on_assumed_open_ground() -> None:
+    """Без единого признака грунта посадка возможна только с запасным «свободная земля в
+    границе работ - газон» (open_ground, с пометкой «Исправлено автоматически»); без него -
+    ни одной посадки, как раньше."""
     features = [
         feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
         feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
         feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
     ]
-    plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
+    strict = PlanParams(open_ground=False)
+    plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, strict)
     assert not plan.placements
     assert not plan.zones
+    assumed = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
+    assert assumed.placements
 
 
 def test_missing_work_boundary_does_not_mean_the_entire_drawing() -> None:

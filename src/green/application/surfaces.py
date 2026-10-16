@@ -123,6 +123,8 @@ class SurfaceMap:
     fallback_soil_m2: float = 0.0
     fallback_paved_m2: float = 0.0
     fallback_labels: int = 0
+    # Чертёж без признаков грунта: свободная земля в границе работ принята за газон (м²).
+    open_ground_m2: float = 0.0
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
     # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
     _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
@@ -273,6 +275,18 @@ class SurfaceMap:
         }
 
     def review_notes(self) -> tuple[str, ...]:
+        notes = self._review_notes()
+        if not self.open_ground_m2:
+            return notes
+        area = f"{self.open_ground_m2:,.0f}".replace(",", " ")
+        opened = (
+            "Исправлено автоматически: в чертеже нет ни газонов, ни подписей грунта - "
+            f"свободная земля внутри границы работ ({area} м², без зданий и твёрдых покрытий) "
+            "принята за газон. Места посадок требуют подтверждения грунта по натуре."
+        )
+        return (opened, *(n for n in notes if not n.startswith("Грунт не определён")))
+
+    def _review_notes(self) -> tuple[str, ...]:
         if not self.closed_faces_mode:
             note = self._functional_note()
             return (note,) if note else ()
@@ -360,8 +374,13 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     ambiguity_m: float = 1.0,
     tree_distance_m: float = 2.0,
     inference_mode: str = "closed_faces",
+    open_ground: bool = True,
 ) -> SurfaceMap | None:
-    """Use explicit polygons or bounded, competing material evidence; preserve unknowns."""
+    """Use explicit polygons or bounded, competing material evidence; preserve unknowns.
+
+    open_ground: a drawing with a work boundary and no soil evidence at all (no lawn
+    polygon, no soil label) gets its free ground inside the boundary as inferred soil.
+    """
     if not np.isfinite([cell_m, max_distance_m, ambiguity_m, tree_distance_m]).all():
         raise ValueError("Surface distances must be finite")
     if cell_m <= 0 or max_distance_m <= 0 or ambiguity_m < 0 or tree_distance_m < 0:
@@ -389,7 +408,9 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         if f.geometry.geom_type in _AREA_TYPES
         and (f.object_class is ObjectClass.LAWN or f.object_class.is_hard_surface)
     ]
-    if not len(seed_xy) and not polygons and not functional_labels:
+    has_extent = extent is not None and not extent.is_empty
+    evidence = len(seed_xy) or polygons or functional_labels
+    if not evidence and not (open_ground and has_extent):
         return None
     barriers = _barrier_lines(features)
     if extent is not None and not extent.is_empty:
@@ -460,6 +481,20 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     if functional_grid is not None:
         grid[functional_grid] = int(Material.PAVED)
     grid[barrier] = int(Material.BARRIER)
+    open_m2 = 0.0
+    if (
+        open_ground
+        and has_extent
+        and not soil
+        and not paved  # подписи покрытий есть - чертёж говорит о материале, не угадываем
+        and not fallback.soil_m2
+        and (soil_area is None or soil_area.is_empty)
+        and not any(f.object_class is ObjectClass.LAWN for f in polygons)
+        and not _surface_linework(features)
+    ):
+        open_m2 = _open_ground(
+            grid, features, extent, (paved_area, uncertain), origin=origin, cell=cell
+        )
     inferred_grid = grid.copy()
     _paint_materials(grid, (soil_area, paved_area, uncertain), origin, cell)
     return SurfaceMap(
@@ -484,12 +519,65 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         fallback_soil_m2=fallback.soil_m2,
         fallback_paved_m2=fallback.paved_m2,
         fallback_labels=fallback.labels,
+        open_ground_m2=open_m2,
         closed_faces=faces.count if faces else 0,
         conflicting_faces=faces.conflicts if faces else 0,
         unassigned_labels=faces.unassigned_labels if faces else 0,
         open_edges=faces.open_edges if faces else 0,
         unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
     )
+
+
+# Линии границ покрытий, контуры без смысла и нерешённые объекты - чертёж говорит о покрытиях,
+# но сервис их не понял: грунт тогда не угадывается, остаётся неизвестным (материал места
+# решает уточнение, а не запасной вариант).
+_SURFACE_LINEWORK = frozenset({ObjectClass.CONTOUR, ObjectClass.PAVEMENT_EDGE, ObjectClass.UNKNOWN})
+
+
+# Площади, где грунта для посадки нет: здания, сооружения, препятствия, массивы, пути.
+_NOT_GROUND = frozenset(
+    {
+        ObjectClass.BUILDING,
+        ObjectClass.STRUCTURE,
+        ObjectClass.OBSTACLE,
+        ObjectClass.EXISTING_WOODLAND,
+        ObjectClass.RAILWAY,
+        ObjectClass.TRAM,
+    }
+)
+
+
+def _surface_linework(features: Sequence[Feature]) -> bool:
+    return any(
+        f.object_class in _SURFACE_LINEWORK
+        or (f.object_class is ObjectClass.IGNORE and f.geometry.geom_type in _AREA_TYPES)
+        for f in features
+    )
+
+
+def _open_ground(  # noqa: PLR0913 - растр, объекты, граница и исключения
+    grid: NDArray[np.int8],
+    features: Sequence[Feature],
+    extent: BaseGeometry,
+    hard: tuple[BaseGeometry | None, ...],
+    *,
+    origin: tuple[float, float],
+    cell: float,
+) -> float:
+    """Неизвестные клетки внутри границы работ, вне зданий, сооружений и твёрдых покрытий,
+    становятся грунтом; возвращает их площадь, м²."""
+    blocked = [g for g in hard if g is not None and not g.is_empty]
+    blocked += [
+        f.geometry
+        for f in features
+        if f.object_class in _NOT_GROUND and f.geometry.geom_type in _AREA_TYPES
+    ]
+    ground = extent.difference(shapely.union_all(blocked)) if blocked else extent
+    if ground.is_empty:
+        return 0.0
+    mask = _inside(ground, origin, cell, grid.shape) & (grid == int(Material.UNKNOWN))
+    grid[mask] = int(Material.SOIL)
+    return float(mask.sum()) * cell * cell
 
 
 @dataclass(frozen=True, slots=True)
@@ -655,9 +743,26 @@ def _exact_areas(
     )
     paved = shapely.union_all([outer_area(f) for f in polygons if f.object_class.is_hard_surface])
     if extent is not None:
-        soil, paved = soil.intersection(extent), paved.intersection(extent)
-    soil = soil.difference(paved)
+        soil, paved = (
+            _overlay(soil, extent, "intersection"),
+            _overlay(paved, extent, "intersection"),
+        )
+    soil = _overlay(soil, paved, "difference")
     return (None if soil.is_empty else soil, None if paved.is_empty else paved)
+
+
+# Самопересекающиеся заливки чужих чертежей роняют наложение GEOS («Unable to determine overlay
+# result geometry dimension», GreenCAD, 17.10.2026): тогда операция повторяется на исправленных
+# геометриях с сеткой 1 мм - меньше любой точности чертежа подосновы.
+_OVERLAY_GRID_M = 0.001
+
+
+def _overlay(a: BaseGeometry, b: BaseGeometry, operation: str) -> BaseGeometry:
+    function = getattr(shapely, operation)
+    try:
+        return function(a, b)
+    except shapely.errors.GEOSException:
+        return function(shapely.make_valid(a), shapely.make_valid(b), grid_size=_OVERLAY_GRID_M)
 
 
 def _uncertainty_area(features: Sequence[Feature]) -> BaseGeometry | None:
