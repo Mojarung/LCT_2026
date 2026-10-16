@@ -118,7 +118,16 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
         note = f"Единицы чертежа заданы параметром drawing_unit={requested}, заголовок: {header}."
         return UnitDecision(unit_m, (note + _RESCALED_TAIL,))
     if code == _UNITLESS:
-        raise InputError(f"Единицы чертежа не заданы ({header}); задайте drawing_unit явно")
+        guess = _unitless_guess(doc)
+        if guess is None:
+            raise InputError(f"Единицы чертежа не заданы ({header}); задайте drawing_unit явно")
+        unit, reason, other = guess
+        note = (
+            f"Исправлено автоматически: единицы чертежа не заданы ({header}); по геометрии "
+            f"принято drawing_unit={unit} (1 единица = {EXPLICIT_UNITS[unit]:g} м): {reason}. "
+            f"Если это не так, запустите с drawing_unit={other}."
+        )
+        return UnitDecision(EXPLICIT_UNITS[unit], (note + _RESCALED_TAIL,))
     try:
         factor = units.conversion_factor(InsertUnits(code), InsertUnits.Meters)
     except (ValueError, TypeError, IndexError, ZeroDivisionError) as exc:
@@ -175,6 +184,27 @@ def _geometry_conflict(doc: Drawing, factor: float) -> tuple[str, str, str] | No
 
 
 _HEADER_UNIT = {value: name for name, value in EXPLICIT_UNITS.items()}
+
+
+def _unitless_guess(doc: Drawing) -> tuple[str, str, str] | None:
+    """Метры или миллиметры чертежа без единиц, если оба признака сходятся: размер участка
+    10 м - 100 км и высота текста метровая (меньше 20 единиц) или миллиметровая (от 20)."""
+    spread = measure(doc)
+    if spread is None or spread.anchors < _MIN_ANCHORS:
+        return None
+    size, text = spread.size, spread.text_height
+    extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
+    metric_text = text is None or text < _METRE_TEXT_UNITS
+    if _MIN_SITE_M <= size <= _MAX_SITE_M and metric_text:
+        return "m", f"{extent}, участок {size:.0f} м" + _text(text), "mm"
+    mm = size * EXPLICIT_UNITS["mm"]
+    if _MIN_SITE_M <= mm <= _MAX_SITE_M and text is not None and text >= _METRE_TEXT_UNITS:
+        return "mm", f"{extent}, участок {mm:.0f} м" + _text(text), "m"
+    return None
+
+
+def _text(height: float | None) -> str:
+    return "" if height is None else f", высота текста {height:g} единиц"
 
 
 _RESCALED_TAIL = (

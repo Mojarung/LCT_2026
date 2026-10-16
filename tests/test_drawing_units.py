@@ -91,11 +91,24 @@ def test_imperial_header_is_reported_and_applied(tmp_path: Path) -> None:
     assert "приняты объявленные" in decision.notes[0]
 
 
-def test_unitless_input_requires_scale_instead_of_guessing_from_extent(tmp_path: Path) -> None:
+def test_unitless_street_takes_the_units_both_signs_confirm(tmp_path: Path) -> None:
+    """Единиц нет ($INSUNITS=0), но размер участка и высота текста сходятся на одном
+    (миллиметры: улица 200 м и текст 2,5 м): берутся они, с пометкой «Исправлено
+    автоматически» и параметром для другого решения."""
     source = tmp_path / "unitless_mm.dxf"
     _street(source, scale=MM, insunits=0)
-    with pytest.raises(InputError, match="drawing_unit"):
-        decide_units(ezdxf.readfile(source))
+    decision = decide_units(ezdxf.readfile(source))
+    assert decision.unit_m == pytest.approx(0.001)
+    assert decision.notes[0].startswith("Исправлено автоматически")
+    assert "$INSUNITS=0" in decision.notes[0]
+
+
+def test_unitless_metre_street_is_taken_in_metres(tmp_path: Path) -> None:
+    source = tmp_path / "unitless_m.dxf"
+    _street(source, insunits=0)
+    decision = decide_units(ezdxf.readfile(source))
+    assert decision.unit_m == 1.0
+    assert decision.notes[0].startswith("Исправлено автоматически")
 
 
 def test_explicit_unit_wins_over_detection(tmp_path: Path) -> None:
