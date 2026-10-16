@@ -42,6 +42,8 @@ BUSY = (
 # очистка по пределу объёма такой каталог прогоном не считают.
 DELETED = ".deleted-"
 RENAME_ATTEMPTS = 5
+# Замена status.json под Windows: до 10 попыток, в сумме меньше секунды ожидания.
+REPLACE_ATTEMPTS = 10
 
 
 class FileSystemRunStore:
@@ -130,7 +132,7 @@ class FileSystemRunStore:
         path = self._dir(record.run_id) / STATUS
         temporary = path.with_suffix(".tmp")
         temporary.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        temporary.replace(path)
+        _replace(temporary, path)
         if record.state not in _ACTIVE:
             self._drop(record.run_id)
 
@@ -247,6 +249,21 @@ class FileSystemRunStore:
         if not _RUN_ID.fullmatch(run_id):
             raise NotFoundError(f"Прогон {run_id} не найден")
         return self._root / run_id
+
+
+def _replace(temporary: Path, path: Path) -> None:
+    """Заменить статус записанным рядом файлом. Под Windows замена отказывает, пока status.json
+    открыт читателем (опрос статуса из браузера и API раз в секунду), - читатель держит его
+    миллисекунды, поэтому ещё несколько попыток, а не падение прогона."""
+    for attempt in range(REPLACE_ATTEMPTS):
+        try:
+            temporary.replace(path)
+        except PermissionError:
+            if attempt == REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(0.02 * (attempt + 1))
+        else:
+            return
 
 
 def _rename(folder: Path, target: Path) -> None:

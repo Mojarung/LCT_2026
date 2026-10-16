@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -59,6 +60,28 @@ def test_finished_run_releases_its_lease_and_keeps_its_state(tmp_path: Path) -> 
     # Пересборка правки снова берёт прогон в работу - уже другой экземпляр хранилища.
     other.save(replace(record, state=RunState.RUNNING))
     assert owner.get(record.run_id).state is RunState.RUNNING
+
+
+def test_status_is_written_while_a_reader_briefly_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Под Windows замена status.json падает, пока его читает опрос статуса (демо 29.09.2026:
+    прогон упал с PermissionError на status.tmp -> status.json). Читатель держит файл
+    мгновение - запись должна дождаться, а не ронять прогон."""
+    store = FileSystemRunStore(tmp_path)
+    record = store.create("street.dxf", "strict", {})
+    real = pathlib.Path.replace
+    refusals = iter([True, True])
+
+    def busy(self: Path, target: Path) -> Path:
+        if next(refusals, False):
+            raise PermissionError(5, "Отказано в доступе")
+        return real(self, target)
+
+    monkeypatch.setattr(pathlib.Path, "replace", busy)
+    store.save(replace(record, state=RunState.SUCCEEDED))
+
+    assert store.get(record.run_id).state is RunState.SUCCEEDED
 
 
 def _filled(store: FileSystemRunStore, root: Path, size: int, state: RunState) -> str:
