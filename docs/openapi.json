@@ -33,6 +33,12 @@
       },
       "Body_create_photo_api_v1_runs__run_id__photos_post": {
         "properties": {
+          "buildings": {
+            "default": true,
+            "description": "Есть ли в кадре здания; без них промпт не говорит о фасадах",
+            "title": "Buildings",
+            "type": "boolean"
+          },
           "hour": {
             "default": 11.0,
             "maximum": 24.0,
@@ -2382,6 +2388,16 @@
               "default": "",
               "title": "Shrubs",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "buildings",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Buildings",
+              "type": "boolean"
             }
           }
         ],
