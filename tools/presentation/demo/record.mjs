@@ -315,7 +315,7 @@ async function record() {
       '5 · Правка в браузере',
       'Перенос посадки проверяется теми же нормами. Место ближе нормы сервис не примет',
     );
-    const editing = page.getByLabel('Переносить и удалять посадки');
+    const editing = page.locator('.hud-edit');
     await glide(editing);
     await sleep(1200);
     await canvas.focus();
@@ -475,12 +475,19 @@ async function record() {
     );
     const hour = page.locator('input[type=range]').first();
     await glide(hour, { click: false });
-    for (let h = 11.5; h <= 18.5; h += 0.5) {
+    // До 17:00: сезон сдвигает дату, и осенью в 18:30 солнце уже село - сцена уходит в ночь.
+    for (let h = 11.5; h <= 17; h += 0.5) {
       await hour.fill(String(h));
       await sleep(260);
     }
     await sleep(2500);
     await cap('8 · 3D-вид: сезон', 'Осенью кроны по виду меняют цвет, зимой деревья без листвы');
+    // Осень показываем днём: при низком солнце цвет крон не разглядеть.
+    for (let h = 16.5; h >= 13; h -= 0.5) {
+      await hour.fill(String(h));
+      await sleep(120);
+    }
+    await sleep(1500);
     await glide(page.getByRole('radio', { name: 'осень' }));
     await sleep(4000);
     await glide(page.getByRole('radio', { name: 'лето' }));

@@ -102,6 +102,7 @@ def _payload(job: PhotoJob) -> dict[str, object]:
             "shrubs": list(o.shrubs),
             "shot": o.shot,
             "modern": o.modern,
+            "buildings": o.buildings,
             "custom_text": o.custom_text,
             "custom_negative": o.custom_negative,
         },
@@ -127,6 +128,8 @@ def _job(data: dict[str, Any]) -> PhotoJob:
             shot=str(o.get("shot", "")),
             # Задания до 29.09.2026 шли без современных фасадов и своего промпта.
             modern=bool(o.get("modern", False)),
+            # Задания до 07.10.2026 не знали, есть ли в кадре здания: промпт был с фасадами.
+            buildings=bool(o.get("buildings", True)),
             custom_text=str(o.get("custom_text", "")),
             custom_negative=str(o.get("custom_negative", "")),
         ),

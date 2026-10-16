@@ -109,6 +109,9 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
     modern: Annotated[
         bool, Form(description="Современные московские фасады: объём и этажность домов те же")
     ] = True,
+    buildings: Annotated[
+        bool, Form(description="Есть ли в кадре здания; без них промпт не говорит о фасадах")
+    ] = True,
     prompt: Annotated[
         str, Form(max_length=MAX_PROMPT, description="Свой промпт вместо собранного сервисом")
     ] = "",
@@ -129,6 +132,7 @@ async def create_photo(  # noqa: PLR0913 - form fields are separate parameters b
         shrubs=species_names(shrubs.split(",")),
         shot=" ".join(shot.split()),
         modern=modern,
+        buildings=buildings,
         custom_text=prompt,
         custom_negative=negative,
     )
@@ -152,6 +156,7 @@ def photo_prompt(  # noqa: PLR0913 - query parameters are separate by design
     viewpoint: Viewpoint = "aerial",
     species: str = "",
     shrubs: str = "",
+    buildings: bool = True,
 ) -> PromptOut:
     """Промпт, который сервис соберёт для фото с этими параметрами: основа для редактора."""
     container.store.get(run_id)
@@ -164,6 +169,7 @@ def photo_prompt(  # noqa: PLR0913 - query parameters are separate by design
             viewpoint=viewpoint,
             species=species_names(species.split(",")),
             shrubs=species_names(shrubs.split(",")),
+            buildings=buildings,
         )
     )
     return PromptOut(text=built.text, negative=built.negative)

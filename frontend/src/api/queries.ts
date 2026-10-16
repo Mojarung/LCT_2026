@@ -117,6 +117,8 @@ export interface PhotoRequest {
   shot: string;
   /** Современные московские фасады вместо условных. */
   modern: boolean;
+  /** Есть ли в кадре здания: без них сервис не говорит модели о фасадах. */
+  buildings: boolean;
   /** Свой промпт из редактора; пусто - сервис соберёт сам. */
   prompt: string;
   negative: string;
@@ -137,6 +139,7 @@ export function useCreatePhoto(runId: string) {
       form.append('shrubs', req.shrubs.join(','));
       form.append('shot', req.shot);
       form.append('modern', String(req.modern));
+      form.append('buildings', String(req.buildings));
       form.append('prompt', req.prompt);
       form.append('negative', req.negative);
       return postForm<PhotoOut>(photosUrl(runId), form);

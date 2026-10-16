@@ -9,6 +9,7 @@ import { SHRUB_STRIP_HEIGHT_M, SHRUB_STRIP_WIDTH_M } from '../map/existing';
 
 import {
   type AutoShot,
+  buildingsInView,
   obstaclesOf,
   plantShots,
   SHOT_HEIGHT,
@@ -54,6 +55,8 @@ export interface ViewShot {
   viewpoint: 'aerial' | 'ground';
   trees: string[];
   shrubs: string[];
+  /** Есть ли в кадре здания: без них промпт фото не говорит о фасадах. */
+  buildings: boolean;
 }
 
 /** Снежный покров зимой без снегопада: белое, но с проталинами у проезжей части. */
@@ -776,14 +779,25 @@ export class SceneEngine {
       blob,
       viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground',
       ...speciesInView(this.forest.bodies(), pose),
+      buildings: buildingsInView(this.world.buildings, pose),
     };
   }
 
   /** Виды плана в кадре с текущей позы: подпись снимка, который потом уйдёт на фото. */
-  speciesHere(): { trees: string[]; shrubs: string[]; viewpoint: 'aerial' | 'ground' } {
+  speciesHere(): {
+    trees: string[];
+    shrubs: string[];
+    viewpoint: 'aerial' | 'ground';
+    buildings: boolean;
+  } {
     const pose = this.freecam.pose;
     const { trees, shrubs } = speciesInView(this.forest.bodies(), pose);
-    return { trees, shrubs, viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground' };
+    return {
+      trees,
+      shrubs,
+      viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground',
+      buildings: buildingsInView(this.world.buildings, pose),
+    };
   }
 
   /** Ракурсы для галереи: улица отрезками или посадка по кругу. Солнце ночью не учитывается. */
@@ -792,9 +806,11 @@ export class SceneEngine {
     const sun = state.night > 0.5 ? null : { x: state.direction.x, z: state.direction.z };
     const obstacles = obstaclesOf(this.world);
     const bodies = this.forest.bodies();
-    return target.kind === 'street'
-      ? streetShots(bodies, obstacles, sun)
-      : plantShots(bodies, target.id, obstacles, sun);
+    const shots =
+      target.kind === 'street'
+        ? streetShots(bodies, obstacles, sun)
+        : plantShots(bodies, target.id, obstacles, sun);
+    return shots.map((s) => ({ ...s, buildings: buildingsInView(this.world.buildings, s.pose) }));
   }
 
   /** Кадры заданных поз в PNG заданного размера, без панелей и без сдвига камеры человека.
