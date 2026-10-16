@@ -9,22 +9,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-import shapely
 from shapely.geometry import LineString, box
 
 from green.application.params import PlanParams
 from green.application.placement import GreedyPlantingStrategy
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.domain.planting import Species
+from green.domain.planting import Plan, Species
 from green.infrastructure.config.repositories import YamlRuleBookSource
+from green.infrastructure.reports.interpretation_report import blocked_rows
+
+if TYPE_CHECKING:
+    from shapely.geometry.base import BaseGeometry
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOK = YamlRuleBookSource(ROOT / "config" / "acts.yaml", ROOT / "config" / "rules.yaml").load()
 
 
-def _feature(kind: ObjectClass, geometry: shapely.Geometry, number: int) -> Feature:
+def _feature(kind: ObjectClass, geometry: BaseGeometry, number: int) -> Feature:
     return Feature(SourceRef("t", "t", str(number)), "t", geometry, object_class=kind)
 
 
@@ -59,9 +63,6 @@ def test_closed_area_never_exceeds_the_soil() -> None:
 
 
 def test_report_rows_name_the_rule_its_basis_and_the_share_of_soil() -> None:
-    from green.domain.planting import Plan
-    from green.infrastructure.reports.interpretation_report import blocked_rows
-
     plan = Plan(
         (),
         (),
