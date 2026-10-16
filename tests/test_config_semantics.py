@@ -9,8 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from shapely.geometry import LineString
 
-from green.domain.objects import ObjectClass
+from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.infrastructure.config.repositories import YamlLayerMapSource
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,11 +38,7 @@ def test_retaining_walls_keep_the_retaining_wall_rule(name: str) -> None:
     assert found.object_class is ObjectClass.STRUCTURE
 
 
-def _feature(layer: str, block: str | None) -> object:
-    from shapely.geometry import LineString
-
-    from green.domain.objects import Feature, SourceRef
-
+def _feature(layer: str, block: str | None) -> Feature:
     return Feature(SourceRef("f", "x", "1"), layer, LineString([(0, 0), (5, 0)]), block=block)
 
 
@@ -57,13 +54,13 @@ def _feature(layer: str, block: str | None) -> object:
     ],
 )
 def test_red_lines_and_regulation_lines_are_not_surfaces(layer: str, block: str) -> None:
-    found, evidence = LAYER_MAP.decide(_feature(layer, block))  # type: ignore[arg-type]
+    found, evidence = LAYER_MAP.decide(_feature(layer, block))
     assert found is ObjectClass.IGNORE
     assert evidence.method == "name_rule"
 
 
 def test_topographic_sheet_block_is_not_caught_by_the_red_line_rule() -> None:
     """Негативный контроль: лист топоплана (tp) правилом красных линий не снимается."""
-    _, evidence = LAYER_MAP.decide(_feature("0", "output[1-12]_3_ДЖКХ-24_03233tp"))  # type: ignore[arg-type]
+    _, evidence = LAYER_MAP.decide(_feature("0", "output[1-12]_3_ДЖКХ-24_03233tp"))
     reasons = [LAYER_MAP.rules[i].reason for i in evidence.matched_rules]
     assert not any("красн" in reason for reason in reasons)

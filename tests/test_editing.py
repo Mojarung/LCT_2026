@@ -11,6 +11,7 @@ import json
 from collections import Counter
 from typing import TYPE_CHECKING
 
+import ezdxf
 import pytest
 from fastapi.testclient import TestClient
 from test_pipeline_synthetic import PIPE_Y, ROOT, _street
@@ -347,8 +348,6 @@ def test_manual_edits_are_marked_on_their_own_result_layer(
     """ТЗ, п. 6: правки сохраняются на отдельном слое результата. Удалённая посадка - метка на
     прежнем месте, перенесённая - откуда и куда, добавленная - метка у новой посадки (Вороны
     делают так же, `USER_*`). Сами посадки остаются на своих слоях GREEN_*."""
-    import ezdxf
-
     draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
     gone, stay = [p for p in draft if p["planting_type"] == "tree"][:2]
     body = client.post(

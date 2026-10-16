@@ -413,9 +413,8 @@ def test_text_style_reads_cyrillic_in_librecad_and_in_ttf_viewers(tmp_path: Path
     doc = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
     style = doc.styles.get("unicode")
     assert style is not None
-    assert style.dxf.font and not style.dxf.font.lower().endswith(
-        (".lff", ".shx")
-    )  # TTF для nanoCAD
+    assert style.dxf.font  # TTF для nanoCAD и AutoCAD
+    assert not style.dxf.font.lower().endswith((".lff", ".shx"))
     texts = [
         e
         for e in doc.modelspace()

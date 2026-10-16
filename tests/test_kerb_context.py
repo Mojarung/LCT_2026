@@ -56,7 +56,8 @@ def test_kerb_partly_beside_the_road_is_split_by_length() -> None:
     bent = _f("K3", C.CURB, LineString([(0, 13), (80, 13), (80, 10), (100, 10)]))
     refined, _ = refine_kerbs((ROAD, WALK, ROAD_KERB, bent))
     parts = _classes(refined, "K3")
-    assert parts[C.CURB] == pytest.approx(20.0 + 1.0, abs=0.1)  # 20 м по краю и метр спуска у дороги
+    # 20 м по краю проезжей части и метр спуска у дороги
+    assert parts[C.CURB] == pytest.approx(20.0 + 1.0, abs=0.1)
     assert parts[C.PAVEMENT_EDGE] == pytest.approx(80.0 + 2.0, abs=0.1)
 
 

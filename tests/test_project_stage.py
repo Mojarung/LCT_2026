@@ -27,7 +27,9 @@ WALK = _f("W", C.SIDEWALK, box(0, 10, 20, 13))
 
 
 def _length(features: tuple[Feature, ...], handle: str, cls: ObjectClass) -> float:
-    return sum(f.geometry.length for f in features if f.ref.handle == handle and f.object_class is cls)
+    return sum(
+        f.geometry.length for f in features if f.ref.handle == handle and f.object_class is cls
+    )
 
 
 def test_survey_edge_inside_the_merged_lawn_is_dropped() -> None:
