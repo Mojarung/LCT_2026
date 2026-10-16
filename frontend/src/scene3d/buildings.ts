@@ -415,21 +415,25 @@ function roofDetails(out: AccentBuffers, b: Building, style: Style): void {
     const s = (k - (rooms - 1) / 2) * (r.length / rooms);
     const cx = r.cx + r.ux * s;
     const cz = r.cz + r.uz * s;
-    if (!inside(outer, cx, cz)) continue;
-    orientedBox(
-      out,
-      {
-        cx,
-        cz,
-        ux: r.ux,
-        uz: r.uz,
-        length: Math.min(7, r.length / rooms - 2),
-        width: Math.min(4.5, r.width - 3),
-      },
-      b.height,
-      b.height + 3.2,
-      MACHINE,
+    const room = {
+      cx,
+      cz,
+      ux: r.ux,
+      uz: r.uz,
+      length: Math.min(7, r.length / rooms - 2),
+      width: Math.min(4.5, r.width - 3),
+    };
+    // Будка целиком на крыше этой секции: все углы с запасом под парапет внутри контура.
+    const half = { s: room.length / 2 + PARAPET_T, t: room.width / 2 + PARAPET_T };
+    const corners = [-1, 1].flatMap((i) =>
+      [-1, 1].map((j) => [
+        cx + r.ux * i * half.s - r.uz * j * half.t,
+        cz + r.uz * i * half.s + r.ux * j * half.t,
+      ]),
     );
+    if (room.length < 2 || room.width < 2) continue;
+    if (!corners.every(([x = 0, z = 0]) => inside(outer, x, z))) continue;
+    orientedBox(out, room, b.height, b.height + 3.2, MACHINE);
   }
 }
 
