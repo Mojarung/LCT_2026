@@ -225,7 +225,7 @@ def test_schedule_position_is_plain_text_where_the_attribute_is(tmp_path: Path) 
         assert label.dxf.text == position.dxf.text
         assert label.dxf.insert.isclose(position.dxf.insert, abs_tol=1e-9)
         assert math.isclose(label.dxf.height, position.dxf.height)
-        assert label.dxf.style == "GREEN_TEXT"
+        assert label.dxf.style == "unicode"
 
 
 def test_position_text_is_in_drawing_units_for_millimetre_drawing(tmp_path: Path) -> None:
@@ -403,3 +403,39 @@ def test_export_check_flags_position_text_of_unknown_planting(tmp_path: Path) ->
     issues = check_written_plan(target, plan, unit_m=1.0).issues
     assert any(issue.startswith("p99:") and "подпись позиции" in issue for issue in issues)
     assert any(issue.startswith("p3:") and "подпись позиции" in issue for issue in issues)
+
+
+def test_text_style_reads_cyrillic_in_librecad_and_in_ttf_viewers(tmp_path: Path) -> None:
+    """LibreCAD ищет штриховой шрифт по ИМЕНИ стиля (unicode.lff, cyrillic_ii.lff), а не по
+    файлу шрифта: стиль «GREEN_TEXT» с DejaVuSans.ttf он рисовал ромбиками (снимки
+    docker/cadcheck 16.10.2026). Имя «unicode» - кириллица в LibreCAD; файл TTF - в nanoCAD и
+    AutoCAD."""
+    doc = ezdxf.readfile(_write(tmp_path, _mixed_plan()))
+    style = doc.styles.get("unicode")
+    assert style is not None
+    assert style.dxf.font and not style.dxf.font.lower().endswith(
+        (".lff", ".shx")
+    )  # TTF для nanoCAD
+    texts = [
+        e
+        for e in doc.modelspace()
+        if e.dxftype() in {"TEXT", "MTEXT"} and e.dxf.layer.startswith("GREEN_")
+    ]
+    assert texts
+    assert all(e.dxf.style == "unicode" for e in texts)
+
+
+def test_drawing_opens_on_the_plan_not_on_the_origin(tmp_path: Path) -> None:
+    """ezdxf оставлял вид «*Active» в начале координат: просмотрщики на базе LibreCAD
+    открывали результат «в пустоте» (разбор Lexan97, HANDOFF.md:698-715)."""
+    plan = _mixed_plan()
+    doc = ezdxf.readfile(_write(tmp_path, plan))
+    xs = [p.x for p in plan.placements]
+    ys = [p.y for p in plan.placements]
+    (active,) = doc.viewports.get("*Active")
+    center = active.dxf.center
+    assert min(xs) - 20 <= center.x <= max(xs) + 20
+    assert min(ys) - 20 <= center.y <= max(ys) + 20
+    assert active.dxf.height >= max(ys) - min(ys)
+    low, high = doc.header["$EXTMIN"], doc.header["$EXTMAX"]
+    assert low[0] <= min(xs) <= max(xs) <= high[0]

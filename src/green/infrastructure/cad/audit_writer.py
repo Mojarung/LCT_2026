@@ -21,7 +21,10 @@ if TYPE_CHECKING:
     from green.domain.norms import RuleBook
     from green.infrastructure.cad.documents import DocumentCache
 
-TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
+# LibreCAD ищет штриховой шрифт по имени стиля: «unicode» - его unicode.lff с кириллицей;
+# AutoCAD и nanoCAD берут файл шрифта стиля (TTF). Стиль «GREEN_TEXT» LibreCAD рисовал
+# ромбиками (docker/cadcheck, 16.10.2026).
+TEXT_STYLE = "unicode"
 LAYER_VIOLATION = f"{RESULT_PREFIX}AUDIT_VIOLATION"
 LAYER_BARRIER = f"{RESULT_PREFIX}AUDIT_BARRIER"
 LAYER_APPROVAL = f"{RESULT_PREFIX}AUDIT_APPROVAL"

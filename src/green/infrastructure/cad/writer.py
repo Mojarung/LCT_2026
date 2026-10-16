@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import shapely
+from ezdxf import zoom
 from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 
 from green.application.barriers import BARRIER_NOTE
@@ -36,7 +37,10 @@ if TYPE_CHECKING:
     )
     from green.infrastructure.cad.documents import DocumentCache
 
-TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
+# LibreCAD ищет штриховой шрифт по имени стиля: «unicode» - его unicode.lff с кириллицей;
+# AutoCAD и nanoCAD берут файл шрифта стиля (TTF). Стиль «GREEN_TEXT» LibreCAD рисовал
+# ромбиками (docker/cadcheck, 16.10.2026).
+TEXT_STYLE = "unicode"
 LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
 LAYER_TREES_BARRIER = f"{RESULT_PREFIX}TREES_BARRIER"
@@ -145,6 +149,7 @@ class EzdxfPlanWriter:
         if extent is not None:
             left = self._schedule(msp, rows, extent, scale)
             self._legend(msp, plan, rulebook, (left, extent[3] * scale), scale)
+            _initial_view(doc, (min(left, extent[0] * scale), *[v * scale for v in extent[1:]]))
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
         return snapshot
@@ -416,6 +421,24 @@ class EzdxfPlanWriter:
             x += width
             msp.add_line((x, y0), (x, y), dxfattribs={"layer": LAYER_SCHEDULE})
         return right + LEGEND_GAP_HEIGHTS * height
+
+
+def _initial_view(doc: Drawing, box: Sequence[float]) -> None:
+    """Вид при открытии - на план с ведомостью, а не на начало координат.
+
+    ezdxf оставляет вид «*Active» в (0, 0) высотой 1000 и не пишет габарит: просмотрщики на
+    базе LibreCAD открывали результат «в пустоте». Таблица видов и заголовок не входят в сверку
+    целостности: исходные сущности не меняются.
+    """
+    min_x, min_y, max_x, max_y = box
+    margin = 0.05 * max(max_x - min_x, max_y - min_y, 1.0)
+    zoom.window(
+        doc.modelspace(), (min_x - margin, min_y - margin), (max_x + margin, max_y + margin)
+    )
+    # Габарит пишется в лист модели: при сохранении ezdxf переносит его в $EXTMIN/$EXTMAX.
+    msp = doc.modelspace()
+    msp.dxf.extmin = (min_x, min_y, 0.0)
+    msp.dxf.extmax = (max_x, max_y, 0.0)
 
 
 def plan_extent(plan: Plan) -> tuple[float, float, float, float] | None:
