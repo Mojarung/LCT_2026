@@ -65,7 +65,15 @@ def species_verdict(
     species: Species, ctx: SiteContext, rulebook: RuleBook, params: PlanParams
 ) -> SpeciesVerdict:
     reasons: list[Reason] = []
-    for check in (_given, _species_norms, _distances, _overhead, _hardiness, _salt):
+    for check in (
+        _given,
+        _species_norms,
+        _mos_assortment,
+        _distances,
+        _overhead,
+        _hardiness,
+        _salt,
+    ):
         blocking = check(species, ctx, rulebook, params, reasons)
         if blocking is not None:
             return SpeciesVerdict(species=species, allowed=False, reasons=(*reasons, blocking))
@@ -84,6 +92,41 @@ def _given(
 ) -> Reason | None:
     if params.assortment_mode == "given" and species.code not in params.given_assortment:
         return Reason(PARAMETER, "вида нет в заданном ассортименте участка")
+    return None
+
+
+# Категория места (МГСН 1.02-02, табл. В.6) -> графа официального ассортимента Москвы.
+_MOS_COLUMN = {"streets": "roads", "yards": "yards", "squares": "parks", "parks": "parks"}
+_MOS_LABEL = {
+    "roads": "магистралей, внутриквартальных улиц и местных проездов",
+    "yards": "дворовых территорий",
+    "parks": "парков, бульваров, скверов",
+}
+MOS_SOURCE = (
+    "Основной и дополнительный ассортимент деревьев, кустарников и лиан, рекомендуемый для "
+    "озеленения различных категорий территорий города Москвы (mos.ru)"
+)
+
+
+def _mos_assortment(
+    species: Species,
+    ctx: SiteContext,
+    _rulebook: RuleBook,
+    params: PlanParams,
+    reasons: list[Reason],
+) -> Reason | None:
+    """Официальный ассортимент Москвы: вид с «-» для категории места не предлагается.
+
+    Документ - рекомендация ДПиООС, а не акт: основание reference, источник - строка документа.
+    Вида нет в документе - решают остальные фильтры.
+    """
+    column = _MOS_COLUMN.get(ctx.category or params.planting_category)
+    if not params.mos_assortment or column is None or column not in species.mos_marks:
+        return None
+    where = f"ассортимент Москвы для {_MOS_LABEL[column]} ({species.mos_ref})"
+    if not species.mos_marks[column]:
+        return Reason(REFERENCE, f"не рекомендован: {where}", source=MOS_SOURCE)
+    reasons.append(Reason(REFERENCE, f"рекомендован: {where}", source=MOS_SOURCE))
     return None
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import fields
+from dataclasses import fields, replace
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -247,6 +247,33 @@ class YamlLayerMapSource:
         return LayerMap(rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary)
 
 
+_MOS_LISTS = {"main": "основной ассортимент", "extra": "дополнительный ассортимент"}
+
+
+def _with_mos_assortment(species: tuple[Species, ...], path: Path) -> tuple[Species, ...]:
+    """Отметки официального ассортимента Москвы по категориям территорий (если файл есть)."""
+    if not path.exists():
+        return species
+    data, _ = _read(path)
+    found: dict[str, tuple[dict[str, bool], str]] = {}
+    for entry in (data or {}).get("entries", []):
+        marks = entry.get("marks")
+        if not marks:
+            continue
+        ref = (
+            f"{_MOS_LISTS.get(entry.get('list'), '')}, {entry.get('group', '').lower()}, "
+            f"№ {entry.get('row')}, стр. {entry.get('page')}"
+        )
+        for code in entry.get("species_codes", []):
+            found[code] = ({str(k): bool(v) for k, v in marks.items()}, ref)
+    return tuple(
+        replace(item, mos_marks=found[item.code][0], mos_ref=found[item.code][1])
+        if item.code in found
+        else item
+        for item in species
+    )
+
+
 class YamlSpeciesCatalog:
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -260,7 +287,10 @@ class YamlSpeciesCatalog:
             duplicates = sorted({c for c in codes if codes.count(c) > 1})
             if duplicates:
                 raise ConfigurationError(f"Повторяются коды видов: {', '.join(duplicates)}")
-            self._cache = tuple(_species(s) for s in parsed.species)
+            self._cache = _with_mos_assortment(
+                tuple(_species(s) for s in parsed.species),
+                self._path.with_name("mos_assortment.yaml"),
+            )
         return self._cache
 
     def get(self, code: str) -> Species:

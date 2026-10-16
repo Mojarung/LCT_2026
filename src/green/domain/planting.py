@@ -103,6 +103,10 @@ class Species:
     categories: Mapping[str, str] = field(default_factory=dict, compare=False)
     status: str = "draft"
     sources: Mapping[str, str] = field(default_factory=dict, compare=False)
+    # Официальный ассортимент Москвы (config/mos_assortment.yaml, PDF mos.ru): категория
+    # территории (yards, roads, parks, ...) -> рекомендован ли вид. Пусто - вида в документе нет.
+    mos_marks: Mapping[str, bool] = field(default_factory=dict, compare=False)
+    mos_ref: str = ""  # где строка в документе: список, группа, номер, страница
 
     @property
     def traits(self) -> frozenset[str]:

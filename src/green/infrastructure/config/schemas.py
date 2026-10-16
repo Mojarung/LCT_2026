@@ -357,6 +357,7 @@ class ProfileModel(_Strict):
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
+    mos_assortment: bool = True
     allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
     sp42_edition: Literal["2016", "2026"] = "2016"
