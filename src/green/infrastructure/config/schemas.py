@@ -407,6 +407,7 @@ class ProfileModel(_Strict):
     quota_adaptive: bool = False
     quota_single_places: float = Field(default=30.0, ge=1, le=10_000)
     condition_penalty: float = Field(default=0.2, ge=0, le=1)
+    mos_penalty: float = Field(default=1.0, ge=0, le=100)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     quality_weights: dict[str, float] = Field(default_factory=dict)
     density_trees_per_km: tuple[float, float] = Field(default=(150.0, 180.0))

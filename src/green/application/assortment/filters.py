@@ -83,6 +83,13 @@ def species_verdict(
     return SpeciesVerdict(species=species, allowed=True, reasons=tuple(reasons))
 
 
+def off_assortment(verdict: SpeciesVerdict) -> bool:
+    """Вид допущен вне рекомендованного ассортимента Москвы для категории места."""
+    return any(
+        r.source == MOS_SOURCE and r.text.startswith(NOT_RECOMMENDED) for r in verdict.reasons
+    )
+
+
 def _given(
     species: Species,
     _ctx: SiteContext,
@@ -102,6 +109,7 @@ _MOS_LABEL = {
     "yards": "дворовых территорий",
     "parks": "парков, бульваров, скверов",
 }
+NOT_RECOMMENDED = "не рекомендован"
 MOS_SOURCE = (
     "Основной и дополнительный ассортимент деревьев, кустарников и лиан, рекомендуемый для "
     "озеленения различных категорий территорий города Москвы (mos.ru)"
@@ -115,10 +123,13 @@ def _mos_assortment(
     params: PlanParams,
     reasons: list[Reason],
 ) -> Reason | None:
-    """Официальный ассортимент Москвы: вид с «-» для категории места не предлагается.
+    """Официальный ассортимент Москвы: вид с «-» для категории места уступает видам из списка.
 
     Документ - рекомендация ДПиООС, а не акт: основание reference, источник - строка документа.
-    Вида нет в документе - решают остальные фильтры.
+    Запрета нет: вид с «-» допускается с причиной и поправкой mos_penalty в подборе, поэтому
+    берётся, только когда виды из списка упираются в квоты разнообразия (жёсткий запрет
+    оставлял у сетей три вида и перебор квоты 40%). Вида нет в документе - решают остальные
+    фильтры.
     """
     column = _MOS_COLUMN.get(ctx.category or params.planting_category)
     if not params.mos_assortment or column is None or column not in species.mos_marks:
@@ -127,7 +138,9 @@ def _mos_assortment(
         return None  # заданный пользователем ассортимент рекомендация не режет
     where = f"ассортимент Москвы для {_MOS_LABEL[column]} ({species.mos_ref})"
     if not species.mos_marks[column]:
-        return Reason(REFERENCE, f"не рекомендован: {where}", source=MOS_SOURCE)
+        text = f"{NOT_RECOMMENDED}: {where}; допущен ради разнообразия состава"
+        reasons.append(Reason(REFERENCE, text, source=MOS_SOURCE))
+        return None
     reasons.append(Reason(REFERENCE, f"рекомендован: {where}", source=MOS_SOURCE))
     return None
 

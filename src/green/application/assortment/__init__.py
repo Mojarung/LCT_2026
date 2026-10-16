@@ -16,7 +16,14 @@ from typing import TYPE_CHECKING
 
 from green.application.assortment.assign import Assignment, Candidate, assign
 from green.application.assortment.context import site_context
-from green.application.assortment.filters import COMPOSITION, SpeciesVerdict, species_verdict
+from green.application.assortment.filters import (
+    COMPOSITION,
+    MOS_SOURCE,
+    NOT_RECOMMENDED,
+    SpeciesVerdict,
+    off_assortment,
+    species_verdict,
+)
 from green.application.assortment.scoring import Score, percent, score_species
 from green.application.assortment.spacing import crowded, enforce_spacing, tree_neighbors
 from green.application.assortment.structures import GROUP, ROW, build_structures
@@ -200,6 +207,7 @@ def _assign_species(
         *plan.warnings,
         *_warnings(assignment, no_species, soft=params.quota_penalty > 0),
         *conditions(placements),
+        *_off_assortment_warning(placements),
     )
     return replace(
         plan,
@@ -216,13 +224,35 @@ def _obligation(verdict: SpeciesVerdict, species: Species, params: PlanParams) -
     Индекс качества вычитает штраф за каждую такую посадку (quality.PENALTIES): условие -
     обязательство на годы (барьер, мужские клоны, контроль вида группы III), слабый аллерген
     743-ПП не запрещает, но заказчику он не нужен. Подбор узнаёт об этом той же поправкой:
-    при равных квотах берётся вид без условия.
+    при равных квотах берётся вид без условия. Вид вне рекомендованного ассортимента Москвы
+    теряет mos_penalty: он берётся, только когда виды из списка упираются в квоты.
     """
+    off = params.mos_penalty if off_assortment(verdict) else 0.0
     penalty = params.condition_penalty
     if penalty <= 0:
-        return 0.0
+        return off
     conditional = any(reason.condition for reason in verdict.reasons)
-    return penalty * (int(conditional) + int(species.allergen == 1))
+    return off + penalty * (int(conditional) + int(species.allergen == 1))
+
+
+def _off_assortment_warning(placements: Sequence[Placement]) -> list[str]:
+    """Сколько посадок взято вне рекомендованного ассортимента Москвы и каких видов."""
+    names: Counter[str] = Counter()
+    for placement in placements:
+        info = placement.assortment
+        if info is None or info.status == NO_SPECIES:
+            continue
+        if any(r.source == MOS_SOURCE and r.text.startswith(NOT_RECOMMENDED) for r in info.reasons):
+            names[placement.species.name_ru] += 1
+    if not names:
+        return []
+    listed = ", ".join(f"{name} {count}" for name, count in names.most_common())
+    total = counted(names.total(), "посадка", "посадки", "посадок")
+    text = (
+        f"Вне рекомендованного ассортимента Москвы для категории места {total} ({listed}): "
+        "виды из списка упёрлись в квоты разнообразия состава."
+    )
+    return [text]
 
 
 def _drop_unplanted(
