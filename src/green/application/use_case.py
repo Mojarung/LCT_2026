@@ -26,6 +26,7 @@ from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
+from green.application.kerbs import refine_kerbs
 from green.application.lawns import plan_lawns
 from green.application.placement import (
     MODE_CURB_HEDGE,
@@ -168,7 +169,7 @@ class PlanSite:
         self._integrity = integrity
         self._merger = merger
 
-    def execute(  # noqa: C901, PLR0915 - explicit pipeline and evidence gates
+    def execute(  # noqa: C901, PLR0912, PLR0915 - explicit pipeline and evidence gates
         self, request: PlanRequest, progress: ProgressSink | None = None
     ) -> RunReport:
         watch = Stopwatch([], on_stage=progress.stage if progress is not None else None)
@@ -249,6 +250,10 @@ class PlanSite:
             if request.gis_layers:
                 scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
+            # Борт тротуара - край тротуара, а не проезжей части (аудит Берзарина 16.10.2026).
+            features, kerb_note = refine_kerbs(features)
+            if kerb_note:
+                scene = replace(scene, warnings=(*scene.warnings, kerb_note))
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):

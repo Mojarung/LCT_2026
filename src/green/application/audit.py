@@ -38,6 +38,7 @@ from green.application.constraints import ConstraintIndex
 from green.application.diameters import assign_diameters
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
+from green.application.kerbs import refine_kerbs
 from green.application.params import active_distance_rules
 from green.application.use_case import MERGED_DXF, Stopwatch, to_dxf
 from green.application.wording import plural
@@ -270,6 +271,9 @@ class AuditSite:
                     "Семантика не уточнена: нормоконтроль неполон; см. classification.json.",
                 )
             features = assign_diameters(base.features, base.labels, params.label_search_radius_m)
+            features, kerb_note = refine_kerbs(features)
+            if kerb_note:
+                notes = (*notes, kerb_note)
             found, skipped = _plantings(on_layers)
         with watch.stage("check"):
             plantings = _check(found, features, rulebook, params, typer)
