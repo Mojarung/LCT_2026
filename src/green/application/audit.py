@@ -40,6 +40,7 @@ from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
 from green.application.kerbs import refine_kerbs
 from green.application.params import active_distance_rules
+from green.application.project_stage import drop_edges_inside_lawn
 from green.application.use_case import MERGED_DXF, Stopwatch, to_dxf
 from green.application.wording import plural
 from green.domain.norms import PlantingType, Severity
@@ -271,6 +272,8 @@ class AuditSite:
                     "Семантика не уточнена: нормоконтроль неполон; см. classification.json.",
                 )
             features = assign_diameters(base.features, base.labels, params.label_search_radius_m)
+            # Граница покрытия съёмки внутри проектного газона - след прежнего состояния.
+            features, _ = drop_edges_inside_lawn(features)
             features, kerb_note = refine_kerbs(features)
             if kerb_note:
                 notes = (*notes, kerb_note)

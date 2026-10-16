@@ -37,6 +37,7 @@ from green.application.placement import (
 )
 from green.application.places import place_map, replace_moved_places, with_places
 from green.application.portfolio import choose_plan
+from green.application.project_stage import drop_edges_inside_lawn
 from green.application.quality import assess, site_of
 from green.application.refine import refine_weak
 from green.application.results import RunReport, StageTiming
@@ -251,6 +252,8 @@ class PlanSite:
                 scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
             # Борт тротуара - край тротуара, а не проезжей части (аудит Берзарина 16.10.2026).
+            # Граница покрытия съёмки внутри проектного газона - след прежнего состояния.
+            features, _ = drop_edges_inside_lawn(features)
             features, kerb_note = refine_kerbs(features)
             if kerb_note:
                 scene = replace(scene, warnings=(*scene.warnings, kerb_note))
