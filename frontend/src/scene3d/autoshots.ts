@@ -38,6 +38,8 @@ export interface AutoShot {
   /** Где на кадре снятая посадка: доли ширины и высоты. Кольцо рисует галерея, а не кадр -
    *  иначе модель фото перенесла бы его на снимок. */
   mark?: { u: number; v: number } | null;
+  /** Есть ли в кадре здания: без них промпт фото не говорит о фасадах. */
+  buildings?: boolean;
 }
 
 /** Кадр для фото: 16:9, стороны кратны 32 - так их ждёт модель. */
@@ -72,6 +74,24 @@ function ranked(plants: readonly Plant[], nameOf: (p: Plant) => string): string[
 }
 
 const latin = (p: Plant) => p.species.name_lat;
+
+/** Есть ли в кадре хоть одно здание: углы и середины стен у земли и на уровне крыши. Без
+ *  зданий в кадре абзац промпта про новые фасады модель читала как просьбу их нарисовать
+ *  и ставила дома на пустой газон у края сцены. */
+export function buildingsInView(buildings: World['buildings'], pose: Pose): boolean {
+  const frame = framing();
+  return buildings.some((b) =>
+    (b.rings[0] ?? []).some((p, i, ring) => {
+      const next = ring[(i + 1) % ring.length] ?? p;
+      const points = [p, { x: (p.x + next.x) / 2, z: (p.z + next.z) / 2 }];
+      return points.some(
+        (q) =>
+          project(pose, { x: q.x, y: 0, z: q.z }, frame) !== null ||
+          project(pose, { x: q.x, y: b.height, z: q.z }, frame) !== null,
+      );
+    }),
+  );
+}
 
 /** Виды плана в кадре: деревья и кустарники раздельно, частые - первыми. */
 export function speciesInView(

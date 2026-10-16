@@ -17,6 +17,7 @@ export interface Shot {
   viewpoint: 'aerial' | 'ground';
   trees: string[];
   shrubs: string[];
+  buildings?: boolean;
 }
 
 export type MediaItem =

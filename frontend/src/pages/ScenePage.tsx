@@ -73,6 +73,8 @@ interface PhotoFrame {
   viewpoint: 'aerial' | 'ground';
   trees: string[];
   shrubs: string[];
+  /** Есть ли в кадре здания; неизвестно - сервер считает, что есть. */
+  buildings?: boolean;
 }
 
 function timeOfDay(date: Date): string {
@@ -430,6 +432,7 @@ export function ScenePage() {
         viewpoint: frame.viewpoint,
         species: frame.trees,
         shrubs: frame.shrubs,
+        buildings: frame.buildings ?? true,
         shot: label,
         modern,
         prompt: promptDraft?.text ?? '',

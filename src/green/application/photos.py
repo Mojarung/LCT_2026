@@ -81,6 +81,10 @@ class PhotoOptions:
     shot: str = ""
     # Современные московские фасады вместо условных: пятно, высота и этажность домов те же.
     modern: bool = True
+    # Есть ли в кадре здания (3D-вид считает по позе камеры). Без зданий абзац о фасадах
+    # модель читала как просьбу их нарисовать и ставила дома на пустой газон у края сцены
+    # (прогон 01a112fc, 07.10.2026). Неизвестно - считаем, что есть, как раньше.
+    buildings: bool = True
     # Свой промпт из редактора интерфейса: заменяет собранный сервисом, негативный - тоже.
     custom_text: str = ""
     custom_negative: str = ""
@@ -150,9 +154,18 @@ MODERN_NEGATIVE = (
     "soviet panel building, khrushchevka, old balconies, peeling paint, rust, dilapidated facade"
 )
 # В режиме по плану модель охотно досаживала берёзы у стен и изгородь вдоль ограды: запрет прямо.
+# Дома тоже: на кадре двора, где сцена кончается газоном до горизонта, она поставила ряд
+# жилых домов с кафе внизу (прогон 01a112fc, 06.10.2026), - абзац про фасады она читала как
+# просьбу их показать.
 PLAN_NEGATIVE = (
     f"{NEGATIVE}, extra trees, additional trees, new trees, trees in front of the building, "
-    "hedge, extra bushes, added vegetation, fence replaced by bushes"
+    "hedge, extra bushes, added vegetation, fence replaced by bushes, new buildings, "
+    "extra buildings, added houses, city skyline"
+)
+# Фасады по плану - только у домов, что есть в кадре; край сцены - открытый газон, не город.
+PLAN_NO_NEW_BUILDINGS = (
+    " Do not add any building where the render has none. Where the render ends in open lawn "
+    "towards the horizon, keep it an open meadow with no buildings."
 )
 
 
@@ -183,12 +196,22 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
         view = "real aerial photograph taken from a drone over"
         camera = "a DJI Mavic 3, 24mm lens"
     foliage = FOLIAGE[options.season]
+    # Без зданий в кадре сцена - двор, а не улица: «жилая улица» тоже звала модель
+    # дорисовать дома и проезд.
+    place = (
+        "a residential street" if options.buildings else "a landscaped residential courtyard park"
+    )
     lead = (
-        f"Transform this 3D render into a {view} a residential street in Moscow in "
+        f"Transform this 3D render into a {view} {place} in Moscow in "
         f"{SEASONS[options.season]}, {light_of(options.hour)}. "
     )
     finish = f" Photorealistic, natural colors, sharp, high detail, shot on {camera}."
-    facades = MODERN_FACADES if options.modern else f"Keep {PLAIN_FACADES}."
+    if not options.buildings:
+        facades = ""
+    elif options.modern:
+        facades = MODERN_FACADES
+    else:
+        facades = f"Keep {PLAIN_FACADES}."
     if options.scenery:
         trees = (
             ", ".join(options.species[:MAX_SPECIES]) + " trees"
@@ -228,7 +251,7 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
         "pavement or wall, keep it bare. Only make the materials real: "
         f"{trees}, with {foliage} and visible branches{shrubs}; mowed lawn with slight "
         "unevenness, worn grey asphalt with patches, concrete curbs, paving tiles, metal fences, "
-        "soft realistic shadows. " + facades + finish
+        "soft realistic shadows. " + facades + PLAN_NO_NEW_BUILDINGS + finish
     )
     return PhotoPrompt(text=text, negative=with_modern(PLAN_NEGATIVE, options))
 

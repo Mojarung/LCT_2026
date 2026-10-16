@@ -315,6 +315,21 @@ def test_modern_facades_keep_the_volume_and_can_be_switched_off() -> None:
     assert "khrushchevka" not in plain.negative
 
 
+def test_frame_without_buildings_asks_for_no_houses_and_no_facades() -> None:
+    """Кадр двора без зданий (236285.dxf, 07.10.2026): абзац о новых фасадах модель читала
+    как просьбу нарисовать дома и ставила их на газон у края сцены."""
+    with_houses = build_prompt(PhotoOptions(modern=True))
+    courtyard = build_prompt(PhotoOptions(modern=True, buildings=False))
+
+    assert "clinker brick" in with_houses.text
+    assert "residential street" in with_houses.text
+    assert "clinker brick" not in courtyard.text
+    assert "courtyard" in courtyard.text
+    assert "Do not add any building" in courtyard.text
+    assert "new buildings" in courtyard.negative
+    assert "city skyline" in courtyard.negative
+
+
 def test_custom_prompt_replaces_the_built_one() -> None:
     from green.application.photos import prompt_for  # noqa: PLC0415
 
