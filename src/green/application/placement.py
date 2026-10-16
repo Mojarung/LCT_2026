@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import math
 import re
 from dataclasses import dataclass, field, replace
@@ -22,7 +23,12 @@ import shapely
 from green.application.approximation import reserved_buffer
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.candidate_selection import SelectionProblem, select_candidates
-from green.application.constraints import ConstraintIndex, EvaluationBatch, boundary_gaps
+from green.application.constraints import (
+    ConstraintIndex,
+    EvaluationBatch,
+    boundary_gaps,
+    work_boundary,
+)
 from green.application.errors import InputError
 from green.application.params import (
     REJECTIONS_CEILING,
@@ -490,32 +496,39 @@ def _hedge_room(params: PlanParams) -> float:
 
 # Ряд существующих деревьев: шаг, отклонение от прямой и сколько мест продолжать за край.
 ROW_STEP_M = (4.0, 12.0)
-ROW_TOLERANCE = 0.15  # доля шага: насколько третье дерево может уйти от продолжения пары
+ROW_TOLERANCE = 0.1  # доля шага: насколько дерево может уйти от места ряда
+ROW_MIN_TREES = 4  # ряд - 4 дерева подряд (ревью 16.10.2026: тройки в облаке дают ложные ряды)
+ROW_MAX_GAP = 2  # в ряду пропущено не больше одного места подряд
 ROW_EXTEND = 6
+ROW_REACH_M = 50.0  # деревья дальше от границы работ ряд не задают
 _ROW_STATION = 1_000_000  # станции рядов не пересекаются со станциями аллеи
 
 
 def existing_row_candidates(features: Sequence[Feature], params: PlanParams) -> list[_Candidate]:
     """Места, продолжающие ряды существующих деревьев их же шагом (идея greenai).
 
-    Ряд - три и больше дерева, где каждое следующее стоит на продолжении пары с отклонением не
-    больше ROW_TOLERANCE шага; шаг ROW_STEP_M. Ряд продолжается на ROW_EXTEND мест за каждый
-    край и заполняет разрывы, кратные шагу. Нормы место проходит как любой кандидат.
+    Ряд - ROW_MIN_TREES и больше стволов подряд на прямой с шагом ROW_STEP_M (отклонение не
+    больше ROW_TOLERANCE шага, пропущено не больше одного места подряд). Ряд продолжается на
+    ROW_EXTEND мест за каждый край и заполняет пропуски. Берутся только стволы (точки): полоса
+    деревьев - не ствол; только у границы работ. Нормы место проходит как любой кандидат.
     """
     del params
+    boundary = work_boundary(features)
+    reach = boundary.buffer(ROW_REACH_M) if boundary is not None else None
     trees = [
-        (float(c.x), float(c.y))
+        (float(f.geometry.x), float(f.geometry.y))
         for f in features
         if f.object_class is ObjectClass.EXISTING_TREE
-        for c in (f.geometry.centroid,)
-        if not f.geometry.is_empty
+        and f.geometry.geom_type == "Point"
+        and (reach is None or reach.contains(f.geometry))
     ]
-    if len(trees) < 3:  # noqa: PLR2004 - ряд из трёх деревьев
+    if len(trees) < ROW_MIN_TREES:
         return []
     points = np.array(trees)
     index = shapely.STRtree(shapely.points(points))
     low, high = ROW_STEP_M
-    seen: set[tuple[int, int, int]] = set()
+    seen: set[tuple[int, ...]] = set()
+    taken: set[tuple[int, int]] = set()
     out: list[_Candidate] = []
     for a, (ax, ay) in enumerate(trees):
         for b in index.query(shapely.Point(ax, ay), predicate="dwithin", distance=high):
@@ -525,22 +538,26 @@ def existing_row_candidates(features: Sequence[Feature], params: PlanParams) -> 
             step = math.hypot(bx - ax, by - ay)
             if not low <= step <= high:
                 continue
-            ux, uy = (bx - ax) / step, (by - ay) / step
-            members = _row_members(points, (ax, ay), (ux, uy), step)
-            if len(members) < 3:  # noqa: PLR2004 - ряд из трёх деревьев
+            ux, uz = (bx - ax) / step, (by - ay) / step
+            ks = _row_ks(points, (ax, ay), (ux, uz), step)
+            if len(ks) < ROW_MIN_TREES:
                 continue
-            key = (round(math.degrees(math.atan2(uy, ux)) % 180), round(step), min(members))
+            key = (round(math.degrees(math.atan2(uz, ux)) % 180), round(step), *ks[:2])
             if key in seen:
                 continue
             seen.add(key)
-            out += _row_places(points, members, (ax, ay), (ux, uy), step, len(out))
+            for candidate in _row_places(ks, (ax, ay), (ux, uz), step, _ROW_STATION + len(out)):
+                spot = (round(candidate.x * 2), round(candidate.y * 2))
+                if spot not in taken:
+                    taken.add(spot)
+                    out.append(candidate)
     return out
 
 
-def _row_members(
+def _row_ks(
     points: NDArray[np.float64], origin: tuple[float, float], u: tuple[float, float], step: float
 ) -> list[int]:
-    """Деревья на прямой origin + k * step * u (k целое, в обе стороны) с допуском."""
+    """Номера мест ряда origin + k * step * u, занятые стволами, - связная часть с k = 0 и 1."""
     rel = points - np.array(origin)
     along = rel @ np.array(u)
     across = rel @ np.array((-u[1], u[0]))
@@ -548,31 +565,37 @@ def _row_members(
     near = (np.abs(across) <= ROW_TOLERANCE * step) & (
         np.abs(along - k * step) <= ROW_TOLERANCE * step
     )
-    members = np.flatnonzero(near)
-    # Ряд связный: подряд идущие k без разрыва больше трёх шагов.
-    ks = sorted(set(k[members].astype(int).tolist()))
-    if len(ks) < 3:  # noqa: PLR2004
+    ks = sorted(set(k[near].astype(int).tolist()))
+    if 0 not in ks or 1 not in ks:
         return []
-    return members.tolist()
+    lo = hi = ks.index(0)
+    while lo > 0 and ks[lo] - ks[lo - 1] <= ROW_MAX_GAP:
+        lo -= 1
+    while hi < len(ks) - 1 and ks[hi + 1] - ks[hi] <= ROW_MAX_GAP:
+        hi += 1
+    part = ks[lo : hi + 1]
+    # Ядро ряда - ROW_MIN_TREES стволов подряд без пропуска: случайное облако так не ложится.
+    run = best = 1
+    for left, right in itertools.pairwise(part):
+        run = run + 1 if right - left == 1 else 1
+        best = max(best, run)
+    return part if best >= ROW_MIN_TREES else []
 
 
-def _row_places(  # noqa: PLR0913, PLR0917 - геометрия ряда
-    points: NDArray[np.float64],
-    members: list[int],
+def _row_places(
+    ks: list[int],
     origin: tuple[float, float],
     u: tuple[float, float],
     step: float,
-    start: int,
+    station: int,
 ) -> list[_Candidate]:
-    rel = points[members] - np.array(origin)
-    ks = sorted(set(np.round((rel @ np.array(u)) / step).astype(int).tolist()))
     taken = set(ks)
-    wanted = [k for k in range(ks[0], ks[-1]) if k not in taken]  # разрывы
+    wanted = [k for k in range(ks[0], ks[-1]) if k not in taken]  # пропуски
     wanted += [ks[-1] + i for i in range(1, ROW_EXTEND + 1)]
     wanted += [ks[0] - i for i in range(1, ROW_EXTEND + 1)]
     return [
         _Candidate(
-            station=_ROW_STATION + start + i,
+            station=station + i,
             mode=MODE_EXISTING_ROW,
             x=origin[0] + k * step * u[0],
             y=origin[1] + k * step * u[1],
