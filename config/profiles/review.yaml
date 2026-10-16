@@ -33,5 +33,5 @@ structure_patch_size: 10
 # отключена; отступ от газопровода по табл. 9.1 СП 42 (R-GAS-TREE-001, 1,5 м) действует.
 # Включить зону: параметр {"disabled_rules": []} - посадки в 2 м от оси (по яме) требуют
 # письменного разрешения эксплуатационной организации.
-disabled_rules: [R-GASZONE-TREE-001, R-GASZONE-SHRUB-001]
+disabled_rules: [R-GASZONE-TREE-001, R-GASZONE-SHRUB-001, R-HEATZONE-TREE-001, R-HEATZONE-SHRUB-001]
 lawns: true  # п. 3 ТЗ: газоны на грунте, который посадки оставили свободным (application/lawns.py)
