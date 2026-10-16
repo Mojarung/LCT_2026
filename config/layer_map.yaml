@@ -32,7 +32,8 @@ rules:
   # профиля: BOUND - граница объекта (граница работ), DOROGA - край проезжей части линиями,
   # DOM и EGKO_BUILDINGS - здания, ZABOR - ограждения, LAWN - газоны, «2.<покрытие>» -
   # твёрдые покрытия площадок. Имена целиком: DOMINO или BOUNDARY_TEXT не берутся.
-  - {pattern: "(?:^|[|$])BOUND$", object_class: work_boundary, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])(?:BOUND|BOUNDARY|SITE_BOUNDARY|WORK_BOUNDARY)$", object_class: work_boundary, confirmed: true, priority: 10,
+     note: "BOUNDARY - граница участка у синтетических участков других команд (17.10.2026)"}
   - {pattern: "(?:^|[|$])DOROGA$", object_class: curb, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])(?:DOM|EGKO_BUILDINGS|Жилое)$", object_class: building, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])ZABOR$", object_class: fence, confirmed: true, priority: 10}

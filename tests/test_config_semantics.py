@@ -155,3 +155,21 @@ def test_frames_and_power_cables_keep_their_classes(name: str) -> None:
         found = inferred.object_class if inferred else ObjectClass.UNKNOWN
     expected = ObjectClass.UTILITY_POWER if "Кабель" in name else ObjectClass.IGNORE
     assert found is expected, name
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Синтетические участки Воронов: граница слоем BOUNDARY, кабель связи ELECTR_CABLE_COMM.
+        ("BOUNDARY", ObjectClass.WORK_BOUNDARY),
+        ("ELECTR_CABLE_COMM", ObjectClass.UTILITY_TELECOM),
+        ("ELECTR_CABLE", ObjectClass.UTILITY_POWER),
+    ],
+)
+def test_bare_english_boundary_and_comm_cable(name: str, expected: ObjectClass) -> None:
+    found, evidence = LAYER_MAP.decide(_feature(name, None))
+    if evidence.method != "name_rule":
+        inferred = LAYER_MAP.vocabulary.infer(None, name)
+        assert inferred is not None, name
+        found = inferred.object_class
+    assert found is expected
