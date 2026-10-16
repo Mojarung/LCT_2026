@@ -16,12 +16,15 @@ from ezdxf.audit import AuditError, ErrorEntry
 from ezdxf.entities import DXFTagStorage
 
 from green.application.errors import InputError
+from green.infrastructure.cad import acis_index
 from green.infrastructure.cad.structure import require_complete_container
 
 if TYPE_CHECKING:
     from ezdxf.audit import Auditor
     from ezdxf.document import Drawing
     from ezdxf.entities import DXFEntity
+
+acis_index.install()  # поиск ACIS по индексу, а не перебором (acis_index.py)
 
 RESULT_PREFIX = "GREEN_"
 APPID = "LCT_GREEN"
