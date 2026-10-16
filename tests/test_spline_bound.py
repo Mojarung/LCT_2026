@@ -4,7 +4,9 @@
 «погрешность не ограничена» и остановил бы строгий прогон. Нерациональный сплайн - точная
 цепочка кривых Безье; кривая лежит в выпуклой оболочке своих контрольных точек, поэтому
 дробление, пока они не лягут ближе допуска к хорде, даёт строгую, а не проверенную в середине
-отрезка погрешность. Рациональный сплайн (с весами) так не раскладывается и остаётся пробелом.
+отрезка погрешность. Рациональный сплайн с положительными весами раскладывается так же в
+однородных координатах (чертёж 236285.dxf, проверка жюри 06.10.2026: два таких сплайна в блоке
+«препят» останавливали прогон); с неположительным весом он остаётся пробелом.
 """
 
 from __future__ import annotations
@@ -48,11 +50,47 @@ def test_plain_spline_is_complete_geometry_within_the_tolerance(
     assert shapely.distance(truth, feature.geometry).max() <= FLATTEN_M + 1e-9
 
 
-def test_rational_spline_stays_an_explicit_gap(tmp_path: Path) -> None:
-    scene, _ = _read(
+def test_rational_spline_is_complete_geometry_within_the_tolerance(tmp_path: Path) -> None:
+    scene, curve = _read(
         tmp_path,
         lambda msp: msp.add_rational_spline(
             [(0, 0), (10, 20), (30, -10), (50, 0)], weights=[1, 3, 0.5, 1]
+        ),
+    )
+
+    assert scene.read_diagnostics.geometry_gaps == ()
+    (feature,) = scene.features
+    assert feature.geometry_error_m == pytest.approx(FLATTEN_M)
+    truth = shapely.points([(p.x, p.y) for p in curve.points(np.linspace(0, curve.max_t, 4000))])
+    assert shapely.distance(truth, feature.geometry).max() <= FLATTEN_M + 1e-9
+
+
+def test_quarter_circle_as_rational_spline_lies_on_the_circle(tmp_path: Path) -> None:
+    radius = 10.0
+    scene, _ = _read(
+        tmp_path,
+        lambda msp: msp.add_rational_spline(
+            [(radius, 0), (radius, radius), (0, radius)],
+            weights=[1, 2**-0.5, 1],
+            degree=2,
+        ),
+    )
+
+    (feature,) = scene.features
+    vertices = shapely.get_coordinates(feature.geometry)
+    assert np.abs(np.hypot(vertices[:, 0], vertices[:, 1]) - radius).max() < 1e-9
+    angles = np.linspace(0, np.pi / 2, 2000)
+    truth = shapely.points(np.column_stack([radius * np.cos(angles), radius * np.sin(angles)]))
+    assert shapely.distance(truth, feature.geometry).max() <= FLATTEN_M + 1e-9
+
+
+def test_rational_spline_with_a_non_positive_weight_stays_an_explicit_gap(
+    tmp_path: Path,
+) -> None:
+    scene, _ = _read(
+        tmp_path,
+        lambda msp: msp.add_rational_spline(
+            [(0, 0), (10, 20), (30, -10), (50, 0)], weights=[1, -3, 0.5, 1]
         ),
     )
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from ezdxf.entities import Arc, Circle, LWPolyline
-from ezdxf.math import arc_segment_count
+from ezdxf.math import BSpline, arc_segment_count
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -170,27 +170,25 @@ def spline_vertices(entity: Spline, distance: float) -> tuple[list[tuple[float, 
 
     Кривая лежит в выпуклой оболочке своих контрольных точек, расстояние до хорды выпукло,
     поэтому оценка строгая, а не проверка в середине отрезка. Проекция на план - аффинное
-    отображение, контрольные точки проецируются вместе с кривой. Рациональный или незажатый
-    сплайн так не раскладывается, а сплайн только из точек прохождения каждая CAD-программа
-    строит своей интерполяцией: ValueError, вызывающий оставляет пробел.
+    отображение, контрольные точки проецируются вместе с кривой. Рациональный сплайн с
+    положительными весами раскладывается и делится так же в однородных координатах
+    (x*w, y*w, w): деление де Кастельжо там точное, а с положительными весами рациональная
+    кривая лежит в оболочке спроецированных контрольных точек, оценка та же. Незажатый сплайн,
+    веса не больше нуля и сплайн только из точек прохождения (каждая CAD-программа строит его
+    своей интерполяцией) так не раскладываются: ValueError, вызывающий оставляет пробел.
     """
-    if not entity.control_point_count():
-        raise ValueError("Fit-point spline: the curve depends on the CAD interpolation")
-    try:
-        segments = list(entity.construction_tool().bezier_decomposition())
-    except TypeError as error:
-        raise ValueError(str(error)) from error
-    if not segments:
-        raise ValueError("Empty spline")
-    points = [(segments[0][0].x, segments[0][0].y)]
+    segments = _homogeneous_segments(entity)
+    first = _projected(segments[0])[0]
+    points = [(float(first[0]), float(first[1]))]
     bound = 0.0
     for control in segments:
-        pending = [(np.array([(v.x, v.y) for v in control], dtype=np.float64), 0)]
+        pending = [(control, 0)]
         while pending:
             part, depth = pending.pop()
-            deviation = _control_deviation(part)
+            plan = _projected(part)
+            deviation = _control_deviation(plan)
             if deviation <= distance or depth >= _MAX_SPLIT_DEPTH:
-                points.append((float(part[-1, 0]), float(part[-1, 1])))
+                points.append((float(plan[-1, 0]), float(plan[-1, 1])))
                 bound = max(bound, deviation)
                 if len(points) > MAX_VERTICES:
                     raise ValueError("Curve vertex budget exceeded")
@@ -198,6 +196,43 @@ def spline_vertices(entity: Spline, distance: float) -> tuple[list[tuple[float, 
             left, right = _split_half(part)
             pending.extend(((right, depth + 1), (left, depth + 1)))
     return points, max(bound, distance)
+
+
+def _homogeneous_segments(entity: Spline) -> list[NDArray[np.float64]]:
+    """Кривые Безье сплайна контрольными точками (x*w, y*w, w); у нерационального w = 1."""
+    if not entity.control_point_count():
+        raise ValueError("Fit-point spline: the curve depends on the CAD interpolation")
+    tool = entity.construction_tool()
+    weights = list(entity.weights)
+    try:
+        if not weights:
+            segments = [
+                np.array([(v.x, v.y, 1.0) for v in c], dtype=np.float64)
+                for c in tool.bezier_decomposition()
+            ]
+        else:
+            if len(weights) != entity.control_point_count() or min(weights) <= 0:
+                raise ValueError("Rational spline needs one positive weight per control point")
+            control = zip(entity.control_points, weights, strict=True)
+            lifted = BSpline(
+                [(p[0] * w, p[1] * w, w) for p, w in control],
+                order=tool.order,
+                knots=tool.knots(),
+            )
+            segments = [
+                np.array([(v.x, v.y, v.z) for v in c], dtype=np.float64)
+                for c in lifted.bezier_decomposition()
+            ]
+    except TypeError as error:
+        raise ValueError(str(error)) from error
+    if not segments:
+        raise ValueError("Empty spline")
+    return segments
+
+
+def _projected(homogeneous: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Однородные контрольные точки (x*w, y*w, w) в точки плана (x, y)."""
+    return homogeneous[:, :2] / homogeneous[:, 2:3]
 
 
 def _control_deviation(control: NDArray[np.float64]) -> float:
