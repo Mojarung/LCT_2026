@@ -61,6 +61,10 @@ _SHRUB_GAP_M = 0.5
 _PIT_RESERVE_M = 0.002
 # Центров групп - с запасом к недобору: из группы 3 x 3 обычно садится около половины.
 _CENTER_RESERVE = 2.5
+# Точки грунта проверяются нормами пачками в порядке обхода, пока не набраны центры: групп
+# нужны десятки, а точек на участке - десятки тысяч (Камчатская 17.10.2026: 19 с на проверку
+# всех). Ответ тот же: проверка точки не зависит от соседей по пачке.
+CENTER_CHUNK = 2048
 
 
 def fill_shrub_gaps(  # noqa: PLR0913 - сценарий передаёт всё, что знает о прогоне
@@ -178,21 +182,9 @@ def _centers(
     Обход - от борта вглубь: ближние к борту места первыми. Так группы идут вдоль улицы и
     прикрывают борт от пыли, а не забивают первый попавшийся газон ковром.
     """
-    surface = index.surface
-    if surface is None:
+    if index.surface is None:
         return []
-    stride = max(1, round(_CELL_M / surface.cell))
-    soil = surface.grid[::stride, ::stride] == Material.SOIL
-    while soil.sum() > MAX_ZONE_POINTS:  # огромная граница: шаг растёт, как у зон
-        stride *= 2
-        soil = surface.grid[::stride, ::stride] == Material.SOIL
-    rows, cols = np.nonzero(soil)
-    xy = np.column_stack(
-        [
-            surface.origin[0] + (cols * stride + 0.5) * surface.cell,
-            surface.origin[1] + (rows * stride + 0.5) * surface.cell,
-        ]
-    )
+    xy = _soil_points(index.surface)
     points = shapely.points(xy)
     keep = index.plantable(points)
     for kind, gap in (
@@ -203,7 +195,6 @@ def _centers(
     candidates = np.flatnonzero(keep)
     if not len(candidates):
         return []
-    batch = index.evaluate(points[candidates])
     order = np.arange(len(candidates))
     if curbs:
         tree = shapely.STRtree(list(curbs))
@@ -214,24 +205,51 @@ def _centers(
     step = params.shrub_fill_step_m
     cells: dict[tuple[int, int], list[tuple[float, float]]] = {}
     centers: list[tuple[float, float]] = []
-    for row in order.tolist():
-        k = int(candidates[row])
-        if batch.verdict(row) is not Verdict.ALLOWED:
-            continue
-        x, y = float(xy[k, 0]), float(xy[k, 1])
-        cx, cy = math.floor(x / step), math.floor(y / step)
-        if any(
-            math.hypot(px - x, py - y) < step
-            for dx in (-1, 0, 1)
-            for dy in (-1, 0, 1)
-            for px, py in cells.get((cx + dx, cy + dy), ())
-        ):
-            continue
-        cells.setdefault((cx, cy), []).append((x, y))
-        centers.append((x, y))
-        if len(centers) >= groups:
-            break
+    for start in range(0, len(order), CENTER_CHUNK):
+        chunk = candidates[order[start : start + CENTER_CHUNK]]
+        batch = index.evaluate(points[chunk])
+        for row, k in enumerate(chunk.tolist()):
+            if batch.verdict(row) is not Verdict.ALLOWED:
+                continue
+            x, y = float(xy[k, 0]), float(xy[k, 1])
+            if not _take(cells, x, y, step):
+                continue
+            centers.append((x, y))
+            if len(centers) >= groups:
+                return centers
     return centers
+
+
+def _soil_points(surface: SurfaceMap) -> NDArray[np.float64]:
+    """Центры клеток грунта с шагом около метра; на огромной границе шаг растёт, как у зон."""
+    stride = max(1, round(_CELL_M / surface.cell))
+    soil = surface.grid[::stride, ::stride] == Material.SOIL
+    while soil.sum() > MAX_ZONE_POINTS:
+        stride *= 2
+        soil = surface.grid[::stride, ::stride] == Material.SOIL
+    rows, cols = np.nonzero(soil)
+    return np.column_stack(
+        [
+            surface.origin[0] + (cols * stride + 0.5) * surface.cell,
+            surface.origin[1] + (rows * stride + 0.5) * surface.cell,
+        ]
+    )
+
+
+def _take(
+    cells: dict[tuple[int, int], list[tuple[float, float]]], x: float, y: float, step: float
+) -> bool:
+    """Занять точку, если в шаге от неё нет уже взятого центра (сетка ячеек размером шага)."""
+    cx, cy = math.floor(x / step), math.floor(y / step)
+    if any(
+        math.hypot(px - x, py - y) < step
+        for dx in (-1, 0, 1)
+        for dy in (-1, 0, 1)
+        for px, py in cells.get((cx + dx, cy + dy), ())
+    ):
+        return False
+    cells.setdefault((cx, cy), []).append((x, y))
+    return True
 
 
 def _away(
