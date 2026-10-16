@@ -87,6 +87,9 @@ classes:
     rank: line
     words: ["связ", "телеф", "мгтс", "слаботоч", "вок", "спайк", "оптик", "сс", "telecom",
             "fiber", "fibre"]
+    # «Кабель связи», «CABLE_COMM» - связь, а не силовой кабель (входы других команд 17.10.2026).
+    phrases: ["кабель связи", "кабели связи", "кабельная связ", "cable comm", "comm cable",
+              "communication cable", "telecom cable"]
   utility.water:
     rank: line
     words: ["водопровод", "водовод", "в1", "water"]
@@ -112,6 +115,8 @@ classes:
   curb:
     rank: line
     words: ["борт", "бордюр", "бр", "бк", "kerb", "curb"]
+    # Край проезжей части линией - борт, а не покрытие проезда.
+    phrases: ["край дорог", "край проезж", "край пч", "кромка проезж", "road edge", "edge of road"]
     patterns: ["^_?гп ?\\d"]
   fence:
     rank: line
@@ -155,4 +160,7 @@ classes:
   work_boundary:
     rank: boundary
     phrases: ["граница работ", "границы работ", "граница благоустр", "границы благоустр",
-              "граница проектир", "граница участк", "граница заказа", "work boundary"]
+              "граница проектир", "граница участк", "граница заказа", "work boundary",
+              "граница проект", "границы проект", "границы участк", "граница территор",
+              "граница объект", "site boundary", "site border", "territory boundary",
+              "project boundary", "site limit", "work limit"]

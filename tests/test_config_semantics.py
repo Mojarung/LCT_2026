@@ -123,3 +123,35 @@ def test_pole_and_wall_words_still_work_elsewhere(name: str, expected: ObjectCla
     found = LAYER_MAP.vocabulary.infer(name)
     assert found is not None
     assert found.object_class is expected
+
+
+# Входные DXF других команд финала (other/*, 17.10.2026): имена слоёв без правил пилота.
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("ГРАНИЦА_ПРОЕКТА", ObjectClass.WORK_BOUNDARY),
+        ("РАМКА_ГРАНИЦА_УЧАСТКА", ObjectClass.WORK_BOUNDARY),
+        ("TERRITORY_BOUNDARY", ObjectClass.WORK_BOUNDARY),
+        ("SITE_BORDER", ObjectClass.WORK_BOUNDARY),
+        ("КАБЕЛЬ_СВЯЗИ", ObjectClass.UTILITY_TELECOM),
+        ("CABLE_COMM_N", ObjectClass.UTILITY_TELECOM),
+        ("КРАЙ_ДОРОГИ", ObjectClass.CURB),
+    ],
+)
+def test_foreign_layer_names(name: str, expected: ObjectClass) -> None:
+    found, evidence = LAYER_MAP.decide(_feature(name, None))
+    if evidence.method != "name_rule":
+        inferred = LAYER_MAP.vocabulary.infer(None, name)
+        assert inferred is not None, name
+        found = inferred.object_class
+    assert found is expected
+
+
+@pytest.mark.parametrize("name", ["Рамка", "Рамка листа", "SHEET_BORDER", "Кабель силовой"])
+def test_frames_and_power_cables_keep_their_classes(name: str) -> None:
+    found, evidence = LAYER_MAP.decide(_feature(name, None))
+    if evidence.method != "name_rule":
+        inferred = LAYER_MAP.vocabulary.infer(None, name)
+        found = inferred.object_class if inferred else ObjectClass.UNKNOWN
+    expected = ObjectClass.UTILITY_POWER if "Кабель" in name else ObjectClass.IGNORE
+    assert found is expected, name

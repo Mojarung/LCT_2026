@@ -104,7 +104,7 @@ class Vocabulary:
         tokens = text.split()
         if not tokens:
             return None
-        if word := self._annotation(text, tokens):
+        if (word := self._annotation(text, tokens)) and not self._boundary(text):
             return Inference(ObjectClass.IGNORE, word, "annotation")
         head = self._head(name, tokens)
         hits = self._hits(" ".join(head), head)
@@ -129,6 +129,14 @@ class Vocabulary:
 
     def _service(self) -> frozenset[str]:
         return self.removal | self.proposed | self.existing | self.negations
+
+    def _boundary(self, text: str) -> bool:
+        """Фраза границы работ сильнее слова оформления: «РАМКА_ГРАНИЦА_УЧАСТКА», «SITE_BORDER»
+        у других команд - граница участка, а не рамка листа (17.10.2026)."""
+        return any(
+            kind is ObjectClass.WORK_BOUNDARY and _has_phrase(text, phrase)
+            for phrase, (kind, _) in self.phrases.items()
+        )
 
     def _annotation(self, text: str, tokens: list[str]) -> str | None:
         for phrase in self.annotation_phrases:
