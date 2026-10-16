@@ -623,6 +623,18 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
             for lawn in plan.lawns
         ],
         "warnings": list(plan.warnings),
+        "edits": [
+            {
+                "kind": m.kind,
+                "placement_id": m.placement_id,
+                "x": m.x,
+                "y": m.y,
+                "from_x": m.from_x,
+                "from_y": m.from_y,
+                "species_ru": m.species_ru,
+            }
+            for m in plan.edits
+        ],
     }
 
 

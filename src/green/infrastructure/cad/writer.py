@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import shapely
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from green.application.schedule import ScheduleRow
     from green.domain.norms import RuleBook
     from green.domain.planting import (
+        EditMark,
         Lawn,
         Placement,
         Plan,
@@ -53,6 +55,8 @@ LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
 LAYER_LAWN = f"{RESULT_PREFIX}LAWN"
 # Ведомость элементов озеленения (ГОСТ 21.508-2020, п. 10.8, форма 9) таблицей рядом с планом.
 LAYER_SCHEDULE = f"{RESULT_PREFIX}SCHEDULE"
+# Ручные правки плана (ТЗ, п. 6): метки удалений, переносов и добавлений.
+LAYER_EDITS = f"{RESULT_PREFIX}EDITS"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 LAYER_COLORS = {
     LAYER_TREES: 3,
@@ -66,6 +70,7 @@ LAYER_COLORS = {
     LAYER_ZONE_APPROVAL: 30,
     LAYER_LAWN: 82,
     LAYER_SCHEDULE: 7,
+    LAYER_EDITS: 6,
 }
 ZONE_LAYERS = {Verdict.ALLOWED: LAYER_ZONE_ALLOWED, Verdict.NEEDS_APPROVAL: LAYER_ZONE_APPROVAL}
 ZONE_TRANSPARENCY = 0.7
@@ -145,6 +150,8 @@ class EzdxfPlanWriter:
             self._placement(doc, msp, placement, position, scale=scale, rulebook=rulebook)
         for rejection in plan.rejections:
             self._rejection(msp, rejection, scale)
+        for mark in plan.edits:
+            self._edit_mark(msp, mark, scale)
         extent = plan_extent(plan)
         if extent is not None:
             left = self._schedule(msp, rows, extent, scale)
@@ -328,6 +335,32 @@ class EzdxfPlanWriter:
                 (1000, failed[:XDATA_CHUNK]),
             ],
         )
+
+    def _edit_mark(self, msp: Modelspace, mark: EditMark, scale: float) -> None:
+        """Метка ручной правки на слое GREEN_EDITS; посадка остаётся на своём слое."""
+        attribs = {"layer": LAYER_EDITS}
+        x, y = mark.x * scale, mark.y * scale
+        half = 0.8 * scale
+        if mark.kind == "delete":
+            msp.add_line((x - half, y - half), (x + half, y + half), dxfattribs=attribs)
+            msp.add_line((x - half, y + half), (x + half, y - half), dxfattribs=attribs)
+            text = f"удалена вручную: {mark.species_ru}"
+        elif mark.kind == "move" and mark.from_x is not None and mark.from_y is not None:
+            msp.add_line((mark.from_x * scale, mark.from_y * scale), (x, y), dxfattribs=attribs)
+            msp.add_circle(
+                (mark.from_x * scale, mark.from_y * scale), 0.3 * scale, dxfattribs=attribs
+            )
+            shift = math.dist((mark.from_x, mark.from_y), (mark.x, mark.y))
+            text = f"перенесена вручную на {shift:.2f} м: {mark.species_ru}".replace(".", ",")
+        else:
+            msp.add_circle((x, y), half, dxfattribs=attribs)
+            text = f"добавлена вручную: {mark.species_ru}"
+        label = msp.add_text(
+            text,
+            dxfattribs={**attribs, "height": self._height * scale, "style": TEXT_STYLE},
+        )
+        label.set_placement((x + half, y - half - self._height * scale))
+        label.set_xdata(APPID, [(1000, mark.placement_id)])
 
     def _legend(
         self,

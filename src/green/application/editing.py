@@ -43,7 +43,7 @@ from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
 from green.application.validation import PlanValidation, spacing_issues, validate_plan
 from green.domain.norms import PlantingType
-from green.domain.planting import CheckOutcome, Placement, Rejection, Verdict
+from green.domain.planting import CheckOutcome, EditMark, Placement, Rejection, Verdict
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -440,23 +440,32 @@ def apply_edits_detailed(
     by_code = {s.code: s for s in catalog}
     current: list[Placement | None] = list(context.plan.placements)
     positions = {p.placement_id: i for i, p in enumerate(context.plan.placements)}
+    marks = _EditMarks(context.plan.edits)
 
     for edit in edits:
         if edit.kind is EditKind.ADD:
             added = _added(context, edit, by_code, current)
             current.append(added)
             positions[added.placement_id] = len(current) - 1
+            marks.added(added)
             continue
         position = _require_existing(positions, edit)
+        before = _at(current, position, edit)
         if edit.kind is EditKind.DELETE:
             current[position] = None
             positions.pop(_placement_id(edit))
+            marks.deleted(before)
         else:
-            current[position] = _moved(context, _at(current, position, edit), edit)
+            after = _moved(context, before, edit)
+            current[position] = after
+            marks.moved(before, after)
 
     plan, rejected = _rebuild_plan(context, [p for p in current if p is not None], catalog)
     plan, spaced = _reject_crowding(context, plan, _edited_ids(edits, current))
     rejected = (*rejected, *spaced)
+    for item in rejected:
+        marks.rejected(item.placement_id)
+    plan = replace(plan, edits=marks.result())
     plan = refresh_summaries(plan, context.params, catalog)
     # Посадочные места сдвинулись: газон считается заново по той же карте покрытий прогона.
     plan = plan_lawns(
@@ -569,6 +578,54 @@ def _rebuild_plan(
         ),
     )
     return plan, tuple(EditRejection(p.placement_id, _reason(context, p)) for p in violating)
+
+
+class _EditMarks:
+    """Ручные правки плана для слоя GREEN_EDITS: одна метка на посадку, итог всех правок.
+
+    Добавленную и затем удалённую посадку меток не оставляет; перенос помнит исходную точку,
+    сколько бы раз посадку ни двигали; посадка, которую правка увела в отказ, - удалена.
+    """
+
+    def __init__(self, marks: Sequence[EditMark]) -> None:
+        self._marks: dict[str, EditMark] = {m.placement_id: m for m in marks}
+
+    def added(self, placement: Placement) -> None:
+        self._marks[placement.placement_id] = EditMark(
+            "add", placement.placement_id, placement.x, placement.y, placement.species.name_ru
+        )
+
+    def moved(self, before: Placement, after: Placement) -> None:
+        known = self._marks.get(before.placement_id)
+        if known is not None and known.kind == "add":
+            self._marks[before.placement_id] = replace(known, x=after.x, y=after.y)
+            return
+        origin = (known.from_x, known.from_y) if known is not None else (before.x, before.y)
+        self._marks[before.placement_id] = EditMark(
+            "move", before.placement_id, after.x, after.y, before.species.name_ru, *origin
+        )
+
+    def deleted(self, placement: Placement) -> None:
+        known = self._marks.pop(placement.placement_id, None)
+        if known is not None and known.kind == "add":
+            return
+        x, y = placement.x, placement.y
+        if known is not None and known.from_x is not None and known.from_y is not None:
+            x, y = known.from_x, known.from_y
+        self._marks[placement.placement_id] = EditMark(
+            "delete", placement.placement_id, x, y, placement.species.name_ru
+        )
+
+    def rejected(self, placement_id: str) -> None:
+        known = self._marks.pop(placement_id, None)
+        if known is None or known.kind == "add":
+            return
+        x = known.from_x if known.from_x is not None else known.x
+        y = known.from_y if known.from_y is not None else known.y
+        self._marks[placement_id] = EditMark("delete", placement_id, x, y, known.species_ru)
+
+    def result(self) -> tuple[EditMark, ...]:
+        return tuple(self._marks.values())
 
 
 def _edited_ids(edits: Sequence[Edit], current: Sequence[Placement | None]) -> list[str]:
