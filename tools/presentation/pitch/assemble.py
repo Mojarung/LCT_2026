@@ -1,14 +1,15 @@
-# ruff: noqa: INP001, T201 - standalone deck assembler next to build.mjs
-"""Собирает презентацию к сдаче: обязательные слайды 7-11 шаблона ЛЦТ 2026 и свободные слайды.
+# ruff: noqa: INP001, T201, SLF001 - standalone deck assembler; python-pptx has no API for slide order
+"""Собирает презентацию к сдаче в шаблоне ЛЦТ 2026, целиком редактируемую в PowerPoint.
 
-Обязательные слайды заполняет deck/mandatory.py в исходном оформлении шаблона (меняется только
-текст), свободные рисует build.mjs в HTML. PDF обязательных - LibreOffice, склейка - PyMuPDF;
-в PPTX свободные слайды вставляются картинками во весь кадр после обязательных.
+Слайды 7-11 шаблона обязательные (deck/mandatory.py): оформление шаблона, меняется только текст.
+За ними слайд шаблона с рекомендуемой структурой и свободные слайды native.py по шести
+разделам этой структуры: текст, фигуры, таблицы и графики PowerPoint, снимки сервиса - картинками.
+PDF - тот же PPTX через LibreOffice.
 
-Запуск (после shots.mjs и build.mjs):
+Запуск (после shots.mjs; фоны bg/ - из шаблона):
     uv run --with python-pptx --with pillow --with pymupdf python \
         tools/presentation/pitch/assemble.py "ЛЦТ2026 Шаблон презентации.pptx"
-Выход: out/presentation/pitch/green-lct2026.pdf и green-lct2026.pptx.
+Выход: out/presentation/pitch/green-lct2026.pptx и green-lct2026.pdf.
 """
 
 from __future__ import annotations
@@ -20,16 +21,18 @@ from pathlib import Path
 import pymupdf
 from PIL import Image
 from pptx import Presentation
-from pptx.util import Emu
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "deck"))
+sys.path.insert(0, str(HERE))
 
-import build_pptx as deck  # noqa: E402 - модуль колоды лежит рядом, путь добавлен выше
+import build_pptx as deck  # noqa: E402 - модули колоды лежат рядом, путь добавлен выше
+import native  # noqa: E402
 
 ROOT = HERE.parents[2]
 PITCH = ROOT / "out" / "presentation" / "pitch"
 SOFFICE = Path(r"C:\Program Files\LibreOffice\program\soffice.exe")
+STRUCTURE = 4  # слайд шаблона «Рекомендуемая структура презентации»
 
 
 def plan_band() -> Path:
@@ -39,16 +42,22 @@ def plan_band() -> Path:
     return deck.jpg(shot.crop((1080, 380, 2220, 1420)), "plan_band.jpg")
 
 
-def mandatory_deck(template: Path) -> Presentation:
+def build(template: Path) -> Presentation:
     prs = Presentation(str(template))
-    deck.drop_slides(prs, set(deck.MANDATORY))
-    title_s, about_s, team_s, history_s, short_s = list(prs.slides)
+    deck.drop_slides(prs, {STRUCTURE, *deck.MANDATORY})
+    structure_s, title_s, about_s, team_s, history_s, short_s = list(prs.slides)
+    ids = prs.slides._sldIdLst
+    first = ids[0]
+    ids.remove(first)
+    ids.insert(len(deck.MANDATORY), first)  # структура - сразу после обязательных
     assets = {"plan_band": plan_band(), **deck.poser_logo()}
     deck.fill_title_slide(title_s, assets)
     deck.fill_about_slide(about_s, assets)
     deck.fill_team_slide(team_s, [deck.portrait(*spec) for spec in deck.TEAM_PHOTOS])
     deck.fill_history_slide(history_s)
     deck.fill_short_slide(short_s)
+    native.fill_structure_slide(structure_s)
+    native.add_slides(prs)
     return prs
 
 
@@ -70,37 +79,17 @@ def to_pdf(pptx: Path) -> Path:
 
 
 def main() -> None:
-    template = Path(sys.argv[1])
-    free_png = sorted((PITCH / "slides").glob("*.png"))
-    if not free_png:
-        raise SystemExit("Нет свободных слайдов: сначала node tools/presentation/pitch/build.mjs")
-
-    mandatory = PITCH / "mandatory.pptx"
-    mandatory_deck(template).save(str(mandatory))
-    mandatory_pdf = to_pdf(mandatory)
-
-    out_pdf = PITCH / "green-lct2026.pdf"
-    with pymupdf.open(mandatory_pdf) as doc, pymupdf.open(PITCH / "free.pdf") as free:
-        doc.insert_pdf(free)
-        doc.set_metadata({"title": "green - озеленение улиц по нормам", "author": "MISIS MOJARUNG"})
-        # Снимки сервиса сняты в 2x: 150 dpi на слайде 1920 px хватает, файл меньше вчетверо.
-        doc.rewrite_images(dpi_threshold=180, dpi_target=150, quality=82)
-        doc.save(out_pdf, garbage=4, deflate=True, clean=True)
-
-    prs = mandatory_deck(template)
-    blank = prs.slide_layouts[len(prs.slide_layouts) - 1]
-    for png in free_png:
-        slide = prs.slides.add_slide(blank)
-        for ph in list(slide.placeholders):
-            ph._element.getparent().remove(ph._element)  # noqa: SLF001 - у python-pptx нет API
-        slide.shapes.add_picture(str(png), 0, 0, Emu(prs.slide_width), Emu(prs.slide_height))
+    PITCH.mkdir(parents=True, exist_ok=True)
     out_pptx = PITCH / "green-lct2026.pptx"
+    prs = build(Path(sys.argv[1]))
+    prs.core_properties.title = "green - озеленение улиц по нормам"
+    prs.core_properties.author = "MISIS MOJARUNG"
     prs.save(str(out_pptx))
-
+    out_pdf = to_pdf(out_pptx)
     with pymupdf.open(out_pdf) as doc:
         pages = doc.page_count
-    print(f"{out_pdf}: {pages} слайдов, {out_pdf.stat().st_size / 1e6:.1f} МБ")
-    print(f"{out_pptx}: {out_pptx.stat().st_size / 1e6:.1f} МБ")
+    print(f"{out_pptx}: {len(prs.slides)} слайдов, {out_pptx.stat().st_size / 1e6:.1f} МБ")
+    print(f"{out_pdf}: {pages} страниц, {out_pdf.stat().st_size / 1e6:.1f} МБ")
 
 
 if __name__ == "__main__":
