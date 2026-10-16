@@ -88,9 +88,9 @@ def run(job: tuple[str, str, str]) -> dict:
     }
 
 
-def _need_gb(street: object) -> float:
+def _need_gb(street: object, factor: float = 25.0) -> float:
     size = sum(p.stat().st_size for p in (street.main, *street.extra))  # ty: ignore[unresolved-attribute]
-    return 1.0 + 25 * size / 1e9
+    return 1.0 + factor * size / 1e9
 
 
 def _memory_gb() -> tuple[float, float]:
@@ -128,6 +128,9 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--skip-done", action="store_true", help="не перегонять succeeded")
     parser.add_argument("--ram-fill", type=float, default=0.93, help="доля всей памяти")
+    parser.add_argument(
+        "--ram-factor", type=float, default=25.0, help="пик памяти улицы / размер комплекта"
+    )
     args = parser.parse_args()
     streets = [
         s
@@ -160,7 +163,7 @@ def main() -> None:
         while queue or running:
             committed = sum(need for _, need in running.values())
             while queue and len(running) < args.workers:
-                need = _need_gb(queue[0])
+                need = _need_gb(queue[0], args.ram_factor)
                 # Первая улица идёт всегда; дальше - пока оценки помещаются в бюджет.
                 if running and committed + need > budget:
                     break
