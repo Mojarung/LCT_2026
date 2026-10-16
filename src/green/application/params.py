@@ -166,6 +166,10 @@ class PlanParams:
     # Compare complete validated layouts; baseline always remains an alternative.
     placement_solver: str = "portfolio"
     placement_time_limit_s: float = 5.0
+    # Скоркарта «похоже на практику проектировщиков» (application/likeness.py): к весу места в
+    # задаче выбора добавляется до likeness_weight очков - меньше, чем стоит одно лишнее место.
+    # 0 - не учитывается (по умолчанию: опыт E2b, docs/plans/2026-10-16-ml-experiments.md).
+    likeness_weight: float = 0.0
     # Бюджет времени портфеля на все варианты, с: следующий вариант не начинается, если
     # самый долгий из посчитанных в бюджет не укладывается; исходный считается всегда. Лимит
     # стенда - 30 минут на подбор мест (docs/notes/15); 0 - без бюджета.

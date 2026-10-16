@@ -1046,6 +1046,7 @@ NOT_RUN_FILES = {
     "raw.png",
     "context.pickle",
     "name_model.json",  # обучающие имена модели имён слоёв, config/
+    "likeness.json",  # скоркарта практики проектировщиков, config/
     "_layers.dxf",  # суффикс имени, файл - result_layers.dxf
 }
 
@@ -1274,6 +1275,10 @@ PARAMS: list[tuple[str, list[tuple[str, str]]]] = [
                 "`portfolio` - сравнение вариантов, прошедших проверку; иначе один приём",
             ),
             ("placement_time_limit_s", "лимит времени MILP на вариант, с"),
+            (
+                "likeness_weight",
+                "очки скоркарты «похоже на практику проектировщиков» (config/likeness.json) к весу места в MILP: 0 - не учитывается",
+            ),
             ("placement_max_candidates", "предел числа кандидатов MILP; больше - жадный отбор"),
             ("placement_max_conflicts", "предел числа пар-конфликтов MILP"),
             ("portfolio_budget_s", "бюджет времени портфеля, с; исходный вариант считается всегда"),

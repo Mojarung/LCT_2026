@@ -22,6 +22,7 @@ from green.infrastructure.config.repositories import (
     YamlProfileSource,
     YamlRuleBookSource,
     YamlSpeciesCatalog,
+    load_likeness,
 )
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
@@ -79,7 +80,7 @@ def build_container(settings: Settings | None = None) -> Container:
         rules=rules,
         layers=layers,
         species=species,
-        strategy=GreedyPlantingStrategy(),
+        strategy=GreedyPlantingStrategy(likeness=load_likeness(config / "likeness.json")),
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
         merger=EzdxfDrawingMerger(documents=documents),

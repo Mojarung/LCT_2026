@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
+from green.application.likeness import LikenessModel, likeness_model
 from green.application.name_model import NameModel
 from green.application.name_semantics import Vocabulary, build_vocabulary
 from green.application.params import PlanParams
@@ -261,6 +262,13 @@ class YamlLayerMapSource:
 
 
 _MOS_LISTS = {"main": "основной ассортимент", "extra": "дополнительный ассортимент"}
+
+
+def load_likeness(path: Path) -> LikenessModel | None:
+    """Скоркарта практики проектировщиков (config/likeness.json); нет файла - нет скоркарты."""
+    if not path.exists():
+        return None
+    return likeness_model(json.loads(path.read_text(encoding="utf-8")))
 
 
 def _with_mos_assortment(species: tuple[Species, ...], path: Path) -> tuple[Species, ...]:

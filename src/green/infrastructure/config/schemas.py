@@ -337,6 +337,7 @@ class ProfileModel(_Strict):
     portfolio_budget_s: float = Field(default=900.0, ge=0, le=86_400)
     refine_budget_s: float = Field(default=30.0, ge=0, le=3_600)
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
+    likeness_weight: float = Field(default=0.0, ge=0, le=5)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
     placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)
     lawn_phase: tuple[Annotated[float, Field(ge=0, lt=1)], Annotated[float, Field(ge=0, lt=1)]] = (

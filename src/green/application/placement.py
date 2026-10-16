@@ -54,12 +54,13 @@ from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from numpy.typing import NDArray
     from shapely.geometry import LineString
     from shapely.geometry.base import BaseGeometry
 
+    from green.application.likeness import LikenessModel
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
     from green.domain.norms import DistanceRule, RuleBook
@@ -150,6 +151,19 @@ def _outside_yards(candidates: list[_Candidate], features: Sequence[Feature]) ->
 class GreedyPlantingStrategy:
     """Аллея вдоль борта, затем заполнение газона; первый допустимый вариант на станции."""
 
+    def __init__(self, likeness: LikenessModel | None = None) -> None:
+        # Скоркарта практики проектировщиков: только добавка к весу места в задаче выбора.
+        self.likeness = likeness
+
+    def _selector(
+        self, features: Sequence[Feature], species: Species, params: PlanParams
+    ) -> _Selector:
+        selector = _Selector(species=species, params=params)
+        if self.likeness is not None and params.likeness_weight > 0:
+            model = self.likeness
+            selector.likeness = lambda xy: model.probability(xy, features)
+        return selector
+
     def plan(  # noqa: PLR0913 - входы прогона плюс его карта покрытий
         self,
         features: Sequence[Feature],
@@ -197,7 +211,7 @@ class GreedyPlantingStrategy:
         )
         if params.require_soil:
             index.surface = surface or _surface_map(features, labels, index, params)
-        selector = _Selector(species=species, params=params)
+        selector = self._selector(features, species, params)
         stats: dict[str, int | float] = {}
         if MODE_EXISTING_ROW in params.modes:
             candidates = existing_row_candidates(features, params)
@@ -764,6 +778,8 @@ class _Selector:
     _chosen: list[_Candidate] = field(default_factory=list)
     # Все предложенные места с принимаемым вердиктом, по порядку: из них - вместимость участка.
     admissible: list[tuple[float, float]] = field(default_factory=list)
+    # Вероятность «так посадил бы проектировщик» по точкам места (likeness.py); None - не нужна.
+    likeness: Callable[[NDArray[np.float64]], NDArray[np.float64]] | None = None
 
     def offer(self, candidate: _Candidate, row: int) -> None:
         if candidate.station != self._station:
@@ -833,7 +849,8 @@ class _Selector:
         baseline = tuple(indices[id(candidate)] for candidate in self._chosen)
         # One extra place outweighs the sum of all secondary preferences. These are
         # project preferences, not law and not a measured ecological benefit.
-        base = 15 * len(pool) + 1
+        likeness = self._likeness_points(pool)
+        base = (15 + max(likeness, default=0)) * len(pool) + 1
         hedge_room = _hedge_room(self.params)
         problem = SelectionProblem(
             xy=tuple((c.x, c.y) for c, _, _ in pool),
@@ -845,7 +862,8 @@ class _Selector:
                 + 2 * (c.mode == MODE_ALLEY)
                 + 3 * (c.mode == MODE_EXISTING_ROW)
                 + (c.mode == MODE_ALLEY and c.offset >= hedge_room)
-                for c, batch, row in pool
+                + extra
+                for (c, batch, row), extra in zip(pool, likeness, strict=True)
             ),
             min_gap_m=max(
                 step_with_tolerance(self.params.spacing_m, self.params.planting_type),
@@ -854,7 +872,8 @@ class _Selector:
             objective_description=(
                 "First maximize eligible places; then sum preferences: allowed=8, "
                 "no root barrier=4, continuing a row of existing trees=3, alley=2, "
-                "alley tree leaving room for a curb hedge=1. "
+                "alley tree leaving room for a curb hedge=1, designer-likeness scorecard "
+                f"up to {self.params.likeness_weight:g}. "
                 "Species feasibility and aesthetic quality are not part of this objective."
             ),
         )
@@ -874,6 +893,16 @@ class _Selector:
             occupied.add(placement.x, placement.y)
         self.rejections = [r for r in self.rejections if not occupied.near(r.x, r.y)]
         return report
+
+    def _likeness_points(
+        self, pool: Sequence[tuple[_Candidate, EvaluationBatch, int]]
+    ) -> list[int]:
+        """Очки скоркарты практики проектировщиков: 0..likeness_weight целыми."""
+        if self.likeness is None or not pool or self.params.likeness_weight <= 0:
+            return [0] * len(pool)
+        xy = np.array([(c.x, c.y) for c, _, _ in pool], dtype=np.float64)
+        scores = self.likeness(xy) * self.params.likeness_weight
+        return [round(float(s)) for s in scores]
 
     def _placement(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> Placement:
         return Placement(
