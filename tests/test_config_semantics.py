@@ -162,6 +162,7 @@ def test_frames_and_power_cables_keep_their_classes(name: str) -> None:
     [
         # Синтетические участки Воронов: граница слоем BOUNDARY, кабель связи ELECTR_CABLE_COMM.
         ("BOUNDARY", ObjectClass.WORK_BOUNDARY),
+        ("GROUND", ObjectClass.LAWN),  # у Воронов - земля под озеленение (их тесты: type lawn)
         ("ELECTR_CABLE_COMM", ObjectClass.UTILITY_TELECOM),
         ("ELECTR_CABLE", ObjectClass.UTILITY_POWER),
     ],

@@ -37,7 +37,8 @@ rules:
   - {pattern: "(?:^|[|$])DOROGA$", object_class: curb, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])(?:DOM|EGKO_BUILDINGS|Жилое)$", object_class: building, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])ZABOR$", object_class: fence, confirmed: true, priority: 10}
-  - {pattern: "(?:^|[|$])LAWN$", object_class: lawn, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])(?:LAWN|GROUND|GRASS)$", object_class: lawn, confirmed: true, priority: 10,
+     note: "GROUND - земля под озеленение у синтетических участков других команд (17.10.2026)"}
   - {pattern: "(?:^|[|$])EGKO_ROADS$", object_class: road, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])2\\.(?:Асфальт|Плитка|Брусчатка|Резиновая крошка|Песчанное покрытие|Песчано-гравийная смесь|Щебеночное|Гравийное|Гранитное|Пластиковое|Каменное|Искуственная тарва)$",
      object_class: sidewalk, confirmed: true, priority: 10, note: "покрытия площадок и дорожек паспорта ОГХ"}
