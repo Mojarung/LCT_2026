@@ -63,6 +63,7 @@ if TYPE_CHECKING:
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
 MODE_FILL = "fill"  # добор зоны; посадки подписаны как заполнение газона
+MODE_EXISTING_ROW = "existing_row"
 MODE_SHRUB_GROUP = "shrub_group"
 MODE_SHRUB_ROW = "shrub_row"
 MODE_CURB_HEDGE = "curb_hedge"
@@ -71,6 +72,7 @@ MODE_SHRUB_FILL = "shrub_fill"
 MODE_LABELS = {
     MODE_ALLEY: "аллея вдоль борта",
     MODE_LAWN: "заполнение газона",
+    MODE_EXISTING_ROW: "продолжение ряда существующих деревьев",
     MODE_SHRUB_GROUP: "группа кустарников на месте дерева",
     MODE_SHRUB_ROW: "ряд кустарника у борта под кронами аллеи",
     MODE_CURB_HEDGE: "живая изгородь вдоль борта",
@@ -190,6 +192,10 @@ class GreedyPlantingStrategy:
             index.surface = surface or _surface_map(features, labels, index, params)
         selector = _Selector(species=species, params=params)
         stats: dict[str, int | float] = {}
+        if MODE_EXISTING_ROW in params.modes:
+            candidates = existing_row_candidates(features, params)
+            stats["row_candidates"] = len(candidates)
+            stats["row_plantable"] = _offer(index, selector, candidates)
         if MODE_ALLEY in params.modes:
             reach = max((abs(offset) for offset in params.curb_offsets_m), default=0.0)
             lines = _curb_lines(features, index.boundary, reach + _ROUNDING_PAIR_RESERVE_M)
@@ -482,6 +488,99 @@ def _hedge_room(params: PlanParams) -> float:
     return min(offsets) + params.planting_radius_m + params.shrub_planting_radius_m
 
 
+# Ряд существующих деревьев: шаг, отклонение от прямой и сколько мест продолжать за край.
+ROW_STEP_M = (4.0, 12.0)
+ROW_TOLERANCE = 0.15  # доля шага: насколько третье дерево может уйти от продолжения пары
+ROW_EXTEND = 6
+_ROW_STATION = 1_000_000  # станции рядов не пересекаются со станциями аллеи
+
+
+def existing_row_candidates(features: Sequence[Feature], params: PlanParams) -> list[_Candidate]:
+    """Места, продолжающие ряды существующих деревьев их же шагом (идея greenai).
+
+    Ряд - три и больше дерева, где каждое следующее стоит на продолжении пары с отклонением не
+    больше ROW_TOLERANCE шага; шаг ROW_STEP_M. Ряд продолжается на ROW_EXTEND мест за каждый
+    край и заполняет разрывы, кратные шагу. Нормы место проходит как любой кандидат.
+    """
+    del params
+    trees = [
+        (float(c.x), float(c.y))
+        for f in features
+        if f.object_class is ObjectClass.EXISTING_TREE
+        for c in (f.geometry.centroid,)
+        if not f.geometry.is_empty
+    ]
+    if len(trees) < 3:  # noqa: PLR2004 - ряд из трёх деревьев
+        return []
+    points = np.array(trees)
+    index = shapely.STRtree(shapely.points(points))
+    low, high = ROW_STEP_M
+    seen: set[tuple[int, int, int]] = set()
+    out: list[_Candidate] = []
+    for a, (ax, ay) in enumerate(trees):
+        for b in index.query(shapely.Point(ax, ay), predicate="dwithin", distance=high):
+            if b <= a:
+                continue
+            bx, by = trees[b]
+            step = math.hypot(bx - ax, by - ay)
+            if not low <= step <= high:
+                continue
+            ux, uy = (bx - ax) / step, (by - ay) / step
+            members = _row_members(points, (ax, ay), (ux, uy), step)
+            if len(members) < 3:  # noqa: PLR2004 - ряд из трёх деревьев
+                continue
+            key = (round(math.degrees(math.atan2(uy, ux)) % 180), round(step), min(members))
+            if key in seen:
+                continue
+            seen.add(key)
+            out += _row_places(points, members, (ax, ay), (ux, uy), step, len(out))
+    return out
+
+
+def _row_members(
+    points: NDArray[np.float64], origin: tuple[float, float], u: tuple[float, float], step: float
+) -> list[int]:
+    """Деревья на прямой origin + k * step * u (k целое, в обе стороны) с допуском."""
+    rel = points - np.array(origin)
+    along = rel @ np.array(u)
+    across = rel @ np.array((-u[1], u[0]))
+    k = np.round(along / step)
+    near = (np.abs(across) <= ROW_TOLERANCE * step) & (
+        np.abs(along - k * step) <= ROW_TOLERANCE * step
+    )
+    members = np.flatnonzero(near)
+    # Ряд связный: подряд идущие k без разрыва больше трёх шагов.
+    ks = sorted(set(k[members].astype(int).tolist()))
+    if len(ks) < 3:  # noqa: PLR2004
+        return []
+    return members.tolist()
+
+
+def _row_places(  # noqa: PLR0913, PLR0917 - геометрия ряда
+    points: NDArray[np.float64],
+    members: list[int],
+    origin: tuple[float, float],
+    u: tuple[float, float],
+    step: float,
+    start: int,
+) -> list[_Candidate]:
+    rel = points[members] - np.array(origin)
+    ks = sorted(set(np.round((rel @ np.array(u)) / step).astype(int).tolist()))
+    taken = set(ks)
+    wanted = [k for k in range(ks[0], ks[-1]) if k not in taken]  # разрывы
+    wanted += [ks[-1] + i for i in range(1, ROW_EXTEND + 1)]
+    wanted += [ks[0] - i for i in range(1, ROW_EXTEND + 1)]
+    return [
+        _Candidate(
+            station=_ROW_STATION + start + i,
+            mode=MODE_EXISTING_ROW,
+            x=origin[0] + k * step * u[0],
+            y=origin[1] + k * step * u[1],
+        )
+        for i, k in enumerate(wanted)
+    ]
+
+
 def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
     """Шахматная сетка с шагом посадки по ячейкам грунта; каждая точка - своя станция."""
     if (
@@ -720,6 +819,7 @@ class _Selector:
                 + 8 * (batch.verdict(row) is Verdict.ALLOWED)
                 + 4 * (not batch.needs_barrier(row))
                 + 2 * (c.mode == MODE_ALLEY)
+                + 3 * (c.mode == MODE_EXISTING_ROW)
                 + (c.mode == MODE_ALLEY and c.offset >= hedge_room)
                 for c, batch, row in pool
             ),
@@ -729,7 +829,8 @@ class _Selector:
             ),
             objective_description=(
                 "First maximize eligible places; then sum preferences: allowed=8, "
-                "no root barrier=4, alley=2, alley tree leaving room for a curb hedge=1. "
+                "no root barrier=4, continuing a row of existing trees=3, alley=2, "
+                "alley tree leaving room for a curb hedge=1. "
                 "Species feasibility and aesthetic quality are not part of this objective."
             ),
         )

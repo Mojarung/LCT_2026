@@ -329,8 +329,8 @@ class ProfileModel(_Strict):
     surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
-    modes: tuple[Literal["alley", "lawn", "fill"], ...] = Field(
-        default=("alley", "lawn", "fill"), min_length=1
+    modes: tuple[Literal["existing_row", "alley", "lawn", "fill"], ...] = Field(
+        default=("existing_row", "alley", "lawn", "fill"), min_length=1
     )
     fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
     placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"

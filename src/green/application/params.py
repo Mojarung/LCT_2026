@@ -159,8 +159,9 @@ class PlanParams:
     # auto uses declared $INSUNITS; unitless input needs an explicit override.
     # An override applies to every source of a package. No guess from site size.
     drawing_unit: str = "auto"
-    # Приёмы размещения по порядку: аллея вдоль борта, заполнение грунта сеткой, добор зоны.
-    modes: tuple[str, ...] = ("alley", "lawn", "fill")
+    # Приёмы размещения по порядку: продолжение рядов существующих деревьев, аллея вдоль борта,
+    # заполнение грунта сеткой, добор зоны.
+    modes: tuple[str, ...] = ("existing_row", "alley", "lawn", "fill")
     fill_step_m: float = 1.0  # шаг ячеек добора зоны
     # Compare complete validated layouts; baseline always remains an alternative.
     placement_solver: str = "portfolio"
