@@ -75,3 +75,12 @@ def test_model_never_drops_an_object_from_the_constraints() -> None:
         classes=(C.IGNORE, C.IGNORE, C.IGNORE),
     )
     assert model.guess("Кабель связи DIMTXT новый", None) is None
+
+
+def test_names_without_words_get_nothing() -> None:
+    """Слой «0» - слой по умолчанию, смысла в имени нет. Модель 16.10.2026 выдавала ему борт
+    (ближайшее «БР 1000 300 150»: цифры заменяются на #, и у «0» остаётся один символ)."""
+    root = Path(__file__).resolve().parents[1]
+    shipped = YamlLayerMapSource(root / "config/layer_map.yaml").load()
+    for layer, block in (("0", None), ("0", "1000"), ("0 RL 2.8.1.2", None), ("12", "*U45")):
+        assert shipped.names.guess(layer, block) is None, (layer, block)

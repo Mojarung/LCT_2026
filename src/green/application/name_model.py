@@ -37,6 +37,11 @@ NEVER = frozenset(
         ObjectClass.TERRITORY_PARK,
     }
 )
+# Имя, в котором меньше трёх букв («0», «12», «0 RL 2.8.1.2»), смысла не несёт: цифры
+# заменяются на #, и косинус коротких векторов случайно высок (слой «0» получал борт от
+# «БР 1000 300 150», 16.10.2026).
+MIN_LETTERS = 3
+_LETTERS = re.compile(r"[a-zа-яё]", re.IGNORECASE)
 _DIGITS = re.compile(r"\d+")
 _SPACES = re.compile(r"[\s_\-.|$]+")
 
@@ -94,6 +99,8 @@ class NameModel:
         return self._cache[key]
 
     def _guess(self, key: str) -> Guess | None:
+        if len(_LETTERS.findall(key)) < MIN_LETTERS:
+            return None
         grams = _grams(key)
         norm = math.sqrt(sum(v * v for v in grams.values()))
         if not norm:
