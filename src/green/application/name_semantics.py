@@ -94,6 +94,9 @@ class Vocabulary:
         """
         found = [self._infer(local_name(name)) for name in names if name]
         strong = next((item for item in found if item and item.kind != "weak"), None)
+        removed = next((item for item in found if item and item.kind == "removed"), None)
+        if strong is not None and strong.object_class is ObjectClass.LAWN and removed is not None:
+            return removed  # снос в одном имени сильнее газона в другом
         return strong or next((item for item in found if item), None)
 
     def _infer(self, name: str) -> Inference | None:
@@ -149,9 +152,9 @@ class Vocabulary:
             for separator in self.separators:
                 size = len(separator.split())
                 if " ".join(tokens[position : position + size]) == separator:
-                    head = tokens[:position]
-                    if self._hits(" ".join(head), head):
-                        return head
+                    # Заменяемое («за счёт газона») класса не даёт, даже если в новом
+                    # (до разделителя) есть только слабый намёк или нет слов вовсе.
+                    return tokens[:position]
         return tokens
 
     def _hits(self, text: str, tokens: list[str]) -> list[_Hit]:

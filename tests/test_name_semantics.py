@@ -164,3 +164,28 @@ def test_weak_hint_of_the_layer_loses_to_strong_word_of_the_block() -> None:
     found = WORDS.infer("Газон", "Покрытия")
     assert found is not None
     assert found.object_class is C.LAWN
+
+
+# Ревью ветки 16.10.2026: обратная проектная грамматика - заменяемое (после «за счёт») класса
+# не даёт; снос в одном имени сильнее газона в другом.
+def test_tail_after_the_separator_never_gives_the_class() -> None:
+    for name in ("Бетон за счёт газона", "Резиновое покрытие за счёт газона"):
+        found = WORDS.infer(None, name)
+        assert found is None or found.object_class is not C.LAWN, name
+
+
+def test_weak_head_decides_over_the_replaced_tail() -> None:
+    for name in ("АБ за счёт газона", "Асфальт за счёт газона"):
+        found = WORDS.infer(None, name)
+        assert found is not None
+        assert found.object_class is C.SIDEWALK, name
+
+
+def test_pair_with_container_block_keeps_the_new_material() -> None:
+    found = WORDS.infer(BERZARINA_BLOCK, f"{BERZARINA_BLOCK}$0$ДВ_ПП_Бетон_У за счет Газона")
+    assert found is None or found.object_class is not C.LAWN
+
+
+def test_removal_in_one_name_beats_lawn_in_the_other() -> None:
+    found = WORDS.infer("Блок_газон", "Демонтаж")
+    assert found is None or found.object_class is not C.LAWN
