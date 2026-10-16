@@ -6,6 +6,7 @@ POS, а сам POS, номер, вид и нормы скрыты; ведомо�
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -438,3 +439,11 @@ def test_drawing_opens_on_the_plan_not_on_the_origin(tmp_path: Path) -> None:
     assert active.dxf.height >= max(ys) - min(ys)
     low, high = doc.header["$EXTMIN"], doc.header["$EXTMAX"]
     assert low[0] <= min(xs) <= max(xs) <= high[0]
+
+
+def test_legend_says_which_norms_closed_the_soil(tmp_path: Path) -> None:
+    plan = replace(_mixed_plan(), stats={"blocked_R-WATER-TREE-001_m2": 412.0})
+    doc = ezdxf.readfile(_write(tmp_path, plan))
+    legend = " ".join(e.text for e in doc.modelspace().query("MTEXT"))
+    assert "Почему пусто" in legend
+    assert "R-WATER-TREE-001 412" in legend

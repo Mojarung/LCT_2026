@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 
-from green.application.constraints import VERDICT_ORDER
+from green.application.constraints import FAIL_CODE, VERDICT_ORDER
 from green.application.surfaces import Material
 from green.domain.planting import Verdict, Zone
 
@@ -60,6 +60,33 @@ def build_zones(index: ConstraintIndex, cell_m: float) -> tuple[Zone, ...]:
         if not merged.is_empty:
             zones.append(Zone(verdict=verdict, geometry=merged))
     return tuple(zones)
+
+
+def blocked_shares(index: ConstraintIndex, cell_m: float) -> dict[str, float]:
+    """Сколько грунта закрыла каждая норма: «почему здесь пусто» (идея LPN1KoL, `blocked_by`).
+
+    Те же ячейки грунта, что у зон. Ячейка закрыта нормой, если в её центре норма не пройдена;
+    `blocked_<rule>_m2` - вся закрытая нормой площадь, `blocked_only_<rule>_m2` - где она
+    единственная причина (снять её - и место откроется). Суммы по нормам пересекаются.
+    """
+    xy, cell = _grid(index, cell_m)
+    if not len(xy):
+        return {}
+    points = shapely.points(xy)
+    keep = index.plantable(points)
+    if not keep.any():
+        return {}
+    batch = index.evaluate(points[keep])
+    failed = batch.outcomes == FAIL_CODE
+    area = cell * cell
+    counts = failed.sum(axis=1)
+    only = (failed & (failed.sum(axis=0) == 1)).sum(axis=1)
+    out: dict[str, float] = {}
+    for rule, total, alone in zip(batch.rules, counts.tolist(), only.tolist(), strict=True):
+        if total:
+            out[f"blocked_{rule.rule_id}_m2"] = round(total * area, 1)
+            out[f"blocked_only_{rule.rule_id}_m2"] = round(alone * area, 1)
+    return out
 
 
 def pack_count(points: Iterable[tuple[float, float]], step_m: float = DENSEST_STEP_M) -> int:

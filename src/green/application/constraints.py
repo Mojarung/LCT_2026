@@ -37,6 +37,8 @@ _PASS, _FAIL, _NO_DATA, _BARRIER = 0, 1, 2, 3
 # превращал такую посадку в нарушение при нормоконтроле собственного плана.
 _EPS_M = 1e-3
 _OUTCOMES = (CheckOutcome.PASS, CheckOutcome.FAIL, CheckOutcome.NO_DATA, CheckOutcome.BARRIER)
+# Код «норма не пройдена» в матрице исходов EvaluationBatch.outcomes.
+FAIL_CODE = _OUTCOMES.index(CheckOutcome.FAIL)
 VERDICT_ORDER = (Verdict.ALLOWED, Verdict.NEEDS_APPROVAL, Verdict.FORBIDDEN, Verdict.UNKNOWN)
 _VERDICTS = VERDICT_ORDER
 

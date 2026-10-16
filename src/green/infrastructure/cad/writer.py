@@ -58,6 +58,8 @@ LAYER_SCHEDULE = f"{RESULT_PREFIX}SCHEDULE"
 # Ручные правки плана (ТЗ, п. 6): метки удалений, переносов и добавлений.
 LAYER_EDITS = f"{RESULT_PREFIX}EDITS"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
+# Сколько норм «почему пусто» уходит в легенду чертежа; полный список - в отчёте.
+BLOCKED_IN_LEGEND = 5
 LAYER_COLORS = {
     LAYER_TREES: 3,
     LAYER_TREES_APPROVAL: 30,
@@ -386,6 +388,21 @@ class EzdxfPlanWriter:
             }
             areas = ", ".join(f"{LAWN_LABELS[k]} {_area(a)}" for k, a in totals.items() if a > 0)
             lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
+        blocked = sorted(
+            (
+                (float(v), k.removeprefix("blocked_").removesuffix("_m2"))
+                for k, v in plan.stats.items()
+                if k.startswith("blocked_") and not k.startswith("blocked_only_")
+            ),
+            reverse=True,
+        )[:BLOCKED_IN_LEGEND]
+        if blocked:
+            # Почему пусто: те же числа, что в отчёте интерпретаций (report.html).
+            lines.append(
+                "Почему пусто, грунт закрыт нормой, м²: "
+                + "; ".join(f"{rule_id} {_area(area)}" for area, rule_id in blocked)
+                + "."
+            )
         height = self._height * 2 * scale
         mtext = msp.add_mtext(
             "\\P".join(lines),

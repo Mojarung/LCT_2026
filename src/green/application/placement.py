@@ -35,7 +35,13 @@ from green.application.places import Place, place_map
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.wording import counted
-from green.application.zones import CAPACITY_STAT, MAX_ZONE_POINTS, build_zones, pack_count
+from green.application.zones import (
+    CAPACITY_STAT,
+    MAX_ZONE_POINTS,
+    blocked_shares,
+    build_zones,
+    pack_count,
+)
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
@@ -297,6 +303,9 @@ def _zones(
     zones = build_zones(index, params.zone_cell_m) if params.zones else ()
     for zone in zones:
         stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+    # Почему пусто: какая норма закрыла какую часть грунта.
+    if params.zones:
+        stats.update(blocked_shares(index, params.zone_cell_m))
     return zones
 
 
