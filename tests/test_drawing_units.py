@@ -119,20 +119,38 @@ def test_stray_entity_does_not_decide_for_the_drawing(tmp_path: Path) -> None:
     assert decision.notes == ()
 
 
-def test_header_that_geometry_contradicts_stops_with_the_numbers(tmp_path: Path) -> None:
-    """Песчаный: заголовок генплана - миллиметры от шаблона, а геометрия метровая (топооснова
-    1:500 вставлена в масштабе 1). По заголовку улица вышла бы в тысячу раз мельче; вместо
-    тихого плана на улице длиной в метр прогон останавливается и называет числа."""
+def test_header_that_geometry_contradicts_is_corrected_with_a_note(tmp_path: Path) -> None:
+    """Песчаный и чертёж жюри 236287 (08.10.2026): заголовок - миллиметры от шаблона, а
+    геометрия метровая. По заголовку участок вышел бы в тысячу раз мельче. Прогон не
+    останавливается: берутся единицы, которые подтверждает геометрия, а в предупреждении -
+    что исправлено, по каким числам и как вернуть заголовок."""
     source = tmp_path / "lying_header.dxf"
     _street(source, insunits=INSUNITS_MM)
     doc = ezdxf.readfile(source)
 
-    with pytest.raises(InputError, match=r"\$INSUNITS=4.*drawing_unit=m") as stop:
-        decide_units(doc)
+    decision = decide_units(doc)
 
-    assert "высота текста 2.5" in str(stop.value)
+    assert decision.unit_m == 1.0
+    note = decision.notes[0]
+    assert "Исправлено автоматически" in note
+    assert "$INSUNITS=4" in note
+    assert "высота текста 2.5" in note
+    assert "drawing_unit=mm" in note  # как вернуть заголовок, если он всё-таки верен
     assert decide_units(doc, "m").unit_m == 1.0
     assert decide_units(doc, "mm").unit_m == pytest.approx(0.001)
+
+
+def test_metre_header_over_millimetre_geometry_is_corrected_to_millimetres(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "mm_with_metre_header.dxf"
+    _street(source, scale=MM, insunits=6)
+
+    decision = decide_units(ezdxf.readfile(source))
+
+    assert decision.unit_m == pytest.approx(0.001)
+    assert "Исправлено автоматически" in decision.notes[0]
+    assert "drawing_unit=m" in decision.notes[0]
 
 
 def test_true_millimetre_street_is_not_mistaken_for_a_conflict(tmp_path: Path) -> None:

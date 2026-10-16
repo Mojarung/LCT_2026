@@ -64,3 +64,62 @@ def test_topographic_sheet_block_is_not_caught_by_the_red_line_rule() -> None:
     _, evidence = LAYER_MAP.decide(_feature("0", "output[1-12]_3_ДЖКХ-24_03233tp"))
     reasons = [LAYER_MAP.rules[i].reason for i in evidence.matched_rules]
     assert not any("красн" in reason for reason in reasons)
+
+
+# Выгрузка паспорта ОГХ / ЕГКО (чертёж жюри 236287, 08.10.2026): английские имена слоёв без
+# единого русского слова. Жюри не смогло запустить чертёж без JSON поверх профиля - классы
+# этих слоёв теперь в словаре, JSON не нужен.
+@pytest.mark.parametrize(
+    ("layer", "expected"),
+    [
+        ("BOUND", ObjectClass.WORK_BOUNDARY),
+        ("DOROGA", ObjectClass.CURB),
+        ("DOM", ObjectClass.BUILDING),
+        ("EGKO_BUILDINGS", ObjectClass.BUILDING),
+        ("Жилое", ObjectClass.BUILDING),
+        ("ZABOR", ObjectClass.FENCE),
+        ("LAWN", ObjectClass.LAWN),
+        ("EGKO_ROADS", ObjectClass.ROAD),
+        ("2.Резиновая крошка", ObjectClass.SIDEWALK),
+        ("2.Плитка", ObjectClass.SIDEWALK),
+        ("2.Песчано-гравийная смесь", ObjectClass.SIDEWALK),
+        ("PLANT_NUM_TXT", ObjectClass.IGNORE),
+        ("план|DOM", ObjectClass.BUILDING),  # слой привязанного XREF
+    ],
+)
+def test_ogh_passport_layers_need_no_overrides(layer: str, expected: ObjectClass) -> None:
+    found, evidence = LAYER_MAP.decide(_feature(layer, None))
+    assert found is expected
+    assert evidence.method == "name_rule"
+
+
+@pytest.mark.parametrize("layer", ["DOMINO", "ogh_BOUND_old", "BOUNDARY_TEXT", "RANDOM"])
+def test_ogh_names_match_whole_words_only(layer: str) -> None:
+    found, _ = LAYER_MAP.decide(_feature(layer, None))
+    assert found not in {ObjectClass.BUILDING, ObjectClass.WORK_BOUNDARY}
+
+
+@pytest.mark.parametrize(
+    ("block", "layer"),
+    [
+        # Чертёж жюри 236287: скалодром на слое МАФ стал зданием по слову wall (22 786 линий с
+        # отступом 5 м), стойка велопарковки - опорой освещения по слову «стойка».
+        ("WALL BOULDERING CUBE XL", "МАФы"),
+        ("Стойка велопарковка", "МАФы"),
+        ("Стойки велопарковки", "Благоустройство"),
+    ],
+)
+def test_playground_and_bike_rack_blocks_are_obstacles(block: str, layer: str) -> None:
+    found = LAYER_MAP.vocabulary.infer(block, layer)
+    assert found is not None
+    assert found.object_class is ObjectClass.OBSTACLE
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("Стойка светильника", ObjectClass.POLE), ("Wall of building", ObjectClass.BUILDING)],
+)
+def test_pole_and_wall_words_still_work_elsewhere(name: str, expected: ObjectClass) -> None:
+    found = LAYER_MAP.vocabulary.infer(name)
+    assert found is not None
+    assert found.object_class is expected

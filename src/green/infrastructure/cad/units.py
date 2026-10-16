@@ -5,9 +5,11 @@ drawing. Pilot files with incorrect headers need an explicit override. Unitless
 input requires one too. Blocks retain their explicit INSERT scale; their unit
 metadata must not cause a second, implicit conversion (ezdxf units documentation).
 
-A header that the geometry clearly contradicts is not guessed around either: it stops
-the run and names the numbers, so the override is always explicit (Peschanyy: a
-millimetre template header over a metre survey, the street would shrink a thousandfold).
+A header that the geometry clearly contradicts (two signs at once: site size and text
+height) is corrected to the unit the geometry confirms, and the note says so with the numbers
+and the override that restores the header (Peschanyy and the jury drawing 236287: a
+millimetre template header over a metre survey, the site would shrink a thousandfold; the jury
+stopped at the error on 08.10.2026 instead of setting drawing_unit).
 """
 
 from __future__ import annotations
@@ -125,17 +127,20 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
         raise InputError(f"Некорректные единицы {header}; задайте drawing_unit явно")
     conflict = _geometry_conflict(doc, factor)
     if conflict is not None:
-        raise InputError(
-            f"Единицы чертежа спорят с геометрией: {header}, но {conflict}. Задайте единицы "
-            "явно: drawing_unit=m, если координаты в метрах, или drawing_unit=mm, если заголовок "
-            "верен."
+        reason, unit, back = conflict
+        note = (
+            f"Исправлено автоматически: единицы чертежа спорят с геометрией - {header}, но "
+            f"{reason}. Принято drawing_unit={unit} (1 единица = {EXPLICIT_UNITS[unit]:g} м); "
+            f"если заголовок всё-таки верен, запустите с drawing_unit={back}."
         )
+        return UnitDecision(EXPLICIT_UNITS[unit], (note + _RESCALED_TAIL,))
     note = f"Единицы: приняты объявленные {header}; 1 единица = {factor:g} м."
     return UnitDecision(factor, () if code == _METRES else (note + _RESCALED_TAIL,))
 
 
-# Заголовок верен, пока геометрия ему явно не противоречит (решение 23.09.2026: исправление
-# заголовка - только явным drawing_unit). Явное противоречие - два признака сразу, как в
+# Заголовок верен, пока геометрия ему явно не противоречит. Явное противоречие исправляется
+# с пометкой (решение 16.10.2026 вместо остановки прогона от 23.09.2026: жюри не поняло, что
+# дописать в параметры). Противоречие - два признака сразу, как в
 # docs/notes/19: участок короче 10 м по заголовку при тексте метровой высоты (в метровом
 # чертеже текст 0,5-5 единиц, в миллиметровом 1:500 - от 250), или участок больше 100 км.
 _MIN_SITE_M = 10.0
@@ -143,8 +148,9 @@ _MAX_SITE_M = 100_000.0
 _METRE_TEXT_UNITS = 20.0
 
 
-def _geometry_conflict(doc: Drawing, factor: float) -> str | None:
-    """Чем геометрия противоречит объявленным единицам; None - не противоречит."""
+def _geometry_conflict(doc: Drawing, factor: float) -> tuple[str, str, str] | None:
+    """Чем геометрия противоречит объявленным единицам, какие единицы она подтверждает и какие
+    вернут заголовок; None - не противоречит."""
     spread = measure(doc)
     if spread is None or spread.anchors < _MIN_ANCHORS:
         return None
@@ -152,13 +158,23 @@ def _geometry_conflict(doc: Drawing, factor: float) -> str | None:
     text = spread.text_height
     extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
     if factor < 1 and size * factor < _MIN_SITE_M and text is not None and text < _METRE_TEXT_UNITS:
-        return (
+        reason = (
             f"геометрия метровая: {extent} (по заголовку {size * factor:.2f} м, меньше "
             f"{_MIN_SITE_M:g} м), высота текста {text:g} единиц"
         )
+        return reason, "m", _HEADER_UNIT.get(factor, "mm")
     if factor >= 1 and size * factor > _MAX_SITE_M and (text is None or text >= _METRE_TEXT_UNITS):
-        return f"геометрия не метровая: {extent} (по заголовку {size * factor / 1000:.0f} км)"
+        reason = f"геометрия не метровая: {extent} (по заголовку {size * factor / 1000:.0f} км)"
+        if _MIN_SITE_M <= size * EXPLICIT_UNITS["mm"] <= _MAX_SITE_M:
+            return reason, "mm", _HEADER_UNIT.get(factor, "m")
+        raise InputError(
+            f"Единицы чертежа спорят с геометрией: {reason}, и миллиметры её не объясняют. "
+            "Задайте единицы явно параметром drawing_unit."
+        )
     return None
+
+
+_HEADER_UNIT = {value: name for name, value in EXPLICIT_UNITS.items()}
 
 
 _RESCALED_TAIL = (
