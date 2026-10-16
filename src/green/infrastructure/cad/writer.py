@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+import ezdxf
 import shapely
 from ezdxf import zoom
+from ezdxf.addons import Importer
 from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 
 from green.application.barriers import BARRIER_NOTE
@@ -15,7 +17,7 @@ from green.application.results import SourceSnapshot
 from green.application.schedule import build_schedule
 from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome, Verdict
-from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
+from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, entity_layer, load_document
 from green.infrastructure.cad.integrity import fingerprints
 
 if TYPE_CHECKING:
@@ -60,6 +62,8 @@ LAYER_EDITS = f"{RESULT_PREFIX}EDITS"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
 # Сколько норм «почему пусто» уходит в легенду чертежа; полный список - в отчёте.
 BLOCKED_IN_LEGEND = 5
+# Рядом с result.dxf - только слои результата (подключение внешней ссылкой).
+RESULT_LAYERS_SUFFIX = "_layers.dxf"
 LAYER_COLORS = {
     LAYER_TREES: 3,
     LAYER_TREES_APPROVAL: 30,
@@ -161,6 +165,7 @@ class EzdxfPlanWriter:
             _initial_view(doc, (min(left, extent[0] * scale), *[v * scale for v in extent[1:]]))
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
+        save_result_layers(doc, target.with_name(f"{target.stem}{RESULT_LAYERS_SUFFIX}"))
         return snapshot
 
     def _prepare(self, doc: Drawing) -> None:
@@ -489,6 +494,25 @@ def _initial_view(doc: Drawing, box: Sequence[float]) -> None:
     msp = doc.modelspace()
     msp.dxf.extmin = (min_x, min_y, 0.0)
     msp.dxf.extmax = (max_x, max_y, 0.0)
+
+
+def save_result_layers(source: Drawing, target: Path) -> Path:
+    """Новый чертёж только с сущностями слоёв GREEN_* (и их блоками, стилями) из source."""
+    light = ezdxf.new(source.dxfversion)
+    light.units = source.units
+    for name in ("$INSUNITS", "$MEASUREMENT", "$DWGCODEPAGE"):
+        if name in source.header:
+            light.header[name] = source.header[name]
+    for app in source.appids:
+        if app.dxf.name not in light.appids:
+            light.appids.add(app.dxf.name)
+    importer = Importer(source, light)
+    importer.import_entities(
+        [e for e in source.modelspace() if entity_layer(e).upper().startswith(RESULT_PREFIX)]
+    )
+    importer.finalize()
+    light.saveas(target)
+    return target
 
 
 def plan_extent(plan: Plan) -> tuple[float, float, float, float] | None:

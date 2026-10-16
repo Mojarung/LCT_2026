@@ -14,7 +14,6 @@ import ezdxf
 import numpy as np
 import orjson
 import shapely
-from ezdxf.addons import Importer
 from openpyxl import Workbook
 
 from green.application.classification import recognition_summary
@@ -22,7 +21,7 @@ from green.application.explain import LAWN_LABELS
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.planting import Placement, Rejection
-from green.infrastructure.cad.documents import RESULT_PREFIX, entity_layer
+from green.infrastructure.cad.writer import RESULT_LAYERS_SUFFIX, save_result_layers
 from green.infrastructure.reports.interpretation_report import (
     write_html,
     write_markdown,
@@ -923,23 +922,17 @@ def _cell(value: object) -> object:
 
 def write_result_layers(result: Path, target: Path) -> Path:
     """Только слои результата GREEN_* в координатах исходника - для подключения внешней ссылкой
-    к генплану проектировщика (идея konstantikkov): файл лёгкий даже для Олимпийской деревни."""
-    source = ezdxf.readfile(result)
-    light = ezdxf.new(source.dxfversion)
-    light.units = source.units
-    for name in ("$INSUNITS", "$MEASUREMENT", "$DWGCODEPAGE"):
-        if name in source.header:
-            light.header[name] = source.header[name]
-    for app in source.appids:
-        if app.dxf.name not in light.appids:
-            light.appids.add(app.dxf.name)
-    importer = Importer(source, light)
-    importer.import_entities(
-        [e for e in source.modelspace() if entity_layer(e).upper().startswith(RESULT_PREFIX)]
-    )
-    importer.finalize()
-    light.saveas(target)
-    return target
+    к генплану проектировщика (идея konstantikkov): файл лёгкий даже для Олимпийской деревни.
+
+    Писатель плана сохраняет его рядом с result.dxf, пока чертёж в памяти; читать заново
+    результат на сотни мегабайт приходится, только если такого файла нет.
+    """
+    ready = result.with_name(f"{result.stem}{RESULT_LAYERS_SUFFIX}")
+    if ready.exists():
+        if ready != target:
+            target.write_bytes(ready.read_bytes())
+        return target
+    return save_result_layers(ezdxf.readfile(result), target)
 
 
 def _write_schedule(path: Path, plan: Plan) -> Path:
