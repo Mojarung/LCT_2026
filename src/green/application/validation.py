@@ -397,6 +397,13 @@ def _barrier_documented(placement: Placement) -> bool:
     )
 
 
+def spacing_issues(
+    placements: Sequence[Placement], params: PlanParams
+) -> list[ValidationIssue]:
+    """Пары посадок ближе требуемого шага или с пересекающимися посадочными местами."""
+    return _spacing(placements, params)
+
+
 def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[ValidationIssue]:
     if not placements:
         return []

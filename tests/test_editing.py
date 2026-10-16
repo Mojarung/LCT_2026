@@ -304,3 +304,38 @@ def test_edited_plantings_get_a_place(client: TestClient, run_id: str) -> None:
     )
     draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
     assert all(p["place"] for p in draft)
+
+
+def test_move_too_close_to_a_neighbour_is_rejected_and_the_draft_still_rebuilds(
+    client: TestClient, run_id: str
+) -> None:
+    """Чекпоинт 16.10.2026, п. 3: «API отдаёт одно, а на плане посадки остаются». Перенос на
+    0,5 м от соседа принимался (нормы до сетей он проходит), а пересборка отвечала 422 по шагу
+    между посадками: черновик в интерфейсе и plan.json, CSV, DXF расходились. Теперь такая
+    посадка уходит в отказы правки с причиной, и пересборка проходит."""
+    draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
+    first, second = [p for p in draft if p["planting_type"] == "tree"][:2]
+    body = client.post(
+        f"{API_PREFIX}/runs/{run_id}/edits",
+        json={
+            "edits": [
+                {
+                    "kind": "move",
+                    "placement_id": first["id"],
+                    "x": second["x"] + 0.5,
+                    "y": second["y"],
+                }
+            ]
+        },
+    ).json()
+    assert [r["placement_id"] for r in body["rejected_by_edit"]] == [first["id"]]
+    assert "шаг" in body["rejected_by_edit"][0]["reason"]
+
+    response = client.post(f"{API_PREFIX}/runs/{run_id}/rebuild")
+    assert response.status_code == 202, response.text
+    status = client.get(f"{API_PREFIX}/runs/{run_id}").json()
+    assert status["state"] == "succeeded"
+    draft = client.get(f"{API_PREFIX}/runs/{run_id}/draft").json()["plan"]["placements"]
+    plan = _plan(client, run_id)["placements"]
+    assert [p["id"] for p in plan] == [p["id"] for p in draft]
+    assert first["id"] not in {p["id"] for p in plan}

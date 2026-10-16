@@ -41,7 +41,7 @@ from green.application.params import active_distance_rules, species_distance_rul
 from green.application.places import place_map, with_places
 from green.application.quality import assess, site_of
 from green.application.surfaces import build_surface_map
-from green.application.validation import PlanValidation, validate_plan
+from green.application.validation import PlanValidation, spacing_issues, validate_plan
 from green.domain.norms import PlantingType
 from green.domain.planting import CheckOutcome, Placement, Rejection, Verdict
 
@@ -455,6 +455,8 @@ def apply_edits_detailed(
             current[position] = _moved(context, _at(current, position, edit), edit)
 
     plan, rejected = _rebuild_plan(context, [p for p in current if p is not None], catalog)
+    plan, spaced = _reject_crowding(context, plan, _edited_ids(edits, current))
+    rejected = (*rejected, *spaced)
     plan = refresh_summaries(plan, context.params, catalog)
     # Посадочные места сдвинулись: газон считается заново по той же карте покрытий прогона.
     plan = plan_lawns(
@@ -567,6 +569,70 @@ def _rebuild_plan(
         ),
     )
     return plan, tuple(EditRejection(p.placement_id, _reason(context, p)) for p in violating)
+
+
+def _edited_ids(edits: Sequence[Edit], current: Sequence[Placement | None]) -> list[str]:
+    """Посадки, которые эта пачка перенесла или добавила, в порядке правок."""
+    moved = [_placement_id(e) for e in edits if e.kind is EditKind.MOVE]
+    added = [
+        p.placement_id
+        for p in current[len(current) - sum(e.kind is EditKind.ADD for e in edits) :]
+        if p
+    ]
+    return [*moved, *added]
+
+
+def _reject_crowding(
+    context: RunContext, plan: Plan, edited: Sequence[str]
+) -> tuple[Plan, tuple[EditRejection, ...]]:
+    """Перенесённая или добавленная посадка ближе шага к соседу уходит в отказ правки.
+
+    Чекпоинт 16.10.2026, п. 3: такой перенос раньше принимался, а пересборка отвечала 422 по
+    шагу между посадками - черновик в интерфейсе и файлы прогона расходились. Шаг проверяется
+    той же функцией, что финальная проверка плана; посадки генератора не трогаются, в отказ
+    уходит та из пары, которую правили позже.
+    """
+    order = {pid: i for i, pid in enumerate(edited)}
+    numbers = {p.placement_id: p.number for p in plan.placements}
+    out: dict[str, str] = {}
+    placements = list(plan.placements)
+    while True:
+        issues = [
+            issue
+            for issue in spacing_issues(placements, context.params)
+            if any(pid in order for pid in issue.placements)
+        ]
+        if not issues:
+            break
+        issue = issues[0]
+        loser = max((pid for pid in issue.placements if pid in order), key=order.__getitem__)
+        other = next(pid for pid in issue.placements if pid != loser)
+        out[loser] = (
+            f"шаг до посадки №{numbers.get(other, '?')} {issue.measured_m:.2f} м"
+            f" при требуемых {issue.required_m:.2f} м: посадочные места пересекаются или шаг"
+            " между посадками меньше требуемого"
+        ).replace(".", ",")
+        placements = [p for p in placements if p.placement_id != loser]
+    if not out:
+        return plan, ()
+    gone = [p for p in plan.placements if p.placement_id in out]
+    start = len(plan.rejections)
+    rejections = tuple(
+        Rejection(
+            rejection_id=p.placement_id,
+            number=start + i,
+            planting_type=p.planting_type,
+            x=p.x,
+            y=p.y,
+            verdict=Verdict.FORBIDDEN,
+            blocking=(),
+            note=f"Посадка {p.species.name_ru} после ручной правки: {out[p.placement_id]}.",
+        )
+        for i, p in enumerate(gone, 1)
+    )
+    kept = tuple(replace(p, number=i) for i, p in enumerate(placements, 1))
+    plan = replace(plan, placements=kept, rejections=(*plan.rejections, *rejections))
+    return plan, tuple(EditRejection(pid, reason) for pid, reason in out.items())
 
 
 def _reason(context: RunContext, placement: Placement) -> str:
