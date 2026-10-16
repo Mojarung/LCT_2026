@@ -66,3 +66,12 @@ def test_shipped_layer_map_carries_the_pilot_names() -> None:
     layer_map = YamlLayerMapSource(root / "config/layer_map.yaml").load()
     assert len(layer_map.names.names) > 1000
     assert all(c not in {C.LAWN, C.WORK_BOUNDARY} for c in layer_map.names.classes)
+
+
+def test_model_never_drops_an_object_from_the_constraints() -> None:
+    """Ревью 16.10.2026: ignore снимает объект из ограничений - это тоже расширение зоны посадки."""
+    model = NameModel(
+        names=("Кабель связи DIMTXT", "Водопровод проектный DIMTXT", "Подписи DIMTXT"),
+        classes=(C.IGNORE, C.IGNORE, C.IGNORE),
+    )
+    assert model.guess("Кабель связи DIMTXT новый", None) is None

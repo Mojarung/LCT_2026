@@ -23,8 +23,10 @@ MIN_SIMILARITY = 0.6  # косинус ближайшего обучающего
 MIN_SHARE = 0.7  # доля голосов за класс среди соседей
 NEIGHBOURS = 5
 # Модель не расширяет зону посадки и не решает место: такие классы только по правилам и словам.
+# ignore тоже расширяет: объект выпадает из ограничений (ревью 16.10.2026).
 NEVER = frozenset(
     {
+        ObjectClass.IGNORE,
         ObjectClass.LAWN,
         ObjectClass.WORK_BOUNDARY,
         ObjectClass.CONTOUR,
