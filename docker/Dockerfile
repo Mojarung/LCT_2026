@@ -77,16 +77,21 @@ RUN if [ "${EZDXF_C_EXT}" = "true" ]; then \
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 ARG WITH_ODA=false
-ARG ODA_VERSION=27.1
+# Сайт ODA отдаёт только текущую версию, ссылки с номером версии отвечают 404 (проверено
+# 01.10.2026: в пакете 27.9.0.0). Пакет не объявляет библиотеки Qt-окружения: без них
+# ODAFileConverter не запускается («libOpenGL.so.0: cannot open shared object file»).
+ARG ODA_URL=https://www.opendesign.com/guestfiles/get?filename=ODAFileConverter_QT6_lnxX64_11dll.deb
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini fonts-dejavu-core \
     && if [ "${WITH_ODA}" = "true" ]; then \
         apt-get install -y --no-install-recommends curl xvfb xauth \
-        && curl -fsSL -o /tmp/oda.deb \
-            "https://www.opendesign.com/guestfiles/get?filename=ODAFileConverter_QT6_lnxX64_8.3dll_${ODA_VERSION}.deb" \
+            libopengl0 libegl1 libglib2.0-0t64 libxkbcommon0 libxkbcommon-x11-0 libdbus-1-3 \
+            libfontconfig1 libgssapi-krb5-2 \
+        && curl -fsSL -o /tmp/oda.deb "${ODA_URL}" \
         && apt-get install -y /tmp/oda.deb \
         && rm -f /tmp/oda.deb \
-        && apt-get purge -y curl; \
+        && apt-get purge -y curl \
+        && ! ldd /usr/bin/ODAFileConverter_*/ODAFileConverter | grep "not found"; \
     fi \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=libredwg /opt/libredwg/bin /usr/local/bin
