@@ -170,17 +170,14 @@ def _body_polygons(
     polygons: list[Polygon] = []
     error = 0.0
     for face in _faces(body):  # ty: ignore[invalid-argument-type]
-        try:
-            rings = []
-            for loop in face.loops():
-                points, loop_error = _loop_points(loop, flatten)
-                error = max(error, loop_error)
-                rings.append(_to_plan(points, transform, footprint=footprint))
-            polygon = _face_polygon(rings)
-        except RegionGeometryError:
-            if not footprint:
-                raise
-            continue
+        # Неразобранная кривая или петля - пробел и у тела: след не собирается молча из
+        # остальных граней (ревью 17.10.2026). Отвесная грань даёт нулевую площадь и выпадает.
+        rings = []
+        for loop in face.loops():
+            points, loop_error = _loop_points(loop, flatten)
+            error = max(error, loop_error)
+            rings.append(_to_plan(points, transform, footprint=footprint))
+        polygon = _face_polygon(rings)
         if not footprint or polygon.area > 0:
             polygons.append(polygon)
     return polygons, error

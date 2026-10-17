@@ -174,7 +174,10 @@ def main() -> None:
             done, _ = wait(list(running), return_when=FIRST_COMPLETED)
             for future in done:
                 street, _ = running.pop(future)
-                row = future.result()
+                try:
+                    row = future.result()
+                except Exception as error:  # noqa: BLE001 - упавший воркер (память) - строка итога
+                    row = {"slug": street.slug, "state": "crashed", "error": repr(error)}
                 row["number"] = street.number
                 rows.append(row)
                 (OUT / f"{street.slug}.json").write_text(
