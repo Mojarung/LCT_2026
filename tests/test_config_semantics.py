@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point, box
 
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.infrastructure.config.repositories import YamlLayerMapSource
+
+if TYPE_CHECKING:
+    from shapely.geometry.base import BaseGeometry
 
 ROOT = Path(__file__).resolve().parents[1]
 LAYER_MAP = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
@@ -196,3 +200,51 @@ def test_review_regressions_in_the_vocabulary(name: str, expected: ObjectClass) 
     inferred = LAYER_MAP.vocabulary.infer(None, name)
     assert inferred is not None, name
     assert inferred.object_class is expected, (name, inferred)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Входы других финалистов без грунта (17.10.2026): водоём - не земля и не линия покрытия.
+        ("ВОДОЕМ", ObjectClass.OBSTACLE),
+        ("OSM_HYDROGRAPHY", ObjectClass.OBSTACLE),
+        ("POND", ObjectClass.OBSTACLE),
+        ("WATER_BODY", ObjectClass.OBSTACLE),
+        # GreenCAD: тестовая копия границы работ, не газон (их README).
+        ("GC_TEST_GREEN_ZONE", ObjectClass.IGNORE),
+        # Детали 3D-зданий и разметка - не границы покрытий.
+        ("WINDOWS", ObjectClass.IGNORE),
+        ("ROAD_MARKINGS", ObjectClass.IGNORE),
+        ("PARKING_MARKINGS", ObjectClass.IGNORE),
+        ("CANOPIES", ObjectClass.OBSTACLE),
+        ("TRANSFORMER_SUBSTATION", ObjectClass.BUILDING),
+        ("PLAYGROUND_SPORTS", ObjectClass.SIDEWALK),
+        ("PLAYGROUND", ObjectClass.SIDEWALK),
+    ],
+)
+def test_foreign_site_names_without_soil(name: str, expected: ObjectClass) -> None:
+    found, evidence = LAYER_MAP.decide(_feature(name, None))
+    if evidence.method != "name_rule":
+        inferred = LAYER_MAP.vocabulary.infer(None, name)
+        found = inferred.object_class if inferred else ObjectClass.UNKNOWN
+    assert found is expected, name
+
+
+@pytest.mark.parametrize(
+    ("layer", "geometry", "radius", "expected"),
+    [
+        # green-atlas: «существующее озеленение» из OSM - площади зелени (газон), а круги - кроны.
+        ("OSM_GREEN_EXISTING", box(0, 0, 30, 20), None, ObjectClass.LAWN),
+        ("GREEN_EXISTING", Point(5, 5).buffer(3.0), 3.0, ObjectClass.EXISTING_TREE),
+        ("OSM_RAILWAY", LineString([(0, 0), (50, 0)]), None, ObjectClass.RAILWAY),
+    ],
+)
+def test_osm_green_and_railway_layers(
+    layer: str, geometry: BaseGeometry, radius: float | None, expected: ObjectClass
+) -> None:
+    feature = Feature(SourceRef("f", "x", "1"), layer, geometry, circle_radius_m=radius)
+    found, evidence = LAYER_MAP.decide(feature)
+    if evidence.method != "name_rule":
+        inferred = LAYER_MAP.vocabulary.infer(None, layer)
+        found = inferred.object_class if inferred else ObjectClass.UNKNOWN
+    assert found is expected, layer

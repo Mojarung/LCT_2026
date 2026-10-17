@@ -39,6 +39,19 @@ rules:
   - {pattern: "(?:^|[|$])ZABOR$", object_class: fence, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])(?:LAWN|GROUND|GRASS)$", object_class: lawn, confirmed: true, priority: 10,
      note: "GROUND - земля под озеленение у синтетических участков других команд (17.10.2026)"}
+  # green-atlas (other/, 17.10.2026): слои выгрузки OSM. GREEN_EXISTING - существующее озеленение:
+  # площади - газоны и скверы (грунт), круги - кроны существующих деревьев, линии - ряды деревьев
+  # без ширины (оформление). OSM_RAILWAY - железная дорога.
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: circle, object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: point, object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: area, object_class: lawn, confirmed: true, priority: 9}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: line, object_class: ignore, confirmed: true, priority: 9,
+     reason: "ряд деревьев OSM линией без ширины: не граница покрытия"}
+  - {pattern: "(?:^|[|$_])(?:OSM_)?RAILWAYS?$", object_class: railway, confirmed: true, priority: 10}
+  # GreenCAD: GC_TEST_GREEN_ZONE - «точная копия границы работ для проверки интерфейса, не
+  # подтверждённая зелёная зона» (их materials/dxf_examples/README.md).
+  - {pattern: "(?:^|[|$_])TEST_GREEN_ZONE$", object_class: ignore, confirmed: true, priority: 10,
+     reason: "тестовая копия границы работ GreenCAD: не зона озеленения"}
   - {pattern: "(?:^|[|$])EGKO_ROADS$", object_class: road, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])2\\.(?:Асфальт|Плитка|Брусчатка|Резиновая крошка|Песчанное покрытие|Песчано-гравийная смесь|Щебеночное|Гравийное|Гранитное|Пластиковое|Каменное|Искуственная тарва)$",
      object_class: sidewalk, confirmed: true, priority: 10, note: "покрытия площадок и дорожек паспорта ОГХ"}
