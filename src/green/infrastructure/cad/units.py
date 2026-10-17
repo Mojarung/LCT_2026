@@ -122,6 +122,8 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
     if code == _UNITLESS:
         guess = _unitless_guess(doc)
         if guess is None:
+            if not len(doc.modelspace()):
+                raise InputError("В пространстве модели нет ни одного объекта: планировать нечего")
             raise InputError(f"Единицы чертежа не заданы ({header}); задайте drawing_unit явно")
         unit, reason, other = guess
         note = (

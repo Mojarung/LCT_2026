@@ -16,6 +16,7 @@ _ASCII_ENTITIES = re.compile(
 )
 _ASCII_EOF = re.compile(rb"(?:^|\n)[ \t]*0+[ \t]*\nEOF[ \t\n]*$")
 _BINARY_ENTITIES = (b"\x00\x00SECTION\x00\x02\x00ENTITIES\x00", b"\x00SECTION\x00\x02ENTITIES\x00")
+_LFS_POINTER = b"version https://git-lfs.github.com/spec/"
 _CHUNK = 1_048_576
 _OVERLAP = 128
 
@@ -27,7 +28,13 @@ def require_complete_container(path: Path) -> None:
     source objects. The actual DXF grammar and repairs remain ezdxf's responsibility.
     """
     with path.open("rb") as stream:
-        binary = stream.read(len(_BINARY_HEADER)) == _BINARY_HEADER
+        head = stream.read(len(_LFS_POINTER))
+        if head == _LFS_POINTER:
+            raise InputError(
+                f"{path.name} - не чертёж, а указатель Git LFS (ссылка на файл в хранилище "
+                "репозитория): получите сам файл командой git lfs pull и загрузите его"
+            )
+        binary = head.startswith(_BINARY_HEADER)
         stream.seek(0, 2)
         size = stream.tell()
         stream.seek(max(0, size - _CHUNK))
