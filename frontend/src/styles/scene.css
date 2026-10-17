@@ -59,20 +59,10 @@
   accent-color: var(--bone);
 }
 
+/* Предустановка света - действие, а не состояние: тихая кнопка под сезоном. */
 .scene-light-preset {
   width: 100%;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-control);
-  background: var(--panel-2);
-  color: var(--bone);
-  font-size: var(--fs-micro);
-  text-align: left;
-}
-.scene-light-preset:hover,
-.scene-light-preset:focus-visible {
-  border-color: var(--bone);
+  margin: 0 0 12px;
 }
 
 /* Переключатель из нескольких значений: одна полоса, выбранное залито. */
@@ -265,37 +255,125 @@
   }
 }
 
+/* Сборка сцены - отдельный экран цвета страницы, а не текст на тёмном поле: знак сервиса
+   дышит, полоса хода едет масштабом (без пересчёта ширины), этапы отмечаются по мере сборки. */
 .scene-loading {
   position: absolute;
   z-index: 1;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: #e9e6e0;
-  font-size: var(--fs-body);
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: var(--ground);
+  color: var(--bone);
+  animation: fade var(--dur-2) var(--ease-out);
 }
-.scene-loading p {
+.scene-loader {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(380px, 100%);
+  text-align: center;
+}
+.scene-loader-mark {
+  display: block;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  animation: breathe 2.4s var(--ease-out) infinite;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+}
+.scene-loader[data-problem] .scene-loader-mark {
+  animation: none;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.scene-loader-title {
   margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-wrap: balance;
 }
-.scene-loading a {
-  color: #a5a39d;
-  font-size: var(--fs-small);
+.scene-loader-stage {
+  margin: -6px 0 4px;
+  min-height: 1.5em;
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-2);
 }
 .scene-progress {
-  width: min(360px, 70vw);
-  height: 4px;
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 2px;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-3);
   overflow: hidden;
 }
 .scene-progress span {
   display: block;
   height: 100%;
-  background: #e9e6e0;
-  transition: width 0.3s ease-out;
+  border-radius: inherit;
+  background: var(--bone);
+  transform-origin: left;
+  transition: transform var(--dur-3) var(--ease-out);
+}
+.scene-steps {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.scene-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+  transition: color var(--dur-2);
+}
+/* Отметка этапа: пустой кружок - впереди, пульсирующая точка - идёт, галочка - готово. */
+.scene-steps li::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--hair-2);
+}
+.scene-steps li[data-state='active'] {
+  color: var(--bone);
+  font-weight: 600;
+}
+.scene-steps li[data-state='active']::before {
+  background: radial-gradient(circle, var(--bone) 0 3px, transparent 3.5px);
+  box-shadow: inset 0 0 0 1.5px var(--bone);
+  animation: breathe 1.2s var(--ease-out) infinite;
+}
+.scene-steps li[data-state='done'] {
+  color: var(--bone-2);
+}
+.scene-steps li[data-state='done']::before {
+  background: var(--ok)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='white' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+  box-shadow: none;
+  animation: pop-in var(--dur-2) var(--ease-spring);
+}
+.scene-loader-back {
+  margin-top: 6px;
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+}
+.scene-loader-back:hover {
+  color: var(--bone);
 }
 
 /* Узкий экран: рабочее место становится страницей, и шапка сцены ложится на фон страницы, а

@@ -111,7 +111,8 @@ export interface ScenePanelProps {
 }
 
 /** Какие разделы пульта открыты: запоминается в браузере, без хранилища - по умолчанию. */
-const OPEN_KEY = 'green-scene-sections';
+// v2: разделы переставлены 17.10.2026, прежние открытые и свёрнутые не переносятся.
+const OPEN_KEY = 'green-scene-sections-v2';
 
 function readOpen(): Record<string, boolean> {
   try {
@@ -173,6 +174,17 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
     settings.snow > 0 ? `снег ${pct(settings.snow)}` : '',
     settings.leaves > 0 ? `листопад ${pct(settings.leaves)}` : '',
   ].filter(Boolean);
+  const weatherSummary = weather.length
+    ? weather.join(', ')
+    : `облачно ${pct(settings.clouds)}, ветер ${pct(settings.wind)}`;
+  const surroundings =
+    [
+      settings.people > 0 ? `люди ${pct(settings.people)}` : '',
+      settings.cars ? 'машины' : '',
+      settings.city ? 'город' : '',
+    ]
+      .filter(Boolean)
+      .join(', ') || 'пусто';
   return (
     <aside
       className={collapsed ? 'hud scene-panel collapsed' : 'hud scene-panel'}
@@ -184,6 +196,33 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
       </div>
       {collapsed ? null : (
         <div className="hud-scroll">
+          {/* Порядок - по тому, что спрашивают на показе: как посадки будут выглядеть с годами
+              и при каком свете. Камера, окружение и погода - ниже и свёрнуты. */}
+          <Section
+            id="plants"
+            title="Посадки"
+            summary={`${age}${settings.showExisting ? ', с существующими' : ''}`}
+            defaultOpen
+          >
+            <Segmented
+              label="Возраст посадок"
+              options={AGES}
+              value={settings.age}
+              onChange={(value) => {
+                onChange({ age: value });
+              }}
+            />
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.showExisting}
+                onChange={(e) => {
+                  onChange({ showExisting: e.target.checked });
+                }}
+              />
+              Существующие насаждения с подосновы
+            </label>
+          </Section>
           <Section
             id="time"
             title="Время и сезон"
@@ -206,15 +245,6 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 }}
               />
             </div>
-            <button
-              className="scene-light-preset"
-              type="button"
-              onClick={() => {
-                onChange({ hour: showcaseHour(settings.season), clouds: 0.2 });
-              }}
-            >
-              Мягкий вечерний свет
-            </button>
             <Segmented
               label="Сезон"
               options={SEASONS}
@@ -223,66 +253,15 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 onChange({ season: value });
               }}
             />
-            <div className="scene-field">
-              <label className="hud-label" htmlFor="scene-clouds">
-                Облачность <span className="scene-value">{pct(settings.clouds)}</span>
-              </label>
-              <input
-                id="scene-clouds"
-                type="range"
-                min={0}
-                max={0.9}
-                step={0.05}
-                value={settings.clouds}
-                onChange={(e) => {
-                  onChange({ clouds: Number(e.target.value) });
-                }}
-              />
-            </div>
-          </Section>
-          <Section
-            id="plants"
-            title="Посадки"
-            summary={`${age}${settings.showExisting ? ', с существующими' : ''}`}
-          >
-            <Segmented
-              label="Возраст посадок"
-              options={AGES}
-              value={settings.age}
-              onChange={(value) => {
-                onChange({ age: value });
+            <button
+              className="ghost small scene-light-preset"
+              type="button"
+              onClick={() => {
+                onChange({ hour: showcaseHour(settings.season), clouds: 0.2 });
               }}
-            />
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={settings.showExisting}
-                onChange={(e) => {
-                  onChange({ showExisting: e.target.checked });
-                }}
-              />
-              Существующие насаждения с подосновы
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={settings.cars}
-                onChange={(e) => {
-                  onChange({ cars: e.target.checked });
-                }}
-              />
-              Машины у бортов (условно: в подоснове их нет)
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={settings.city}
-                onChange={(e) => {
-                  onChange({ city: e.target.checked });
-                }}
-              />
-              Город вокруг съёмки (OpenStreetMap)
-            </label>
+            >
+              Поставить мягкий вечерний свет
+            </button>
           </Section>
           <Section
             id="layers"
@@ -316,10 +295,94 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
             <p className="hint">В кадры для фото ИИ слои не попадают.</p>
           </Section>
           <Section
-            id="weather"
-            title="Погода"
-            summary={weather.length ? weather.join(', ') : `ветер ${pct(settings.wind)}`}
+            id="camera"
+            title="Камера и качество"
+            summary={`${String(Math.round(speed))} м/с, ${quality}`}
           >
+            <div className="scene-field">
+              <label className="hud-label" htmlFor="scene-speed">
+                Скорость полёта <span className="scene-value">{Math.round(speed)} м/с</span>
+              </label>
+              <input
+                id="scene-speed"
+                type="range"
+                min={0}
+                max={SPEED_STEPS}
+                step={1}
+                value={toSlider(speed)}
+                aria-valuetext={`${String(Math.round(speed))} метров в секунду`}
+                onChange={(e) => {
+                  onSpeed(fromSlider(Number(e.target.value)));
+                }}
+              />
+            </div>
+            <Segmented
+              label="Качество"
+              options={QUALITIES}
+              value={settings.quality}
+              onChange={(value) => {
+                onChange({ quality: value });
+              }}
+            />
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.enhanced}
+                disabled={settings.quality === 'low'}
+                onChange={(e) => {
+                  onChange({ enhanced: e.target.checked });
+                }}
+              />
+              Объёмный свет и сглаживание
+            </label>
+          </Section>
+          <Section id="surroundings" title="Окружение" summary={surroundings}>
+            <Share
+              id="scene-people"
+              label="Люди на тротуарах"
+              value={settings.people}
+              onChange={(people) => {
+                onChange({ people });
+              }}
+            />
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.cars}
+                onChange={(e) => {
+                  onChange({ cars: e.target.checked });
+                }}
+              />
+              Машины у бортов (условно: в подоснове их нет)
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.city}
+                onChange={(e) => {
+                  onChange({ city: e.target.checked });
+                }}
+              />
+              Город вокруг съёмки (OpenStreetMap)
+            </label>
+          </Section>
+          <Section id="weather" title="Погода" summary={weatherSummary}>
+            <div className="scene-field">
+              <label className="hud-label" htmlFor="scene-clouds">
+                Облачность <span className="scene-value">{pct(settings.clouds)}</span>
+              </label>
+              <input
+                id="scene-clouds"
+                type="range"
+                min={0}
+                max={0.9}
+                step={0.05}
+                value={settings.clouds}
+                onChange={(e) => {
+                  onChange({ clouds: Number(e.target.value) });
+                }}
+              />
+            </div>
             <Share
               id="scene-wind"
               label="Ветер"
@@ -352,56 +415,6 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 onChange({ leaves });
               }}
             />
-          </Section>
-          <Section
-            id="camera"
-            title="Камера и качество"
-            summary={`${String(Math.round(speed))} м/с, ${quality}`}
-          >
-            <div className="scene-field">
-              <label className="hud-label" htmlFor="scene-speed">
-                Скорость полёта <span className="scene-value">{Math.round(speed)} м/с</span>
-              </label>
-              <input
-                id="scene-speed"
-                type="range"
-                min={0}
-                max={SPEED_STEPS}
-                step={1}
-                value={toSlider(speed)}
-                aria-valuetext={`${String(Math.round(speed))} метров в секунду`}
-                onChange={(e) => {
-                  onSpeed(fromSlider(Number(e.target.value)));
-                }}
-              />
-            </div>
-            <Share
-              id="scene-people"
-              label="Люди на тротуарах"
-              value={settings.people}
-              onChange={(people) => {
-                onChange({ people });
-              }}
-            />
-            <Segmented
-              label="Качество"
-              options={QUALITIES}
-              value={settings.quality}
-              onChange={(value) => {
-                onChange({ quality: value });
-              }}
-            />
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={settings.enhanced}
-                disabled={settings.quality === 'low'}
-                onChange={(e) => {
-                  onChange({ enhanced: e.target.checked });
-                }}
-              />
-              Объёмный свет и сглаживание
-            </label>
           </Section>
         </div>
       )}

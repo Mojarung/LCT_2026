@@ -615,7 +615,8 @@ export function ScenePage() {
       <div className="canvas-holder" ref={holder} />
       {flash ? <div key={flash} className="scene-flash" aria-hidden="true" /> : null}
       {cam.locked && readyToFly ? <div className="scene-crosshair" aria-hidden="true" /> : null}
-      {!hudHidden ? (
+      {data ? <RunTitle run={data} /> : <h1 className="visually-hidden">{title}</h1>}
+      {!hudHidden && readyToFly ? (
         <>
           <div className="scene-left">
             <aside
@@ -631,7 +632,6 @@ export function ScenePage() {
                 icon="street"
                 onToggle={toggleHead}
               />
-              {data ? <RunTitle run={data} /> : <h1 className="visually-hidden">{title}</h1>}
               <h2 className="hud-label scene-head-title">В сцене</h2>
               {counts && world ? (
                 <div className="hud-scroll scene-facts">
@@ -826,7 +826,7 @@ export function ScenePage() {
             </div>
           ) : null}
         </>
-      ) : (
+      ) : readyToFly ? (
         <button
           type="button"
           className="hud scene-unhide"
@@ -836,7 +836,7 @@ export function ScenePage() {
         >
           Панели · H
         </button>
-      )}
+      ) : null}
       {gallery && readyToFly ? (
         <ShotGallery
           title={gallery.title}
@@ -918,38 +918,98 @@ export function ScenePage() {
         </div>
       ) : null}
       {!readyToFly ? (
-        <div className="scene-loading" role="status" aria-live="polite">
-          {!supported ? (
-            <p className="notice">В браузере нет WebGL 2, 3D-вид недоступен.</p>
-          ) : loadError ? (
-            <p className="notice">Не загрузился {loadError}, сцену не построить.</p>
-          ) : failure ? (
-            <p className="notice">3D-вид не собрался: {failure}</p>
-          ) : run.isError ? (
-            <p className="notice">Прогон не найден.</p>
-          ) : live ? (
-            <p>Прогон ещё считается: 3D-вид откроется, когда план будет готов.</p>
-          ) : data?.state === 'failed' ? (
-            <p className="notice">Прогон завершился ошибкой: строить нечего.</p>
-          ) : (
-            <>
-              <p>
-                {world ? STAGE_TITLES[progress.stage] : 'Загрузка плана и подосновы'}
-                {world && progress.stage === 'plants'
-                  ? ` · ${progress.done} из ${progress.total}`
-                  : ''}
-              </p>
-              <div className="scene-progress">
-                <span style={{ width: `${world ? stageShare(progress) * 100 : 4}%` }} />
-              </div>
-            </>
-          )}
-          <Link to={`/runs/${encodeURIComponent(runId)}`}>← к плану прогона</Link>
-        </div>
+        <SceneLoading
+          problem={
+            !supported
+              ? 'В браузере нет WebGL 2, 3D-вид недоступен.'
+              : loadError
+                ? `Не загрузился ${loadError}, сцену не построить.`
+                : failure
+                  ? `3D-вид не собрался: ${failure}`
+                  : run.isError
+                    ? 'Прогон не найден.'
+                    : data?.state === 'failed'
+                      ? 'Прогон завершился ошибкой: строить нечего.'
+                      : null
+          }
+          waiting={live}
+          stage={world ? progress.stage : null}
+          share={world ? stageShare(progress) : 0.04}
+          count={
+            world && progress.stage === 'plants' ? `${progress.done} из ${progress.total}` : ''
+          }
+          back={`/runs/${encodeURIComponent(runId)}`}
+        />
       ) : null}
       <span className="visually-hidden" aria-live="polite">
         {readyToFly ? `3D-вид готов, ${clock(settings.hour)}` : ''}
       </span>
+    </div>
+  );
+}
+
+const LOAD_STEPS: { stage: Stage; title: string }[] = [
+  { stage: 'textures', title: 'Фактуры покрытий' },
+  { stage: 'ground', title: 'Газоны, тротуары и борта' },
+  { stage: 'buildings', title: 'Здания' },
+  { stage: 'plants', title: 'Кроны деревьев и кустарников' },
+];
+
+/** Экран сборки сцены: знак сервиса, этап и полоса хода, этапы списком с отметкой пройденных.
+ *  Панели сцены до готовности не показываются: в них нечего читать, а пустая карточка на
+ *  тёмном поле выглядела поломкой. */
+function SceneLoading({
+  problem,
+  waiting,
+  stage,
+  share,
+  count,
+  back,
+}: {
+  problem: string | null;
+  waiting: boolean;
+  stage: Stage | null;
+  share: number;
+  count: string;
+  back: string;
+}) {
+  const at = stage ? LOAD_STEPS.findIndex((step) => step.stage === stage) : -1;
+  return (
+    <div className="scene-loading" role="status" aria-live="polite">
+      <div className="scene-loader" data-problem={problem ? '1' : undefined}>
+        <img className="scene-loader-mark" src="/mark.svg" width={52} height={52} alt="" />
+        {problem ? (
+          <p className="scene-loader-title">{problem}</p>
+        ) : waiting ? (
+          <p className="scene-loader-title">
+            Прогон ещё считается: 3D-вид откроется, когда план будет готов.
+          </p>
+        ) : (
+          <>
+            <p className="scene-loader-title">Собираем 3D-вид улицы</p>
+            <p className="scene-loader-stage">
+              {stage ? STAGE_TITLES[stage] : 'Загрузка плана и подосновы'}
+              {count ? ` · ${count}` : ''}
+            </p>
+            <div className="scene-progress" aria-hidden="true">
+              <span style={{ transform: `scaleX(${String(Math.max(share, 0.02))})` }} />
+            </div>
+            <ol className="scene-steps">
+              {LOAD_STEPS.map((step, index) => (
+                <li
+                  key={step.stage}
+                  data-state={index < at ? 'done' : index === at ? 'active' : 'wait'}
+                >
+                  {step.title}
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <Link className="scene-loader-back" to={back}>
+          ← к плану прогона
+        </Link>
+      </div>
     </div>
   );
 }
