@@ -54,7 +54,11 @@ export function ConsolePage() {
     <div className="home">
       <section className="home-hero" aria-labelledby="hero-title">
         <div className="home-intro">
-          <h1 id="hero-title">Озеленение улиц по нормам</h1>
+          <h1 id="hero-title">
+            Озеленение
+            <br />
+            улиц по нормам
+          </h1>
           <p className="lead">
             Подоснова DXF или DWG на входе. На выходе - деревья и кустарник на слоях GREEN_* того же
             чертежа, и у каждой посадки пункт нормы, по которому она здесь стоит.
@@ -88,10 +92,7 @@ export function ConsolePage() {
                 <span>Фото по 3D-кадру</span>
               </span>
             </span>
-            <figcaption>
-              Выноски - отступы выбранной посадки до борта и опоры в метрах против нормы. Фото
-              нарисовано нейросетью по 3D-виду этого плана, это иллюстрация.
-            </figcaption>
+            <figcaption>Фото нарисовано нейросетью по 3D-кадру этого плана.</figcaption>
           </figure>
         </div>
         <div className="home-side">

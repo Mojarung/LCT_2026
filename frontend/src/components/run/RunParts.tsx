@@ -10,6 +10,7 @@ import { drawingName, integer, plural } from '../../lib/format';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron, UiIcon } from '../icons';
+import { SquareLoader } from '../ui/SquareLoader';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
@@ -182,7 +183,9 @@ export function RunMetrics({
               <div>
                 <dt>Грунт под ямой не подтверждён</dt>
                 <dd>
-                  {integer(unconfirmed)} из {integer(total)}
+                  {unconfirmed === total
+                    ? 'у всех'
+                    : `${integer(unconfirmed)} из ${integer(total)}`}
                 </dd>
               </div>
             ) : null}
@@ -256,8 +259,8 @@ export function RunStatus({ run }: { run: RunOut }) {
           ? run.progress.title
           : 'Читаем чертёж';
     return (
-      <div className="status" data-state={run.state}>
-        <span className="spinner" aria-hidden="true" />
+      <div className="status status-wait" data-state={run.state}>
+        <SquareLoader size={48} />
         <div>
           <p className="status-title">{title}</p>
           <p className="hint">Чертёж появится здесь после чтения. Ход расчёта - в полосе внизу.</p>
@@ -288,8 +291,8 @@ export function RunStatus({ run }: { run: RunOut }) {
     );
   }
   return (
-    <div className="status" data-state={run.state}>
-      <span className="spinner" aria-hidden="true" />
+    <div className="status status-wait" data-state={run.state}>
+      <SquareLoader size={48} />
       <span>Загружаем подоснову</span>
     </div>
   );

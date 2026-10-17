@@ -158,10 +158,22 @@
     padding: 2px;
   }
   .hud-view button {
-    height: 28px;
-    min-width: 0;
-    padding: 0 8px;
+    height: 30px;
+    min-width: 30px;
+    padding: 0 7px;
     font-size: var(--fs-micro);
+  }
+}
+/* На телефоне у переключателей вида - только значки: с подписями четыре кнопки шире экрана
+   и страница уезжала вбок (жюри, итерация 12). Подпись остаётся для читалки экрана. */
+@media (max-width: 560px) {
+  .hud-view .pair-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .hud-bottom {
     max-width: calc(100% - 2 * var(--inset));

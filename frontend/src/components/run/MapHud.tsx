@@ -30,7 +30,7 @@ function Pair<T extends string>({
           }}
         >
           <UiIcon name={icon} size={16} />
-          {text}
+          <span className="pair-text">{text}</span>
         </button>
       ))}
     </span>

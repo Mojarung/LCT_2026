@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
 import { useOverflowMark } from '../../hooks/useOverflowMark';
-import { KIND_RU, VERDICT_RU } from '../../lib/checks';
+import { VERDICT_RU } from '../../lib/checks';
 import { meters } from '../../lib/format';
 import type { MapItem } from '../../map/types';
 import { useEngine } from '../../state/engine';
@@ -56,7 +56,6 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
   const select = useWorkspace((s) => s.select);
   const editing = useWorkspace((s) => s.editing);
   const { runId = '' } = useParams();
-  const kind = KIND_RU[item.planting_type] ?? '';
   const title =
     item.kind === 'placement'
       ? `№ ${String(item.number)}. ${item.species_ru || 'вид не назначен'}`
@@ -79,7 +78,6 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <span className={`verdict verdict-${item.verdict}`}>
         {VERDICT_RU[item.verdict] ?? item.verdict}
       </span>
-      {kind ? <p className="detail-note">{kind}</p> : null}
       {item.kind === 'placement' && runId ? (
         <a
           className="detail-3d"
@@ -175,7 +173,6 @@ export function DetailPanel({ placements, rules, quality, legend = null }: Detai
             legend
           ) : section === 'plants' ? (
             <>
-              <p className="composition-guide">Выберите вид, чтобы найти его на плане.</p>
               <Composition placements={placements} />
             </>
           ) : (

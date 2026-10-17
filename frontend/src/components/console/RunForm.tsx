@@ -215,11 +215,9 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
         </>
       ) : demo ? (
         <>
-          <div className="field sample">
+          <div className="field sample" title="Каталог улиц пилота на этом стенде не подключён">
             <p className="sample-title">Встроенный участок улицы Берзарина</p>
-            <p className="hint">
-              Фрагмент настоящей подосновы с сетями. Каталог улиц не подключён.
-            </p>
+            <p className="hint">Фрагмент настоящей подосновы с сетями.</p>
           </div>
           <p className="or">или</p>
         </>

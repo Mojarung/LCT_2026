@@ -208,7 +208,6 @@
   align-items: start;
 }
 .home-intro h1 {
-  max-width: 12ch;
   margin: 0;
   font-size: var(--fs-display);
   font-weight: 700;

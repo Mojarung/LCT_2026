@@ -127,22 +127,31 @@ a:hover {
   margin-right: 6px;
   border-radius: var(--r-control);
   color: var(--bone);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  /* Имя сервиса - как на логотипе: GREEN_ прописными, плотно; подчёркивание - префикс слоёв
+     результата в DXF (GREEN_*). */
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   text-decoration: none;
   transition: background-color var(--dur-1);
 }
 .brand:hover {
   background: var(--panel-2);
 }
+/* Знак - лист на чертёжной сетке. Тонкие линии сетки - тёмные: в тёмной теме знак стоит на
+   светлой плашке цвета бумаги, иначе от него остаётся один лист. */
 .brand img {
   display: block;
   border-radius: 6px;
   transition: transform var(--dur-3) var(--ease-spring);
 }
 .brand:hover img {
-  transform: rotate(-8deg) scale(1.06);
+  transform: scale(1.08);
+}
+:root[data-theme='dark'] .brand img,
+:root[data-theme='dark'] .scene-loader-mark {
+  padding: 2px;
+  background: #f1ede5;
 }
 
 /* Путь «Прогоны / имя чертежа»: имя - главное в шапке, параметры прогона - строкой мельче. */
@@ -796,5 +805,70 @@ fieldset.field > legend {
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+}
+
+/* --- лоадер «змейка» (components/ui/SquareLoader.tsx) ---
+   Сетка 3 x 3, повёрнутая на 45 градусов: семь квадратов по очереди переходят в пустую клетку
+   по кругу (0,0)-(1,0)-(2,0)-(2,1)-(1,1)-(1,2)-(0,2)-(0,1). Сдвиг - transform в долях клетки,
+   раскладка страницы не пересчитывается. */
+.square-loader {
+  --cell: calc(var(--loader-size) / 3);
+  position: relative;
+  display: inline-block;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  transform: rotate(45deg);
+}
+.square-loader i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--cell) - 4px);
+  height: calc(var(--cell) - 4px);
+  margin: 2px;
+  border-radius: 2px;
+  background: var(--brand);
+  animation: square-walk 10s ease-in-out infinite both;
+  animation-delay: calc(var(--i) * -1.4285714286s);
+}
+.square-loader i:nth-child(even) {
+  background: color-mix(in srgb, var(--brand) 62%, var(--panel));
+}
+@keyframes square-walk {
+  0%,
+  10.5% {
+    transform: translate(0, 0);
+  }
+  12.5%,
+  23% {
+    transform: translate(var(--cell), 0);
+  }
+  25%,
+  35.5% {
+    transform: translate(calc(var(--cell) * 2), 0);
+  }
+  37.5%,
+  48% {
+    transform: translate(calc(var(--cell) * 2), var(--cell));
+  }
+  50%,
+  60.5% {
+    transform: translate(var(--cell), var(--cell));
+  }
+  62.5%,
+  73% {
+    transform: translate(var(--cell), calc(var(--cell) * 2));
+  }
+  75%,
+  85.5% {
+    transform: translate(0, calc(var(--cell) * 2));
+  }
+  87.5%,
+  98% {
+    transform: translate(0, var(--cell));
+  }
+  100% {
+    transform: translate(0, 0);
   }
 }

@@ -1199,6 +1199,13 @@ body.shell-map .topbar {
   font-weight: 600;
   font-size: var(--fs-body);
 }
+/* Ожидание чтения чертежа: змейка над строкой этапа, по центру карты. */
+.status-wait {
+  flex-direction: column;
+  gap: 18px;
+  text-align: center;
+  animation: fade var(--dur-3) var(--ease-out);
+}
 .status .hint {
   margin-top: 2px;
   max-width: none;

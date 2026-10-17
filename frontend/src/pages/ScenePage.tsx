@@ -24,6 +24,7 @@ import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
 import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
 import { RunTitle } from '../components/run/RunParts';
+import { SquareLoader } from '../components/ui/SquareLoader';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -971,7 +972,12 @@ function SceneLoading({
   return (
     <div className="scene-loading" role="status" aria-live="polite">
       <div className="scene-loader" data-problem={problem ? '1' : undefined}>
-        <img className="scene-loader-mark" src="/mark.svg" width={52} height={52} alt="" />
+        {/* Пока сцена собирается - змейка из квадратов; при ошибке - неподвижный знак сервиса. */}
+        {problem ? (
+          <img className="scene-loader-mark" src="/logo.webp" width={64} height={64} alt="" />
+        ) : (
+          <SquareLoader size={66} />
+        )}
         {problem ? (
           <p className="scene-loader-title">{problem}</p>
         ) : waiting ? (

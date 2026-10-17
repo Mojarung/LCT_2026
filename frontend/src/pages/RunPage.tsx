@@ -21,6 +21,7 @@ import { Legend } from '../components/run/Legend';
 import { MapHud } from '../components/run/MapHud';
 import { type Choice, PickChooser } from '../components/run/PickChooser';
 import { PlanMap } from '../components/run/PlanMap';
+import { SquareLoader } from '../components/ui/SquareLoader';
 import { ProgressHud } from '../components/run/ProgressHud';
 import { PanelToggle, RunMetrics, RunStatus, RunTitle } from '../components/run/RunParts';
 import { useOverflowMark } from '../hooks/useOverflowMark';
@@ -360,7 +361,7 @@ export function RunPage() {
           <PlanMap root={root} hooks={hooks} interactive={done} />
           {mapReady ? null : (
             <div className="map-loading" data-state={state}>
-              {data ? <RunStatus run={data} /> : <span className="spinner" aria-hidden="true" />}
+              {data ? <RunStatus run={data} /> : <SquareLoader size={48} />}
             </div>
           )}
           {withMap ? <MapHud editable={done} /> : null}

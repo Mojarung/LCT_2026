@@ -278,8 +278,10 @@
 .scene-loader-mark {
   display: block;
   margin-bottom: 6px;
-  border-radius: 12px;
-  animation: breathe 2.4s var(--ease-out) infinite;
+  border-radius: 8px;
+}
+.scene-loader .square-loader {
+  margin: 8px 0 18px;
 }
 @keyframes breathe {
   50% {
@@ -288,7 +290,6 @@
   }
 }
 .scene-loader[data-problem] .scene-loader-mark {
-  animation: none;
   filter: grayscale(1);
   opacity: 0.6;
 }

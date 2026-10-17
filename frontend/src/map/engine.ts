@@ -631,7 +631,14 @@ export class PlanEngine {
     }
     const ext = extentOf(this.view, this.extentPoints());
     const width = holder.getBoundingClientRect().width;
-    const wanted = (width * ext.h) / ext.w + 90;
+    // Плашки вида сверху и полоса кнопок снизу лежат поверх карты: высота колодца - план плюс
+    // они, иначе вписанный план мельчает (жюри дизайна, итерация 12).
+    let chrome = 0;
+    for (const strip of holder.querySelectorAll<HTMLElement>(
+      '[data-map-obstacle="top"], [data-map-obstacle="bottom"]',
+    ))
+      chrome += strip.getBoundingClientRect().height + PANEL_GAP * 2;
+    const wanted = (width * ext.h) / ext.w + Math.max(90, chrome + 24);
     const limit = window.innerHeight * 0.62;
     holder.style.height = `${String(Math.round(Math.min(Math.max(wanted, 260), limit)))}px`;
   }

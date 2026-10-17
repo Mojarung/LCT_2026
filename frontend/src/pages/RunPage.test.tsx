@@ -184,7 +184,8 @@ describe('RunPage: finished run', () => {
     const title = await within(left).findByText('Эскиз · проверить');
     expect(title).toBeVisible();
     const notice = title.closest('.notice');
-    expect(notice).toHaveTextContent('Грунт под ямой не подтверждён40 из 40');
+    // Когда не подтверждено у всех посадок, так и сказано, без «40 из 40».
+    expect(notice).toHaveTextContent('Грунт под ямой не подтверждёну всех');
     expect(left).not.toHaveTextContent('все без ограничений');
     // Почему эскиз и что делать - под раскрытием в том же блоке.
     await openFold(left, 'Почему эскиз и что сделать');

@@ -18,9 +18,9 @@ export function TopBar() {
     <header className="topbar">
       {/* Имя сервиса на каждом экране: на защите скриншот рабочего места без него - просто
           карта. Ведёт к консоли запуска. */}
-      <Link className="brand" to="/" aria-label="green, консоль запуска">
-        <img src="/mark.svg" width="22" height="22" alt="" />
-        <span>green</span>
+      <Link className="brand" to="/" aria-label="GREEN_, консоль запуска">
+        <img src="/logo.webp" width="30" height="30" alt="" />
+        <span>GREEN_</span>
       </Link>
       {runId ? <RunCrumbs runId={runId} /> : <MainNav />}
       <nav className="topbar-end" aria-label="Справка">
