@@ -379,24 +379,159 @@
 /* --- уточнение объектов чертежа (/runs/:id/review) --- */
 .review-body {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  align-items: start;
 }
-/* Поля слева прокручиваются сами: карта справа остаётся на месте, пока человек идёт по
-   группам сверху вниз. */
+.review-intro {
+  grid-column: 1 / -1;
+  padding: 12px 24px 0;
+}
+.review-intro > p:first-child {
+  margin: 0;
+}
 .review-controls {
-  padding: clamp(18px, 2.2vw, 26px);
+  min-width: 0;
+  padding: 0 24px 24px;
   border-right: 1px solid var(--hair-2);
-  max-height: calc(100dvh - 190px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hair-2) transparent;
 }
-.review-controls > .hint:first-child {
-  margin-top: 0;
+.review-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 20px;
+}
+.review-filters .field {
+  flex: 1 1 220px;
+  margin-bottom: 12px;
+}
+.review-filters .check {
+  margin-bottom: 20px;
+}
+.review-table-scroll {
+  overflow: auto;
+  max-height: 64vh;
+  scrollbar-width: thin;
+}
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  text-align: left;
+}
+.review-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 0 0 12px;
+}
+.review-table caption span {
+  font-weight: 400;
+  color: var(--bone-2);
+}
+.review-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel-2);
+}
+.review-table th,
+.review-table td {
+  padding: 12px 10px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--hair-2);
+}
+.review-table thead th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.review-table tbody th {
+  width: 29%;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.review-table td:nth-child(2) {
+  width: 31%;
+}
+.review-table td:last-child {
+  width: 40%;
+}
+.review-table select {
+  width: 100%;
+  min-width: 175px;
+  min-height: 44px;
+}
+.review-table .is-selected {
+  background: var(--panel-2);
+}
+.review-layer {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 44px;
+  color: var(--bone);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  font: inherit;
+}
+.review-layer[aria-pressed='true'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.review-cell-note {
+  display: block;
+  margin-top: 5px;
+  color: var(--bone-2);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+}
+.review-cell-note.needs-review {
+  color: var(--review-group);
+  font-weight: 600;
+}
+.review-row-reset {
+  margin-top: 8px;
+}
+.review-advanced {
+  border-top: 1px solid var(--hair-2);
+  padding: 12px 0;
+}
+.review-advanced summary {
+  cursor: pointer;
+  font-size: var(--fs-small);
+  min-height: 32px;
+}
+.review-advanced[open] summary {
+  margin-bottom: 14px;
+}
+.review-export {
+  grid-column: 1 / -1;
+  padding: 16px 24px;
+}
+.review-apply {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 16px 24px;
+  background: var(--panel);
+  border-top: 1px solid var(--hair-2);
+}
+.review-apply .hint {
+  margin: 6px 0 0;
+}
+.review-apply > [role='alert'] {
+  flex-basis: 100%;
+  margin: 0;
 }
 .review-status {
-  margin: 14px 0 20px;
-  padding: 10px 12px;
+  margin: 10px 0 14px;
+  padding: 8px 12px;
   border: 1px solid var(--hair);
   border-radius: var(--r-control);
   background: var(--panel-2);
@@ -417,7 +552,7 @@
   gap: 8px;
   margin: -6px 0 20px;
 }
-.review-controls textarea {
+.review-export textarea {
   width: 100%;
   font-family: var(--mono);
   font-size: var(--fs-micro);
@@ -429,6 +564,13 @@
   min-width: 0;
   padding: clamp(14px, 1.8vw, 20px);
 }
+.review-map h2 {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+.review-map > .hint {
+  margin: 0;
+}
 .review-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -437,7 +579,8 @@
 .review-canvas {
   flex: 1;
   width: 100%;
-  min-height: 520px;
+  min-height: 320px;
+  height: clamp(320px, 42vh, 500px);
   background: var(--panel-2);
   border: 1px solid var(--hair-2);
   border-radius: var(--r-control);
@@ -476,7 +619,34 @@
     border-bottom: 1px solid var(--hair-2);
   }
   .review-canvas {
-    min-height: 60vh;
+    min-height: 280px;
+    height: 40vh;
+  }
+  .review-table-scroll {
+    max-height: 58vh;
+  }
+  .review-intro {
+    padding: 16px 14px 0;
+  }
+  .review-controls {
+    padding: 0 14px 16px;
+  }
+  .review-table th,
+  .review-table td {
+    padding: 10px 6px;
+  }
+  .review-table select {
+    min-width: 155px;
+  }
+  .review-apply,
+  .review-export {
+    padding: 14px;
+  }
+  .review-apply {
+    position: static;
+  }
+  .review-apply .primary {
+    width: 100%;
   }
 }
 

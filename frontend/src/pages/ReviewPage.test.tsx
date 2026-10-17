@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -46,8 +46,8 @@ describe('уточнение объектов чертежа', () => {
     });
     renderApp('/runs/r1/review');
     await screen.findByText(/Не уточнено: 2/);
-    await user.selectOptions(screen.getByLabelText('Класс по исходнику'), 'building');
-    await user.click(screen.getByRole('button', { name: 'Назначить класс (2 объекта)' }));
+    expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'building');
     await user.click(screen.getByRole('button', { name: 'Применить и пересчитать' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Попробуйте ещё раз');
     const request = calls.find((c) => c.method === 'POST');
@@ -84,8 +84,9 @@ describe('уточнение объектов чертежа', () => {
     await screen.findByText(/Не уточнено:/);
     await user.click(screen.getByLabelText('Только требующие уточнения'));
     await user.type(screen.getByLabelText('Поиск слоя или блока'), '394');
-    expect(screen.getByLabelText('Группа').querySelectorAll('option')).toHaveLength(1);
-    expect(screen.getByLabelText('Группа')).toHaveDisplayValue(/08TREE.*394/);
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByRole('row', { name: /08TREE/ })).toHaveTextContent('Блок: 394');
+    expect(screen.queryByRole('row', { name: /Газон/ })).toBeNull();
   });
   it('первой открывается неизвестная группа, статус считает объекты и назначения', async () => {
     mockApi(routes());
@@ -96,9 +97,14 @@ describe('уточнение объектов чертежа', () => {
         'Элементов: 4. Автоматически: 1. Не уточнено: 2. Ваших назначений: 1.',
       ),
     ).toBeInTheDocument();
-    const group = screen.getByLabelText('Группа');
-    expect(group).toHaveDisplayValue('0, LineString, 2 объекта: Неизвестно');
-    expect(screen.getByText(/Основание: имя не распознано/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Показать слой 0, группа 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const row = screen.getAllByRole('row')[1];
+    expect(row).toHaveTextContent('Неизвестно');
+    expect(row).toHaveTextContent('имя не распознано');
+    expect(row).toHaveTextContent('Линия · 2 шт.');
   });
 
   it('класс назначается всей группе, и JSON несёт точные ссылки на объекты', async () => {
@@ -107,12 +113,16 @@ describe('уточнение объектов чертежа', () => {
     renderApp('/runs/r1/review');
     await screen.findByText(/Не уточнено: 2/);
 
-    await user.selectOptions(screen.getByLabelText('Класс по исходнику'), 'curb');
-    await user.click(screen.getByRole('button', { name: 'Назначить класс (2 объекта)' }));
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'curb');
+    // Исходный тип остаётся рядом с черновиком до пересчёта.
+    expect(
+      screen.getByRole('button', { name: 'Показать слой 0, группа 1' }).closest('tr'),
+    ).toHaveTextContent('Неизвестно');
 
     expect(
       screen.getByText('Элементов: 4. Автоматически: 1. Не уточнено: 0. Ваших назначений: 3.'),
     ).toBeInTheDocument();
+    await user.click(screen.getByText('Экспорт уточнений и исходника'));
     await user.click(screen.getByRole('button', { name: 'Показать JSON' }));
     const values = JSON.parse(
       screen.getByLabelText<HTMLTextAreaElement>('JSON уточнений').value,
@@ -132,6 +142,7 @@ describe('уточнение объектов чертежа', () => {
     renderApp('/runs/r1/review');
     await screen.findByText(/Не уточнено: 2/);
 
+    await user.click(screen.getByText('Отдельные объекты и основание распознавания'));
     const object = screen.getByLabelText('Объект в группе (0 - вся группа)');
     await user.clear(object);
     await user.type(object, '2');
@@ -149,6 +160,7 @@ describe('уточнение объектов чертежа', () => {
     renderApp('/runs/r1/review');
     await screen.findByText(/Не уточнено: 2/);
 
+    await user.click(screen.getByText('Подписи и покрытия'));
     const number = screen.getByLabelText('Номер подписи на карте (0 - не выбрана)');
     await user.clear(number);
     await user.type(number, '1');
@@ -156,6 +168,7 @@ describe('уточнение объектов чертежа', () => {
     await user.selectOptions(screen.getByLabelText('Роль выбранной подписи'), 'paved');
     await user.click(screen.getByRole('button', { name: 'Назначить роль' }));
     expect(screen.getByText(/Основание: назначено вами/)).toBeInTheDocument();
+    await user.click(screen.getByText('Экспорт уточнений и исходника'));
     await user.click(screen.getByRole('button', { name: 'Показать JSON' }));
     const values = JSON.parse(
       screen.getByLabelText<HTMLTextAreaElement>('JSON уточнений').value,
@@ -164,13 +177,76 @@ describe('уточнение объектов чертежа', () => {
   });
 
   it('копия DXF для повторного прогона предлагается, если сервис её сохранил', async () => {
+    const user = userEvent.setup();
     mockApi(routes(['semantic-review.geojson', 'classification.json', 'review-input.dxf']));
     renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    await user.click(screen.getByText('Экспорт уточнений и исходника'));
     const link = await screen.findByRole('link', { name: 'Исходник для повторной проверки' });
     expect(link).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/review-input.dxf');
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeDisabled();
+  });
+
+  it('изменяет строку без отправки на сервер, отмена возвращает исходное назначение', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi(
+      routes(['semantic-review.geojson', 'classification.json', 'review-input.dxf']),
     );
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    const field = screen.getByLabelText('Новый тип: Газон, группа 3');
+    await user.selectOptions(field, 'building');
+    expect(screen.getByRole('heading', { name: 'На чертеже: Газон' })).toBeInTheDocument();
+    expect(field).toHaveValue('building');
+    expect(screen.getByText('Назначений к применению: 1')).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Отменить изменения: Газон, группа 3' }));
+    expect(field).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeDisabled();
+  });
+
+  it('назначение строки затрагивает связанные штрихи выноски в другой группе', async () => {
+    const user = userEvent.setup();
+    mockApi({
+      ...routes(),
+      '/api/v1/runs/r1/artifacts/semantic-review.geojson': {
+        ...REVIEW,
+        callouts: [
+          {
+            source_refs: ['f:1', 'f:2'],
+            label_ref: 'l:1',
+            text: 'каб. кол.',
+            certain: false,
+            reason: 'проверить',
+          },
+        ],
+      },
+    });
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'ignore');
+    expect(screen.getByLabelText('Новый тип: Опоры, группа 2')).toHaveValue('ignore');
+    expect(screen.getByText('Назначений к применению: 3')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Отменить изменения: 0, группа 1' }));
+    expect(screen.getByLabelText('Новый тип: Опоры, группа 2')).toHaveValue('');
+  });
+
+  it('текущий тип сомнительной строки можно явно подтвердить', async () => {
+    const user = userEvent.setup();
+    mockApi({
+      ...routes(),
+      '/api/v1/runs/r1/artifacts/classification.json': {
+        ...REPORT,
+        groups: REPORT.groups.map((g, i) =>
+          i === 2 ? { ...g, review_reason: 'требуется проверка' } : g,
+        ),
+      },
+    });
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 3/);
+    await user.click(screen.getByRole('button', { name: 'Подтвердить тип: Газон, группа 3' }));
+    expect(screen.getByLabelText('Новый тип: Газон, группа 3')).toHaveValue('lawn');
+    expect(screen.getByText(/Не уточнено: 2/)).toBeInTheDocument();
   });
 
   it('без геометрии - одна строка и дорога к прогону, формы нет', async () => {
