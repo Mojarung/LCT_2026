@@ -43,6 +43,8 @@ export function SemanticReviewPanel({
   const [onlyReview, setOnlyReview] = useState(false);
   const [showDecoration, setShowDecoration] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  const [objectAt, setObjectAt] = useState<number | null>(null);
+  const [canRestoreView, setCanRestoreView] = useState(false);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState('');
@@ -73,10 +75,12 @@ export function SemanticReviewPanel({
   );
   // Пока человек не выбрал строку, весь план остаётся обзором, без случайного слоя «0».
   const current = selected !== null && order.includes(selected) ? selected : -1;
-  const chosen = useMemo(
-    () => (ready && current >= 0 ? relatedIndices(data, members[current] ?? []) : []),
-    [ready, data, members, current],
-  );
+  const chosen = useMemo(() => {
+    if (!ready || current < 0) return [];
+    const groupMembers = members[current] ?? [];
+    const one = objectAt === null ? undefined : groupMembers[objectAt];
+    return relatedIndices(data, objectAt === null ? groupMembers : one === undefined ? [] : [one]);
+  }, [ready, data, members, current, objectAt]);
   const selectedGeometry = useMemo(
     () => (data ? chosen.flatMap((i) => data.features[i]?.geometry ?? []) : []),
     [data, chosen],
@@ -90,10 +94,13 @@ export function SemanticReviewPanel({
     currentEngine?.setSemanticReview(
       open && ready ? { selected: selectedGeometry, changed: changedGeometry } : null,
     );
+  }, [engine, open, ready, selectedGeometry, changedGeometry]);
+  useEffect(() => {
+    const currentEngine = engine.current;
     return () => {
       currentEngine?.setSemanticReview(null);
     };
-  }, [engine, open, ready, selectedGeometry, changedGeometry]);
+  }, [engine]);
   useEffect(() => {
     if (!open) return;
     const close = (event: KeyboardEvent) => {
@@ -104,9 +111,35 @@ export function SemanticReviewPanel({
       window.removeEventListener('keydown', close);
     };
   }, [open, onClose]);
+  const focus = (indices: number[], automatic = false) => {
+    if (!ready || !indices.length) return;
+    const moved = engine.current?.focusSemanticReview(boundsOf(data, indices), automatic);
+    if (moved) setCanRestoreView(true);
+  };
+  const selectGroup = (index: number) => {
+    if (!ready) return;
+    setSelected(index);
+    setObjectAt(null);
+    focus(relatedIndices(data, members[index] ?? []), true);
+  };
+  const stepObject = (delta: number) => {
+    const list = members[current] ?? [];
+    if (!ready || !list.length) return;
+    const next =
+      objectAt === null
+        ? delta > 0
+          ? 0
+          : list.length - 1
+        : (objectAt + delta + list.length) % list.length;
+    const index = list[next];
+    if (index === undefined) return;
+    setObjectAt(next);
+    focus(relatedIndices(data, [index]));
+  };
   const assign = (index: number, value: string) => {
     if (!ready) return;
     setSelected(index);
+    setObjectAt(null);
     const refs = new Set(
       relatedIndices(data, members[index] ?? []).flatMap((i) => data.features[i]?.id ?? []),
     );
@@ -157,7 +190,7 @@ export function SemanticReviewPanel({
   return (
     <>
       {open && ready ? (
-        <div className="semantic-map-key" role="status">
+        <div className="semantic-map-key" role="status" data-map-obstacle="top">
           <strong>
             {selectedGroup
               ? `${selectedGroup.layer} · ${integer(chosen.length)} шт.`
@@ -166,7 +199,7 @@ export function SemanticReviewPanel({
           <span>
             {selectedGroup
               ? selectedTypes
-              : 'Подсветка появится на этом плане. Масштаб можно менять кнопками внизу.'}
+              : 'Подсветка появится на этом плане. При необходимости карта приблизит выбранные объекты.'}
           </span>
           <span>
             <i className="semantic-key-selected" />
@@ -196,7 +229,8 @@ export function SemanticReviewPanel({
           </button>
         </header>
         <p className="hint">
-          Выбор слоя подсвечивает объекты. Новый тип действует на всю строку после пересчёта.
+          Выбор строки подсвечивает и показывает объекты на плане. Новый тип действует на всю строку
+          после пересчёта.
         </p>
         {!ready ? (
           <p role={geometry.isError || report.isError || mismatch ? 'alert' : 'status'}>
@@ -253,12 +287,72 @@ export function SemanticReviewPanel({
                 className="ghost small"
                 disabled={!chosen.length}
                 onClick={() => {
-                  engine.current?.focusSemanticReview(boundsOf(data, chosen));
+                  focus(chosen);
                 }}
               >
                 Приблизить выбранное
               </button>
             </div>
+            <div className="semantic-object-nav">
+              <button
+                type="button"
+                className="ghost small"
+                aria-label="Предыдущий объект группы"
+                disabled={current < 0 || !members[current]?.length}
+                onClick={() => {
+                  stepObject(-1);
+                }}
+              >
+                ←
+              </button>
+              <span>
+                {current < 0
+                  ? 'Выберите строку'
+                  : objectAt === null
+                    ? `Вся группа · ${integer(members[current]?.length ?? 0)} шт.`
+                    : `Объект ${integer(objectAt + 1)} из ${integer(members[current]?.length ?? 0)}`}
+              </span>
+              <button
+                type="button"
+                className="ghost small"
+                aria-label="Следующий объект группы"
+                disabled={current < 0 || !members[current]?.length}
+                onClick={() => {
+                  stepObject(1);
+                }}
+              >
+                →
+              </button>
+              {objectAt !== null ? (
+                <button
+                  type="button"
+                  className="ghost small"
+                  onClick={() => {
+                    setObjectAt(null);
+                    focus(relatedIndices(data, members[current] ?? []));
+                  }}
+                >
+                  Вся группа
+                </button>
+              ) : null}
+              {canRestoreView ? (
+                <button
+                  type="button"
+                  className="ghost small"
+                  onClick={() => {
+                    engine.current?.restoreSemanticReviewView();
+                    setCanRestoreView(false);
+                  }}
+                >
+                  Вернуться к предыдущему виду
+                </button>
+              ) : null}
+            </div>
+            {objectAt !== null ? (
+              <p className="hint semantic-scope">
+                Показан один объект. Новый тип в таблице назначается всей группе.
+              </p>
+            ) : null}
             <ReviewGroupTable
               data={data}
               report={classes}
@@ -266,7 +360,7 @@ export function SemanticReviewPanel({
               members={members}
               assignments={assignments}
               selected={current}
-              onSelect={setSelected}
+              onSelect={selectGroup}
               onAssign={assign}
             />
           </>

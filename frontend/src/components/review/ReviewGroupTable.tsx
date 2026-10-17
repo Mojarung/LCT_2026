@@ -71,7 +71,18 @@ export function ReviewGroupTable({
             const pending = groupNeedsReview(item);
             const rowName = `${item.layer}, группа ${index + 1}`;
             return (
-              <tr key={index} className={selected === index ? 'is-selected' : undefined}>
+              <tr
+                key={index}
+                className={selected === index ? 'is-selected' : undefined}
+                onClick={(event) => {
+                  if (
+                    event.target instanceof Element &&
+                    event.target.closest('button, select, input, a')
+                  )
+                    return;
+                  onSelect(index);
+                }}
+              >
                 <th scope="row">
                   <button
                     type="button"

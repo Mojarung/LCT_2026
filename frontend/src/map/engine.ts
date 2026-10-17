@@ -17,6 +17,7 @@ import type {
   ZonesJson,
 } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
+import { semanticReviewTarget } from './reviewView';
 import { drawSourceConflicts } from './sourceConflicts';
 import { buildChunks, type Chunk } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
@@ -105,7 +106,15 @@ const validBox = (box: Box | null | undefined): Box | null =>
   box && (box[2] - box[0] > 0 || box[3] - box[1] > 0) ? box : null;
 
 export class PlanEngine {
-  private semanticReview: { selected: Path2D; changed: Path2D } | null = null;
+  private semanticReview: {
+    selected: Path2D;
+    changed: Path2D;
+    points: readonly Position[];
+    changedPoints: readonly Position[];
+    source: readonly Geometry[];
+    pulseStarted: number;
+  } | null = null;
+  private semanticReviewView: ViewState | null = null;
   private sourceConflicts: readonly SourceConflict[] = [];
   private sourceConflictSelected: string | null = null;
   private readonly view: ViewState = { scale: 1, tx: 0, ty: 0, rot: 0 };
@@ -512,25 +521,51 @@ export class PlanEngine {
       const changed = new Path2D();
       for (const geometry of value.selected) addGeometry(selected, geometry);
       for (const geometry of value.changed) addGeometry(changed, geometry);
-      this.semanticReview = { selected, changed };
+      const points: Position[] = [];
+      const changedPoints: Position[] = [];
+      const collect = (geometries: readonly Geometry[], into: Position[]) => {
+        for (const geometry of geometries) {
+          if (geometry.type === 'Point') into.push(geometry.coordinates);
+          else if (geometry.type === 'MultiPoint') into.push(...geometry.coordinates);
+          else if (geometry.type === 'GeometryCollection') collect(geometry.geometries, into);
+        }
+      };
+      collect(value.selected, points);
+      collect(value.changed, changedPoints);
+      const pulseStarted =
+        this.semanticReview?.source === value.selected
+          ? this.semanticReview.pulseStarted
+          : performance.now();
+      this.semanticReview = {
+        selected,
+        changed,
+        points,
+        changedPoints,
+        source: value.selected,
+        pulseStarted,
+      };
     }
     this.schedule();
   }
 
-  focusSemanticReview(box: Box): void {
-    const [x0, y0, x1, y1] = box;
-    const margin = 3;
-    const points = [
-      { x: x0 - margin, y: y0 - margin },
-      { x: x1 + margin, y: y0 - margin },
-      { x: x1 + margin, y: y1 + margin },
-      { x: x0 - margin, y: y1 + margin },
-    ];
-    Object.assign(this.view, fitView(extentOf(this.view, points), this.clearArea()));
+  focusSemanticReview(box: Box, automatic = false): boolean {
+    const target = semanticReviewTarget(this.view, box, this.clearArea(), automatic);
+    if (!target) return false;
+    this.semanticReviewView ??= { ...this.view };
     this.touched = true;
     this.invalidate();
-    this.schedule();
-    this.hooks.viewChanged();
+    this.moveTo(target, GROUP_MS);
+    return true;
+  }
+
+  restoreSemanticReviewView(): void {
+    const previous = this.semanticReviewView;
+    if (!previous) return;
+    this.semanticReviewView = null;
+    this.view.rot = previous.rot;
+    this.touched = true;
+    this.invalidate();
+    this.moveTo(previous, GROUP_MS);
   }
 
   setSourceConflicts(items: readonly SourceConflict[], selected: string | null): void {
@@ -640,6 +675,11 @@ export class PlanEngine {
       )
         continue;
       bottom = Math.min(bottom, strip.getBoundingClientRect().top - rect.top - PANEL_GAP);
+    }
+    for (const key of this.root.querySelectorAll<HTMLElement>('[data-map-obstacle="top"]')) {
+      const box = key.getBoundingClientRect();
+      if (box.width > 0 && getComputedStyle(key).position === 'absolute')
+        top = Math.max(top, box.bottom - rect.top + PANEL_GAP);
     }
     // Значки шапки висят над правой панелью; отступ сверху нужен, только где они накрывают план.
     const bar = document.querySelector<HTMLElement>('.topbar');
@@ -756,21 +796,60 @@ export class PlanEngine {
     drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette, dpr, this.style);
 
     if (this.semanticReview) {
+      const selection = this.semanticReview;
+      const active = selection.source.length > 0;
+      const elapsed = performance.now() - selection.pulseStarted;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const pulsing = active && !reduced && elapsed < 1200;
+      const pulse = pulsing ? Math.abs(Math.sin((elapsed / 600) * Math.PI)) : 0;
       ctx.save();
-      for (const [path, color, dashed] of [
-        [this.semanticReview.selected, this.palette.get('--review-group'), false],
-        [this.semanticReview.changed, this.palette.get('--review-label-active'), true],
+      // Сначала приглушаем фон, затем заново рисуем выбранное поверх: контуры не теряются.
+      if (active) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.globalAlpha = 0.52;
+        ctx.fillStyle = this.palette.get('--panel');
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        ctx.globalAlpha = 1;
+        worldTransform(ctx, this.view, dpr);
+      }
+      for (const [path, color, dashed, points] of [
+        [selection.selected, this.palette.get('--review-group'), false, selection.points],
+        [
+          selection.changed,
+          this.palette.get('--review-label-active'),
+          true,
+          selection.changedPoints,
+        ],
       ] as const) {
         ctx.strokeStyle = this.palette.get('--panel');
-        ctx.lineWidth = 7 / this.view.scale;
+        ctx.lineWidth = (9 + pulse * 5) / this.view.scale;
         ctx.stroke(path);
         ctx.strokeStyle = color;
-        ctx.lineWidth = 3 / this.view.scale;
+        ctx.lineWidth = (4 + pulse) / this.view.scale;
         ctx.setLineDash(dashed ? [6 / this.view.scale, 3 / this.view.scale] : []);
         ctx.stroke(path);
         ctx.setLineDash([]);
+        // Кольца в экранных пикселях видны даже у точечных деревьев на общем плане.
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (const [x, y] of points) {
+          const { sx, sy } = toScreen(this.view, x, y);
+          if (sx < -20 || sy < -20 || sx > rect.width + 20 || sy > rect.height + 20) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 9 + pulse * 3, 0, Math.PI * 2);
+          ctx.strokeStyle = this.palette.get('--panel');
+          ctx.lineWidth = 7;
+          ctx.stroke();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.setLineDash(dashed ? [4, 3] : []);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
       }
       ctx.restore();
+      if (pulsing) this.schedule();
     }
 
     // Отметка выбранного, север и линейка - в экранных пикселях: их размер не зависит от
@@ -842,6 +921,7 @@ export class PlanEngine {
     if (reduced || still) {
       Object.assign(this.view, target);
       this.schedule();
+      this.hooks.viewChanged();
       return;
     }
     const from = { scale: this.view.scale, tx: this.view.tx, ty: this.view.ty };
@@ -861,6 +941,11 @@ export class PlanEngine {
       this.view.ty = cy - (v0 + (v1 - v0) * eased) * scale;
       this.draw();
       if (k < 1) this.pan = requestAnimationFrame(tick);
+      else {
+        this.invalidate();
+        this.schedule();
+        this.hooks.viewChanged();
+      }
     };
     this.pan = requestAnimationFrame(tick);
   }

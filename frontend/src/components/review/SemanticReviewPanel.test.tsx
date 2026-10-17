@@ -11,7 +11,11 @@ import { mockApi, run } from '../../test/api';
 import { SemanticReviewPanel } from './SemanticReviewPanel';
 
 const engine = vi.hoisted(() => ({
-  current: { setSemanticReview: vi.fn(), focusSemanticReview: vi.fn() },
+  current: {
+    setSemanticReview: vi.fn(),
+    focusSemanticReview: vi.fn().mockReturnValue(true),
+    restoreSemanticReviewView: vi.fn(),
+  },
 }));
 vi.mock('../../state/engine', () => ({ useEngine: () => engine }));
 
@@ -77,7 +81,7 @@ describe('уточнение объектов поверх основного п
     });
     expect(engine.current.focusSemanticReview).not.toHaveBeenCalled();
   });
-  it('показывает исходную геометрию на плане и приближает её только по кнопке', async () => {
+  it('показывает исходную геометрию на плане и просит показать её автоматически и по кнопке', async () => {
     const user = userEvent.setup();
     mockApi(routes);
     setup();
@@ -87,9 +91,49 @@ describe('уточнение объектов поверх основного п
       selected: [REVIEW.features[0]?.geometry, REVIEW.features[2]?.geometry],
       changed: [],
     });
-    expect(engine.current.focusSemanticReview).not.toHaveBeenCalled();
+    expect(engine.current.focusSemanticReview).toHaveBeenLastCalledWith([0, 0, 20, 12], true);
     await user.click(screen.getByRole('button', { name: 'Приблизить выбранное' }));
-    expect(engine.current.focusSemanticReview).toHaveBeenCalledWith([0, 0, 20, 12]);
+    expect(engine.current.focusSemanticReview).toHaveBeenLastCalledWith([0, 0, 20, 12], false);
+  });
+  it('выбирает группу кликом на тип в строке, кнопка не вызывает повторный выбор', async () => {
+    const user = userEvent.setup();
+    mockApi(routes);
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Открыть' }));
+    await user.click(await screen.findByText('Неизвестно'));
+    expect(engine.current.focusSemanticReview).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Показать слой 0, группа 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Показать слой 0, группа 1' }));
+    expect(engine.current.focusSemanticReview).toHaveBeenCalledTimes(2);
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'fence');
+    expect(engine.current.focusSemanticReview).toHaveBeenCalledTimes(2);
+  });
+  it('обходит отдельные объекты, возвращает обзор, назначение в таблице действует на всю группу', async () => {
+    const user = userEvent.setup();
+    mockApi(routes);
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Открыть' }));
+    await user.click(await screen.findByRole('button', { name: 'Показать слой 0, группа 1' }));
+    await user.click(screen.getByRole('button', { name: 'Следующий объект группы' }));
+    expect(screen.getByText('Объект 1 из 2')).toBeInTheDocument();
+    expect(engine.current.setSemanticReview).toHaveBeenLastCalledWith({
+      selected: [REVIEW.features[0]?.geometry],
+      changed: [],
+    });
+    await user.click(screen.getByRole('button', { name: 'Следующий объект группы' }));
+    expect(screen.getByText('Объект 2 из 2')).toBeInTheDocument();
+    expect(engine.current.setSemanticReview).toHaveBeenLastCalledWith({
+      selected: [REVIEW.features[2]?.geometry],
+      changed: [],
+    });
+    await user.click(screen.getByRole('button', { name: 'Вернуться к предыдущему виду' }));
+    expect(engine.current.restoreSemanticReviewView).toHaveBeenCalledTimes(1);
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'fence');
+    expect(screen.getByText('Назначений к применению: 2')).toBeInTheDocument();
+    expect(screen.getByText('Вся группа · 2 шт.')).toBeInTheDocument();
   });
   it('черновик переживает сворачивание, подсветка снимается, исходный класс остаётся виден', async () => {
     const user = userEvent.setup();

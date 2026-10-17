@@ -1825,3 +1825,25 @@ body.semantic-review-mode .topbar {
     bottom: 12px;
   }
 }
+.review-table tbody tr {
+  cursor: pointer;
+}
+.review-table tbody tr:hover {
+  background: var(--panel-2);
+}
+.semantic-object-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-small);
+}
+.semantic-object-nav > span {
+  min-width: 110px;
+  text-align: center;
+}
+.semantic-review-panel > .semantic-scope {
+  display: block;
+  margin: 0;
+  font-size: var(--fs-micro);
+}
