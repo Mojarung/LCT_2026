@@ -50,16 +50,18 @@ def test_no_surface_evidence_plants_only_on_assumed_open_ground() -> None:
     assert all(p.y > 10 for p in assumed.placements)  # не на проезжей части
 
 
-def test_kerb_lines_without_a_carriageway_polygon_keep_the_strict_reading() -> None:
-    """Ревью 17.10.2026: борта линиями без полигона проезжей части не говорят, с какой стороны
-    дорога - запасной грунт залил бы проезд, и деревья встали бы в 3 м от борта на асфальте."""
+def test_kerb_line_without_a_carriageway_polygon_keeps_trees_off_the_narrow_side() -> None:
+    """Ревью 17.10.2026: борт линией без полигона проезжей части не говорит, с какой стороны
+    дорога - запасной грунт заливал проезд, и деревья вставали в 3 м от борта на асфальте.
+    Теперь узкая полоса от борта до границы работ принята проездом, сажают по другую сторону."""
     features = [
         feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
         feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
         feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
     ]
     plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
-    assert not plan.placements
+    assert plan.placements
+    assert all(p.y > 10 for p in plan.placements)
 
 
 def test_missing_work_boundary_does_not_mean_the_entire_drawing() -> None:

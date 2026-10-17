@@ -125,6 +125,10 @@ class SurfaceMap:
     fallback_labels: int = 0
     # Чертёж без признаков грунта: свободная земля в границе работ принята за газон (м²).
     open_ground_m2: float = 0.0
+    # Из них вырезано под проезды и тротуары, нарисованные только линиями (м²).
+    open_ground_edges_m2: float = 0.0
+    # Сам запасной грунт контуром: газоны плана выделяются и на нём (устраиваемые).
+    open_ground_area: BaseGeometry | None = None
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
     # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
     _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
@@ -284,6 +288,13 @@ class SurfaceMap:
             f"свободная земля внутри границы работ ({area} м², без зданий и твёрдых покрытий) "
             "принята за газон. Места посадок требуют подтверждения грунта по натуре."
         )
+        if self.open_ground_edges_m2:
+            edges = f"{self.open_ground_edges_m2:,.0f}".replace(",", " ")
+            opened += (
+                f" Проезды и тротуары даны линиями: под них вырезано {edges} м² - полоса между "
+                "линиями или от линии до границы работ, одиночная линия поперёк участка - ось "
+                "проезда шириной 7 м."
+            )
         return (opened, *(n for n in notes if not n.startswith("Грунт не определён")))
 
     def _review_notes(self) -> tuple[str, ...]:
@@ -481,7 +492,8 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     if functional_grid is not None:
         grid[functional_grid] = int(Material.PAVED)
     grid[barrier] = int(Material.BARRIER)
-    open_m2 = 0.0
+    open_m2 = edges_m2 = 0.0
+    open_area = None
     if (
         open_ground
         and has_extent
@@ -492,7 +504,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         and not any(f.object_class is ObjectClass.LAWN for f in polygons)
         and not _surface_linework(features)
     ):
-        open_m2 = _open_ground(
+        open_m2, edges_m2, open_area = _open_ground(
             grid, features, extent, (paved_area, uncertain), origin=origin, cell=cell
         )
     inferred_grid = grid.copy()
@@ -520,6 +532,8 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         fallback_paved_m2=fallback.paved_m2,
         fallback_labels=fallback.labels,
         open_ground_m2=open_m2,
+        open_ground_edges_m2=edges_m2,
+        open_ground_area=open_area,
         closed_faces=faces.count if faces else 0,
         conflicting_faces=faces.conflicts if faces else 0,
         unassigned_labels=faces.unassigned_labels if faces else 0,
@@ -530,9 +544,10 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
 
 # Линии границ покрытий, контуры без смысла и нерешённые объекты - чертёж говорит о покрытиях,
 # но сервис их не понял: грунт тогда не угадывается, остаётся неизвестным (материал места
-# решает уточнение, а не запасной вариант).
+# решает уточнение, а не запасной вариант). Замкнутое кольцо контура или края покрытия - не
+# граница между покрытиями, а площадь неизвестного смысла: она вырезается из запасного грунта,
+# как и площадь оформления (разметка, штамп).
 _SURFACE_LINEWORK = frozenset({ObjectClass.CONTOUR, ObjectClass.PAVEMENT_EDGE, ObjectClass.UNKNOWN})
-_EDGE_LINES = frozenset({ObjectClass.CURB, ObjectClass.ROAD, ObjectClass.SIDEWALK})
 
 
 # Площади, где грунта для посадки нет: здания, сооружения, препятствия, массивы, пути.
@@ -547,24 +562,95 @@ _NOT_GROUND = frozenset(
     }
 )
 
+# Проезды и тротуары линиями (синтетические участки других финалистов, 17.10.2026): борт и край
+# проезда - сторона проезда, край тротуара - сторона тротуара.
+_EDGE_KIND = {ObjectClass.CURB: "road", ObjectClass.ROAD: "road", ObjectClass.SIDEWALK: "walk"}
+# Полоса не шире этого между линиями одного вида или от линии до границы работ - покрытие.
+_STRIP_WIDTH_M = {"road": 35.0, "walk": 8.0}
+# Одиночная линия, по обе стороны которой широко, - ось: полуширина проезда и дорожки.
+_AXIS_HALF_M = {"road": 3.5, "walk": 1.0}
+_EDGE_SHARE = 0.3  # доля периметра полосы на линиях этого вида
+_STRIP_SHARE = 0.9  # доля периметра на линиях этого вида и границе работ
+_EDGE_TOL_M = 0.05
+_REMOVED = "inferred_removed"  # метод классификации снимаемого проектом (classification)
+_FRAME_COVER = 0.98  # кольцо оформления, покрывающее почти весь участок, - рамка или его копия
+
+
+def _ring_area(geometry: BaseGeometry) -> BaseGeometry | None:
+    """Площадь объекта: полигон как есть, кольцо с совпадающими концами - полигон."""
+    if geometry.geom_type in _AREA_TYPES:
+        return geometry
+    if geometry.geom_type == "LineString" and geometry.is_closed and len(geometry.coords) >= 4:  # noqa: PLR2004 - кольцо
+        area = shapely.make_valid(shapely.Polygon(geometry.coords))
+        return area if area.area > 0 else None
+    return None
+
+
+def _frame(feature: Feature, area: BaseGeometry, parts: Sequence[BaseGeometry]) -> bool:
+    """Рамка листа или копия границы работ: оформление, покрывающее почти весь участок или
+    одну из его границ работ."""
+    return feature.object_class is ObjectClass.IGNORE and any(
+        part.intersection(area).area >= _FRAME_COVER * part.area for part in parts
+    )
+
 
 def _surface_linework(features: Sequence[Feature]) -> bool:
-    """Чертёж говорит о покрытиях, но не так, чтобы запасной грунт был безопасен: неясные
-    линии и площади, или борта и края покрытий линиями без полигона проезжей части - тогда
-    неизвестно, с какой стороны борта асфальт (ревью 17.10.2026: деревья на проезде)."""
-    if any(
-        f.object_class in _SURFACE_LINEWORK
-        or (f.object_class is ObjectClass.IGNORE and f.geometry.geom_type in _AREA_TYPES)
+    """Чертёж говорит о покрытиях, но не так, чтобы запасной грунт был безопасен: открытые
+    неясные линии (границы покрытий, которые сервис не понял), нерешённые объекты и снимаемое
+    проектом (на месте демонтажа покрытие задаёт проект, а не запасной вариант)."""
+    return any(
+        f.object_class is ObjectClass.UNKNOWN
+        or (f.object_class in _SURFACE_LINEWORK and _ring_area(f.geometry) is None)
+        or (f.classification is not None and f.classification.method.startswith(_REMOVED))
         for f in features
-    ):
-        return True
-    carriageway = any(
-        f.object_class is ObjectClass.ROAD and f.geometry.geom_type in _AREA_TYPES for f in features
     )
-    edges = any(
-        f.object_class in _EDGE_LINES and f.geometry.geom_type not in _AREA_TYPES for f in features
+
+
+def _edge_strips(features: Sequence[Feature], extent: BaseGeometry) -> BaseGeometry | None:
+    """Проезды и тротуары, нарисованные только линиями: грани между линиями и границей работ.
+
+    Полоса между линиями одного вида или от линии до границы работ, не шире предела, - покрытие
+    (сторона борта неизвестна, поэтому узкая полоса у границы тоже проезд: осторожно). Линия,
+    у которой ни одна сторона не покрытие, - ось проезда или дорожки."""
+    lines: dict[str, list[BaseGeometry]] = {"road": [], "walk": []}
+    for f in features:
+        kind = _EDGE_KIND.get(f.object_class)
+        if kind and f.geometry.geom_type not in _AREA_TYPES and not f.geometry.is_empty:
+            lines[kind].append(f.geometry)
+    if not lines["road"] and not lines["walk"]:
+        return None
+    border = extent.boundary
+    noded = shapely.union_all([border, *lines["road"], *lines["walk"]])
+    faces = [
+        face
+        for face in shapely.get_parts(shapely.polygonize(shapely.get_parts(noded)))
+        if face.area > 0 and extent.contains(face.representative_point())
+    ]
+    zones = {k: shapely.union_all(v).buffer(_EDGE_TOL_M) for k, v in lines.items() if v}
+    edge_zone = border.buffer(_EDGE_TOL_M)
+    hard: list[BaseGeometry] = []
+    for face in faces:
+        ring = face.boundary
+        perimeter = ring.length
+        on_border = ring.intersection(edge_zone).length
+        width = 2 * shapely.maximum_inscribed_circle(face, 0.1).length
+        for kind, zone in zones.items():
+            on_kind = ring.intersection(zone).length
+            if (
+                on_kind >= _EDGE_SHARE * perimeter
+                and on_kind + on_border >= _STRIP_SHARE * perimeter
+                and width <= _STRIP_WIDTH_M[kind]
+            ):
+                hard.append(face)
+                break
+    near = shapely.union_all(hard).buffer(_EDGE_TOL_M) if hard else None
+    hard.extend(
+        line.buffer(_AXIS_HALF_M[kind]).intersection(extent)
+        for kind, group in lines.items()
+        for line in group
+        if near is None or not line.intersects(near)
     )
-    return edges and not carriageway
+    return shapely.union_all(hard) if hard else None
 
 
 def _open_ground(  # noqa: PLR0913 - растр, объекты, граница и исключения
@@ -575,21 +661,36 @@ def _open_ground(  # noqa: PLR0913 - растр, объекты, граница 
     *,
     origin: tuple[float, float],
     cell: float,
-) -> float:
-    """Неизвестные клетки внутри границы работ, вне зданий, сооружений и твёрдых покрытий,
-    становятся грунтом; возвращает их площадь, м²."""
+) -> tuple[float, float, BaseGeometry | None]:
+    """Неизвестные клетки внутри границы работ, вне зданий, сооружений, твёрдых покрытий и
+    замкнутых контуров без смысла, становятся грунтом; возвращает их площадь, площадь,
+    вырезанную под проезды и тротуары линиями (м²), и сам грунт контуром."""
     blocked = [g for g in hard if g is not None and not g.is_empty]
-    blocked += [
+    parts = [extent] + [
         f.geometry
         for f in features
-        if f.object_class in _NOT_GROUND and f.geometry.geom_type in _AREA_TYPES
+        if f.object_class is ObjectClass.WORK_BOUNDARY and f.geometry.geom_type in _AREA_TYPES
     ]
+    for f in features:
+        if (
+            f.object_class in _NOT_GROUND
+            or f.object_class in _SURFACE_LINEWORK
+            or f.object_class is ObjectClass.IGNORE
+        ):
+            area = _ring_area(f.geometry)
+            if area is not None and not _frame(f, area, parts):
+                blocked.append(area)
+    strips = _edge_strips(features, extent)
+    edges_m2 = 0.0
+    if strips is not None and not strips.is_empty:
+        blocked.append(strips)
+        edges_m2 = float(strips.intersection(extent).area)
     ground = extent.difference(shapely.union_all(blocked)) if blocked else extent
     if ground.is_empty:
-        return 0.0
+        return 0.0, edges_m2, None
     mask = _inside(ground, origin, cell, grid.shape) & (grid == int(Material.UNKNOWN))
     grid[mask] = int(Material.SOIL)
-    return float(mask.sum()) * cell * cell
+    return float(mask.sum()) * cell * cell, edges_m2, ground
 
 
 @dataclass(frozen=True, slots=True)
