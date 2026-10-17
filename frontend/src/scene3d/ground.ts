@@ -480,7 +480,9 @@ export const GROUND_MAP = /* glsl */ `
   vec3 m = texture2D(uMask, clamp(muv, 0.0, 1.0)).rgb;
   // За границей сцены данных нет: газон квартала, край уходит в дымку.
   float outside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
-  if (uCutRoad > 0.5 && outside > 0.5 && m.b > 0.5) discard;
+  // Порог выше середины: вырез чуть уже проезда, край земли уходит под борт, а не открывает
+  // щель между бортом и тротуаром.
+  if (uCutRoad > 0.5 && outside > 0.5 && m.b > 0.7) discard;
   vec4 nz = texture2D(uNoise, p / 23.0);
   // Граница газона, плитки и асфальта - порог маски без шума: шум делал край «обгрызенным»
   // (пользователь, 17.10.2026). Лесенку клеток растра снимает размытие маски (softenCells).
@@ -547,7 +549,9 @@ export const CURB_ABOVE_WALK_M = 0.02;
 export const GARDEN_CURB_W = 0.08;
 export const GARDEN_CURB_H = 0.06;
 
-/** Сетка бруса вдоль ломаной: верх и две боковые грани, без дна. */
+/** Сетка бруса вдоль ломаной: верх и две боковые грани без дна. Пролёты стыкуются срезом
+ *  угла (без щели и нахлёста на изломе, срез не длиннее ширины бруса), открытая ломаная
+ *  закрыта торцами, замкнутое кольцо - стыком конца с началом: изнутри брус не виден. */
 export function ribbonBox(
   lines: readonly Line[],
   width: number,
@@ -570,53 +574,111 @@ export function ribbonBox(
     for (let i = 0; i < 6; i++) nor.push(...n);
     uv.push(u0, 0, u1, 0, u1, 1, u0, 0, u1, 1, u0, 1);
   };
+  const hw = width / 2;
+  const y0 = lift;
+  const y1 = lift + height;
   for (const line of lines) {
+    const pts: Flat[] = [];
+    for (const p of line.points) {
+      const last = pts.at(-1);
+      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= 0.01) pts.push(p);
+    }
+    const first = pts[0];
+    const end = pts.at(-1);
+    const closed =
+      pts.length > 3 && !!first && !!end && Math.hypot(first.x - end.x, first.z - end.z) < 0.01;
+    if (closed) pts.pop();
+    const n = pts.length;
+    const segments = closed ? n : n - 1;
+    if (segments < 1) continue;
+    // Нормаль каждого пролёта.
+    const normals: [number, number][] = [];
+    for (let s = 0; s < segments; s++) {
+      const p = pts[s] as Flat;
+      const q = pts[(s + 1) % n] as Flat;
+      const len = Math.hypot(q.x - p.x, q.z - p.z);
+      normals.push([-(q.z - p.z) / len, (q.x - p.x) / len]);
+    }
+    // Смещение вершины влево: среднее нормалей соседних пролётов, длиной до стыка граней.
+    const offset = (k: number): [number, number] => {
+      const after = closed ? k % segments : Math.min(k, segments - 1);
+      const before = closed ? (k - 1 + segments) % segments : Math.max(k - 1, 0);
+      const [ax, az] = normals[before] ?? [0, 0];
+      const [bx, bz] = normals[after] ?? [0, 0];
+      let mx = ax + bx;
+      let mz = az + bz;
+      const ml = Math.hypot(mx, mz);
+      if (ml < 1e-6) return [bx * hw, bz * hw];
+      mx /= ml;
+      mz /= ml;
+      const scale = Math.min(hw / Math.max(mx * bx + mz * bz, 1e-6), width);
+      return [mx * scale, mz * scale];
+    };
     let along = 0;
-    for (let i = 0; i + 1 < line.points.length; i++) {
-      const p = line.points[i];
-      const q = line.points[i + 1];
-      if (!p || !q) continue;
-      const dx = q.x - p.x;
-      const dz = q.z - p.z;
-      const len = Math.hypot(dx, dz);
-      if (len < 0.01) continue;
-      const nx = -dz / len;
-      const nz = dx / len;
-      const hw = width / 2;
-      const y0 = lift;
-      const y1 = lift + height;
-      const l = [p.x + nx * hw, p.z + nz * hw, q.x + nx * hw, q.z + nz * hw];
-      const r = [p.x - nx * hw, p.z - nz * hw, q.x - nx * hw, q.z - nz * hw];
+    for (let s = 0; s < segments; s++) {
+      const p = pts[s] as Flat;
+      const q = pts[(s + 1) % n] as Flat;
+      const [ox0, oz0] = offset(s);
+      const [ox1, oz1] = offset(s + 1);
+      const [nx, nz] = normals[s] ?? [0, 0];
+      const len = Math.hypot(q.x - p.x, q.z - p.z);
       const u0 = along;
       const u1 = along + len;
       along = u1;
+      const l0 = [p.x + ox0, p.z + oz0];
+      const r0 = [p.x - ox0, p.z - oz0];
+      const l1 = [q.x + ox1, q.z + oz1];
+      const r1 = [q.x - ox1, q.z - oz1];
       // Верх, левая и правая грани.
       quad(
-        [l[0] ?? 0, y1, l[1] ?? 0],
-        [r[0] ?? 0, y1, r[1] ?? 0],
-        [r[2] ?? 0, y1, r[3] ?? 0],
-        [l[2] ?? 0, y1, l[3] ?? 0],
+        [l0[0] ?? 0, y1, l0[1] ?? 0],
+        [r0[0] ?? 0, y1, r0[1] ?? 0],
+        [r1[0] ?? 0, y1, r1[1] ?? 0],
+        [l1[0] ?? 0, y1, l1[1] ?? 0],
         [0, 1, 0],
         u0,
         u1,
       );
       quad(
-        [l[0] ?? 0, y0, l[1] ?? 0],
-        [l[0] ?? 0, y1, l[1] ?? 0],
-        [l[2] ?? 0, y1, l[3] ?? 0],
-        [l[2] ?? 0, y0, l[3] ?? 0],
+        [l0[0] ?? 0, y0, l0[1] ?? 0],
+        [l0[0] ?? 0, y1, l0[1] ?? 0],
+        [l1[0] ?? 0, y1, l1[1] ?? 0],
+        [l1[0] ?? 0, y0, l1[1] ?? 0],
         [nx, 0, nz],
         u0,
         u1,
       );
       quad(
-        [r[2] ?? 0, y0, r[3] ?? 0],
-        [r[2] ?? 0, y1, r[3] ?? 0],
-        [r[0] ?? 0, y1, r[1] ?? 0],
-        [r[0] ?? 0, y0, r[1] ?? 0],
+        [r1[0] ?? 0, y0, r1[1] ?? 0],
+        [r1[0] ?? 0, y1, r1[1] ?? 0],
+        [r0[0] ?? 0, y1, r0[1] ?? 0],
+        [r0[0] ?? 0, y0, r0[1] ?? 0],
         [-nx, 0, -nz],
         u1,
         u0,
+      );
+    }
+    if (closed) continue;
+    // Торцы открытой ломаной.
+    for (const [k, sign] of [
+      [0, -1],
+      [n - 1, 1],
+    ] as const) {
+      const p = pts[k] as Flat;
+      const [ox, oz] = offset(k);
+      const [nx, nz] = normals[sign < 0 ? 0 : segments - 1] ?? [0, 0];
+      const dir = [nz * sign, -nx * sign];
+      const a = [p.x + ox, p.z + oz];
+      const b = [p.x - ox, p.z - oz];
+      const [first, second] = sign < 0 ? [a, b] : [b, a];
+      quad(
+        [first[0] ?? 0, y0, first[1] ?? 0],
+        [first[0] ?? 0, y1, first[1] ?? 0],
+        [second[0] ?? 0, y1, second[1] ?? 0],
+        [second[0] ?? 0, y0, second[1] ?? 0],
+        [dir[0] ?? 0, 0, dir[1] ?? 0],
+        0,
+        width,
       );
     }
   }

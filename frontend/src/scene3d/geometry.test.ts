@@ -125,11 +125,40 @@ describe('борт, ограда и опоры', () => {
     ],
   };
 
-  it('брус борта: три грани на каждый пролёт, высота 15 см', () => {
+  it('брус борта: три грани на пролёт и торцы на концах, высота 15 см', () => {
     const g = ribbonBox([line], 0.15, 0.15);
-    expect(g.getAttribute('position').count).toBe(2 * 3 * 6);
+    expect(g.getAttribute('position').count).toBe(2 * 3 * 6 + 2 * 6);
     g.computeBoundingBox();
     expect(g.boundingBox?.max.y).toBeCloseTo(0.15);
+  });
+
+  it('брус борта сплошной: на изломе грани сходятся в одной точке, без щели', () => {
+    // Излом на 90° в (10, 0): левая грань срезается в (9.9, 0.1), правая - в (10.1, -0.1).
+    const g = ribbonBox([line], 0.2, 0.15);
+    const pos = g.getAttribute('position');
+    const has = (x: number, z: number) => {
+      for (let i = 0; i < pos.count; i++)
+        if (Math.abs(pos.getX(i) - x) < 1e-6 && Math.abs(pos.getZ(i) - z) < 1e-6) return true;
+      return false;
+    };
+    expect(has(9.9, 0.1)).toBe(true);
+    expect(has(10.1, -0.1)).toBe(true);
+    // Без стыка пролёты кончались бы в (10, ±0.1) и начинались в (10 ± 0.1, 0) - щель.
+    expect(has(10, -0.1)).toBe(false);
+    expect(has(10.1, 0)).toBe(false);
+  });
+
+  it('замкнутое кольцо борта без торцов: начало и конец сходятся стыком', () => {
+    const ring = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+        { x: 10, z: 10 },
+        { x: 0, z: 0 },
+      ],
+    };
+    const g = ribbonBox([ring], 0.2, 0.15);
+    expect(g.getAttribute('position').count).toBe(3 * 3 * 6);
   });
 
   it('шаг прутьев ограды не зависит от длины пролёта', () => {

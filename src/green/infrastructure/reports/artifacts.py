@@ -775,7 +775,7 @@ PAVED_ROAD, PAVED_ASPHALT, PAVED_PAVERS, PAVED_UNKNOWN = "road", "asphalt", "pav
 ROAD_MIN_WIDTH_M = 3.5
 # Сетка проезжей части шире её контура: край маски на 3D не точнее пикселя, дыра в земле
 # у борта должна попадать на асфальт, а не в пустоту.
-ROAD_MESH_MARGIN_M = 0.3
+ROAD_MESH_MARGIN_M = 0.5
 SURFACE_MIN_PART_M2 = 0.5
 PAVED_SMOOTH_M = 0.5
 # Подписи материала съёмки Мосгеотреста: «А» - асфальт, «Ц» - цементобетон, «ПЛ» - плитка,
