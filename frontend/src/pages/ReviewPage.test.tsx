@@ -249,6 +249,27 @@ describe('уточнение объектов чертежа', () => {
     expect(screen.getByText(/Не уточнено: 2/)).toBeInTheDocument();
   });
 
+  it('подсказка локальной модели видна в строке и принимается одним нажатием', async () => {
+    const user = userEvent.setup();
+    mockApi({
+      ...routes(),
+      '/api/v1/runs/r1/artifacts/classification.json': {
+        ...REPORT,
+        groups: REPORT.groups.map((g, i) =>
+          i === 0
+            ? { ...g, llm_hint: { suggestion: 'building', confidence: 0.84, model: 'qwen3:8b' } }
+            : g,
+        ),
+      },
+    });
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    expect(screen.getByText('Модель qwen3:8b предлагает: Здание (0,84)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Новый тип: 0, группа 1')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: 'Принять подсказку: 0, группа 1' }));
+    expect(screen.getByLabelText('Новый тип: 0, группа 1')).toHaveValue('building');
+  });
+
   it('без геометрии - одна строка и дорога к прогону, формы нет', async () => {
     mockApi(routes(['classification.json']));
     renderApp('/runs/r1/review');

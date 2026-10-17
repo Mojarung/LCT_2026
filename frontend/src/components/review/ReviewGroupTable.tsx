@@ -70,6 +70,8 @@ export function ReviewGroupTable({
             const value = uniform ? drafts[0] : drafts.length ? 'mixed' : '';
             const pending = groupNeedsReview(item);
             const rowName = `${item.layer}, группа ${index + 1}`;
+            const hint =
+              item.llm_hint && ASSIGNABLE.includes(item.llm_hint.suggestion) ? item.llm_hint : null;
             return (
               <tr
                 key={index}
@@ -160,6 +162,24 @@ export function ReviewGroupTable({
                     >
                       Подтвердить текущий
                     </button>
+                  ) : null}
+                  {hint && value !== hint.suggestion ? (
+                    <>
+                      <span className="review-cell-note">
+                        Модель {hint.model} предлагает: {className(hint.suggestion)} (
+                        {hint.confidence.toLocaleString('ru-RU', { maximumFractionDigits: 2 })})
+                      </span>
+                      <button
+                        type="button"
+                        className="ghost small review-row-reset"
+                        aria-label={`Принять подсказку: ${rowName}`}
+                        onClick={() => {
+                          onAssign(index, hint.suggestion);
+                        }}
+                      >
+                        Принять подсказку
+                      </button>
+                    </>
                   ) : null}
                 </td>
               </tr>

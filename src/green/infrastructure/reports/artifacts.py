@@ -19,6 +19,7 @@ from openpyxl import Workbook
 
 from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
+from green.application.name_model import name_key
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material
 from green.domain.objects import ObjectClass
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
 
     from green.application.basemap import Basemap, BasemapFeature
     from green.application.classification import ClassificationReport
+    from green.application.name_hints import NameHint
     from green.application.results import RunReport
     from green.application.surfaces import SurfaceMap
     from green.domain.effect import StreetEffect
@@ -125,10 +127,29 @@ class FileArtifactSink:
             ),
             "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "classification.json": _write_json(
-                directory / "classification.json", classification_payload(report.classification)
+                directory / "classification.json",
+                classification_payload(report.classification, report.name_hints),
             ),
             "input_read.json": _write_json(
                 directory / "input_read.json", asdict(report.read_diagnostics)
+            ),
+            # Подсказки LLM по именам слоёв: только когда их спрашивали и было что сказать.
+            **(
+                {
+                    "name_hints.json": _write_json(
+                        directory / "name_hints.json",
+                        {
+                            "note": (
+                                "Предположения LLM о классе слоёв, которые сервис понял только "
+                                "по геометрии. План от них не зависит; принять подсказку - "
+                                "назначить класс слою (layer_classes) и перезапустить."
+                            ),
+                            "hints": [asdict(h) for h in report.name_hints],
+                        },
+                    )
+                }
+                if report.name_hints
+                else {}
             ),
             "assembly.json": _write_json(
                 directory / "assembly.json", asdict(report.assembly) if report.assembly else None
@@ -205,10 +226,25 @@ class FileArtifactSink:
         return saved
 
 
-def classification_payload(report: ClassificationReport | None) -> dict[str, Any] | None:
+def classification_payload(
+    report: ClassificationReport | None, hints: Sequence[NameHint] = ()
+) -> dict[str, Any] | None:
+    """classification.json; подсказка LLM по имени (application/name_hints.py) кладётся в каждую
+    группу этого имени полем llm_hint - её показывает таблица страницы уточнения."""
     if report is None:
         return None
-    return {"ready": report.ready, "recognition": recognition_summary(report), **asdict(report)}
+    body = asdict(report)
+    groups: list[dict[str, Any]] = body["groups"]
+    by_name = {h.name: h for h in hints}
+    for group in groups:
+        hint = by_name.get(name_key(group["layer"], group["block"]))
+        if hint is not None:
+            group["llm_hint"] = {
+                "suggestion": hint.suggestion,
+                "confidence": hint.confidence,
+                "model": hint.model,
+            }
+    return {"ready": report.ready, "recognition": recognition_summary(report), **body}
 
 
 def build_rows(plan: Plan, rulebook: RuleBook) -> list[dict[str, Any]]:

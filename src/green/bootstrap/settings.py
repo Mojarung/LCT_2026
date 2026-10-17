@@ -59,5 +59,9 @@ class Settings(BaseSettings):
         ]
     )
     osm_timeout_s: int = Field(default=90, ge=5, le=300)
+    # Локальная LLM (Ollama) для подсказок классов по именам слоёв; пусто - подсказок нет.
+    llm_url: str = ""
+    llm_model: str = "qwen3:8b"
+    llm_timeout_s: int = Field(default=180, ge=5, le=1800)
     log_json: bool = False
     log_level: str = "INFO"

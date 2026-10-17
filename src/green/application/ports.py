@@ -29,6 +29,15 @@ if TYPE_CHECKING:
     from green.domain.planting import Plan, Species
 
 
+class LayerNameHinter(Protocol):
+    """Подсказка класса по имени слоя (LLM): ответ на каждое имя - класс или None и уверенность."""
+
+    @property
+    def model(self) -> str: ...
+
+    def suggest(self, names: Sequence[str]) -> Sequence[tuple[str | None, float]]: ...
+
+
 class SceneReader(Protocol):
     def read(self, path: Path, *, unit: str = "auto") -> Scene: ...
 

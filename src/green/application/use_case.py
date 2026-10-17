@@ -30,6 +30,7 @@ from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
 from green.application.kerbs import refine_kerbs
 from green.application.lawns import plan_lawns
+from green.application.name_hints import NameHint, name_hints
 from green.application.placement import (
     MODE_CURB_HEDGE,
     MODE_LABELS,
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
     from pathlib import Path
 
+    from green.application.classification import ClassificationReport
     from green.application.params import PlanParams
     from green.application.placement import PlacementStrategy
     from green.application.ports import (
@@ -73,6 +75,7 @@ if TYPE_CHECKING:
         IntegrityChecker,
         InventoryCounts,
         LayerMapSource,
+        LayerNameHinter,
         PlanWriter,
         ProgressSink,
         RuleBookSource,
@@ -164,8 +167,11 @@ class PlanSite:
         merger: DrawingMerger | None = None,
         gis: GisLayerSource | None = None,
         schools: Path | None = None,
+        hinter: LayerNameHinter | None = None,
     ) -> None:
         self._gis = gis
+        # Подсказки LLM по именам слоёв: только в отчёт (application/name_hints.py).
+        self._hinter = hinter
         # Контуры школ и детсадов OpenStreetMap (config/gis/osm_schools_moscow.geojson).
         self._schools = schools
         self._school_outlines: tuple[Feature, ...] | None = None
@@ -178,6 +184,23 @@ class PlanSite:
         self._writer = writer
         self._integrity = integrity
         self._merger = merger
+
+    def _name_hints(self, semantics: ClassificationReport) -> tuple[tuple[NameHint, ...], str]:
+        """Подсказки LLM и строка для журнала. Недоступная модель - запись в журнале, а не
+        остановка прогона: подсказка план не меняет."""
+        if self._hinter is None:
+            return (), ""
+        try:
+            hints = name_hints(semantics, self._hinter)
+        except (OSError, ValueError, KeyError) as error:
+            return (), f"Подсказки LLM по именам слоёв недоступны: {type(error).__name__}: {error}"
+        if not hints:
+            return (), ""
+        return hints, (
+            f"Подсказки LLM ({self._hinter.model}): для {len(hints)} слоёв, которые сервис понял "
+            "только по геометрии, модель предлагает другой класс - см. name_hints.json. План от "
+            "подсказок не зависит; принять подсказку - назначить класс слою (layer_classes)."
+        )
 
     def execute(  # noqa: C901, PLR0912, PLR0915 - explicit pipeline and evidence gates
         self, request: PlanRequest, progress: ProgressSink | None = None
@@ -275,6 +298,12 @@ class PlanSite:
                     scene = replace(scene, warnings=(*scene.warnings, school_note))
             # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
             semantics = classification_report(replace(scene, features=features), layer_map, params)
+        hints: tuple[NameHint, ...] = ()
+        if self._hinter is not None and params.llm_hints:
+            with watch.stage("llm_hints"):
+                hints, hint_note = self._name_hints(semantics)
+                if hint_note:
+                    scene = replace(scene, warnings=(*scene.warnings, hint_note))
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
@@ -515,6 +544,7 @@ class PlanSite:
             assembly=assembly,
             classification=semantics,
             merged_dxf=merged_dxf,
+            name_hints=hints,
         )
         # Состояние для интерактивной правки собирается из того, что уже в памяти, поэтому
         # само по себе ничего не стоит. Индекс ограничений и карта покрытий строятся позже и

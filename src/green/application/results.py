@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from green.application.basemap import Basemap
     from green.application.classification import ClassificationReport, LayerCoverage
     from green.application.editing import RunContext
+    from green.application.name_hints import NameHint
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
     from green.application.validation import PlanValidation
@@ -112,6 +113,8 @@ class RunReport:
     export_validation: PlanExportReport | None = None
     assembly: PackageAssembly | None = None
     classification: ClassificationReport | None = None
+    # Подсказки LLM по именам слоёв (application/name_hints.py): только отчёт, не план.
+    name_hints: tuple[NameHint, ...] = ()
     # Склеенный чертёж комплекта: исходник, с которым сверен результат. Только у комплекта из
     # нескольких файлов; уходит в артефакты, чтобы сверку можно было повторить `green verify`.
     merged_dxf: Path | None = None

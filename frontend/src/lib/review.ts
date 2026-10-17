@@ -53,6 +53,8 @@ export interface ReviewGroup {
   evidence: { method: string };
   features: number;
   review_reason?: string | null;
+  /** Подсказка локальной LLM по имени слоя (application/name_hints.py): только совет. */
+  llm_hint?: { suggestion: string; confidence: number; model: string };
 }
 
 /** classification.json: группы объектов с классом и основанием классификации. */

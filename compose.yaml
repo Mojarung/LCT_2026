@@ -15,6 +15,13 @@ services:
       # Стенд по ТЗ - 10-20 ГБ SSD, прогон тяжёлой улицы - до нескольких ГБ: перед новым
       # прогоном самые старые законченные удаляются, пока том прогонов больше предела.
       GREEN_RUNS_MAX_GB: "8"
+      # Подсказки локальной LLM по именам слоёв на странице уточнения (только совет, план от
+      # них не зависит). Пусто - выключено. Ollama на этой машине: GREEN_LLM_URL=
+      # http://host.docker.internal:11434 в .env рядом с compose.yaml.
+      GREEN_LLM_URL: ${GREEN_LLM_URL:-}
+      GREEN_LLM_MODEL: ${GREEN_LLM_MODEL:-qwen3:8b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - runs:/data/runs
       - ./dataset:/dataset:ro

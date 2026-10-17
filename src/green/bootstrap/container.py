@@ -36,6 +36,7 @@ from green.infrastructure.gis.osm import (
     drawing_crs,
 )
 from green.infrastructure.inventory import read_inventory
+from green.infrastructure.llm.ollama import OllamaNameHinter
 from green.infrastructure.photo.sdcpp import SdCppPhotoRenderer
 from green.infrastructure.reports.artifacts import FileArtifactSink
 from green.infrastructure.reports.audit_artifacts import AuditArtifactSink
@@ -99,6 +100,11 @@ def build_container(settings: Settings | None = None) -> Container:
         merger=EzdxfDrawingMerger(documents=documents),
         gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
         schools=settings.config_dir / "gis" / "osm_schools_moscow.geojson",
+        hinter=(
+            OllamaNameHinter(settings.llm_url, settings.llm_model, timeout_s=settings.llm_timeout_s)
+            if settings.llm_url
+            else None
+        ),
     )
     audit = AuditSite(
         reader=reader,
