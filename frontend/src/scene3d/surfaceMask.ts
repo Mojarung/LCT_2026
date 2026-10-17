@@ -129,15 +129,17 @@ export function classifySurface(
   w: number,
   h: number,
   metresPerPx: number,
+  minAlpha = 1,
 ): Uint8Array {
   const kind = new Uint8Array(w * h);
   const paved = new Uint8Array(w * h);
   const empty = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const a = rgba[i * 4 + 3] ?? 0;
-    const soil = isSoil(rgba[i * 4] ?? 0, rgba[i * 4 + 1] ?? 0, a);
-    paved[i] = a > 0 && !soil ? 1 : 0;
-    empty[i] = a > 0 ? 0 : 1;
+    const covered = a >= minAlpha;
+    const soil = covered && isSoil(rgba[i * 4] ?? 0, rgba[i * 4 + 1] ?? 0, a);
+    paved[i] = covered && !soil ? 1 : 0;
+    empty[i] = covered ? 0 : 1;
     kind[i] = paved[i] ? ASPHALT : GRASS;
   }
   const middle = maxFilter(

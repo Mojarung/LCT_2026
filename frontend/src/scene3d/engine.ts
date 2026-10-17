@@ -28,11 +28,14 @@ import {
   CURB_H,
   CURB_W,
   fenceGeometry,
-  grassEdge,
+  edgeBetween,
+  GARDEN_CURB_H,
+  GARDEN_CURB_W,
   groundMesh,
   ribbonBox,
   type SurfaceImage,
 } from './ground';
+import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
 import { pick } from './pick';
 import type { ScenePostprocessing } from './postprocessing';
 import { Atmosphere } from './sky';
@@ -376,25 +379,57 @@ export class SceneEngine {
 
   private addStreetFurniture(surface: SurfaceImage | null): void {
     const world = this.world;
-    // Борт по краю покрытия из контуров карты покрытий: проезды и тротуары ограничены камнем.
+    // Борт по краю покрытия из контуров карты покрытий: дорожный - где асфальт проезда
+    // встречает тротуар или газон, садовый - между плиткой тротуара и газоном. Шов внутри
+    // одного покрытия бортом не обводится.
+    const areas = surface?.areas;
+    const mask = this.mask;
     const curbLines = [
       ...world.curbs,
-      ...(surface?.areas && this.mask
-        ? areaCurbs(surface.areas, world.origin, grassEdge(this.mask))
+      ...(areas && mask
+        ? areaCurbs(
+            areas,
+            world.origin,
+            edgeBetween(
+              mask,
+              (k) => k === ASPHALT,
+              (k) => k !== ASPHALT,
+            ),
+          )
         : []),
     ];
-    if (curbLines.length) {
+    const gardenLines =
+      areas && mask
+        ? areaCurbs(
+            areas,
+            world.origin,
+            edgeBetween(
+              mask,
+              (k) => k === PAVERS,
+              (k) => k === GRASS,
+            ),
+          )
+        : [];
+    if (curbLines.length || gardenLines.length) {
       const curbTex = concrete();
       curbTex.anisotropy = 4;
       this.disposables.push(curbTex);
-      const curbs = new THREE.Mesh(
-        ribbonBox(curbLines, CURB_W, CURB_H),
-        new THREE.MeshStandardMaterial({ color: 0xd0cec8, map: curbTex, roughness: 0.85 }),
-      );
-      curbs.castShadow = true;
-      curbs.receiveShadow = true;
-      curbs.name = 'curbs';
-      this.add(curbs);
+      const stone = new THREE.MeshStandardMaterial({
+        color: 0xd0cec8,
+        map: curbTex,
+        roughness: 0.85,
+      });
+      for (const [lines, width, height, name] of [
+        [curbLines, CURB_W, CURB_H, 'curbs'],
+        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 'garden-curbs'],
+      ] as const) {
+        if (!lines.length) continue;
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height), stone);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.name = name;
+        this.add(mesh);
+      }
     }
     if (world.fences.length) {
       const bars = fenceBars();

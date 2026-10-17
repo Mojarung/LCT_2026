@@ -93,4 +93,18 @@ describe('покрытие земли в 3D', () => {
     const kind = classifySurface(rgba, w, h, 0.25);
     expect(kind[5 * w + 13]).toBe(GRASS);
   });
+
+  it('край контура считается покрытием от половины покрытия пикселя: асфальт не вылезает за край', () => {
+    // Контур кладётся непрозрачной заливкой, край - пиксели с долей покрытия (альфа).
+    const opaque: [number, number, number, number] = [140, 142, 150, 255];
+    const edge: [number, number, number, number] = [140, 142, 150, 60];
+    const w = 40;
+    const h = 4;
+    const rgba = raster(w, h, (x) => (x < 20 ? opaque : x === 20 ? edge : null));
+    const kind = classifySurface(rgba, w, h, 0.25, 128);
+    expect(kind[2 * w + 19]).not.toBe(GRASS);
+    expect(kind[2 * w + 20]).toBe(GRASS);
+    // Растр старых прогонов полупрозрачный: там покрытие - любой непустой пиксель.
+    expect(classifySurface(rgba, w, h, 0.25)[2 * w + 20]).not.toBe(GRASS);
+  });
 });

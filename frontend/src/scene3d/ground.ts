@@ -115,14 +115,20 @@ export function areaCurbs(
   return lines;
 }
 
-/** Отрезок - край газона, если по одну его сторону газон маски, а по другую - нет. */
-export function grassEdge(mask: MaskInfo, offsetM = 0.4): (a: Flat, b: Flat) => boolean {
+/** Отрезок - граница двух покрытий: по одну его сторону покрытие вида a, по другую - вида b
+ *  (маска после деления на газон, плитку и асфальт). Вне маски - газон. */
+export function edgeBetween(
+  mask: MaskInfo,
+  isA: (kind: number) => boolean,
+  isB: (kind: number) => boolean,
+  offsetM = 0.4,
+): (a: Flat, b: Flat) => boolean {
   const [minX, minZ] = mask.rect;
-  const grassAt = (x: number, z: number): boolean => {
+  const kindAt = (x: number, z: number): number => {
     const col = Math.floor((x - minX) / mask.metresPerPx);
     const row = Math.floor((z - minZ) / mask.metresPerPx);
-    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return true;
-    return (mask.kinds[row * mask.width + col] ?? GRASS) === GRASS;
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return GRASS;
+    return mask.kinds[row * mask.width + col] ?? GRASS;
   };
   return (a, b) => {
     const dx = b.x - a.x;
@@ -133,7 +139,9 @@ export function grassEdge(mask: MaskInfo, offsetM = 0.4): (a: Flat, b: Flat) => 
     const nz = (dx / len) * offsetM;
     const mx = (a.x + b.x) / 2;
     const mz = (a.z + b.z) / 2;
-    return grassAt(mx + nx, mz + nz) !== grassAt(mx - nx, mz - nz);
+    const left = kindAt(mx + nx, mz + nz);
+    const right = kindAt(mx - nx, mz - nz);
+    return (isA(left) && isB(right)) || (isA(right) && isB(left));
   };
 }
 
@@ -201,10 +209,11 @@ function surfaceToMask(
   w: number,
   h: number,
   mpp: number,
+  minAlpha: number,
 ): Uint8Array {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
-  const kind = classifySurface(d, w, h, mpp);
+  const kind = classifySurface(d, w, h, mpp, minAlpha);
   for (let i = 0; i < kind.length; i++) {
     const k = kind[i];
     d[i * 4] = k === GRASS ? 255 : 0;
@@ -267,7 +276,10 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ctx.drawImage(surface.img, 0, 0);
     ctx.restore();
   }
-  const kinds = surfaceToMask(ctx, w, h, mpp);
+  // Контур залит непрозрачно, его край - доля покрытия пикселя: покрытием считается пиксель,
+  // покрытый наполовину. С порогом «любой непустой» асфальт вылезал за край на пиксель маски
+  // (до 0,4 м) - за бортовой камень. Растр старых прогонов полупрозрачный: порог - непустой.
+  const kinds = surfaceToMask(ctx, w, h, mpp, areas ? 128 : 1);
   // Край контура на пикселе маски (у большой сцены до 0,4 м) - лесенка; лёгкое размытие
   // выравнивает порог шейдера. У растра без контуров - размытие на клетку.
   if (surface) softenCells(c, ctx, areas ? CONTOUR_SOFTEN_PX : surface.cell / mpp);
@@ -467,9 +479,13 @@ scannedNormal.xy *= mix(1.0, 0.35, groundWeights.x) * (1.0 - groundSnow * 0.95) 
 normal = normalize(mat3(viewMatrix) * vec3(scannedNormal.x, scannedNormal.z, scannedNormal.y));
 `;
 
-/** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта. */
+/** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта - дорожный, у проезжей части. */
 export const CURB_W = 0.15;
 export const CURB_H = 0.15;
+/** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665): 8 см шириной, над
+ *  газоном выступает на несколько сантиметров. */
+export const GARDEN_CURB_W = 0.08;
+export const GARDEN_CURB_H = 0.06;
 
 /** Сетка бруса вдоль ломаной: верх и две боковые грани, без дна. */
 export function ribbonBox(

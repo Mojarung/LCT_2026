@@ -4,11 +4,12 @@ import {
   areaCurbs,
   areaRings,
   drawSurfaceAreas,
-  grassEdge,
+  edgeBetween,
   GROUND_MAP,
   type MaskInfo,
   type SurfaceAreas,
 } from './ground';
+import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
 import type { Flat } from './types';
 
 /* Контуры карты покрытий поверх растра: край проезда - прямая, а не лесенка клеток
@@ -102,11 +103,10 @@ describe('бортовой камень по краю покрытия', () => {
   });
 });
 
-describe('край газона по маске', () => {
-  // Маска 10 x 10 м по метру: z < 5 - асфальт, z >= 5 - газон.
+describe('борт по маске: дорожный у асфальта, садовый у плитки с газоном', () => {
+  // Маска 10 x 10 м по метру: z < 4 - асфальт, 4 <= z < 7 - плитка, z >= 7 - газон.
   const kinds = new Uint8Array(100);
-  for (let i = 50; i < 100; i++) kinds[i] = 0;
-  for (let i = 0; i < 50; i++) kinds[i] = 2;
+  for (let i = 0; i < 100; i++) kinds[i] = i < 40 ? ASPHALT : i < 70 ? PAVERS : GRASS;
   const mask = {
     kinds,
     width: 10,
@@ -114,14 +114,31 @@ describe('край газона по маске', () => {
     metresPerPx: 1,
     rect: [0, 0, 10, 10],
   } as unknown as MaskInfo;
-  const edge = grassEdge(mask, 0.6);
+  const road = edgeBetween(
+    mask,
+    (k) => k === ASPHALT,
+    (k) => k !== ASPHALT,
+    0.6,
+  );
+  const garden = edgeBetween(
+    mask,
+    (k) => k === PAVERS,
+    (k) => k === GRASS,
+    0.6,
+  );
 
-  it('отрезок между газоном и покрытием - край', () => {
-    expect(edge({ x: 1, z: 5 }, { x: 9, z: 5 })).toBe(true);
+  it('асфальт и тротуар - дорожный борт', () => {
+    expect(road({ x: 1, z: 4 }, { x: 9, z: 4 })).toBe(true);
+    expect(garden({ x: 1, z: 4 }, { x: 9, z: 4 })).toBe(false);
   });
 
-  it('отрезок внутри покрытия или внутри газона - не край', () => {
-    expect(edge({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
-    expect(edge({ x: 1, z: 8 }, { x: 9, z: 8 })).toBe(false);
+  it('тротуар и газон - садовый борт', () => {
+    expect(garden({ x: 1, z: 7 }, { x: 9, z: 7 })).toBe(true);
+    expect(road({ x: 1, z: 7 }, { x: 9, z: 7 })).toBe(false);
+  });
+
+  it('внутри одного покрытия борта нет', () => {
+    expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
+    expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
   });
 });
