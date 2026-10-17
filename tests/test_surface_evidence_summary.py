@@ -96,4 +96,7 @@ def test_missing_map_and_manual_moves_do_not_keep_a_stale_confirmation() -> None
 
 def test_review_profile_changes_only_semantic_inference() -> None:
     profiles = YamlProfileSource(Path(__file__).resolve().parents[1] / "config/profiles")
-    assert profiles.load("review") == replace(profiles.load("strict"), infer_unknown=False)
+    # e755a87: профиль проверки ещё требует, чтобы всё сомнительное было просмотрено.
+    assert profiles.load("review") == replace(
+        profiles.load("strict"), infer_unknown=False, require_reviewed_objects=True
+    )

@@ -23,10 +23,14 @@ def test_unidentified_line_is_not_assumed_harmless(tmp_path: Path) -> None:
 
     scene = EzdxfSceneReader().read(source)
     rules = YamlLayerMapSource(ROOT / "config/layer_map.yaml").load()
-    default_scene, _ = classify_scene(scene, rules, PlanParams())
-    assert classification_report(default_scene, rules).ready
+    # По умолчанию линия принимается за контур: класс есть, но назначение только по геометрии
+    # остаётся на проверку человеку (e755a87: ready учитывает и такие объекты).
+    default = classification_report(classify_scene(scene, rules, PlanParams())[0], rules)
+    assert default.unresolved_features == 0
+    assert default.review_required_features == 1
     reviewed_scene, _ = classify_scene(scene, rules, PlanParams(assume_unknown_geometry=False))
     report = classification_report(reviewed_scene, rules)
+    assert report.unresolved_features == 1
     assert not report.ready
     assert report.unresolved_features == 1
     assert reviewed_scene.features[0].classification.method == "unmatched"
