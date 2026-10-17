@@ -248,3 +248,19 @@ def test_osm_green_and_railway_layers(
         inferred = LAYER_MAP.vocabulary.infer(None, layer)
         found = inferred.object_class if inferred else ObjectClass.UNKNOWN
     assert found is expected, layer
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # GreenCity: слой «ЛИСТВЕННИЦА ЕВРОПЕЙСКАЯ» брал слово оформления «лист» началом слова.
+        ("ЛИСТВЕННИЦА ЕВРОПЕЙСКАЯ", ObjectClass.EXISTING_TREE),
+        ("Лиственница сибирская", ObjectClass.EXISTING_TREE),
+        ("Лист 1", ObjectClass.IGNORE),
+        ("Листы оформления", ObjectClass.IGNORE),
+    ],
+)
+def test_larch_is_not_a_sheet(name: str, expected: ObjectClass) -> None:
+    inferred = LAYER_MAP.vocabulary.infer(None, name)
+    assert inferred is not None, name
+    assert inferred.object_class is expected, (name, inferred)
