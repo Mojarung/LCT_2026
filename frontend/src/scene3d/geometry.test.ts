@@ -199,6 +199,18 @@ describe('борт, ограда и опоры', () => {
     expect(topMaxZ).toBeCloseTo(0.08);
   });
 
+  it('признак затенения aShade стоит только на правой грани бруса', () => {
+    const straight = { points: [{ x: 0, z: 0 }, { x: 4, z: 0 }] };
+    const g = ribbonBox([straight], 0.2, 0.15, 0, 0.02, 'left');
+    const nor = g.getAttribute('normal');
+    const shade = g.getAttribute('aShade');
+    expect(shade.count).toBe(nor.count);
+    for (let i = 0; i < nor.count; i++) {
+      const right = Math.abs(nor.getY(i)) < 0.01 && nor.getZ(i) < -0.9;
+      expect(shade.getX(i), `вершина ${i}`).toBe(right ? 1 : 0);
+    }
+  });
+
   it('замкнутое кольцо борта без торцов: начало и конец сходятся стыком', () => {
     const ring = {
       points: [

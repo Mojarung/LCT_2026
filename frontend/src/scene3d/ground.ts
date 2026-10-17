@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 
 import {
+  ASPHALT,
   ASPHALT_RGB,
   classifySurface,
   EMPTY,
@@ -310,6 +311,46 @@ export function withoutHairpins(points: Flat[]): Flat[] {
   }
   const first = pts[0];
   return first ? [...pts, first] : [];
+}
+
+/** Линии борта с покрытием (плитка или асфальт) слева от хода: по самому длинному пролёту
+ *  линии смотрится маска в 0,3 м по обе стороны, при покрытии справа линия разворачивается.
+ *  Брус борта (ribbonBox, 'left') затеняет правую, газонную грань: на свету она шла по
+ *  газону белой ниткой (пользователь, 17.10.2026). */
+export function pavedOnLeft(lines: readonly Line[], mask: MaskInfo): Line[] {
+  const [minX, minZ] = mask.rect;
+  const kindAt = (x: number, z: number): number => {
+    const col = Math.floor((x - minX) / mask.metresPerPx);
+    const row = Math.floor((z - minZ) / mask.metresPerPx);
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return EMPTY;
+    return mask.kinds[row * mask.width + col] ?? EMPTY;
+  };
+  const paved = (k: number) => k === PAVERS || k === ASPHALT;
+  return lines.map((line) => {
+    let best = 0;
+    let at = -1;
+    for (let i = 0; i + 1 < line.points.length; i++) {
+      const d = dist(line.points[i] as Flat, line.points[i + 1] as Flat);
+      if (d > best) {
+        best = d;
+        at = i;
+      }
+    }
+    if (at < 0) return line;
+    const p = line.points[at] as Flat;
+    const q = line.points[at + 1] as Flat;
+    const nx = (-(q.z - p.z) / best) * 0.3;
+    const nz = ((q.x - p.x) / best) * 0.3;
+    const mx = (p.x + q.x) / 2;
+    const mz = (p.z + q.z) / 2;
+    const left = paved(kindAt(mx + nx, mz + nz));
+    const right = paved(kindAt(mx - nx, mz - nz));
+    if (left || !right) return line;
+    return {
+      points: [...line.points].reverse(),
+      ...(line.tops ? { tops: [...line.tops].reverse() } : {}),
+    };
+  });
 }
 
 /** Отрезок - граница двух покрытий: по одну его сторону покрытие вида a, по другую - вида b
@@ -758,9 +799,10 @@ export const CURB_W = 0.15;
 export const CURB_H = 0.15;
 /** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665): 8 см шириной, над
  *  газоном выступает на несколько сантиметров. */
-/** Верх дорожного борта над тротуаром: почти вровень. При 2 см грань со стороны газона
- *  ловила солнце и шла по газону белой ниткой (пользователь, 17.10.2026). */
-export const CURB_ABOVE_WALK_M = 0.006;
+/** Верх дорожного борта вровень с тротуаром: любая грань над газоном, хоть 6 мм, ловила
+ *  солнце и шла по газону белой ниткой (пользователь, 17.10.2026). Верх борта и земля
+ *  лежат в одной плоскости: борт рисуется поверх (polygonOffset в материале). */
+export const CURB_ABOVE_WALK_M = 0;
 export const GARDEN_CURB_W = 0.08;
 export const GARDEN_CURB_H = 0.06;
 
@@ -778,6 +820,7 @@ export function ribbonBox(
   const pos: number[] = [];
   const nor: number[] = [];
   const uv: number[] = [];
+  const shade: number[] = [];
   const quad = (
     a: number[],
     b: number[],
@@ -786,9 +829,13 @@ export function ribbonBox(
     n: number[],
     u0: number,
     u1: number,
+    dark = 0,
   ) => {
     pos.push(...a, ...b, ...c, ...a, ...c, ...d);
-    for (let i = 0; i < 6; i++) nor.push(...n);
+    for (let i = 0; i < 6; i++) {
+      nor.push(...n);
+      shade.push(dark);
+    }
     uv.push(u0, 0, u1, 0, u1, 1, u0, 0, u1, 1, u0, 1);
   };
   const hw = width / 2;
@@ -801,6 +848,8 @@ export function ribbonBox(
   // верх до самого ребра, иначе на газоне светилась тонкая полоска фаски.
   const rightBevel = bevelSides === 'both';
   const insetR = rightBevel ? inset : 1;
+  // Правая грань при фаске слева - газонная: затеняется (aShade), будто засыпана землёй.
+  const rightShade = rightBevel ? 0 : 1;
   const sq = Math.SQRT1_2;
   for (const line of lines) {
     const pts: Flat[] = [];
@@ -922,6 +971,7 @@ export function ribbonBox(
         [-nx, 0, -nz],
         u1,
         u0,
+        rightShade,
       );
     }
     if (closed) continue;
@@ -970,6 +1020,7 @@ export function ribbonBox(
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aShade', new THREE.Float32BufferAttribute(shade, 1));
   g.computeBoundingSphere();
   return g;
 }

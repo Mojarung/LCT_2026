@@ -47,6 +47,7 @@ import {
   GARDEN_CURB_W,
   groundGeometry,
   groundMesh,
+  pavedOnLeft,
   ribbonBox,
   smoothSurfaceAreas,
   ROAD_DROP_M,
@@ -474,16 +475,20 @@ export class SceneEngine {
             )
           : []
         : world.curbs;
+    // Садовый борт покрытием слева: газонная грань бруса затеняется.
     const gardenLines =
       areas && mask
-        ? areaCurbs(
-            areas,
-            world.origin,
-            edgeBetween(
-              mask,
-              (k) => k === PAVERS || k === ASPHALT,
-              (k) => k === GRASS,
+        ? pavedOnLeft(
+            areaCurbs(
+              areas,
+              world.origin,
+              edgeBetween(
+                mask,
+                (k) => k === PAVERS || k === ASPHALT,
+                (k) => k === GRASS,
+              ),
             ),
+            mask,
           )
         : [];
     if (curbLines.length || gardenLines.length) {
@@ -492,8 +497,13 @@ export class SceneEngine {
       stoneTex.anisotropy = 8;
       stoneTex.repeat.set(1 / CURB_STONES_PER_TEXTURE, 0.05);
       this.disposables.push(stoneTex);
-      const stoneMaterial = () =>
-        new THREE.MeshStandardMaterial({
+      // Дорожный борт с проезжей частью стоит от асфальта проезда, верх вровень с тротуаром.
+      const roadLift = hasRoads ? -ROAD_DROP_M : 0;
+      const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
+      // Газонная грань (aShade из ribbonBox) затенена, будто засыпана землёй; у дорожного
+      // борта ещё подошва у асфальта грязная и мокрая: нижние 7 см темнее.
+      const stoneMaterial = (foot: number | null) => {
+        const material = new THREE.MeshStandardMaterial({
           color: 0xffffff,
           map: stoneTex,
           bumpMap: stoneTex,
@@ -501,25 +511,37 @@ export class SceneEngine {
           roughness: 0.92,
           metalness: 0,
         });
-      // Дорожный борт с проезжей частью стоит от асфальта проезда, верх - чуть выше тротуара.
-      const roadLift = hasRoads ? -ROAD_DROP_M : 0;
-      const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
-      // Подошва дорожного борта у асфальта грязная и мокрая: нижние 7 см темнее.
-      const roadStone = stoneMaterial();
-      roadStone.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader
-          .replace('#include <common>', '#include <common>\nvarying float vCurbY;')
-          .replace(
-            '#include <worldpos_vertex>',
-            '#include <worldpos_vertex>\nvCurbY = (modelMatrix * vec4(transformed, 1.0)).y;',
-          );
-        shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', '#include <common>\nvarying float vCurbY;')
-          .replace(
-            '#include <map_fragment>',
-            `#include <map_fragment>\ndiffuseColor.rgb *= mix(0.58, 1.0, smoothstep(${roadLift.toFixed(3)}, ${(roadLift + 0.07).toFixed(3)}, vCurbY));`,
-          );
+        material.onBeforeCompile = (shader) => {
+          shader.vertexShader = shader.vertexShader
+            .replace(
+              '#include <common>',
+              '#include <common>\nattribute float aShade;\nvarying float vCurbY;\nvarying float vShade;',
+            )
+            .replace(
+              '#include <worldpos_vertex>',
+              '#include <worldpos_vertex>\nvCurbY = (modelMatrix * vec4(transformed, 1.0)).y;\nvShade = aShade;',
+            );
+          const footLine =
+            foot === null
+              ? ''
+              : `\ndiffuseColor.rgb *= mix(0.58, 1.0, smoothstep(${foot.toFixed(3)}, ${(foot + 0.07).toFixed(3)}, vCurbY));`;
+          shader.fragmentShader = shader.fragmentShader
+            .replace(
+              '#include <common>',
+              '#include <common>\nvarying float vCurbY;\nvarying float vShade;',
+            )
+            .replace(
+              '#include <map_fragment>',
+              `#include <map_fragment>${footLine}\ndiffuseColor.rgb *= mix(1.0, 0.45, vShade);`,
+            );
+        };
+        return material;
       };
+      const roadStone = stoneMaterial(roadLift);
+      // Верх борта в плоскости земли: борт выигрывает глубину, иначе мерцание с газоном.
+      roadStone.polygonOffset = true;
+      roadStone.polygonOffsetFactor = -1;
+      roadStone.polygonOffsetUnits = -1;
       for (const [lines, width, height, lift, bevel, name, material, sides] of [
         [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs', roadStone, 'left'],
         [
@@ -529,8 +551,8 @@ export class SceneEngine {
           0,
           0.01,
           'garden-curbs',
-          stoneMaterial(),
-          'both',
+          stoneMaterial(null),
+          'left',
         ],
       ] as const) {
         if (!lines.length) {

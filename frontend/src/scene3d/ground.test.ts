@@ -8,6 +8,7 @@ import {
   edgeBetween,
   GROUND_MAP,
   groundGeometry,
+  pavedOnLeft,
   ROAD_DROP_M,
   roadGeometry,
   smoothSurfaceAreas,
@@ -272,6 +273,55 @@ describe('земля с вырезом проезда по контуру', () =
     expect(covers(g, 40, 40)).toBe(true); // поле вокруг
     g.computeBoundingBox();
     expect(g.boundingBox?.max.y).toBeCloseTo(0);
+  });
+});
+
+describe('ориентация линий борта: покрытие слева', () => {
+  // Маска 10 x 10 м по метру: z < 7 - плитка, z >= 7 - газон.
+  const kinds = new Uint8Array(100);
+  for (let i = 0; i < 100; i++) kinds[i] = i < 70 ? PAVERS : GRASS;
+  const mask = {
+    kinds,
+    width: 10,
+    height: 10,
+    metresPerPx: 1,
+    rect: [0, 0, 10, 10],
+  } as unknown as MaskInfo;
+
+  it('линия с покрытием справа разворачивается, с покрытием слева остаётся', () => {
+    // Ход +x вдоль z = 7: слева (+z) газон, справа плитка - разворот.
+    const wrong = {
+      points: [
+        { x: 0, z: 7 },
+        { x: 9, z: 7 },
+      ],
+    };
+    const right = {
+      points: [
+        { x: 9, z: 7 },
+        { x: 0, z: 7 },
+      ],
+    };
+    const [a, b] = pavedOnLeft([wrong, right], mask);
+    expect(a?.points).toEqual([
+      { x: 9, z: 7 },
+      { x: 0, z: 7 },
+    ]);
+    expect(b?.points).toEqual([
+      { x: 9, z: 7 },
+      { x: 0, z: 7 },
+    ]);
+  });
+
+  it('отметки верха разворачиваются вместе с точками', () => {
+    const wrong = {
+      points: [
+        { x: 0, z: 7 },
+        { x: 9, z: 7 },
+      ],
+      tops: [0.1, 0.2],
+    };
+    expect(pavedOnLeft([wrong], mask)[0]?.tops).toEqual([0.2, 0.1]);
   });
 });
 
