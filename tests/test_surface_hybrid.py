@@ -85,5 +85,8 @@ def test_existing_tree_does_not_create_soil_in_hybrid_mode() -> None:
         Point(50, 25),
         object_class=ObjectClass.EXISTING_TREE,
     )
-    hybrid = build_surface_map([*STRIP, tree], [], EXTENT, 0.5, inference_mode="hybrid")
+    # Без запасного «свободная земля - газон»: проверяется, что затравкой служит не дерево.
+    hybrid = build_surface_map(
+        [*STRIP, tree], [], EXTENT, 0.5, inference_mode="hybrid", open_ground=False
+    )
     assert hybrid is None or _material(hybrid, 50.5, 25) != Material.SOIL

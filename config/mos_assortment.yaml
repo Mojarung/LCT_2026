@@ -1,0 +1,3884 @@
+# Сгенерировано tools/build_mos_assortment.py из PDF mos.ru, руками не править.
+version: 1
+source:
+  title: Основной и дополнительный ассортимент деревьев, кустарников и лиан, рекомендуемый для озеленения
+    различных категорий территорий города Москвы
+  url: https://www.mos.ru/upload/content/files/c6ee55bb75792e008a490f28cfe834fb/Osnovnoiidopolnitelniiassortimentderevevkystarnikovilian.pdf
+  sha256: 114fe5b7598f32ca0b13162985cc80d14be569d8898aacbcd148fd08571a4b67
+categories:
+- yards
+- kindergartens
+- schools
+- healthcare
+- roads
+- plazas
+- parks
+- industrial
+entries:
+- list: main
+  group: Хвойные деревья
+  row: 1
+  page: 1
+  name: Ель колючая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - picea_pungens
+- list: main
+  group: Хвойные деревья
+  row: 2
+  page: 1
+  name: Ель обыкновенная/евр опейская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Ввиду низкой газоустойчивости чувствительности к уплотнению почвы, механическим травмам корней,
+    требует особого ухода при содержании и тщательного выбора места посадки
+  species_codes:
+  - picea_abies
+- list: main
+  group: Хвойные деревья
+  row: 3
+  page: 1
+  name: Лиственница американская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные деревья
+  row: 4
+  page: 1
+  name: Лиственница даурская (Гмелина)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные деревья
+  row: 5
+  page: 1
+  name: Лиственница европейская (опадающая) (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные деревья
+  row: 6
+  page: 1
+  name: Лиственница сибирская
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные деревья
+  row: 7
+  page: 1
+  name: Сосна обыкновенная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: 'Для придорожных посадок желательно весеннее дождевание крон для смыва солевой взвеси. Ввиду низкой
+    газоустойчивости
+
+    чувствительности к
+
+    уплотнению почвы,
+
+    механическим травмам
+
+    корней, требует
+
+    особого ухода при
+
+    содержании и
+
+    тщательного выбора
+
+    места посадки'
+  species_codes:
+  - pinus_sylvestris
+- list: main
+  group: Хвойные кустарники
+  row: 1
+  page: 2
+  name: Можжевельник виргинский (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Не рекомендуется высаживать вблизи плодовых культур (яблоня, груша и др.) из-за риска распространения
+    ржавчины, а также в непосредственной близости от дорог и тротуаров из-за чувствительности к противогололёдным
+    реагентам. Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания
+    детей
+- list: main
+  group: Хвойные кустарники
+  row: 2
+  page: 2
+  name: Можжевельник горизонтальный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные кустарники
+  row: 3
+  page: 2
+  name: Можжевельник казацкий (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - juniperus_sabina
+- list: main
+  group: Хвойные кустарники
+  row: 4
+  page: 2
+  name: Можжевельник средний Пфитцериана (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные кустарники
+  row: 5
+  page: 2
+  name: Можжевельник скальный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Хвойные кустарники
+  row: 6
+  page: 2
+  name: Сосна горная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Не рекомендуется высаживать в непосредственной близости от дорог и тротуаров из-за чувствительности
+    к противогололёдным реагентам.
+  species_codes:
+  - pinus_mugo
+- list: main
+  group: Лиственные деревья
+  row: 1
+  page: 2
+  name: Бархат Амурский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 2
+  page: 3
+  name: Береза повислая/плакучая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - betula_pendula
+- list: main
+  group: Лиственные деревья
+  row: 3
+  page: 3
+  name: Береза пушистая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 4
+  page: 3
+  name: Боярышник Арнольда
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Жизненные формы- небольшое дерево, кустарник. Рекомендуется высаживать вдали от детских и спортивных
+    площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 5
+  page: 3
+  name: Боярышник крупноколючковый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 6
+  page: 3
+  name: Боярышник перистонадрезанный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 7
+  page: 3
+  name: Боярышник полумягкий/мягко ватый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - crataegus_submollis
+- list: main
+  group: Лиственные деревья
+  row: 8
+  page: 3
+  name: Боярышник сливолистный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 9
+  page: 3
+  name: Боярышник точечный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 10
+  page: 3
+  name: Боярышник чёрный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 11
+  page: 3
+  name: Вишня обыкновенная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Жизненные формы- небольшое дерево, кустарник. Рекомендуется высаживать вдали от детских и спортивных
+    площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 12
+  page: 3
+  name: Вяз гибридный Резиста
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: К посадке рекомендуются сорта вязов с подтверждённой устойчивостью к голландской болезни
+- list: main
+  group: Лиственные деревья
+  row: 13
+  page: 3
+  name: Вяз перисто-ветвистый
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 14
+  page: 4
+  name: Вяз приземистый
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - ulmus_pumila
+- list: main
+  group: Лиственные деревья
+  row: 15
+  page: 4
+  name: Груша уссурийская
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 16
+  page: 4
+  name: Дуб красный*
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+- list: main
+  group: Лиственные деревья
+  row: 17
+  page: 4
+  name: Дуб черешчатый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+  species_codes:
+  - quercus_robur
+- list: main
+  group: Лиственные деревья
+  row: 18
+  page: 4
+  name: Ива белая (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - salix_alba_tristis
+- list: main
+  group: Лиственные деревья
+  row: 19
+  page: 4
+  name: Ива ломкая ф. «Bullata»
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 20
+  page: 4
+  name: Ива прутовидная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 21
+  page: 4
+  name: Ивы свердловской селекции (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: 'К посадке рекомендуются ивы из групп: извилистые (декоративно- лиственные), плакучие, с декоративной
+    корой, высокорослые'
+- list: main
+  group: Лиственные деревья
+  row: 22
+  page: 4
+  name: Ива Шверина
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 23
+  page: 4
+  name: Кладрастис желтый
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 24
+  page: 4
+  name: Клен гиннала/приречный
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - acer_ginnala
+- list: main
+  group: Лиственные деревья
+  row: 25
+  page: 4
+  name: Клен красный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 26
+  page: 5
+  name: Клен остролистный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - acer_platanoides
+- list: main
+  group: Лиственные деревья
+  row: 27
+  page: 5
+  name: Клен сахаристый/серебр истый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: false
+    industrial: true
+  note: ''
+  species_codes:
+  - acer_saccharinum
+- list: main
+  group: Лиственные деревья
+  row: 28
+  page: 5
+  name: Клен татарский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - acer_tataricum
+- list: main
+  group: Лиственные деревья
+  row: 29
+  page: 5
+  name: Конский каштан восьмитычинковый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 30
+  page: 5
+  name: Конский каштан мясо-красный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 31
+  page: 5
+  name: Липа американская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: false
+  note: Для придорожных посадок желательно весеннее дождевание крон для смыва солевой взвеси
+- list: main
+  group: Лиственные деревья
+  row: 32
+  page: 5
+  name: Липа крупнолистная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - tilia_platyphyllos
+- list: main
+  group: Лиственные деревья
+  row: 33
+  page: 5
+  name: Липа мелколистная/серд цевидная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - tilia_cordata
+- list: main
+  group: Лиственные деревья
+  row: 34
+  page: 5
+  name: Липа обыкновенная/евр опейская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 35
+  page: 5
+  name: Ольха серая (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 36
+  page: 5
+  name: Ольха черная (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 37
+  page: 5
+  name: Орех маньчжурский*
+  marks:
+    yards: false
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: false
+    parks: false
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения
+
+    (п. 5 ПП №369-ПП)'
+- list: main
+  group: Лиственные деревья
+  row: 38
+  page: 6
+  name: Орех серый
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 39
+  page: 6
+  name: Робиния лжеакация/акация белая*
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: false
+    industrial: false
+  note: Для посадки использовать только районированные саженцы местного происхождения. *Разрешён на всех
+    территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)
+- list: main
+  group: Лиственные деревья
+  row: 40
+  page: 6
+  name: Рябина ария (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов. Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового
+    пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 41
+  page: 6
+  name: Рябина гибридная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 42
+  page: 6
+  name: Рябина обыкновенная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - sorbus_aucuparia
+- list: main
+  group: Лиственные деревья
+  row: 43
+  page: 6
+  name: Рябина промежуточная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - sorbus_intermedia
+- list: main
+  group: Лиственные деревья
+  row: 44
+  page: 6
+  name: Рябина тюрингская/дубол истная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 45
+  page: 6
+  name: Слива домашняя (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 46
+  page: 6
+  name: Слива колючая/терн
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 47
+  page: 6
+  name: Слива растопыренная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 48
+  page: 7
+  name: Тополь бальзамический
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Допускается к посадке только мужские клоны тополей, не образующих семян и пуха
+  species_codes:
+  - populus_balsamifera
+- list: main
+  group: Лиственные деревья
+  row: 49
+  page: 7
+  name: Тополь белый/серебристый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 50
+  page: 7
+  name: Тополь берлинский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 51
+  page: 7
+  name: Тополь дрожащий/осина
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: false
+    parks: false
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 52
+  page: 7
+  name: Тополь канадский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 53
+  page: 7
+  name: Тополь Симона (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - populus_simonii
+- list: main
+  group: Лиственные деревья
+  row: 54
+  page: 7
+  name: Тополь советский пирамидальный
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 55
+  page: 7
+  name: Черемуха виргинская (формы и сорта)*
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+  species_codes:
+  - prunus_virginiana
+- list: main
+  group: Лиственные деревья
+  row: 56
+  page: 7
+  name: Черемуха Маака
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов. Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового
+    пребывания детей
+  species_codes:
+  - prunus_maackii
+- list: main
+  group: Лиственные деревья
+  row: 57
+  page: 7
+  name: Черемуха обыкновенная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - prunus_padus
+- list: main
+  group: Лиственные деревья
+  row: 58
+  page: 7
+  name: Черемуха поздняя (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 59
+  page: 7
+  name: Яблоня Недзведцкого
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на
+  species_codes:
+  - malus_niedzwetzkyana
+- list: main
+  group: Лиственные деревья
+  row: 60
+  page: 8
+  name: Яблоня обильноцветущая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением от опадающих плодов.
+    Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные деревья
+  row: 61
+  page: 8
+  name: Яблоня сливолистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные деревья
+  row: 62
+  page: 8
+  name: Яблоня ягодная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 1
+  page: 8
+  name: Аморфа кустарниковая*
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+- list: main
+  group: Лиственные кустарники
+  row: 2
+  page: 8
+  name: Арония черноплодная/Мичу рина (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов. Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового
+    пребывания детей
+- list: main
+  group: Лиственные кустарники
+  row: 3
+  page: 8
+  name: Барбарис амурский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные кустарники
+  row: 4
+  page: 8
+  name: Барбарис обыкновенный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 5
+  page: 8
+  name: Барбарис оттавский (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 6
+  page: 8
+  name: Барбарис Тунберга (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Арония черноплодная/Мичу рина (формы и сорта)
+- list: main
+  group: Лиственные кустарники
+  row: 7
+  page: 9
+  name: Бересклет бородавчатый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 8
+  page: 9
+  name: Бересклет европейский (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+  species_codes:
+  - euonymus_europaeus
+- list: main
+  group: Лиственные кустарники
+  row: 9
+  page: 9
+  name: Бересклет крылатый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 10
+  page: 9
+  name: Бересклет Маака
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 11
+  page: 9
+  name: Бирючина обыкновенная* (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 12
+  page: 9
+  name: Боярышник Арнольда
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 13
+  page: 9
+  name: Боярышник кроваво-красный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 14
+  page: 9
+  name: Боярышник обыкновенный/кол ючий
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - crataegus_laevigata
+- list: main
+  group: Лиственные кустарники
+  row: 15
+  page: 9
+  name: Боярышник однопестичный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 16
+  page: 9
+  name: Боярышник перистонадрезанный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 17
+  page: 9
+  name: Боярышник полумягкий/мягкова тый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 18
+  page: 9
+  name: Боярышник сливолистный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 19
+  page: 9
+  name: Бузина канадская «Аurea»
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 20
+  page: 9
+  name: Бузина красная/кистистая
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: false
+    parks: true
+    industrial: true
+  note: Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: main
+  group: Лиственные кустарники
+  row: 21
+  page: 9
+  name: Бузина черная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: (формы и сорта)
+- list: main
+  group: Лиственные кустарники
+  row: 22
+  page: 10
+  name: Гортензия Бреттшнейдера
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 23
+  page: 10
+  name: Гортензия древовидная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - hydrangea_arborescens
+- list: main
+  group: Лиственные кустарники
+  row: 24
+  page: 10
+  name: Гортензия метельчатая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - hydrangea_paniculata
+- list: main
+  group: Лиственные кустарники
+  row: 25
+  page: 10
+  name: Дерен белый/сибирский (формы и сорта)*
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+  species_codes:
+  - cornus_alba
+- list: main
+  group: Лиственные кустарники
+  row: 26
+  page: 10
+  name: Дерен кроваво-красный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 27
+  page: 10
+  name: Дерен отпрысковый ф. «Флавирамея»
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - cornus_sericea
+- list: main
+  group: Лиственные кустарники
+  row: 28
+  page: 10
+  name: Жимолость альпийская
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 29
+  page: 10
+  name: Жимолость золотистая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 30
+  page: 10
+  name: Жимолость Королькова
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 31
+  page: 10
+  name: Жимолость Маака
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 32
+  page: 10
+  name: Жимолость Максимовича
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 33
+  page: 10
+  name: Жимолость обыкновенная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: false
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 34
+  page: 10
+  name: Жимолость татарская (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - lonicera_tatarica
+- list: main
+  group: Лиственные кустарники
+  row: 35
+  page: 10
+  name: Ива пурпурная ф. «Nana»
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 36
+  page: 11
+  name: Ирга канадская/Ирга Ламарка
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов
+- list: main
+  group: Лиственные кустарники
+  row: 37
+  page: 11
+  name: Ирга колосистая*
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+  species_codes:
+  - amelanchier_spicata
+- list: main
+  group: Лиственные кустарники
+  row: 38
+  page: 11
+  name: Ирга круглолистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: За пределами ООЗТ посадка допускается на расстоянии от 1 до 2 км от их границ, а также при условии
+    постоянного контроля за распространением вида
+- list: main
+  group: Лиственные кустарники
+  row: 39
+  page: 11
+  name: Калина гордовина (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 40
+  page: 11
+  name: Калина обыкновенная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 41
+  page: 11
+  name: Калина Саржента (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 42
+  page: 11
+  name: Карагана древовидная/акация желтая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: false
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 43
+  page: 11
+  name: Карагана кустарниковая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 44
+  page: 11
+  name: Кизильник блестящий
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - cotoneaster_lucidus
+- list: main
+  group: Лиственные кустарники
+  row: 45
+  page: 11
+  name: Лапчатка кустарниковая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - potentilla_fruticosa
+- list: main
+  group: Лиственные кустарники
+  row: 46
+  page: 11
+  name: Лещина обыкновенная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Ирга круглолистная (формы и сорта)
+  species_codes:
+  - corylus_avellana
+- list: main
+  group: Лиственные кустарники
+  row: 47
+  page: 12
+  name: Лещина пурпурнолистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 48
+  page: 12
+  name: Лох серебристый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 49
+  page: 12
+  name: Лох узколистный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - elaeagnus_angustifolia
+- list: main
+  group: Лиственные кустарники
+  row: 50
+  page: 12
+  name: Магония падуболистная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 51
+  page: 12
+  name: Пузыреплодник калинолистный (формы и сорта)*
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+  species_codes:
+  - physocarpus_opulifolius
+- list: main
+  group: Лиственные кустарники
+  row: 52
+  page: 12
+  name: Роза бедренцеволистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 53
+  page: 12
+  name: Роза морщинистая* (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: false
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+- list: main
+  group: Лиственные кустарники
+  row: 54
+  page: 12
+  name: Роза сизая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 55
+  page: 12
+  name: Роза собачья
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 56
+  page: 12
+  name: Рябинник рябинолистный* (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+  species_codes:
+  - sorbaria_sorbifolia
+- list: main
+  group: Лиственные кустарники
+  row: 57
+  page: 12
+  name: Сирень амурская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 58
+  page: 12
+  name: Сирень венгерская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - syringa_josikaea
+- list: main
+  group: Лиственные кустарники
+  row: 59
+  page: 12
+  name: Сирень обыкновенная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - syringa_vulgaris
+- list: main
+  group: Лиственные кустарники
+  row: 60
+  page: 12
+  name: Сирень Престон (сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 61
+  page: 12
+  name: Смородина альпийская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным
+- list: main
+  group: Лиственные кустарники
+  row: 62
+  page: 12
+  name: Смородина железистая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 63
+  page: 13
+  name: Смородина золотистая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: загрязнением от опадающих плодов
+- list: main
+  group: Лиственные кустарники
+  row: 64
+  page: 13
+  name: Смородина красная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 65
+  page: 13
+  name: Снежноягодник белый* (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: false
+    industrial: true
+  note: За пределами ООЗТ посадка допускается при условии постоянного контроля за распространением вида
+- list: main
+  group: Лиственные кустарники
+  row: 66
+  page: 13
+  name: Спирея березолистная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - spiraea_betulifolia
+- list: main
+  group: Лиственные кустарники
+  row: 67
+  page: 13
+  name: Спирея Билларда (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 68
+  page: 13
+  name: Спирея Бумальда (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 69
+  page: 13
+  name: Спирея Вангутта (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - spiraea_vanhouttei
+- list: main
+  group: Лиственные кустарники
+  row: 70
+  page: 13
+  name: Спирея дубравколистная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 71
+  page: 13
+  name: Спирея Дугласа (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 72
+  page: 13
+  name: Спирея иволистная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 73
+  page: 13
+  name: Спирея ниппонская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 74
+  page: 13
+  name: Спирея острозубчатая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 75
+  page: 13
+  name: Спирея серая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - spiraea_cinerea
+- list: main
+  group: Лиственные кустарники
+  row: 76
+  page: 13
+  name: Спирея средняя (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 77
+  page: 13
+  name: Спирея трехлопастная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 78
+  page: 13
+  name: Спирея японская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - spiraea_japonica
+- list: main
+  group: Лиственные кустарники
+  row: 79
+  page: 13
+  name: Форзиция обратнояйцевидная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 80
+  page: 13
+  name: Хеномелес японский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 81
+  page: 13
+  name: Чубушник венечный (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - philadelphus_coronarius
+- list: main
+  group: Лиственные кустарники
+  row: 82
+  page: 14
+  name: Чубушник Лемуана (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лиственные кустарники
+  row: 83
+  page: 14
+  name: Чубушник мелколистный
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лианы
+  row: 1
+  page: 14
+  name: Актинидия коломикта
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лианы
+  row: 2
+  page: 14
+  name: Виноград амурский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лианы
+  row: 3
+  page: 14
+  name: Девичий виноград пятилисточковый*
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: '*Разрешён на всех территориях, кроме ООЗТ и ПТ, с контролем распространения (п. 5 ПП №369-ПП)'
+- list: main
+  group: Лианы
+  row: 4
+  page: 14
+  name: Жимолость каприфоль
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: main
+  group: Лианы
+  row: 5
+  page: 14
+  name: Клематис сибирский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: main
+  group: Лианы
+  row: 6
+  page: 14
+  name: Лимонник китайский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 1
+  page: 14
+  name: Ель канадская/сизая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 2
+  page: 14
+  name: Ель сербская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Посадка допустима только на дренированных, не заболоченных и неуплотнённых почвах
+- list: extra
+  group: Хвойные деревья
+  row: 3
+  page: 14
+  name: Ель шероховатая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Посадка допустима только на дренированных, не заболоченных и неуплотнённых почвах.
+- list: extra
+  group: Хвойные деревья
+  row: 4
+  page: 14
+  name: Ель Энгельмана
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 5
+  page: 14
+  name: Кипарисовик горохоплодный
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 6
+  page: 14
+  name: Лиственница Кемфера
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 7
+  page: 14
+  name: Лиственница Сукачева
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 8
+  page: 15
+  name: Пихта бальзамическая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Ввиду низкой газоустойчивости чувствительности к уплотнению почвы, механическим травмам корней,
+    требует особого ухода при содержании и тщательного выбора места посадки
+- list: extra
+  group: Хвойные деревья
+  row: 9
+  page: 15
+  name: Пихта Вича
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 10
+  page: 15
+  name: Пихта одноцветная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 11
+  page: 15
+  name: Пихта сибирская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Ввиду низкой газоустойчивости чувствительности к уплотнению почвы, механическим травмам корней,
+    требует особого ухода при содержании и тщательного выбора места посадки
+- list: extra
+  group: Хвойные деревья
+  row: 12
+  page: 15
+  name: Псевдотсуга Мензиса сизая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+  species_codes:
+  - pseudotsuga_menziesii
+- list: extra
+  group: Хвойные деревья
+  row: 13
+  page: 15
+  name: Сосна Веймутова (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: false
+    parks: true
+    industrial: false
+  note: Посадка допустима только на незасоленных почвах
+- list: extra
+  group: Хвойные деревья
+  row: 14
+  page: 15
+  name: Сосна кедровая европейская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 15
+  page: 15
+  name: Сосна кедровая корейская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 16
+  page: 15
+  name: Сосна кедровая сибирская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 17
+  page: 15
+  name: Сосна кедровая стланиковая (кедровый стланик)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 18
+  page: 15
+  name: Сосна румелийская (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: false
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 19
+  page: 15
+  name: Сосна черная австрийская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Хвойные деревья
+  row: 20
+  page: 15
+  name: Туя западная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+  species_codes:
+  - thuja_occidentalis
+- list: extra
+  group: Хвойные кустарники
+  row: 1
+  page: 16
+  name: Микробиота перекрёстнопарная
+  marks:
+    yards: false
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Хвойные кустарники
+  row: 2
+  page: 16
+  name: Можжевельник китайский (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Не рекомендуется высаживать вблизи плодовых культур
+- list: extra
+  group: Хвойные кустарники
+  row: 3
+  page: 16
+  name: Можжевельник чешуйчатый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: (яблоня, груша и др.) из-за риска распространения ржавчины, а также в непосредственной близости
+    от дорог и тротуаров из-за чувствительности к противогололёдным реагентам.
+- list: extra
+  group: Лиственные деревья
+  row: 1
+  page: 16
+  name: Багряник японский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 2
+  page: 16
+  name: Береза бумажная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 3
+  page: 16
+  name: Берёза вишнёвая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 4
+  page: 16
+  name: Береза ребристая (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 5
+  page: 16
+  name: Береза черная (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 6
+  page: 16
+  name: Береза Эрмана/каменная (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 7
+  page: 16
+  name: Боярышник зеленомясый
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 8
+  page: 16
+  name: Вяз шершавый (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 9
+  page: 16
+  name: Груша иволистная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 10
+  page: 16
+  name: Груша обыкновенная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 11
+  page: 16
+  name: Дуб монгольский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 12
+  page: 16
+  name: Ива козья (формы и сорта)
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: false
+    plazas: false
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 13
+  page: 16
+  name: Ива пятитычинковая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 14
+  page: 17
+  name: Ива росистая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 15
+  page: 17
+  name: Ива цельнолистная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 16
+  page: 17
+  name: Клен зеленокорый
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 17
+  page: 17
+  name: Клён колосистый
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 18
+  page: 17
+  name: Клен ложнозибольдов
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 19
+  page: 17
+  name: Клен маньчжурский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 20
+  page: 17
+  name: Клён мелколистный
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 21
+  page: 17
+  name: Липа войлочная/серебрис тая
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для придорожных посадок желательно весеннее дождевание крон для смыва солевой взвеси
+- list: extra
+  group: Лиственные деревья
+  row: 22
+  page: 17
+  name: Липа монгольская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 23
+  page: 17
+  name: Маакия амурская
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Недостаточная зимостойкость
+  species_codes:
+  - maackia_amurensis
+- list: extra
+  group: Лиственные деревья
+  row: 24
+  page: 17
+  name: Рябина Арнольда (сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 25
+  page: 17
+  name: Рябина бузинолистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на
+- list: extra
+  group: Лиственные деревья
+  row: 26
+  page: 17
+  name: Рябина кашмирская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: газонах, на расстоянии
+- list: extra
+  group: Лиственные деревья
+  row: 27
+  page: 17
+  name: Рябина Мужо
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: от твёрдых покрытий в связи с возможным загрязнением от опадающих плодов
+- list: extra
+  group: Лиственные деревья
+  row: 28
+  page: 17
+  name: Тополь лавролистный
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: false
+    parks: false
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 29
+  page: 17
+  name: Тополь Максимовича
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: false
+    parks: false
+    industrial: true
+  note: Допускается к посадке только мужские клоны тополей, не образующих семян и пуха
+- list: extra
+  group: Лиственные деревья
+  row: 30
+  page: 17
+  name: Тополь черный
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: false
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 31
+  page: 17
+  name: Черемуха пенсильванская
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов
+- list: extra
+  group: Лиственные деревья
+  row: 32
+  page: 17
+  name: Яблоня Зибольда
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Допускается к посадке только мужские клоны тополей, не образующих семян и пуха
+- list: extra
+  group: Лиственные деревья
+  row: 33
+  page: 18
+  name: Яблоня Саржента
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные деревья
+  row: 34
+  page: 18
+  name: Ясень маньчжурский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 1
+  page: 18
+  name: Барбарис Вильсон
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Рекомендуется
+- list: extra
+  group: Лиственные кустарники
+  row: 2
+  page: 18
+  name: Бересклет Форчуна (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: extra
+  group: Лиственные кустарники
+  row: 3
+  page: 18
+  name: Боярышник Максимовича
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов.
+- list: extra
+  group: Лиственные кустарники
+  row: 4
+  page: 18
+  name: Вейгела Миддендорфа
+  marks:
+    yards: false
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 5
+  page: 18
+  name: Вишня войлочная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Для посадки исключительно на газонах, на расстоянии от твёрдых покрытий в связи с возможным загрязнением
+    от опадающих плодов.
+- list: extra
+  group: Лиственные кустарники
+  row: 6
+  page: 18
+  name: Дёрен Бейли
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 7
+  page: 18
+  name: Дёрен Вальтера
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 8
+  page: 18
+  name: Жёстер даурский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 9
+  page: 18
+  name: Жимолость Максимовича
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 10
+  page: 18
+  name: Жимолость покрывальная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 11
+  page: 18
+  name: Кизильник горизонтальный
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 12
+  page: 18
+  name: Миндаль низкий/степной
+  marks:
+    yards: true
+    kindergartens: false
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 13
+  page: 18
+  name: Ракитник русский
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: Рекомендуется высаживать вдали от детских и спортивных площадок, мест массового пребывания детей
+- list: extra
+  group: Лиственные кустарники
+  row: 14
+  page: 19
+  name: Рододендрон даурский
+  marks:
+    yards: false
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 15
+  page: 19
+  name: Сирень Вольфа
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 16
+  page: 19
+  name: Сирень Комарова
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 17
+  page: 19
+  name: Скумпия обыкновенная/коже венная (формы и сорта)
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 18
+  page: 19
+  name: Снежноягодник Доренбоза
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: true
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 19
+  page: 19
+  name: Стефанандра надрезаннолистная
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 20
+  page: 19
+  name: Стефанандра Танаки
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лиственные кустарники
+  row: 21
+  page: 19
+  name: Экзохорда тяньшанская
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: true
+  note: ''
+- list: extra
+  group: Лианы
+  row: 1
+  page: 19
+  name: Аристолохия крупнолистная
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Рекомендуется для тенистых участков.
+- list: extra
+  group: Лианы
+  row: 2
+  page: 19
+  name: Аристолохия маньчжурская
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лианы
+  row: 3
+  page: 19
+  name: Гортензия черешковая
+  marks:
+    yards: true
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: ''
+- list: extra
+  group: Лианы
+  row: 4
+  page: 19
+  name: Древогубец круглолистный
+  marks:
+    yards: false
+    kindergartens: false
+    schools: false
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: Посадка допускается при условии постоянного контроля за распространением вида
+- list: extra
+  group: Лианы
+  row: 5
+  page: 19
+  name: Жимолость вьющаяся
+  marks: null
+  note: ''
+  raw: '5 | Жимолость
+
+    вьющаяся |  |  |  |  |  |  |  |  |  |  | '
+- list: extra
+  group: Лианы
+  row: 6
+  page: 19
+  name: Клематис тангутский
+  marks:
+    yards: true
+    kindergartens: true
+    schools: true
+    healthcare: true
+    roads: false
+    plazas: true
+    parks: true
+    industrial: false
+  note: '1 На территориях ботанических, зоологических садов, кладбищ, мемориальных комплексов и религиозных
+    организаций породный состав для озеленения определяется
+
+    балансодержателем. В границах особо охраняемых природных территорий, особо охраняемых зеленых территорий,
+    природных территорий на участках, занятых естественными
+
+    растительными сообществами, породный состав определяется на основании проекта мероприятий по сохранению,
+    развитию и воспроизводству насаждений. На территориях инклюзивных площадок для людей с ограниченными
+    возможностями породный состав определяется на основании проекта мероприятий по сохранению,
+
+    развитию и воспроизводству насаждений. На территориях высших учебных заведений породный состав определяется
+    на основании проекта мероприятий по сохранению, развитию и воспроизводству насаждений. *Обозначенный
+    перечень территорий озеленения вне границ ООЗТ, на которых возможна высадка рекомендуемого растения
+    при условии контроля его распространения.'

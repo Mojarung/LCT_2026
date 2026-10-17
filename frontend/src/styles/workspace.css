@@ -272,7 +272,49 @@ body.shell-map .topbar {
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
-  overflow-wrap: anywhere;
+  /* Длинное имя файла переносится по слогам, а не посреди слова без дефиса. */
+  overflow-wrap: break-word;
+  hyphens: auto;
+  text-wrap: balance;
+}
+/* Переключатель «План / 3D-вид»: одно место на обоих экранах прогона. Ссылки, а не кнопки:
+   это переход на другую страницу; текущая отмечена aria-current. */
+.view-switch {
+  display: flex;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+}
+.view-switch a {
+  flex: 1 1 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--bone-2);
+  text-decoration: none;
+  border-radius: calc(var(--r-control) - 2px);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.view-switch a:hover {
+  color: var(--bone);
+  background: var(--panel);
+}
+.view-switch a[aria-current='page'] {
+  color: var(--inverse);
+  background: var(--bone);
+}
+.view-switch a:focus-visible {
+  outline: 2px solid var(--bone);
+  outline-offset: 2px;
 }
 .hud-head .run-sub {
   display: flex;

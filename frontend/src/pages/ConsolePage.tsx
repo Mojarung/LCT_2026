@@ -41,7 +41,9 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
   ];
 }
 
-/** Главная: что делает сервис, как им пользоваться, затем запуск и реестр прогонов. */
+/** Главная - рабочий стол: короткая строка о сервисе, сразу под ней запуск и реестр
+ *  прогонов, ниже - как это работает и пример результата. Раньше первый экран занимала
+ *  обложка, и до формы запуска приходилось листать. */
 export function ConsolePage() {
   const meta = useMeta();
   const streets = useStreets();
@@ -50,59 +52,35 @@ export function ConsolePage() {
 
   return (
     <div className="landing">
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <h1 id="hero-title">Озеленение улицы по нормам и подземным сетям</h1>
+      <header className="console-head" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">Озеленение улиц по нормам</h1>
           <p className="lead">
-            Загрузите чертёж подосновы: сервис расставит деревья и кустарник с отступами от сетей,
-            запишет план на отдельные слои DXF и объяснит каждую посадку пунктом нормы.
+            Загрузите подоснову DXF или DWG: сервис расставит деревья и кустарник с отступами от
+            сетей, запишет план на слои GREEN_* того же чертежа и объяснит каждую посадку пунктом
+            нормы.
           </p>
-          <p className="hero-links">
-            <a href="#launch" className="primary">
-              Запустить прогон
-            </a>
+          <nav className="console-links" aria-label="Справка">
             <a href="#how">Как это работает</a>
-          </p>
+            <Link to="/models">Модели растений</Link>
+          </nav>
         </div>
-        <figure className="hero-visual">
+        <figure className="console-shots">
           <img
-            className="hero-photo"
-            src="/landing/street.webp"
-            width={1600}
-            height={900}
-            alt="Улица после посадки: аллея вдоль дорожки, прохожие, новые дома"
-            fetchPriority="high"
+            src="/landing/plan.webp"
+            width={277}
+            height={132}
+            alt="Фрагмент плана: посадки на слоях GREEN_* поверх подосновы и сетей"
           />
-          <div className="hero-plan">
-            <img
-              src="/landing/plan.webp"
-              width={900}
-              height={428}
-              alt="Фрагмент плана: посадки на слоях GREEN_* поверх подосновы и сетей"
-              loading="lazy"
-            />
-            <span>план на слоях GREEN_*</span>
-          </div>
-          <figcaption>
-            Фото нарисовано нейросетью по кадру 3D-вида того же плана: иллюстрация, нормы
-            проверяются на чертеже.
-          </figcaption>
+          <img
+            src="/landing/street.webp"
+            width={235}
+            height={132}
+            alt="Фото по кадру 3D-вида того же плана"
+          />
+          <figcaption>План на слоях DXF и фото по 3D-кадру</figcaption>
         </figure>
-      </section>
-
-      <section className="steps-strip" id="how" aria-labelledby="steps-title">
-        <h2 className="landing-title" id="steps-title">
-          Как это работает
-        </h2>
-        <ol className="how">
-          {steps(meta.data?.species.length).map((step) => (
-            <li key={step.title}>
-              <b>{step.title}</b>
-              <span>{step.text}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      </header>
 
       <div className="workbench">
         <section className="panel launch-panel" id="launch" aria-labelledby="launch-title">
@@ -125,6 +103,35 @@ export function ConsolePage() {
           <RunsRegistry />
         </section>
       </div>
+
+      <section className="how-section" id="how" aria-labelledby="steps-title">
+        <div>
+          <h2 className="landing-title" id="steps-title">
+            Как это работает
+          </h2>
+          <ol className="how">
+            {steps(meta.data?.species.length).map((step) => (
+              <li key={step.title}>
+                <b>{step.title}</b>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <figure className="how-visual">
+          <img
+            src="/landing/street.webp"
+            width={1600}
+            height={900}
+            alt="Улица после посадки: аллея вдоль дорожки, прохожие, новые дома"
+            loading="lazy"
+          />
+          <figcaption>
+            Фото нарисовано нейросетью по кадру 3D-вида плана. Это иллюстрация: нормы проверяются на
+            чертеже.
+          </figcaption>
+        </figure>
+      </section>
     </div>
   );
 }

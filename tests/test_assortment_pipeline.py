@@ -78,7 +78,8 @@ def test_every_place_is_planted_with_a_card_or_rejected_with_a_reason() -> None:
         assert placement.assortment is not None
         assert placement.assortment.status == "assigned"
     for rejection in plan.rejections:
-        assert "квот" in rejection.note
+        # Квоты или шаг по взрослым кронам выбранного вида (743-ПП, табл. 3.6.2).
+        assert "квот" in rejection.note or "шаг" in rejection.note, rejection.note
     assert [p.number for p in plan.placements] == list(range(1, len(plan.placements) + 1))
     rows = {}
     for placement in plan.placements:
@@ -233,3 +234,22 @@ def test_curbside_places_stay_empty_rather_than_break_the_family_quota() -> None
     assert not summary.quota_violations
     assert len(result.placements) < 10
     assert len(result.rejections) == 40 - len(result.placements)
+
+
+def test_off_assortment_species_fills_only_what_the_quotas_leave_and_is_reported() -> None:
+    """Туя у улицы не рекомендована ассортиментом Москвы, рябина рекомендована: при мягких
+    квотах рябина занимает свою долю первой, туя добирает остальное и попадает в
+    предупреждение с числом посадок."""
+    catalog = [CATALOG.get("sorbus_aucuparia"), CATALOG.get("thuja_occidentalis")]
+    params = replace(PARAMS, quota_penalty=5.0)
+    plan = assign_species(_plan(), RULEBOOK, catalog, params)
+    names = [p.species.name_ru for p in plan.placements]
+    thuja = sum(name.startswith("Туя") for name in names)
+    sorbus = sum(name.startswith("Рябина") for name in names)
+    assert thuja > 0
+    assert sorbus >= thuja
+    warning = [w for w in plan.warnings if "Вне рекомендованного ассортимента" in w]
+    assert len(warning) == 1
+    assert f"{thuja} посад" in warning[0]
+    assert "Туя" in warning[0]
+    assert "Рябина" not in warning[0]

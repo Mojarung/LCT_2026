@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from green.application.city_context import ContextUnavailableError
 from green.application.errors import (
     ConfigurationError,
     ConflictError,
@@ -73,6 +74,7 @@ _STATUS: dict[type[GreenError], HTTPStatus] = {
     ConflictError: HTTPStatus.CONFLICT,
     ConfigurationError: HTTPStatus.INTERNAL_SERVER_ERROR,
     PhotoUnavailableError: HTTPStatus.SERVICE_UNAVAILABLE,
+    ContextUnavailableError: HTTPStatus.SERVICE_UNAVAILABLE,
     PhotoBusyError: HTTPStatus.CONFLICT,
 }
 

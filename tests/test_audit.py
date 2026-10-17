@@ -33,6 +33,7 @@ LINDEN = "06_ДП_ЛИПА_Мелк_план"
 BOUND_LINDEN = f"plan$0${LINDEN}"
 LILAC = "06_ДП_СиреньВЕНГ._план"
 ELDER = "06_ДП_БузинаЧерн_план"
+ODD = "06_ДП_Неведомка_план"
 PATTERN = r"^0?6_+ДП_.+_план$"
 TREE_CROWN_R = 2.5
 GOOD = (30.0, 30.0)
@@ -41,8 +42,9 @@ NEAR_PIPE = (50.0, PIPE_Y - PIPE_GAP_M)
 NEAR_HOUSE = (70.0, 52.0)
 LILAC_NEAR_PIPE = (90.0, PIPE_Y - 0.5)
 ELDER_AT = (100.0, 30.0)
+ODD_AT = (110.0, 30.0)
 NEAR_UNKNOWN_LINE = (40.0, 28.0)
-PLANTINGS = 6
+PLANTINGS = 7
 UNKNOWN_LAYER = "ZZ_слой_вне_классификатора"
 
 
@@ -50,7 +52,7 @@ def _designed(path: Path) -> None:
     _street(path)
     doc = ezdxf.readfile(path)
     msp = doc.modelspace()
-    for layer in (LINDEN, BOUND_LINDEN, LILAC, ELDER, UNKNOWN_LAYER):
+    for layer in (LINDEN, BOUND_LINDEN, LILAC, ELDER, ODD, UNKNOWN_LAYER):
         doc.layers.add(layer)
     sign = doc.blocks.new("TREE_SIGN")
     sign.add_circle((0, 0), 0.2)
@@ -60,6 +62,7 @@ def _designed(path: Path) -> None:
     msp.add_circle(NEAR_HOUSE, 1.5, dxfattribs={"layer": LINDEN})
     msp.add_circle(LILAC_NEAR_PIPE, 1.5, dxfattribs={"layer": LILAC})
     msp.add_circle(ELDER_AT, 1.0, dxfattribs={"layer": ELDER})
+    msp.add_circle(ODD_AT, 1.0, dxfattribs={"layer": ODD})
     msp.add_lwpolyline([(10, 25), (20, 25), (20, 26)], dxfattribs={"layer": LINDEN})
     # Линия на слое, которого нет в классификаторе, в полуметре от липы: сетью не считается.
     msp.add_circle(NEAR_UNKNOWN_LINE, TREE_CROWN_R, dxfattribs={"layer": LINDEN})
@@ -137,12 +140,19 @@ def test_genus_from_the_catalog_beats_the_crown_size(audited: dict[str, object])
 
 
 def test_unknown_genus_falls_back_to_the_crown_and_to_explicit_layers(tmp_path: Path) -> None:
-    by_crown = _at(_audit(tmp_path / "a"), ELDER_AT)
+    by_crown = _at(_audit(tmp_path / "a"), ODD_AT)
     assert by_crown.planting_type is PlantingType.TREE
     assert "круг кроны 2.0 м" in by_crown.type_basis
-    named = _at(_audit(tmp_path / "b", shrub_layers="Бузина"), ELDER_AT)
+    named = _at(_audit(tmp_path / "b", shrub_layers="Неведомка"), ODD_AT)
     assert named.planting_type is PlantingType.SHRUB
     assert "в параметрах" in named.type_basis
+
+
+def test_elder_drawn_as_a_wide_circle_is_a_shrub_by_its_genus(audited: dict[str, object]) -> None:
+    """Бузина вне каталога видов, круг 2 м: прежде считалась деревом по кругу (аудит Берзарина)."""
+    elder = _at(audited["report"], ELDER_AT)  # type: ignore[arg-type]
+    assert elder.planting_type is PlantingType.SHRUB
+    assert "бузина" in elder.type_basis
 
 
 def test_unknown_layers_and_project_parameters_are_not_violations(
@@ -164,7 +174,7 @@ def test_unknown_layers_and_project_parameters_are_not_violations(
 def test_summary_counts_types_and_violations(audited: dict[str, object]) -> None:
     summary = audited["report"].summary()  # type: ignore[attr-defined]
     assert summary["trees"] == 5
-    assert summary["shrubs"] == 1
+    assert summary["shrubs"] == 2  # сирень и бузина
     assert summary["with_violations"] == 2
     assert summary["violations"] == 2
 

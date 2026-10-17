@@ -7,8 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from green.application.assortment import _obligation
 from green.application.assortment.context import SiteContext
-from green.application.assortment.filters import NORM, PARAMETER, REFERENCE, species_verdict
+from green.application.assortment.filters import (
+    NORM,
+    PARAMETER,
+    REFERENCE,
+    off_assortment,
+    species_verdict,
+)
 from green.application.params import PlanParams
 from green.domain.objects import ObjectClass
 from green.domain.planting import LifeForm, Species
@@ -319,13 +326,76 @@ def test_thorny_plants_keep_two_metres_from_pedestrian_ways() -> None:
     """СП 82.13330.2016 п. 9.22: колючие растения не ближе 2 м от пешеходных коммуникаций."""
     hawthorn = CATALOG.get("crataegus_laevigata")
     assert "thorny" in hawthorn.traits
+    # Боярышник не рекомендован ассортиментом Москвы для улиц: фильтр ассортимента здесь
+    # выключен, проверяется правило колючих растений.
+    params = replace(PARAMS, mos_assortment=False)
     for where in ("sidewalk", "pavement"):
-        near = species_verdict(hawthorn, _ctx_of(**{where: 1.4}), RULEBOOK, PARAMS)
+        near = species_verdict(hawthorn, _ctx_of(**{where: 1.4}), RULEBOOK, params)
         assert not near.allowed, where
         assert near.blocking is not None
         assert near.blocking.rule_id.startswith("R-THORN"), near.blocking.rule_id
         assert "9.22" in near.blocking.source
         assert "колючее" in near.blocking.text
-        assert species_verdict(hawthorn, _ctx_of(**{where: 2.5}), RULEBOOK, PARAMS).allowed
+        assert species_verdict(hawthorn, _ctx_of(**{where: 2.5}), RULEBOOK, params).allowed
     smooth = _species(crown_mature_m=4.0)
     assert species_verdict(smooth, _ctx_of(sidewalk=1.4), RULEBOOK, PARAMS).allowed
+
+
+# Официальный ассортимент Москвы (config/mos_assortment.yaml из PDF mos.ru, графа 7
+# «Магистрали ... внутриквартальные улицы и проезды местного значения»).
+def test_species_not_recommended_for_streets_stays_allowed_with_a_reason() -> None:
+    """Ассортимент Москвы - рекомендация, а не норма: вид с «-» не запрещается, а уступает.
+
+    Жёсткий запрет 16.10.2026 оставил у Лодочной три вида деревьев у сетей, и два из них
+    перебрали квоту 40%: разнообразие состава важнее рекомендации справочника.
+    """
+    thuja = CATALOG.get("thuja_occidentalis")
+    assert thuja.mos_marks["roads"] is False
+    verdict = species_verdict(thuja, replace(_ctx_of(), category="streets"), RULEBOOK, PARAMS)
+    assert verdict.allowed
+    assert off_assortment(verdict)
+    marked = [r for r in verdict.reasons if "ассортимент" in r.text]
+    assert len(marked) == 1
+    assert marked[0].kind == REFERENCE
+    assert "не рекомендован" in marked[0].text
+    assert "улиц" in marked[0].text
+
+
+def test_off_assortment_species_loses_to_a_recommended_one_in_assignment() -> None:
+    thuja = CATALOG.get("thuja_occidentalis")
+    sorbus = CATALOG.get("sorbus_aucuparia")
+    ctx = replace(_ctx_of(), category="streets")
+    off = species_verdict(thuja, ctx, RULEBOOK, PARAMS)
+    on = species_verdict(sorbus, ctx, RULEBOOK, PARAMS)
+    assert not off_assortment(on)
+    assert _obligation(off, thuja, PARAMS) == pytest.approx(PARAMS.mos_penalty)
+    assert _obligation(on, sorbus, PARAMS) == pytest.approx(0.0)
+    # Поправка больше разброса оценок (0..1), но меньше штрафа за перебор квоты.
+    assert 1.0 <= PARAMS.mos_penalty < 5.0
+
+
+def test_recommended_species_gets_a_positive_reason_with_the_page() -> None:
+    linden = CATALOG.get("tilia_cordata")
+    verdict = species_verdict(linden, replace(_ctx_of(), category="streets"), RULEBOOK, PARAMS)
+    assert verdict.allowed
+    assert any("ассортимент" in r.text and "стр." in r.text for r in verdict.reasons)
+
+
+def test_yard_uses_the_yard_column() -> None:
+    thuja = CATALOG.get("thuja_occidentalis")
+    verdict = species_verdict(thuja, replace(_ctx_of(), category="yards"), RULEBOOK, PARAMS)
+    assert verdict.allowed
+
+
+def test_assortment_filter_can_be_switched_off() -> None:
+    thuja = CATALOG.get("thuja_occidentalis")
+    params = replace(PARAMS, mos_assortment=False)
+    verdict = species_verdict(thuja, replace(_ctx_of(), category="streets"), RULEBOOK, params)
+    assert verdict.allowed
+
+
+def test_given_assortment_is_not_cut_by_the_recommendation() -> None:
+    thuja = CATALOG.get("thuja_occidentalis")
+    params = replace(PARAMS, assortment_mode="given", given_assortment={thuja.code: 10})
+    verdict = species_verdict(thuja, replace(_ctx_of(), category="streets"), RULEBOOK, params)
+    assert verdict.allowed

@@ -43,8 +43,10 @@ export interface AutoShot {
 }
 
 /** Кадр для фото: 16:9, стороны кратны 32 - так их ждёт модель. */
-export const SHOT_WIDTH = 1024;
-export const SHOT_HEIGHT = 576;
+/** 1536 x 864: деталей заметно больше, чем в 1024 x 576, видеопамять та же (сравнение
+ *  17.10.2026); после апскейла и уменьшения фото - 3840 x 2160. */
+export const SHOT_WIDTH = 1536;
+export const SHOT_HEIGHT = 864;
 export const SHOT_FOV = (55 * Math.PI) / 180;
 /** Дальше этого соседние кроны кадр посадки не заслоняют: камера так далеко не уходит. */
 const OCCLUDER_REACH_M = 60;

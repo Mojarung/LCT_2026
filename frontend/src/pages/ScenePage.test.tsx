@@ -25,9 +25,11 @@ describe('3D-вид прогона', () => {
         'href',
         '/runs/r1',
       );
-      expect(screen.getByRole('link', { name: '← план прогона' })).toHaveAttribute(
-        'href',
-        '/runs/r1',
+      // Шапка прогона - та же, что на плане: переключатель «План / 3D-вид».
+      expect(await screen.findByRole('link', { name: 'План' })).toHaveAttribute('href', '/runs/r1');
+      expect(screen.getByRole('link', { name: '3D-вид и фото' })).toHaveAttribute(
+        'aria-current',
+        'page',
       );
     },
   );

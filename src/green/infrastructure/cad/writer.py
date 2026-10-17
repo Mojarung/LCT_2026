@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
+import ezdxf
 import shapely
+from ezdxf import zoom
+from ezdxf.addons import Importer
 from ezdxf.lldxf.const import BOUNDARY_PATH_DEFAULT, BOUNDARY_PATH_EXTERNAL
 
 from green.application.barriers import BARRIER_NOTE
@@ -13,7 +17,7 @@ from green.application.results import SourceSnapshot
 from green.application.schedule import build_schedule
 from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome, Verdict
-from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, load_document
+from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, entity_layer, load_document
 from green.infrastructure.cad.integrity import fingerprints
 
 if TYPE_CHECKING:
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
     from green.application.schedule import ScheduleRow
     from green.domain.norms import RuleBook
     from green.domain.planting import (
+        EditMark,
         Lawn,
         Placement,
         Plan,
@@ -36,7 +41,11 @@ if TYPE_CHECKING:
     )
     from green.infrastructure.cad.documents import DocumentCache
 
-TEXT_STYLE = f"{RESULT_PREFIX}TEXT"
+# LibreCAD ищет штриховой шрифт по имени стиля: «unicode» - его unicode.lff с кириллицей;
+# AutoCAD и nanoCAD берут файл шрифта стиля (TTF). Стиль «GREEN_TEXT» LibreCAD рисовал
+# ромбиками (docker/cadcheck, 16.10.2026).
+TEXT_STYLE = "unicode"
+FALLBACK_STYLE = "cyrillic_ii"
 LAYER_TREES = f"{RESULT_PREFIX}TREES"
 LAYER_TREES_APPROVAL = f"{RESULT_PREFIX}TREES_APPROVAL"
 LAYER_TREES_BARRIER = f"{RESULT_PREFIX}TREES_BARRIER"
@@ -49,7 +58,13 @@ LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
 LAYER_LAWN = f"{RESULT_PREFIX}LAWN"
 # Ведомость элементов озеленения (ГОСТ 21.508-2020, п. 10.8, форма 9) таблицей рядом с планом.
 LAYER_SCHEDULE = f"{RESULT_PREFIX}SCHEDULE"
+# Ручные правки плана (ТЗ, п. 6): метки удалений, переносов и добавлений.
+LAYER_EDITS = f"{RESULT_PREFIX}EDITS"
 REJECT_BLOCK = f"{RESULT_PREFIX}REJECT_MARK"
+# Сколько норм «почему пусто» уходит в легенду чертежа; полный список - в отчёте.
+BLOCKED_IN_LEGEND = 5
+# Рядом с result.dxf - только слои результата (подключение внешней ссылкой).
+RESULT_LAYERS_SUFFIX = "_layers.dxf"
 LAYER_COLORS = {
     LAYER_TREES: 3,
     LAYER_TREES_APPROVAL: 30,
@@ -62,6 +77,7 @@ LAYER_COLORS = {
     LAYER_ZONE_APPROVAL: 30,
     LAYER_LAWN: 82,
     LAYER_SCHEDULE: 7,
+    LAYER_EDITS: 6,
 }
 ZONE_LAYERS = {Verdict.ALLOWED: LAYER_ZONE_ALLOWED, Verdict.NEEDS_APPROVAL: LAYER_ZONE_APPROVAL}
 ZONE_TRANSPARENCY = 0.7
@@ -103,6 +119,7 @@ class EzdxfPlanWriter:
         documents: DocumentCache | None = None,
     ) -> None:
         self._font = text_font
+        self._style = "unicode"
         self._height = label_height_m
         self._documents = documents
 
@@ -141,12 +158,16 @@ class EzdxfPlanWriter:
             self._placement(doc, msp, placement, position, scale=scale, rulebook=rulebook)
         for rejection in plan.rejections:
             self._rejection(msp, rejection, scale)
+        for mark in plan.edits:
+            self._edit_mark(msp, mark, scale)
         extent = plan_extent(plan)
         if extent is not None:
             left = self._schedule(msp, rows, extent, scale)
             self._legend(msp, plan, rulebook, (left, extent[3] * scale), scale)
+            _initial_view(doc, (min(left, extent[0] * scale), *[v * scale for v in extent[1:]]))
         target.parent.mkdir(parents=True, exist_ok=True)
         doc.saveas(target)
+        save_result_layers(doc, target.with_name(f"{target.stem}{RESULT_LAYERS_SUFFIX}"))
         return snapshot
 
     def _prepare(self, doc: Drawing) -> None:
@@ -155,15 +176,14 @@ class EzdxfPlanWriter:
         for name, color in LAYER_COLORS.items():
             if name not in doc.layers:
                 doc.layers.add(name, color=color)
-        if TEXT_STYLE not in doc.styles:
-            doc.styles.add(TEXT_STYLE, font=self._font)
+        self._style = text_style(doc, self._font)
         if REJECT_BLOCK not in doc.blocks:
             block = doc.blocks.new(REJECT_BLOCK)
             half = REJECT_HALF_M
             block.add_line((-half, -half), (half, half))
             block.add_line((-half, half), (half, -half))
             block.add_attdef(
-                "NUM", (0.6, 0.2), dxfattribs={"height": self._height, "style": TEXT_STYLE}
+                "NUM", (0.6, 0.2), dxfattribs={"height": self._height, "style": self._style}
             )
 
     def _tree_block(self, doc: Drawing, species: Species) -> str:
@@ -178,7 +198,7 @@ class EzdxfPlanWriter:
             # объяснением. Позицию ведомости на плане рисует обычный TEXT на месте атрибута POS
             # (_placement): LibreCAD атрибуты вставок не рисует, а видимый POS рядом с текстом
             # nanoCAD показал бы дважды.
-            hidden = {"height": self._height, "style": TEXT_STYLE, "flags": 1}
+            hidden = {"height": self._height, "style": self._style, "flags": 1}
             block.add_attdef("POS", POSITION_OFFSET_M, dxfattribs=hidden)
             block.add_attdef("NUM", (0.4, -0.4 - self._height), dxfattribs=hidden)
             block.add_attdef("SPECIES", (0.4, -0.8 - 2 * self._height), dxfattribs=hidden)
@@ -232,7 +252,7 @@ class EzdxfPlanWriter:
             height=self._height * scale,
             dxfattribs={
                 "layer": LAYER_LABELS,
-                "style": TEXT_STYLE,
+                "style": self._style,
                 "insert": ((placement.x + dx) * scale, (placement.y + dy) * scale),
             },
         )
@@ -324,6 +344,32 @@ class EzdxfPlanWriter:
             ],
         )
 
+    def _edit_mark(self, msp: Modelspace, mark: EditMark, scale: float) -> None:
+        """Метка ручной правки на слое GREEN_EDITS; посадка остаётся на своём слое."""
+        attribs = {"layer": LAYER_EDITS}
+        x, y = mark.x * scale, mark.y * scale
+        half = 0.8 * scale
+        if mark.kind == "delete":
+            msp.add_line((x - half, y - half), (x + half, y + half), dxfattribs=attribs)
+            msp.add_line((x - half, y + half), (x + half, y - half), dxfattribs=attribs)
+            text = f"удалена вручную: {mark.species_ru}"
+        elif mark.kind == "move" and mark.from_x is not None and mark.from_y is not None:
+            msp.add_line((mark.from_x * scale, mark.from_y * scale), (x, y), dxfattribs=attribs)
+            msp.add_circle(
+                (mark.from_x * scale, mark.from_y * scale), 0.3 * scale, dxfattribs=attribs
+            )
+            shift = math.dist((mark.from_x, mark.from_y), (mark.x, mark.y))
+            text = f"перенесена вручную на {shift:.2f} м: {mark.species_ru}".replace(".", ",")
+        else:
+            msp.add_circle((x, y), half, dxfattribs=attribs)
+            text = f"добавлена вручную: {mark.species_ru}"
+        label = msp.add_text(
+            text,
+            dxfattribs={**attribs, "height": self._height * scale, "style": self._style},
+        )
+        label.set_placement((x + half, y - half - self._height * scale))
+        label.set_xdata(APPID, [(1000, mark.placement_id)])
+
     def _legend(
         self,
         msp: Modelspace,
@@ -348,12 +394,27 @@ class EzdxfPlanWriter:
             }
             areas = ", ".join(f"{LAWN_LABELS[k]} {_area(a)}" for k, a in totals.items() if a > 0)
             lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
+        blocked = sorted(
+            (
+                (float(v), k.removeprefix("blocked_").removesuffix("_m2"))
+                for k, v in plan.stats.items()
+                if k.startswith("blocked_") and not k.startswith("blocked_only_")
+            ),
+            reverse=True,
+        )[:BLOCKED_IN_LEGEND]
+        if blocked:
+            # Почему пусто: те же числа, что в отчёте интерпретаций (report.html).
+            lines.append(
+                "Почему пусто, грунт закрыт нормой, м²: "
+                + "; ".join(f"{rule_id} {_area(area)}" for area, rule_id in blocked)
+                + "."
+            )
         height = self._height * 2 * scale
         mtext = msp.add_mtext(
             "\\P".join(lines),
             dxfattribs={
                 "layer": LAYER_LABELS,
-                "style": TEXT_STYLE,
+                "style": self._style,
                 "char_height": height,
                 # Ширина колонки: CAD переносит длинные цитаты внутри неё, а не тянет строку
                 # на десятки метров поверх чертежа.
@@ -384,7 +445,7 @@ class EzdxfPlanWriter:
         y0 = extent[3] * scale
         widths = [w * height for _, w in SCHEDULE_COLUMNS]
         right = x0 + sum(widths)
-        attribs = {"layer": LAYER_SCHEDULE, "style": TEXT_STYLE, "height": height}
+        attribs = {"layer": LAYER_SCHEDULE, "style": self._style, "height": height}
         msp.add_text("Ведомость элементов озеленения", dxfattribs=attribs).set_placement(
             (x0, y0 + height)
         )
@@ -416,6 +477,56 @@ class EzdxfPlanWriter:
             x += width
             msp.add_line((x, y0), (x, y), dxfattribs={"layer": LAYER_SCHEDULE})
         return right + LEGEND_GAP_HEIGHTS * height
+
+
+def _initial_view(doc: Drawing, box: Sequence[float]) -> None:
+    """Вид при открытии - на план с ведомостью, а не на начало координат.
+
+    ezdxf оставляет вид «*Active» в (0, 0) высотой 1000 и не пишет габарит: просмотрщики на
+    базе LibreCAD открывали результат «в пустоте». Таблица видов и заголовок не входят в сверку
+    целостности: исходные сущности не меняются.
+    """
+    min_x, min_y, max_x, max_y = box
+    margin = 0.05 * max(max_x - min_x, max_y - min_y, 1.0)
+    zoom.window(
+        doc.modelspace(), (min_x - margin, min_y - margin), (max_x + margin, max_y + margin)
+    )
+    # Габарит пишется в лист модели: при сохранении ezdxf переносит его в $EXTMIN/$EXTMAX.
+    msp = doc.modelspace()
+    msp.dxf.extmin = (min_x, min_y, 0.0)
+    msp.dxf.extmax = (max_x, max_y, 0.0)
+
+
+def save_result_layers(source: Drawing, target: Path) -> Path:
+    """Новый чертёж только с сущностями слоёв GREEN_* (и их блоками, стилями) из source."""
+    light = ezdxf.new(source.dxfversion)
+    light.units = source.units
+    for name in ("$INSUNITS", "$MEASUREMENT", "$DWGCODEPAGE"):
+        if name in source.header:
+            light.header[name] = source.header[name]
+    for app in source.appids:
+        if app.dxf.name not in light.appids:
+            light.appids.add(app.dxf.name)
+    importer = Importer(source, light)
+    importer.import_entities(
+        [e for e in source.modelspace() if entity_layer(e).upper().startswith(RESULT_PREFIX)]
+    )
+    importer.finalize()
+    light.saveas(target)
+    return target
+
+
+def text_style(doc: Drawing, font: str) -> str:
+    """Стиль подписей результата: «unicode», а если в исходнике уже есть свой «unicode» с другим
+    шрифтом (имена стилей в DXF без регистра) - «cyrillic_ii»: оба имени LibreCAD сопоставляет
+    своему шрифту с кириллицей, а стиль исходника не трогается (ревью 16.10.2026)."""
+    for name in (TEXT_STYLE, FALLBACK_STYLE):
+        if name not in doc.styles:
+            doc.styles.add(name, font=font)
+            return name
+        if str(doc.styles.get(name).dxf.font).lower() == font.lower():
+            return name
+    return TEXT_STYLE
 
 
 def plan_extent(plan: Plan) -> tuple[float, float, float, float] | None:

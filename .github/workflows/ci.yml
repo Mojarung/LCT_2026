@@ -1,0 +1,56 @@
+# Проверка на Linux: та же среда, что у жюри (МосТех.ОС близка к Ubuntu). Линт, типы, контракт
+# слоёв, тесты бэкенда и фронтенда, сборка образа Docker и ответ /api/v1/health из контейнера.
+# Тесты, которым нужен датасет пилота, без него пропускаются (pytest skip).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --locked
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src
+      - run: uv run ty check src
+      - run: uv run lint-imports
+      - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-24.04
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build
+      - run: docker compose up -d
+      - name: health
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8000/api/v1/health && exit 0
+            sleep 5
+          done
+          docker compose logs api
+          exit 1

@@ -57,7 +57,9 @@ def test_annotation_and_work_labels_do_not_supply_soil(
     path = tmp_path / "source.dxf"
     source(path, layer, block)
     scene, _ = classify_scene(EzdxfSceneReader().read(path), RULES)
-    surface = build_surface_map(scene.features, scene.labels, box(0, 0, 20, 20), 0.5)
+    surface = build_surface_map(
+        scene.features, scene.labels, box(0, 0, 20, 20), 0.5, open_ground=False
+    )
     assert (
         surface is None
         or surface.material(np.array([Point(10, 10)], dtype=object))[0] != Material.SOIL
@@ -114,7 +116,9 @@ def test_explicit_label_role_supports_unfamiliar_legend(
     assert label.surface_role == role
     assert label.surface_evidence.method == "explicit_label"
     assert label.text == "M-17"  # retained for other consumers, not deleted
-    surface = build_surface_map(scene.features, scene.labels, box(0, 0, 20, 20), 0.5)
+    surface = build_surface_map(
+        scene.features, scene.labels, box(0, 0, 20, 20), 0.5, open_ground=False
+    )
     if expected is None:
         assert surface is None
     else:

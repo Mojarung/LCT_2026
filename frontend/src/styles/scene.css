@@ -1247,3 +1247,13 @@
   grid-template-columns: 1fr auto;
   align-items: center;
 }
+
+/* Сводка сцены - сеткой 2 x 2, как сводка прогона: разделитель только между колонками. */
+.scene-breakdown {
+  margin: 4px 0 12px;
+  row-gap: 12px;
+}
+.scene-breakdown div:nth-child(odd) {
+  border-left: 0;
+  padding-left: 0;
+}

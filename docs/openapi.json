@@ -33,6 +33,12 @@
       },
       "Body_create_photo_api_v1_runs__run_id__photos_post": {
         "properties": {
+          "buildings": {
+            "default": true,
+            "description": "Есть ли в кадре здания; без них промпт не говорит о фасадах",
+            "title": "Buildings",
+            "type": "boolean"
+          },
           "hour": {
             "default": 11.0,
             "maximum": 24.0,
@@ -1939,6 +1945,75 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/context": {
+      "get": {
+        "description": "Дома, деревья и дороги OpenStreetMap в кольце 450 м вокруг съёмки, в метрах чертежа.\n\nВнутри съёмки решает чертёж: дома карты, пересекающие дома чертежа, и деревья внутри\nпрямоугольника съёмки отброшены. Первый запрос идёт в Overpass (нужна сеть), ответ\nхранится в каталоге прогона. Нет сети - 503, 3D-вид остаётся без окружения.",
+        "operationId": "get_context_api_v1_runs__run_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          }
+        },
+        "summary": "Город вокруг участка для 3D-вида",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/draft": {
       "get": {
         "operationId": "draft_api_v1_runs__run_id__draft_get",
@@ -2382,6 +2457,16 @@
               "default": "",
               "title": "Shrubs",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "buildings",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Buildings",
+              "type": "boolean"
             }
           }
         ],

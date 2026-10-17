@@ -98,6 +98,8 @@ COPY --from=libredwg /opt/libredwg/bin /usr/local/bin
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /opt/venv /opt/venv
 COPY config /app/config
+# Квадраты OpenStreetMap для города вокруг съёмки без сети (tools/osm_moscow.py, data/osm/README.md).
+COPY data/osm /app/data/osm
 COPY --from=web /web/dist /app/web
 RUN useradd --system --uid 10001 --create-home green \
     && install -d -o green /data/runs
@@ -106,6 +108,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     GREEN_CONFIG_DIR=/app/config \
     GREEN_RUNS_DIR=/data/runs \
     GREEN_WEB_DIR=/app/web \
+    GREEN_OSM_TILES_DIR=/app/data/osm/moscow \
     GREEN_LOG_JSON=true
 WORKDIR /app
 USER green

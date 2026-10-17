@@ -43,6 +43,7 @@ def test_faces_without_evidence_stay_unknown() -> None:
         [],
         box(-2, -2, 42, 22),
         0.5,
+        open_ground=False,
     )
 
     assert surface is None or surface.material(shapely.points([LAWN_FACE])).tolist() == [

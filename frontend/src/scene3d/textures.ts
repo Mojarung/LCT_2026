@@ -187,6 +187,27 @@ export function concrete(): THREE.CanvasTexture {
   return texture(c, true);
 }
 
+/** Гранитный бортовой камень: по горизонтали 4 м - четыре камня по метру со своим оттенком и
+ *  тёмным швом между ними, зерно гранита (тёмные и светлые крупинки).
+ *  Ровный серый брус без этого читался пластмассой (пользователь, 17.10.2026). */
+export const CURB_STONES_PER_TEXTURE = 4;
+export function curbStone(): THREE.CanvasTexture {
+  const size = 512;
+  const noise = fbm(size, [8, 32, 128], 149);
+  const random = rng(151);
+  const stone = size / CURB_STONES_PER_TEXTURE;
+  const tints = [0, -9, 6, -4];
+  const c = fromNoise(size, noise, (n, x) => {
+    const tint = tints[Math.floor(x / stone)] ?? 0;
+    const grain = random();
+    const speck = grain > 0.93 ? -55 : grain < 0.05 ? 35 : 0;
+    const joint = x % stone < 3 ? -70 : 0;
+    const v = 138 + n * 30 + speck + tint + joint;
+    return [v, v - 1, v - 3];
+  });
+  return texture(c, true);
+}
+
 /** Решётка ограды: стойки через 12 см, две перекладины, прозрачность между прутьями. */
 export function fenceBars(): THREE.CanvasTexture {
   const [c, ctx] = canvas(256);

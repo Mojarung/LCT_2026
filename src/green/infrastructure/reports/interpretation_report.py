@@ -344,6 +344,51 @@ def _noise_rows(effect: StreetEffect) -> list[list[str]]:
     ]
 
 
+BLOCKED_HEAD = (
+    "Норма",
+    "Основание",
+    "Закрыто, м²",
+    "Единственная причина, м²",
+    "Доля грунта",
+)
+_BLOCKED_HOW = (
+    "Какая норма закрыла какую часть грунта участка: площадь, где норма не пройдена, и где она "
+    "единственная причина (без неё место открылось бы). Суммы по нормам пересекаются. "
+    "«Проектный параметр» - число проекта, а не акта (например, посадочная яма не заходит на "
+    "препятствие)."
+)
+
+
+def blocked_rows(plan: Plan, rulebook: RuleBook) -> list[list[str]]:
+    """Почему пусто: нормы по закрытой ими площади грунта, от большей к меньшей."""
+    stats = plan.stats
+    by_id = {r.rule_id: r for r in rulebook.all_rules}
+    cell = float(stats.get("surface_cell_m", 0.0))
+    soil = float(stats.get("surface_cells_soil", 0)) * cell * cell
+    found = [
+        (key.removeprefix("blocked_").removesuffix("_m2"), float(value))
+        for key, value in stats.items()
+        if key.startswith("blocked_") and not key.startswith("blocked_only_")
+    ]
+    rows = []
+    for rule_id, closed in sorted(found, key=lambda item: -item[1]):
+        rule = by_id.get(rule_id)
+        clause = rule.citation.clause if rule is not None else ""
+        project = rule is not None and rule.citation.act_id == "PROJECT"
+        only = float(stats.get(f"blocked_only_{rule_id}_m2", 0.0))
+        share = f"{closed / soil:.0%}" if soil else "-"
+        rows.append(
+            [
+                f"{rule_id} {clause}".strip(),
+                "проектный параметр" if project else "норма акта",
+                f"{closed:.0f}",
+                f"{only:.0f}",
+                share,
+            ]
+        )
+    return rows
+
+
 def _md_table(head: Sequence[str], rows: Iterable[Sequence[str]]) -> list[str]:
     def cell(value: str) -> str:
         return value.replace("|", "/").replace("\n", " ")
@@ -368,6 +413,9 @@ def write_markdown(path: Path, report: RunReport) -> Path:
         lines += _md_table(KIND_HEAD, _kind_rows(plan.effect))
     lines += ["", "## Нормативная база", ""]
     lines += _md_table(("Акт", "Редакция и сверка", "Текст"), _acts(plan, rules))
+    if blocked := blocked_rows(plan, report.rulebook):
+        lines += ["", "## Почему здесь пусто: что закрыло грунт", "", _BLOCKED_HOW, ""]
+        lines += _md_table(BLOCKED_HEAD, blocked)
     lines += ["", "## Посадки", "", _how(plan, rules), ""]
     lines += _md_table(PLACEMENT_HEAD, (_placement_row(p, rules) for p in plan.placements))
     lines += ["", "## Отказы", ""]
@@ -408,6 +456,9 @@ _NUMERIC = {
     "Изменение",
     "Штук",
     "Пог. м",
+    "Закрыто, м²",
+    "Единственная причина, м²",
+    "Доля грунта",
     "Было, м",
     "Стало, м",
 }
@@ -457,6 +508,15 @@ def write_html(path: Path, report: RunReport) -> Path:
         *_effect_html(plan.effect),
         "<h2>Нормативная база</h2>",
         _html_table(("Акт", "Редакция и сверка", "Текст"), _acts(plan, rules)),
+        *(
+            [
+                "<h2>Почему здесь пусто: что закрыло грунт</h2>",
+                f'<p class="how">{html.escape(_BLOCKED_HOW)}</p>',
+                _html_table(BLOCKED_HEAD, blocked_rows(plan, report.rulebook)),
+            ]
+            if blocked_rows(plan, report.rulebook)
+            else []
+        ),
         f'<h2>Посадки</h2><p class="how">{html.escape(_how(plan, rules))}</p>',
         _html_table(PLACEMENT_HEAD, (_placement_row(p, rules) for p in plan.placements)),
         "<h2>Отказы</h2>",

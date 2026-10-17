@@ -28,7 +28,8 @@ def test_project_boundary_does_not_close_a_material_region() -> None:
 
 def test_tree_in_a_grate_does_not_establish_surrounding_soil() -> None:
     tree = feature(ObjectClass.EXISTING_TREE, Point(5, 5))
-    surface = build_surface_map([tree], [], box(0, 0, 20, 20), 0.5)
+    # Без запасного «свободная земля - газон»: проверяется, что затравкой служит не дерево.
+    surface = build_surface_map([tree], [], box(0, 0, 20, 20), 0.5, open_ground=False)
     assert surface is None or material(surface, 5.1, 5.1) is Material.UNKNOWN
 
 

@@ -34,6 +34,7 @@ MEDIA_TYPES = {
     ".csv": "text/csv; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".html": "text/html; charset=utf-8",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 
 
@@ -224,3 +225,20 @@ def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
             headers={"Content-Disposition": disposition},
         )
     return FileResponse(path, media_type=media_type, filename=name)
+
+
+@router.get(
+    "/{run_id}/context",
+    summary="Город вокруг участка для 3D-вида",
+    response_class=Response,
+    responses={200: {"content": {"application/json": {}}}},
+)
+def get_context(run_id: str, container: ContainerDep) -> Response:
+    """Дома, деревья и дороги OpenStreetMap в кольце 450 м вокруг съёмки, в метрах чертежа.
+
+    Внутри съёмки решает чертёж: дома карты, пересекающие дома чертежа, и деревья внутри
+    прямоугольника съёмки отброшены. Первый запрос идёт в Overpass (нужна сеть), ответ
+    хранится в каталоге прогона. Нет сети - 503, 3D-вид остаётся без окружения.
+    """
+    container.store.get(run_id)
+    return Response(container.city.for_run(run_id), media_type="application/json")

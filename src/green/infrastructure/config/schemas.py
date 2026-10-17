@@ -306,7 +306,7 @@ class ProfileModel(_Strict):
     spacing_group_max_m: float = Field(default=7.0, ge=0.3, le=50)
     lawn_spacing_m: float = Field(default=0.0, ge=0.0, le=50)
     curb_offsets_m: tuple[float, ...] = Field(default=(3.0, 2.5, 2.0), min_length=1, max_length=10)
-    require_utility_data: bool = True
+    require_utility_data: bool = False
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
     infer_unknown: bool = True
@@ -320,6 +320,8 @@ class ProfileModel(_Strict):
     label_search_radius_m: float = Field(default=3.0, gt=0, le=20)
     max_rejections: int = Field(default=REJECTIONS_DEFAULT, ge=0, le=REJECTIONS_CEILING)
     require_soil: bool = True
+    open_ground: bool = True
+    osm_schools: bool = True
     require_work_boundary: bool = True
     planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м
     shrub_planting_radius_m: float = Field(default=0.5, ge=0, le=10)
@@ -329,14 +331,15 @@ class ProfileModel(_Strict):
     surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
-    modes: tuple[Literal["alley", "lawn", "fill"], ...] = Field(
-        default=("alley", "lawn", "fill"), min_length=1
+    modes: tuple[Literal["existing_row", "alley", "lawn", "fill"], ...] = Field(
+        default=("existing_row", "alley", "lawn", "fill"), min_length=1
     )
     fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
     placement_solver: Literal["greedy", "milp", "portfolio"] = "portfolio"
     portfolio_budget_s: float = Field(default=900.0, ge=0, le=86_400)
     refine_budget_s: float = Field(default=30.0, ge=0, le=3_600)
     placement_time_limit_s: float = Field(default=5.0, gt=0, le=60)
+    likeness_weight: float = Field(default=0.0, ge=0, le=5)
     placement_max_candidates: int = Field(default=6000, ge=1, le=50_000)
     placement_max_conflicts: int = Field(default=200_000, ge=1, le=2_000_000)
     lawn_phase: tuple[Annotated[float, Field(ge=0, lt=1)], Annotated[float, Field(ge=0, lt=1)]] = (
@@ -357,6 +360,8 @@ class ProfileModel(_Strict):
     crown_extra_classes: tuple[ObjectClass, ...] = ()
     territory: Territory = Territory.GREEN_FUND
     planting_category: Literal["parks", "squares", "streets", "yards", "special"] = "streets"
+    mos_assortment: bool = True
+    name_model: bool = True
     allergen_act_priority: bool = True
     disabled_rules: tuple[str, ...] = ()
     sp42_edition: Literal["2016", "2026"] = "2016"
@@ -405,13 +410,15 @@ class ProfileModel(_Strict):
     quota_adaptive: bool = False
     quota_single_places: float = Field(default=30.0, ge=1, le=10_000)
     condition_penalty: float = Field(default=0.2, ge=0, le=1)
+    # Выше 5 вид вне ассортимента дороже пустого места рядом с квотой: место пустеет.
+    mos_penalty: float = Field(default=1.0, ge=0, le=5)
     assortment_weights: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     quality_weights: dict[str, float] = Field(default_factory=dict)
     density_trees_per_km: tuple[float, float] = Field(default=(150.0, 180.0))
     density_shrubs_per_km: tuple[float, float] = Field(default=(600.0, 720.0))
     row_spacing_m: tuple[float, float] = Field(default=(5.0, 6.0))
     canopy_target: float = Field(default=0.75, gt=0, le=5)
-    canopy_crown_m: float = Field(default=8.5, gt=0, le=40)
+    canopy_crown_m: float = Field(default=8.0, gt=0, le=40)
     existing_crown_m: float = Field(default=8.5, gt=0, le=40)
     street_length_m: float | None = Field(default=None, gt=0, le=100_000)
     dust_target: float = Field(default=0.50, gt=0, le=1)

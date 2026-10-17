@@ -6,7 +6,7 @@ import type { RunOut } from '../../api/types';
 import { type Call, consoleRoutes, mockApi, run } from '../../test/api';
 import { renderApp } from '../../test/render';
 
-const LIST = '/api/v1/runs?limit=12';
+const LIST = '/api/v1/runs?limit=200';
 
 /** Реестр из четырёх прогонов во всех состояниях; DELETE убирает прогон из списка сервера. */
 function registry(onDelete?: (id: string) => Response) {

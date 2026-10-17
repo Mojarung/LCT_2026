@@ -226,7 +226,7 @@ describe('вспомогательные числа', () => {
 });
 
 it.each([undefined, 'strip'] as const)(
-  'полоса %s сохраняет знаки, но не создаёт стволы и не меняет план',
+  'полоса %s - ряд крон по знакам с шагом кроны, но не стволы и не посадки плана',
   (vegetation_kind) => {
     const world = buildWorld({
       scene: scene(),
@@ -254,10 +254,12 @@ it.each([undefined, 'strip'] as const)(
         ],
       },
     });
-    expect(world.plants.filter((p) => p.existing)).toHaveLength(1);
+    expect(world.plants.filter((p) => p.existing && !p.strip)).toHaveLength(1);
     expect(world.plants.filter((p) => !p.existing)).toHaveLength(3);
     expect(world.treeStrips).toHaveLength(1);
     expect(world.treeStrips?.[0]).toHaveLength(3);
+    // Три знака в 1,6 м - одна крона ряда: шаг ряда - взрослая крона, а не шаг знаков.
+    expect(world.plants.filter((p) => p.strip)).toHaveLength(1);
   },
 );
 

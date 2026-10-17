@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from green.application.assembly import PackageAssembly
     from green.application.audit import AuditedPlanting
     from green.application.basemap import Basemap
+    from green.application.city_context import CityContext
     from green.application.classification import ClassificationReport, LayerMap
     from green.application.editing import Edit, RunContext
     from green.application.params import PlanParams
@@ -309,3 +310,11 @@ class PhotoStore(Protocol):
     def path(self, run_id: str, photo_id: str, kind: PhotoFile) -> Path: ...
 
     def delete(self, run_id: str, photo_id: str) -> None: ...
+
+
+class CityContextSource(Protocol):
+    """Открытая карта вокруг участка для 3D-вида: дома, деревья и дороги в метрах чертежа."""
+
+    def around(self, extent: tuple[float, float, float, float]) -> CityContext:
+        """Окружение в прямоугольнике чертежа; ContextUnavailableError - карта недоступна."""
+        ...

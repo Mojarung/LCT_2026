@@ -21,7 +21,7 @@ from green.application.barriers import BARRIER_NOTE
 from green.application.results import PlanExportReport
 from green.application.schedule import build_schedule
 from green.domain.planting import Verdict
-from green.infrastructure.cad.documents import APPID, load_document
+from green.infrastructure.cad.documents import APPID, entity_layer, load_document
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -64,7 +64,7 @@ def check_written_plan(
     issues = []
     found = 0
     for entity in doc.modelspace():
-        layer = entity.dxf.get("layer", "0")
+        layer = entity_layer(entity)
         planting_block = entity.dxftype() == "INSERT" and entity.dxf.name.upper().startswith(
             ("GREEN_TREE_", "GREEN_SHRUB_")
         )
@@ -164,7 +164,7 @@ def _check_lawns(doc: Drawing, plan: Plan, unit: float) -> tuple[list[str], int]
     expected = {lawn.lawn_id: lawn for lawn in plan.lawns}
     areas: defaultdict[str, float] = defaultdict(float)
     issues = []
-    hatches = [e for e in doc.modelspace() if e.dxf.get("layer", "0") == _LAWN_LAYER]
+    hatches = [e for e in doc.modelspace() if entity_layer(e) == _LAWN_LAYER]
     for entity in hatches:
         if not isinstance(entity, Hatch) or not entity.has_xdata(APPID):
             issues.append(

@@ -20,6 +20,7 @@ from ezdxf.xclip import XClip
 from shapely.geometry import Point, Polygon
 
 from green.application.semantic_names import base_name, local_name
+from green.infrastructure.cad.documents import entity_layer
 from green.infrastructure.cad.reader import (
     ANNOTATIONS,
     CONTAINER_PREFIXES,
@@ -88,7 +89,7 @@ class _Census:
     ) -> None:
         for entity in entities:
             if isinstance(entity, Insert):
-                layer = decode_dxf_unicode(entity.dxf.get("layer", "0"))
+                layer = decode_dxf_unicode(entity_layer(entity))
                 if layer == "0" and parent_layer is not None:
                     layer = parent_layer
                 instances = entity.multi_insert() if entity.mcount > 1 else [entity]

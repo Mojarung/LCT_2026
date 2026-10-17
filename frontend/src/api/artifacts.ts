@@ -256,4 +256,6 @@ export interface SurfaceMeta {
   cell_m: number;
   width: number;
   height: number;
+  /** Контуры грунта и покрытия, которыми закрашен растр: полигон - кольца [x, y] чертежа. */
+  areas?: { soil: number[][][][]; paved: number[][][][] };
 }

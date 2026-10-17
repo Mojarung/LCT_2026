@@ -199,7 +199,7 @@ def _build(features: Sequence[Feature]) -> PlaceMap:
     walls = [f.geometry for f in features if f.object_class is ObjectClass.BUILDING]
     road = shapely.union_all(roads) if roads else None
     buildings = shapely.union_all(walls) if walls else None
-    coverage = None if road is None else _curb_coverage(road, features)
+    coverage = None if road is None else curb_coverage(road, features)
     complete = coverage is None or coverage >= ROAD_COVERAGE_MIN
     if road is not None:
         shapely.prepare(road)
@@ -218,7 +218,7 @@ def _build(features: Sequence[Feature]) -> PlaceMap:
     )
 
 
-def _curb_coverage(road: BaseGeometry, features: Sequence[Feature]) -> float | None:
+def curb_coverage(road: BaseGeometry, features: Sequence[Feature]) -> float | None:
     """Доля длины бортов участка (внутри границы работ, если она есть), лежащей ближе
     CURB_ON_ROAD_M к краю полигонов проезжей части. Бортов нет - проверить нечем (None),
     полигоны принимаются как есть."""

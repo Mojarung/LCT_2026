@@ -43,6 +43,9 @@ class Rank(IntEnum):
     BOUNDARY = 4
 
 
+_FRAME_WORDS = frozenset({"рамк", "border"})
+
+
 @dataclass(frozen=True, slots=True)
 class Inference:
     """Вывод по имени: класс, слово-основание и вид вывода (name, removed, proposed,
@@ -87,18 +90,24 @@ class Vocabulary:
         return bool(self.words or self.phrases)
 
     def infer(self, *names: str | None) -> Inference | None:
-        """Первое имя, по словам которого есть вывод (блок конкретнее слоя)."""
-        for name in names:
-            if name and (found := self._infer(local_name(name))):
-                return found
-        return None
+        """Первое имя, по словам которого есть вывод (блок конкретнее слоя).
+
+        Слабый намёк решает, только если ни в одном имени нет сильного слова: «Покрытия» в имени
+        контейнерного блока не перебивает «Газон» в имени слоя (аудит Берзарина 16.10.2026).
+        """
+        found = [self._infer(local_name(name)) for name in names if name]
+        strong = next((item for item in found if item and item.kind != "weak"), None)
+        removed = next((item for item in found if item and item.kind == "removed"), None)
+        if strong is not None and strong.object_class is ObjectClass.LAWN and removed is not None:
+            return removed  # снос в одном имени сильнее газона в другом
+        return strong or next((item for item in found if item), None)
 
     def _infer(self, name: str) -> Inference | None:
         text = normalize(name)
         tokens = text.split()
         if not tokens:
             return None
-        if word := self._annotation(text, tokens):
+        if (word := self._annotation(text, tokens)) and not self._boundary(text, word):
             return Inference(ObjectClass.IGNORE, word, "annotation")
         head = self._head(name, tokens)
         hits = self._hits(" ".join(head), head)
@@ -124,6 +133,16 @@ class Vocabulary:
     def _service(self) -> frozenset[str]:
         return self.removal | self.proposed | self.existing | self.negations
 
+    def _boundary(self, text: str, word: str) -> bool:
+        """Фраза границы работ сильнее только слов рамки: «РАМКА_ГРАНИЦА_УЧАСТКА», «SITE_BORDER»
+        у других команд - граница участка (17.10.2026), а «Подписи границы работ» - подписи."""
+        if word not in _FRAME_WORDS:
+            return False
+        return any(
+            kind is ObjectClass.WORK_BOUNDARY and _has_phrase(text, phrase)
+            for phrase, (kind, _) in self.phrases.items()
+        )
+
     def _annotation(self, text: str, tokens: list[str]) -> str | None:
         for phrase in self.annotation_phrases:
             if _has_phrase(text, phrase):
@@ -146,17 +165,21 @@ class Vocabulary:
             for separator in self.separators:
                 size = len(separator.split())
                 if " ".join(tokens[position : position + size]) == separator:
-                    head = tokens[:position]
-                    if self._hits(" ".join(head), head):
-                        return head
+                    # Заменяемое («за счёт газона») класса не даёт, даже если в новом
+                    # (до разделителя) есть только слабый намёк или нет слов вовсе.
+                    return tokens[:position]
         return tokens
 
     def _hits(self, text: str, tokens: list[str]) -> list[_Hit]:
         hits = []
+        taken: set[int] = set()
         for phrase, (kind, rank) in self.phrases.items():
             if _has_phrase(text, phrase):
-                hits.append(_Hit(_phrase_position(tokens, phrase), phrase, kind, rank))
-        taken = {hit.position for hit in hits}
+                start = _phrase_position(tokens, phrase)
+                hits.append(_Hit(start, phrase, kind, rank))
+                # Фраза занимает все свои слова: «край дороги» не даёт ещё и «дорогу», и снос
+                # («_демонтаж») снимает фразу как одно слово (ревью 17.10.2026).
+                taken.update(range(start, start + len(phrase.split())))
         for pattern, kind, rank in self.patterns:
             if pattern.search(text):
                 hits.append(_Hit(0, pattern.pattern, kind, rank))

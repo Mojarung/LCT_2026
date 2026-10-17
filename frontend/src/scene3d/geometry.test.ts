@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { buildingGeometry, STYLE, styleOf } from './buildings';
+import { buildingGeometry, pitchedRoof, STYLE, styleOf } from './buildings';
 import { fenceGeometry, nearestCurbDirection, ribbonBox } from './ground';
 import type { Building, Flat } from './types';
 
@@ -125,11 +125,59 @@ describe('борт, ограда и опоры', () => {
     ],
   };
 
-  it('брус борта: три грани на каждый пролёт, высота 15 см', () => {
+  it('брус борта: три грани на пролёт и торцы на концах, высота 15 см', () => {
     const g = ribbonBox([line], 0.15, 0.15);
-    expect(g.getAttribute('position').count).toBe(2 * 3 * 6);
+    expect(g.getAttribute('position').count).toBe(2 * 3 * 6 + 2 * 6);
     g.computeBoundingBox();
     expect(g.boundingBox?.max.y).toBeCloseTo(0.15);
+  });
+
+  it('брус борта сплошной: на изломе грани сходятся в одной точке, без щели', () => {
+    // Излом на 90° в (10, 0): левая грань срезается в (9.9, 0.1), правая - в (10.1, -0.1).
+    const g = ribbonBox([line], 0.2, 0.15);
+    const pos = g.getAttribute('position');
+    const has = (x: number, z: number) => {
+      for (let i = 0; i < pos.count; i++)
+        if (Math.abs(pos.getX(i) - x) < 1e-6 && Math.abs(pos.getZ(i) - z) < 1e-6) return true;
+      return false;
+    };
+    expect(has(9.9, 0.1)).toBe(true);
+    expect(has(10.1, -0.1)).toBe(true);
+    // Без стыка пролёты кончались бы в (10, ±0.1) и начинались в (10 ± 0.1, 0) - щель.
+    expect(has(10, -0.1)).toBe(false);
+    expect(has(10.1, 0)).toBe(false);
+  });
+
+  it('фаска по верхним рёбрам: верх уже бруса на две фаски, грань кончается ниже верха', () => {
+    const straight = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+      ],
+    };
+    const g = ribbonBox([straight], 0.2, 0.15, 0, 0.02);
+    const pos = g.getAttribute('position');
+    const zsAt = (y: number) => {
+      const zs = new Set<number>();
+      for (let i = 0; i < pos.count; i++)
+        if (Math.abs(pos.getY(i) - y) < 1e-6) zs.add(Math.round(pos.getZ(i) * 1000) / 1000);
+      return [...zs].sort((u, v) => u - v);
+    };
+    expect(zsAt(0.15)).toEqual([-0.08, 0.08]); // верх: 0,2 - 2 x 0,02
+    expect(zsAt(0.13)).toEqual([-0.1, 0.1]); // начало фаски - полная ширина
+  });
+
+  it('замкнутое кольцо борта без торцов: начало и конец сходятся стыком', () => {
+    const ring = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+        { x: 10, z: 10 },
+        { x: 0, z: 0 },
+      ],
+    };
+    const g = ribbonBox([ring], 0.2, 0.15);
+    expect(g.getAttribute('position').count).toBe(3 * 3 * 6);
   });
 
   it('шаг прутьев ограды не зависит от длины пролёта', () => {
@@ -145,5 +193,45 @@ describe('борт, ограда и опоры', () => {
     expect(angle).not.toBeNull();
     expect(Math.cos(angle ?? 0)).toBeCloseTo(1);
     expect(nearestCurbDirection({ x: 500, z: 500 }, [line])).toBeNull();
+  });
+});
+
+describe('двускатная крыша', () => {
+  const rect: Flat[] = [
+    { x: 0, z: 0 },
+    { x: 12, z: 0 },
+    { x: 12, z: 8 },
+    { x: 0, z: 8 },
+  ];
+  const lShape: Flat[] = [
+    { x: 0, z: 0 },
+    { x: 12, z: 0 },
+    { x: 12, z: 4 },
+    { x: 4, z: 4 },
+    { x: 4, z: 12 },
+    { x: 0, z: 12 },
+  ];
+
+  it('у малоэтажного жилого прямоугольного дома, а не у пятиэтажки и не у буквы Г', () => {
+    expect(pitchedRoof(building(rect, { floors: 2, height: 7.2, use: 'residential' }))).toBe(true);
+    expect(pitchedRoof(building(rect, { floors: 5, height: 16.2, use: 'residential' }))).toBe(
+      false,
+    );
+    expect(pitchedRoof(building(lShape, { floors: 2, height: 7.2, use: 'residential' }))).toBe(
+      false,
+    );
+  });
+
+  it('скаты поднимаются над карнизом, фронтоны - в сетке стен', () => {
+    const house = building(rect, { floors: 2, height: 7.2, use: 'residential' });
+    const { walls, roofs } = buildingGeometry([house]);
+    const roofY = roofs.getAttribute('position');
+    let top = 0;
+    for (let i = 0; i < roofY.count; i++) top = Math.max(top, roofY.getY(i));
+    expect(top).toBeGreaterThan(7.2 + 1.5);
+    const wallY = walls.getAttribute('position');
+    let gable = 0;
+    for (let i = 0; i < wallY.count; i++) gable = Math.max(gable, wallY.getY(i));
+    expect(gable).toBeGreaterThan(7.2);
   });
 });

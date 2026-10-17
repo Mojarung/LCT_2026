@@ -114,7 +114,9 @@ class PlanParams:
     # реагентов; где полоса грунта уже, - 2,5 и 2 м (норма 743-ПП, табл. 3.6.1 - от 2 м).
     # Так делают проектировщики: изгородь вдоль проезжей части, за ней аллея (docs/notes/34).
     curb_offsets_m: tuple[float, ...] = (3.0, 2.5, 2.0)
-    require_utility_data: bool = True
+    # Чертёж совсем без подземных сетей: false - посадки с пометкой «требует согласования» и
+    # записью «Исправлено автоматически» (решение пользователя 17.10.2026), true - отказ.
+    require_utility_data: bool = False
     unknown_lines_as_utility: bool = True
     # Name matches are evidence, not proof. Unmatched/conflicting spatial objects
     # stop the run; exact per-input assignments resolve them without editing code.
@@ -138,6 +140,12 @@ class PlanParams:
     # Предел записи отказов - предохранитель, а не отбор: пилот его не достигает.
     max_rejections: int = REJECTIONS_DEFAULT
     require_soil: bool = True
+    # Чертёж без признаков грунта (ни газонов, ни подписей): свободная земля в границе работ -
+    # газон с пометкой «Исправлено автоматически», посадки на нём - эскиз (17.10.2026).
+    open_ground: bool = True
+    # Школы и детские сады по OpenStreetMap: здание чертежа, совпавшее с контуром OSM, - 10 м
+    # от стены (743-ПП, табл. 3.6.1; application/schools.py).
+    osm_schools: bool = True
     require_work_boundary: bool = True
     # Посадочное место дерева - яма 2,2 x 2,2 м под ком 1,3 x 1,3 м (743-ПП, табл. 3.3.1; IV группа
     # в ведомости). Яму ставят вдоль полосы: квадрат 2,2 м, повёрнутый по борту, встаёт в полосу
@@ -159,12 +167,17 @@ class PlanParams:
     # auto uses declared $INSUNITS; unitless input needs an explicit override.
     # An override applies to every source of a package. No guess from site size.
     drawing_unit: str = "auto"
-    # Приёмы размещения по порядку: аллея вдоль борта, заполнение грунта сеткой, добор зоны.
-    modes: tuple[str, ...] = ("alley", "lawn", "fill")
+    # Приёмы размещения по порядку: продолжение рядов существующих деревьев, аллея вдоль борта,
+    # заполнение грунта сеткой, добор зоны.
+    modes: tuple[str, ...] = ("existing_row", "alley", "lawn", "fill")
     fill_step_m: float = 1.0  # шаг ячеек добора зоны
     # Compare complete validated layouts; baseline always remains an alternative.
     placement_solver: str = "portfolio"
     placement_time_limit_s: float = 5.0
+    # Скоркарта «похоже на практику проектировщиков» (application/likeness.py): к весу места в
+    # задаче выбора добавляется до likeness_weight очков - меньше, чем стоит одно лишнее место.
+    # 0 - не учитывается (по умолчанию: опыт E2b, docs/plans/2026-10-16-ml-experiments.md).
+    likeness_weight: float = 0.0
     # Бюджет времени портфеля на все варианты, с: следующий вариант не начинается, если
     # самый долгий из посчитанных в бюджет не укладывается; исходный считается всегда. Лимит
     # стенда - 30 минут на подбор мест (docs/notes/15); 0 - без бюджета.
@@ -208,6 +221,10 @@ class PlanParams:
     # Заказчик: сначала определяется тип территории, у улиц, дворов и парков свой ассортимент
     # (docs/notes/15-organizers-qa.md, вопрос 15). Кейс про улицы, поэтому streets.
     planting_category: str = "streets"
+    # Фильтр видов по официальному ассортименту Москвы для категории места (mos.ru).
+    mos_assortment: bool = True
+    # Третья ступень классификации: класс по похожему имени слоя пилота (name_model.py).
+    name_model: bool = True
     # П. 3.6.18 743-ПП (массовые аллергены) видов не называет, МГСН 1.02-02 табл. В.6 и 515-ПП
     # берёзу рекомендуют. True - решает акт, который вид называет (берёза допускается, оценка
     # ниже); False - запрет п. 3.6.18 выше, берёзы в плане нет (species_norms._mass_allergen).
@@ -325,6 +342,10 @@ class PlanParams:
     # На сколько снижается оценка вида с условием посадки и слабого аллергена в задаче
     # назначения (оценка вида - от 0 до 1): при равных квотах берётся вид без обязательств.
     condition_penalty: float = 0.2
+    # Поправка к оценке вида вне рекомендованного ассортимента Москвы для категории места:
+    # больше разброса оценок (вид из списка всегда впереди), меньше штрафа за перебор квоты
+    # (разнообразие состава важнее рекомендации справочника).
+    mos_penalty: float = 1.0
     assortment_weights: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     # --- Индекс качества плана ---
     # Переопределённые веса слагаемых; не названные берутся из DEFAULT_QUALITY_WEIGHTS.
@@ -337,9 +358,9 @@ class PlanParams:
     # Тень (индекс v3): площадь взрослых крон против крон целевого числа деревьев, полный балл
     # с 75% (Kenney, van Wassenaer, Satel 2011, с. 110, 114: относительная площадь крон
     # «optimal» - 75-100% потенциала). Потенциал - целевое число деревьев участка с кроной
-    # canopy_crown_m: медиана взрослой кроны деревьев каталога species.yaml (30 видов, 8,5 м).
+    # canopy_crown_m: медиана взрослой кроны деревьев каталога species.yaml (33 вида, 8 м).
     canopy_target: float = 0.75
-    canopy_crown_m: float = 8.5
+    canopy_crown_m: float = 8.0
     # Крона существующего дерева, которую чертёж не даёт (знак - кружок, а не крона): тень,
     # пылезащита, ярусность и баланс «было - стало» (application/stock). Параметр проекта.
     existing_crown_m: float = 8.5

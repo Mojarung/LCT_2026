@@ -9,7 +9,7 @@ import { nearestCurbDirection, streetLightGeometry } from './ground';
 import type { Flat, Line } from './types';
 
 /** Где светильник относительно опоры: консоль смотрит в +z модели (ground.ts). */
-const HEAD = new THREE.Vector3(0, 8.0, 1.65);
+const HEAD = new THREE.Vector3(0, 8.06, 1.65);
 /** Радиус пятна света на земле, метры: фонарь на 8 м освещает полосу около 15-20 м. */
 const POOL_M = 9;
 
@@ -42,7 +42,7 @@ export class StreetLights {
     if (!poles.length) return;
     const mast = new THREE.InstancedMesh(
       streetLightGeometry(),
-      new THREE.MeshStandardMaterial({ color: 0x5b6166, roughness: 0.45, metalness: 0.7 }),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 }),
       poles.length,
     );
     mast.castShadow = true;

@@ -38,7 +38,9 @@ from green.application.constraints import ConstraintIndex
 from green.application.diameters import assign_diameters
 from green.application.errors import InputError
 from green.application.input_quality import require_complete_geometry
+from green.application.kerbs import refine_kerbs
 from green.application.params import active_distance_rules
+from green.application.project_stage import drop_edges_inside_lawn
 from green.application.use_case import MERGED_DXF, Stopwatch, to_dxf
 from green.application.wording import plural
 from green.domain.norms import PlantingType, Severity
@@ -72,6 +74,69 @@ _LAYER_TAIL = re.compile(r"[^|$]+$")
 # «БересклетЕВР», «СиреньВЕНГ.», «ЯБЛОНЯ_Дек»: слово с заглавной или слово из одних заглавных.
 _LAYER_WORD = re.compile(r"[А-ЯЁ][а-яё]+|[А-ЯЁ]+(?![а-яё])|[а-яё]+")
 _MIN_STEM = 4
+# Жизненная форма родов вне каталога видов, у которых она одна (основной и дополнительный
+# ассортимент Москвы). Бузина на посадочном плане Берзарина нарисована кругом 3 м и считалась
+# деревом по кругу (аудит 16.10.2026). Род из каталога видов важнее этого списка.
+_LIFE_FORMS: dict[str, PlantingType] = {
+    **dict.fromkeys(
+        (
+            "бузина",
+            "бересклет",
+            "чубушник",
+            "спирея",
+            "кизильник",
+            "пузыреплодник",
+            "барбарис",
+            "шиповник",
+            "роза",
+            "смородина",
+            "жимолость",
+            "лещина",
+            "снежноягодник",
+            "форзиция",
+            "гортензия",
+            "самшит",
+            "магония",
+            "дерен",
+            "свидина",
+            "лапчатка",
+            "калина",
+            "сирень",
+            "айва",
+            "миндаль",
+            "облепиха",
+        ),
+        PlantingType.SHRUB,
+    ),
+    **dict.fromkeys(
+        (
+            "липа",
+            "клен",
+            "дуб",
+            "ясень",
+            "вяз",
+            "береза",
+            "тополь",
+            "яблоня",
+            "груша",
+            "рябина",
+            "черемуха",
+            "каштан",
+            "конский",
+            "ольха",
+            "лиственница",
+            "ель",
+            "сосна",
+            "пихта",
+            "платан",
+            "орех",
+            "гледичия",
+            "катальпа",
+            "бархат",
+        ),
+        PlantingType.TREE,
+    ),
+}
 # Знак дерева и круг его кроны проектировщик ставит в одну точку: это одна посадка.
 _SAME_PLANTING_M = 0.05
 # Шаг до существующих растений (743-ПП, табл. 3.6.2) в нормоконтроль не входит.
@@ -252,6 +317,13 @@ class AuditSite:
                     "Семантика не уточнена: нормоконтроль неполон; см. classification.json.",
                 )
             features = assign_diameters(base.features, base.labels, params.label_search_radius_m)
+            # Граница покрытия съёмки внутри проектного газона - след прежнего состояния.
+            features, _ = drop_edges_inside_lawn(features)
+            features, kerb_note = refine_kerbs(features)
+            if kerb_note:
+                notes = (*notes, kerb_note)
+            # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
+            semantics = classification_report(replace(base, features=features), layer_map, params)
             found, skipped = _plantings(on_layers)
         with watch.stage("check"):
             plantings = _check(found, features, rulebook, params, typer)
@@ -312,6 +384,9 @@ class _PlantingTyper:
             kinds[genus].add(PlantingType.TREE if species.is_tree else PlantingType.SHRUB)
         # Род, у которого в каталоге и деревья, и кустарники, тип посадки не определяет.
         self._genera = {genus: next(iter(kind)) for genus, kind in kinds.items() if len(kind) == 1}
+        for genus, kind in _LIFE_FORMS.items():
+            if genus not in kinds:
+                self._genera[genus] = kind
         self._cache: dict[str, tuple[PlantingType, str] | None] = {}
 
     def type_of(self, item: _Found) -> tuple[PlantingType, str]:

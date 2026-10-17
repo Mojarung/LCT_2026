@@ -51,7 +51,7 @@ export interface TemplateSignFile {
 export type SignBasis = 'вид' | 'род';
 
 /** Виды каталога config/species.yaml -> строка таблицы шаблона. Тест сверяет таблицу с
- *  каталогом: каждый из 55 видов - здесь или в WITHOUT_TEMPLATE_SIGN. */
+ *  каталогом: каждый из 58 видов - здесь или в WITHOUT_TEMPLATE_SIGN. */
 export const SPECIES_SIGNS: Readonly<Record<string, readonly [sign: string, basis: SignBasis]>> = {
   // Хвойные деревья и кустарники.
   picea_abies: ['Ель', 'род'],
@@ -66,6 +66,7 @@ export const SPECIES_SIGNS: Readonly<Record<string, readonly [sign: string, basi
   // Лиственные деревья.
   betula_pendula: ['Береза', 'род'],
   crataegus_laevigata: ['Боярышник', 'род'],
+  crataegus_submollis: ['Боярышник', 'род'],
   ulmus_laevis: ['Вяз', 'род'],
   ulmus_pumila: ['Вяз', 'род'],
   quercus_robur: ['Дуб', 'род'],
@@ -73,11 +74,13 @@ export const SPECIES_SIGNS: Readonly<Record<string, readonly [sign: string, basi
   acer_platanoides: ['Клен', 'род'],
   acer_saccharinum: ['Клен', 'род'],
   acer_ginnala: ['Клен', 'род'],
+  acer_tataricum: ['Клен', 'род'],
   acer_negundo: ['Клен', 'род'],
   aesculus_hippocastanum: ['Конский каштан', 'вид'],
   tilia_cordata: ['Липа', 'род'],
   tilia_platyphyllos: ['Липа', 'род'],
   sorbus_aucuparia: ['Рябина', 'род'],
+  sorbus_intermedia: ['Рябина', 'род'],
   populus_simonii: ['Тополь', 'род'],
   populus_balsamifera: ['Тополь', 'род'],
   prunus_maackii: ['Черемуха', 'род'],

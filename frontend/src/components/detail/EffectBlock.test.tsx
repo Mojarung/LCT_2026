@@ -93,7 +93,9 @@ describe('EffectBlock', () => {
       ],
     };
     render(<EffectBlock effect={withNotes} />);
-    expect(screen.getByText('посадки в лунках не считаются. Основание: основание.')).toBeInTheDocument();
+    expect(
+      screen.getByText('посадки в лунках не считаются. Основание: основание.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('ряд посажен. Основание: основание.')).toBeInTheDocument();
   });
 

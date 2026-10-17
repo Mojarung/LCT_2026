@@ -99,7 +99,12 @@ const PARAM_RU: Record<string, string> = {
   species_code: 'вид',
   planting_type: 'тип посадки',
 };
-const MODE_RU: Record<string, string> = { alley: 'аллея', lawn: 'газон', fill: 'добор' };
+const MODE_RU: Record<string, string> = {
+  existing_row: 'ряды существующих',
+  alley: 'аллея',
+  lawn: 'газон',
+  fill: 'добор',
+};
 
 function valueText(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'да' : 'нет';

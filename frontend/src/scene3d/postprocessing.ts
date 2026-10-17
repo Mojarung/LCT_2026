@@ -68,7 +68,7 @@ export class ScenePostprocessing {
     // textures and shader materials; never recurse into the borrowed scene/renderer.
     // Its fullscreen triangle geometry is shared across instances, so leave it alone.
     const resources = new Set<THREE.WebGLRenderTarget | THREE.Texture | THREE.Material>();
-    for (const value of Object.values(this.ao)) {
+    for (const value of Object.values(this.ao as object) as unknown[]) {
       if (
         value instanceof THREE.WebGLRenderTarget ||
         value instanceof THREE.Texture ||

@@ -65,7 +65,15 @@ def species_verdict(
     species: Species, ctx: SiteContext, rulebook: RuleBook, params: PlanParams
 ) -> SpeciesVerdict:
     reasons: list[Reason] = []
-    for check in (_given, _species_norms, _distances, _overhead, _hardiness, _salt):
+    for check in (
+        _given,
+        _species_norms,
+        _mos_assortment,
+        _distances,
+        _overhead,
+        _hardiness,
+        _salt,
+    ):
         blocking = check(species, ctx, rulebook, params, reasons)
         if blocking is not None:
             return SpeciesVerdict(species=species, allowed=False, reasons=(*reasons, blocking))
@@ -73,6 +81,13 @@ def species_verdict(
         passports = plural(species.pilot_streets, "паспорте", "паспортах", "паспортах")
         reasons.append(Reason(PILOT, f"применён в {species.pilot_streets} {passports} пилота"))
     return SpeciesVerdict(species=species, allowed=True, reasons=tuple(reasons))
+
+
+def off_assortment(verdict: SpeciesVerdict) -> bool:
+    """Вид допущен вне рекомендованного ассортимента Москвы для категории места."""
+    return any(
+        r.source == MOS_SOURCE and r.text.startswith(NOT_RECOMMENDED) for r in verdict.reasons
+    )
 
 
 def _given(
@@ -84,6 +99,49 @@ def _given(
 ) -> Reason | None:
     if params.assortment_mode == "given" and species.code not in params.given_assortment:
         return Reason(PARAMETER, "вида нет в заданном ассортименте участка")
+    return None
+
+
+# Категория места (МГСН 1.02-02, табл. В.6) -> графа официального ассортимента Москвы.
+_MOS_COLUMN = {"streets": "roads", "yards": "yards", "squares": "parks", "parks": "parks"}
+_MOS_LABEL = {
+    "roads": "магистралей, внутриквартальных улиц и местных проездов",
+    "yards": "дворовых территорий",
+    "parks": "парков, бульваров, скверов",
+}
+NOT_RECOMMENDED = "не рекомендован"
+MOS_SOURCE = (
+    "Основной и дополнительный ассортимент деревьев, кустарников и лиан, рекомендуемый для "
+    "озеленения различных категорий территорий города Москвы (mos.ru)"
+)
+
+
+def _mos_assortment(
+    species: Species,
+    ctx: SiteContext,
+    _rulebook: RuleBook,
+    params: PlanParams,
+    reasons: list[Reason],
+) -> Reason | None:
+    """Официальный ассортимент Москвы: вид с «-» для категории места уступает видам из списка.
+
+    Документ - рекомендация ДПиООС, а не акт: основание reference, источник - строка документа.
+    Запрета нет: вид с «-» допускается с причиной и поправкой mos_penalty в подборе, поэтому
+    берётся, только когда виды из списка упираются в квоты разнообразия (жёсткий запрет
+    оставлял у сетей три вида и перебор квоты 40%). Вида нет в документе - решают остальные
+    фильтры.
+    """
+    column = _MOS_COLUMN.get(ctx.category or params.planting_category)
+    if not params.mos_assortment or column is None or column not in species.mos_marks:
+        return None
+    if params.assortment_mode == "given":
+        return None  # заданный пользователем ассортимент рекомендация не режет
+    where = f"ассортимент Москвы для {_MOS_LABEL[column]} ({species.mos_ref})"
+    if not species.mos_marks[column]:
+        text = f"{NOT_RECOMMENDED}: {where}; допущен ради разнообразия состава"
+        reasons.append(Reason(REFERENCE, text, source=MOS_SOURCE))
+        return None
+    reasons.append(Reason(REFERENCE, f"рекомендован: {where}", source=MOS_SOURCE))
     return None
 
 

@@ -27,6 +27,7 @@ from scipy.spatial import KDTree
 from green.application.placement import (
     MODE_ALLEY,
     MODE_CURB_HEDGE,
+    MODE_EXISTING_ROW,
     MODE_LABELS,
     MODE_LAWN,
     MODE_SHRUB_FILL,
@@ -70,6 +71,12 @@ _KINDS = (
         MODE_ALLEY,
         "Аллея: рядовая посадка деревьев вдоль борта",
         "743-ПП, табл. 3.6.2; ГОСТ Р 71473-2024, п. 2.2.2.16",
+        False,
+    ),
+    (
+        MODE_EXISTING_ROW,
+        "Продолжение рядов существующих деревьев",
+        "743-ПП, табл. 3.6.2 (рядовая посадка)",
         False,
     ),
     (MODE_LAWN, "Группы и одиночные деревья на газоне", "743-ПП, п. 10.8.1", False),

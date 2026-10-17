@@ -103,6 +103,10 @@ class Species:
     categories: Mapping[str, str] = field(default_factory=dict, compare=False)
     status: str = "draft"
     sources: Mapping[str, str] = field(default_factory=dict, compare=False)
+    # Официальный ассортимент Москвы (config/mos_assortment.yaml, PDF mos.ru): категория
+    # территории (yards, roads, parks, ...) -> рекомендован ли вид. Пусто - вида в документе нет.
+    mos_marks: Mapping[str, bool] = field(default_factory=dict, compare=False)
+    mos_ref: str = ""  # где строка в документе: список, группа, номер, страница
 
     @property
     def traits(self) -> frozenset[str]:
@@ -283,6 +287,20 @@ class Lawn:
 
 
 @dataclass(frozen=True, slots=True)
+class EditMark:
+    """Ручная правка плана для слоя правок (ТЗ, п. 6): удаление - прежняя точка, перенос - откуда
+    и куда, добавление - новая точка."""
+
+    kind: str  # delete | move | add
+    placement_id: str
+    x: float
+    y: float
+    species_ru: str
+    from_x: float | None = None
+    from_y: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Plan:
     placements: tuple[Placement, ...]
     rejections: tuple[Rejection, ...]
@@ -302,6 +320,8 @@ class Plan:
     lawns: tuple[Lawn, ...] = field(default=())
     # Что план даёт улице: баланс «было - стало», виды посадок, шумозащита (application/effect).
     effect: StreetEffect | None = None
+    # Ручные правки по порядку (слой GREEN_EDITS в DXF, edits в plan.json).
+    edits: tuple[EditMark, ...] = field(default=())
 
     @property
     def allowed_count(self) -> int:

@@ -275,3 +275,73 @@ def test_zero_area_hatch_is_read_as_the_outline_cad_draws(tmp_path: Path) -> Non
     assert feature.geometry.geom_type in {"LineString", "MultiLineString"}
     assert feature.geometry.length == pytest.approx(40.0)
     assert scene.read_diagnostics.outcomes["feature:hatch-even-odd+hatch-outline"] == 1
+
+
+def test_spline_edge_bounds_the_hatch_area(tmp_path: Path) -> None:
+    """Штриховка кустарника на посадочном плане Берзарина (ODA) ограничена сплайном: прежде
+    ридер останавливался на «hatch-curve-bound-not-supported» (аудит 16.10.2026).
+    Квадратичная кривая Безье над основанием 10 м с вершиной контрольной точки на 10 м:
+    площадь под кривой 2/3 * 10 * 5 = 33,33 м²."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    path = hatch.paths.add_edge_path()
+    path.add_spline(
+        control_points=[(0, 0), (5, 10), (10, 0)], knot_values=[0, 0, 0, 1, 1, 1], degree=2
+    )
+    path.add_line((10, 0), (0, 0))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    # Вписанная ломаная с отклонением в пределах допуска ридера: площадь чуть меньше точной.
+    assert feature.geometry.area == pytest.approx(100 / 3, abs=0.5)
+
+
+def test_rational_spline_edge_keeps_its_weights(tmp_path: Path) -> None:
+    """Четверть окружности радиуса 10 рациональной квадратичной кривой (веса 1, √2/2, 1)
+    и два радиуса: площадь сектора 25π м²; без весов была бы парабола другой площади."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    path = hatch.paths.add_edge_path()
+    path.add_line((0, 0), (10, 0))
+    path.add_spline(
+        control_points=[(10, 0), (10, 10), (0, 10)],
+        knot_values=[0, 0, 0, 1, 1, 1],
+        weights=[1, math.sqrt(2) / 2, 1],
+        degree=2,
+    )
+    path.add_line((0, 10), (0, 0))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.area == pytest.approx(25 * math.pi, abs=0.5)  # парабола дала бы 83,3
+
+
+def test_single_line_edge_loop_is_dropped_and_the_rest_is_filled(tmp_path: Path) -> None:
+    """Контур из одного ребра-отрезка (штриховка на слое «!Вопросы!» Берзарина после ODA):
+    площади у него нет, CAD его не заливает. Прежде строгая проверка полноты останавливала
+    весь прогон (аудит 16.10.2026); теперь он отброшен с отметкой, остальные контуры залиты."""
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_edge_path().add_line((0, 20), (10, 20))
+    rectangle(hatch, (0, 0, 10, 10))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.area == pytest.approx(100.0)
+    assert any("hatch-degenerate-ring" in key for key in scene.read_diagnostics.outcomes)
+
+
+def test_hatch_of_only_degenerate_loops_is_read_as_its_lines(tmp_path: Path) -> None:
+    doc = ezdxf.new()
+    doc.units = 6
+    hatch = doc.modelspace().add_hatch()
+    hatch.paths.add_edge_path().add_line((0, 0), (10, 0))
+    hatch.paths.add_edge_path().add_line((0, 5), (10, 5))
+    scene = read(doc, tmp_path)
+    require_complete_geometry(scene)
+    (feature,) = scene.features
+    assert feature.geometry.geom_type in {"LineString", "MultiLineString"}
+    assert feature.geometry.length == pytest.approx(20.0)

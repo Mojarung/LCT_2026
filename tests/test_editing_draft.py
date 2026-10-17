@@ -53,36 +53,16 @@ def test_draft_survives_failed_export_and_becomes_saved_only_after_success(tmp_p
             },
         )
         assert moved.status_code == 200
+        # С 16.10.2026 (чекпоинт, п. 3) перенос впритык к соседу - отказ правки с причиной, а
+        # не черновик, который пересборка отклоняет по шагу: интерфейс и файлы не расходятся.
+        # Сохранение только после успешной пересборки при черновике с нарушением состава (квота)
+        # проверяет test_editing.py::test_rebuild_writes_the_edited_plan_into_the_dxf.
+        assert [r["placement_id"] for r in moved.json()["rejected_by_edit"]] == [right["id"]]
         draft = client.get(url + "/draft").json()
         assert draft["stale"] is True
-        assert draft["quality"]["index"] is None
-        assert "spacing" in draft["quality"]["gate"]
-        assert not draft["quality"]["negative"]
-        current = next(p for p in draft["plan"]["placements"] if p["id"] == right["id"])
-        assert current["x"] == left["x"]
-        assert current["assortment"]["status"] == "manual"
+        assert right["id"] not in {p["id"] for p in draft["plan"]["placements"]}
         assert client.get(url + "/artifacts/plan.json").json() == saved
-        refused = client.post(url + "/rebuild")
-        assert refused.status_code == 422
-        assert "spacing" in refused.json()["detail"]
-        assert client.get(url).json()["state"] == "succeeded"
         assert client.get(url + "/artifacts/result.dxf").content == original_dxf
-        assert client.get(url + "/draft").json()["stale"] is True
-        # Страницу прогона рисует React-приложение (frontend/), его разметку проверяют тесты
-        # фронтенда; здесь - только то, что отдаёт API.
-        client.post(
-            url + "/edits",
-            json={
-                "edits": [
-                    {
-                        "kind": "move",
-                        "placement_id": right["id"],
-                        "x": right["x"],
-                        "y": right["y"],
-                    }
-                ]
-            },
-        )
         client.post(url + "/rebuild")
         assert client.get(url).json()["state"] == "succeeded"
         final = client.get(url + "/draft").json()

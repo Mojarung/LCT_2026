@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
-from dataclasses import fields
+from dataclasses import fields, replace
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -12,6 +13,8 @@ from pydantic import ValidationError
 
 from green.application.classification import LayerMap, LayerRule
 from green.application.errors import ConfigurationError, InputError
+from green.application.likeness import LikenessModel, likeness_model
+from green.application.name_model import NameModel
 from green.application.name_semantics import Vocabulary, build_vocabulary
 from green.application.params import PlanParams
 from green.application.symbols import SymbolCatalog, SymbolEntry
@@ -26,6 +29,7 @@ from green.domain.norms import (
     RuleBook,
     SpeciesRestriction,
 )
+from green.domain.objects import ObjectClass
 from green.domain.planting import LifeForm, Species
 from green.infrastructure.config.errors_ru import describe_validation_error
 from green.infrastructure.config.schemas import (
@@ -244,7 +248,51 @@ class YamlLayerMapSource:
             parsed_words = _validate(VocabularyFile, words_data, self._vocabulary)
             vocabulary = build_vocabulary(parsed_words.model_dump(mode="json"), words_digest)
             digest = hashlib.sha256(f"{digest}:{words_digest}".encode()).hexdigest()
-        return LayerMap(rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary)
+        names = NameModel()
+        model_path = self._path.with_name("name_model.json")
+        if model_path.exists():
+            data = json.loads(model_path.read_text(encoding="utf-8"))
+            names = NameModel(tuple(data["names"]), tuple(ObjectClass(c) for c in data["classes"]))
+            digest = hashlib.sha256(
+                f"{digest}:{hashlib.sha256(model_path.read_bytes()).hexdigest()}".encode()
+            ).hexdigest()
+        return LayerMap(
+            rules=rules, fingerprint=digest, symbols=catalog, vocabulary=vocabulary, names=names
+        )
+
+
+_MOS_LISTS = {"main": "основной ассортимент", "extra": "дополнительный ассортимент"}
+
+
+def load_likeness(path: Path) -> LikenessModel | None:
+    """Скоркарта практики проектировщиков (config/likeness.json); нет файла - нет скоркарты."""
+    if not path.exists():
+        return None
+    return likeness_model(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _with_mos_assortment(species: tuple[Species, ...], path: Path) -> tuple[Species, ...]:
+    """Отметки официального ассортимента Москвы по категориям территорий (если файл есть)."""
+    if not path.exists():
+        return species
+    data, _ = _read(path)
+    found: dict[str, tuple[dict[str, bool], str]] = {}
+    for entry in (data or {}).get("entries", []):
+        marks = entry.get("marks")
+        if not marks:
+            continue
+        ref = (
+            f"{_MOS_LISTS.get(entry.get('list'), '')}, {entry.get('group', '').lower()}, "
+            f"№ {entry.get('row')}, стр. {entry.get('page')}"
+        )
+        for code in entry.get("species_codes", []):
+            found[code] = ({str(k): bool(v) for k, v in marks.items()}, ref)
+    return tuple(
+        replace(item, mos_marks=found[item.code][0], mos_ref=found[item.code][1])
+        if item.code in found
+        else item
+        for item in species
+    )
 
 
 class YamlSpeciesCatalog:
@@ -260,7 +308,10 @@ class YamlSpeciesCatalog:
             duplicates = sorted({c for c in codes if codes.count(c) > 1})
             if duplicates:
                 raise ConfigurationError(f"Повторяются коды видов: {', '.join(duplicates)}")
-            self._cache = tuple(_species(s) for s in parsed.species)
+            self._cache = _with_mos_assortment(
+                tuple(_species(s) for s in parsed.species),
+                self._path.with_name("mos_assortment.yaml"),
+            )
         return self._cache
 
     def get(self, code: str) -> Species:

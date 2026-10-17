@@ -424,6 +424,16 @@ export function RunPage() {
                 <span>посадок в плане</span>
               </p>
             )}
+            {/* Файлы - у названия прогона, а не на другом краю экрана: что скачать, решают,
+                глядя на сводку. */}
+            {done && data ? (
+              <Downloads
+                artifacts={data.artifacts ?? []}
+                notes={
+                  Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []
+                }
+              />
+            ) : null}
           </div>
           {done ? <EditBar editor={editor} onRebuilt={rebuilt} /> : null}
         </aside>
@@ -439,12 +449,6 @@ export function RunPage() {
               placements={planned}
               rules={rules.data?.rules ?? {}}
               quality={quality.data}
-            />
-            <Downloads
-              artifacts={data.artifacts ?? []}
-              notes={
-                Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []
-              }
             />
           </aside>
         ) : null}

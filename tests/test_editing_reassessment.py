@@ -13,7 +13,14 @@ from test_surface_uncertainty import feature
 from green.application.assortment.context import site_context
 from green.application.assortment.scoring import percent, score_species
 from green.application.barriers import BARRIER_CONDITION, BARRIER_NOTE
-from green.application.editing import Edit, EditKind, RunContext, apply_edits, check_point
+from green.application.editing import (
+    Edit,
+    EditKind,
+    RunContext,
+    apply_edits,
+    apply_edits_detailed,
+    check_point,
+)
 from green.application.errors import InputError
 from green.application.params import PlanParams
 from green.application.validation import validate_plan
@@ -210,20 +217,28 @@ def test_conditional_warning_disappears_after_deleting_last_conditional_plant() 
     assert not any(w.startswith("Условие допуска:") for w in result.warnings)
 
 
-@pytest.mark.parametrize("failure", ["spacing", "given_count", "quota"])
+def test_move_closer_than_the_step_is_an_edit_rejection_not_an_invalid_draft() -> None:
+    """Чекпоинт 16.10.2026, п. 3: перенос впритык к соседу - отказ правки с причиной."""
+    species = _species()
+    plants = (_plant(species), _plant(species, identity="p2", x=16))
+    result = apply_edits_detailed(_context(plants), [Edit(EditKind.MOVE, "p2", 11, 15)], (species,))
+    assert [p.placement_id for p in result.plan.placements] == ["p1"]
+    assert [r.placement_id for r in result.rejected] == ["p2"]
+    assert "шаг" in result.rejected[0].reason
+
+
+@pytest.mark.parametrize("failure", ["given_count", "quota"])
 def test_invalid_draft_has_no_quality_index_or_removal_advice(failure: str) -> None:
     species = _species()
     plants = (_plant(species), _plant(species, identity="p2", x=16))
     context = _context(plants)
-    edits = [Edit(EditKind.MOVE, "p2", 11, 15)]
+    edits: list[Edit] = []
     if failure == "given_count":
         context.params = replace(
             context.params, assortment_mode="given", given_assortment={species.code: 1}
         )
-        edits = []
-    elif failure == "quota":
+    else:
         context.params = replace(context.params, assortment_mode="auto")
-        edits = []
     result = apply_edits(context, edits, (species,))
     assert len(result.placements) == 2, "The draft should remain editable"
     assert result.quality is not None

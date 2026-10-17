@@ -25,6 +25,9 @@ export const STYLES: Record<string, ClassStyle> = {
     shadow: true,
   },
   structure: { group: 'buildings', stroke: '--c-building', width: 1 },
+  // Здание школы или детского сада по OpenStreetMap (743-ПП, табл. 3.6.1: 10 м): то же здание,
+  // обведённое толще - видно, откуда отступ 10 м.
+  school: { group: 'buildings', stroke: '--c-building', width: 2.6 },
   road: { group: 'surfaces', stroke: '--c-road', width: 1 },
   sidewalk: { group: 'surfaces', stroke: '--c-pavement', width: 1 },
   pavement_edge: { group: 'surfaces', stroke: '--c-pavement', width: 1 },

@@ -11,15 +11,52 @@ rules:
   # которое можно переопределить, а не безвозвратной потерей в парсере.
   - {pattern: "^DIMTXT(?:_|$)", target: block, object_class: ignore, confirmed: true,
      reason: "блок текста размера: текст идёт в подписи, линии - оформление размера"}
+  # Листы Геотреста без смысла для посадки: kl - красные линии, edge - линии градостроительного
+  # регулирования (условные знаки «RL 1.1»...«RL 3.13» по легенде листа ИГДИ-Г). Их линии лежат
+  # на слое 0 и прежде выводились «контуром по геометрии» (39 тыс. объектов в 10 прогонах),
+  # деля газон на части. Чекпоинт 16.10.2026, п. 2.
+  - {pattern: "^output\\[[^\\]]*\\]_(?:\\S*kl|edge\\d+)$|^RL \\d", target: block, object_class: ignore,
+     confirmed: true, reason: "лист красных линий (kl) или линий градостроительного регулирования (edge, знаки RL): не покрытие, не сеть и не препятствие"}
   # Блоки-символы: определяются по имени блока раньше, чем по слою.
   - {pattern: "^(люк|решетка)$|^РСО_Люк_", target: block, object_class: utility.access, confirmed: true}
   - {pattern: "опор[аы].*(освещени|контактн)|^фонарь$|^светофор$", target: block, object_class: pole, confirmed: true}
 
   # Оформление и служебные слои любых чертежей: размеры, выноски, рамки, штампы условных знаков,
   # разбивочные сетки. «Условные_штампы» Геотреста: до миллиона отрезков легенды.
-  - {pattern: "Условн\\w*_штампы|Размер|Выноск|Рамк|Штамп|Разбивочная сетка|^Сетка$|Оформление|ОФОРМЛЕНИЕ|Вспомогат|Координат|Номера|НУМДЕНДР|Вертикалк|вертикалка|Горизонтали|Отметки|GRADES",
+  - {pattern: "Условн\\w*_штампы|Размер|Выноск|Рамк(?!.*(?i:границ))|Штамп|Разбивочная сетка|^Сетка$|Оформление|ОФОРМЛЕНИЕ|Вспомогат|Координат|Номера|НУМДЕНДР|Вертикалк|вертикалка|Горизонтали|Отметки|GRADES",
      object_class: ignore, confirmed: true,
      reason: "оформление листа: размеры, выноски, рамки, штампы легенды, сетки, координаты, номера, горизонтали, отметки"}
+
+  # Выгрузка паспорта ОГХ / ЕГКО (чертёж жюри 236287, 08.10.2026): слои с английскими и
+  # транслитерированными именами без русских слов. Жюри запускало его только с JSON поверх
+  # профиля: BOUND - граница объекта (граница работ), DOROGA - край проезжей части линиями,
+  # DOM и EGKO_BUILDINGS - здания, ZABOR - ограждения, LAWN - газоны, «2.<покрытие>» -
+  # твёрдые покрытия площадок. Имена целиком: DOMINO или BOUNDARY_TEXT не берутся.
+  - {pattern: "(?:^|[|$])(?:BOUND|BOUNDARY|SITE_BOUNDARY|WORK_BOUNDARY)$", object_class: work_boundary, confirmed: true, priority: 10,
+     note: "BOUNDARY - граница участка у синтетических участков других команд (17.10.2026)"}
+  - {pattern: "(?:^|[|$])DOROGA$", object_class: curb, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])(?:DOM|EGKO_BUILDINGS|Жилое)$", object_class: building, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])ZABOR$", object_class: fence, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])(?:LAWN|GROUND|GRASS)$", object_class: lawn, confirmed: true, priority: 10,
+     note: "GROUND - земля под озеленение у синтетических участков других команд (17.10.2026)"}
+  # green-atlas (other/, 17.10.2026): слои выгрузки OSM. GREEN_EXISTING - существующее озеленение:
+  # площади - газоны и скверы (грунт), круги - кроны существующих деревьев, линии - ряды деревьев
+  # без ширины (оформление). OSM_RAILWAY - железная дорога.
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: circle, object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: point, object_class: existing_tree, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: area, object_class: lawn, confirmed: true, priority: 9}
+  - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: line, object_class: ignore, confirmed: true, priority: 9,
+     reason: "ряд деревьев OSM линией без ширины: не граница покрытия"}
+  - {pattern: "(?:^|[|$_])(?:OSM_)?RAILWAYS?$", object_class: railway, confirmed: true, priority: 10}
+  # GreenCAD: GC_TEST_GREEN_ZONE - «точная копия границы работ для проверки интерфейса, не
+  # подтверждённая зелёная зона» (их materials/dxf_examples/README.md).
+  - {pattern: "(?:^|[|$_])TEST_GREEN_ZONE$", object_class: ignore, confirmed: true, priority: 10,
+     reason: "тестовая копия границы работ GreenCAD: не зона озеленения"}
+  - {pattern: "(?:^|[|$])EGKO_ROADS$", object_class: road, confirmed: true, priority: 10}
+  - {pattern: "(?:^|[|$])2\\.(?:Асфальт|Плитка|Брусчатка|Резиновая крошка|Песчанное покрытие|Песчано-гравийная смесь|Щебеночное|Гравийное|Гранитное|Пластиковое|Каменное|Искуственная тарва)$",
+     object_class: sidewalk, confirmed: true, priority: 10, note: "покрытия площадок и дорожек паспорта ОГХ"}
+  - {pattern: "(?:^|[|$])[A-Z_]+_NUM_TXT$", object_class: ignore, confirmed: true, priority: 10,
+     reason: "номера растений, цветников и газонов паспорта ОГХ: подписи"}
 
   # Дендрологические изыскания проектировщиков (ИП_*.dwg, слои «!!!_1. Дендра_*»): сохранить -
   # блоки существующих деревьев, вырубка - деревья под снос, остальное подписи.

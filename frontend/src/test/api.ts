@@ -103,6 +103,6 @@ export function consoleRoutes(options: { streets?: StreetOut[] } = {}) {
     '/api/v1/streets': options.streets ?? streets,
     '/api/v1/profiles/strict': strict,
     '/api/v1/profiles/shrubs': shrubs,
-    '/api/v1/runs?limit=12': { items: [] },
+    '/api/v1/runs?limit=200': { items: [] },
   };
 }

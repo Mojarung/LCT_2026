@@ -101,15 +101,15 @@ uniform float uWind;
 varying vec3 vGrass;
 `;
 
-/* Край газона считается так же, как в шейдере земли: маска R плюс шум, порог 0,5. */
+/* Травинки - только внутри газона, чуть отступив от края: с шумом края они вылезали на
+ * асфальт и плитку зубцами вдоль бортового камня. */
 const GRASS_BEGIN = /* glsl */ `
 vec2 local = mod(aOffset - uCenter + uSize * 0.5, uSize) - uSize * 0.5;
 vec2 world = uCenter + local;
 vec2 muv = (world - uMaskRect.xy) / uMaskRect.zw;
 float inside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
 float m = texture2D(uMask, clamp(muv, 0.0, 1.0)).r;
-float edge = (texture2D(uNoise, world / 23.0).g - 0.5) * 0.5 + (texture2D(uNoise, world / 3.1).b - 0.5) * 0.35;
-float lawn = smoothstep(0.5, 0.62, m + edge) * inside;
+float lawn = smoothstep(0.6, 0.75, m) * inside;
 float dist = length(local);
 float fade = 1.0 - smoothstep(uRadius * 0.6, uRadius, dist);
 float patchy = texture2D(uNoise, world / 7.0).r;

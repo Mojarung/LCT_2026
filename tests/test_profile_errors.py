@@ -103,7 +103,9 @@ def test_consequence_of_a_bad_item_is_not_reported_as_a_second_error() -> None:
     один элемент») - человеку это путает: он прислал один элемент."""
     text = _refusal({"modes": ["x"]})
 
-    assert text == PREFIX + 'modes[0]: допустимые значения alley, lawn, fill (получено "x")'
+    assert text == PREFIX + (
+        'modes[0]: допустимые значения existing_row, alley, lawn, fill (получено "x")'
+    )
 
 
 def test_own_validator_message_is_kept_not_replaced_by_a_generic_phrase() -> None:

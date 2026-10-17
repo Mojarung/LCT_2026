@@ -1,15 +1,15 @@
 /* Фото нейросетью: подгонка снимка под модель и ход задания для полосы загрузки.
  *
  * Модель ждёт кадр 16:9 со сторонами, кратными 32; снимок экрана бывает любого размера,
- * поэтому он обрезается по центру и сжимается до 1024 x 576. Сколько ждать - по прошлым фото
+ * поэтому он обрезается по центру и сжимается до 1536 x 864. Сколько ждать - по прошлым фото
  * этого сервера: время генерации зависит от видеокарты, а не от кадра. */
 
 import type { PhotoOut } from '../api/types';
 
-export const PHOTO_WIDTH = 1024;
-export const PHOTO_HEIGHT = 576;
-/** Сколько ждать, пока своих замеров нет: RTX 5070 при потолке 6 ГБ, docs/notes/40. */
-export const PHOTO_SECONDS_DEFAULT = 80;
+export const PHOTO_WIDTH = 1536;
+export const PHOTO_HEIGHT = 864;
+/** Сколько ждать, пока своих замеров нет: Turbo на RTX 5070, кадр 1536 x 864 с апскейлом. */
+export const PHOTO_SECONDS_DEFAULT = 100;
 /** Полоса не доходит до конца, пока модель не ответила: оценка - не обещание. */
 const PROGRESS_CAP = 0.95;
 
@@ -77,7 +77,7 @@ export function photoProgress(
   return { share: 0, label: photo.error ? `не удалось: ${photo.error}` : 'не удалось' };
 }
 
-/** Снимок любого размера -> PNG 1024 x 576 для модели: центр кадра без полей. */
+/** Снимок любого размера -> PNG 1536 x 864 для модели: центр кадра без полей. */
 export async function fitForPhoto(image: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(image);
   try {

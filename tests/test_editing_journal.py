@@ -178,18 +178,35 @@ def test_edits_from_two_processes_are_applied_in_journal_order(runs: Path, run_i
     """Оба процесса держат контекст; правят одну посадку по очереди - последней остаётся
     правка с большим номером журнала, у обоих."""
     first, second = _process(runs), _process(runs)
-    layout = _layout(first, run_id)
+    _layout(first, run_id)
     _layout(second, run_id)
-    pid, x, y = layout[0]
-    deleted = layout[1][0]
-
-    first.edit(run_id, [Edit(EditKind.MOVE, placement_id=pid, x=x + 0.5, y=y)])
-    second.edit(run_id, [Edit(EditKind.MOVE, placement_id=pid, x=x + 1.0, y=y)])
-    first.edit(run_id, [Edit(EditKind.DELETE, deleted)])
-
+    # Переносы - на места двух удалённых посадок того же вида: место заведомо проходит нормы и
+    # шаг. Перенос впритык к соседу с 16.10.2026 - отказ правки (чекпоинт, п. 3), а здесь
+    # проверяется порядок журнала.
+    plants = _context(first, run_id).plan.placements
+    pid, gone_one, gone_two = next(
+        (a, b, c)
+        for a in plants
+        for b in plants
+        for c in plants
+        if len({a.placement_id, b.placement_id, c.placement_id}) == 3
+        and a.species.code == b.species.code == c.species.code
+    )
+    first.edit(
+        run_id,
+        [
+            Edit(EditKind.DELETE, gone_one.placement_id),
+            Edit(EditKind.DELETE, gone_two.placement_id),
+        ],
+    )
+    first.edit(run_id, [Edit(EditKind.MOVE, pid.placement_id, x=gone_one.x, y=gone_one.y)])
+    second.edit(run_id, [Edit(EditKind.MOVE, pid.placement_id, x=gone_two.x, y=gone_two.y)])
+    deleted = gone_one.placement_id
+    target = (gone_two.x, gone_two.y)
+    pid = pid.placement_id
     assert _layout(first, run_id) == _layout(second, run_id) == _layout(_process(runs), run_id)
     final = _layout(second, run_id)
-    assert next((px, py) for p, px, py in final if p == pid) == (x + 1.0, y)
+    assert next((px, py) for p, px, py in final if p == pid) == target
     assert deleted not in {p for p, _, _ in final}
     assert [seq for seq, _ in _store(runs).edits_since(run_id, 0)] == [1, 2, 3]
 

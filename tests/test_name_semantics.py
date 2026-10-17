@@ -59,8 +59,8 @@ C = ObjectClass
         ("!!Взлёт_ПОС_Ограждение", C.FENCE),
         ("A-HATCH-WALL", C.BUILDING),
         ("ДВ_ГП_П_Воздуховоды", C.STRUCTURE),
-        ("ДВ_ГП_П_Стела", C.STRUCTURE),
-        ("!Project_road stairs", C.STRUCTURE),
+        ("ДВ_ГП_П_Стела", C.OBSTACLE),  # стела - не подпорная стенка (аудит 16.10.2026)
+        ("!Project_road stairs", C.OBSTACLE),
         ("!Project_construction retaining wall", C.STRUCTURE),
         ("ДВ_ГП_П_МАФ", C.OBSTACLE),
         # Сети, опоры, колодцы.
@@ -134,3 +134,58 @@ def test_evidence_names_the_word() -> None:
     found = WORDS.infer("ДВ_ГП_П_Газон_Рулонный")
     assert found is not None
     assert found.method == "inferred_name:газон"
+
+
+# Аудит Берзарина 16.10.2026 (docs/research/jury-audit-2026-10-16): контейнерный блок
+# «Покрытия — Новые» со слабым намёком «покрыти» перебивал «Газон» в имени слоя.
+BERZARINA_BLOCK = "link-улица Берзарина_Покрытия — Новые"
+
+
+def test_layer_lawn_beats_weak_hint_of_the_block() -> None:
+    layer = f"{BERZARINA_BLOCK}$0$ДВ_ПП_Газон_У за счет Бетона"
+    found = WORDS.infer(BERZARINA_BLOCK, layer)
+    assert found is not None
+    assert (found.object_class, found.word) == (C.LAWN, "газон")
+
+
+def test_strong_word_of_the_block_still_beats_the_layer() -> None:
+    found = WORDS.infer("Колодец_канализ", "Газон")
+    assert found is not None
+    assert found.object_class is C.UTILITY_ACCESS
+
+
+def test_weak_hint_still_decides_when_no_name_has_a_word() -> None:
+    found = WORDS.infer(BERZARINA_BLOCK, "0")
+    assert found is not None
+    assert (found.object_class, found.kind) == (C.SIDEWALK, "weak")
+
+
+def test_weak_hint_of_the_layer_loses_to_strong_word_of_the_block() -> None:
+    found = WORDS.infer("Газон", "Покрытия")
+    assert found is not None
+    assert found.object_class is C.LAWN
+
+
+# Ревью ветки 16.10.2026: обратная проектная грамматика - заменяемое (после «за счёт») класса
+# не даёт; снос в одном имени сильнее газона в другом.
+def test_tail_after_the_separator_never_gives_the_class() -> None:
+    for name in ("Бетон за счёт газона", "Резиновое покрытие за счёт газона"):
+        found = WORDS.infer(None, name)
+        assert found is None or found.object_class is not C.LAWN, name
+
+
+def test_weak_head_decides_over_the_replaced_tail() -> None:
+    for name in ("АБ за счёт газона", "Асфальт за счёт газона"):
+        found = WORDS.infer(None, name)
+        assert found is not None
+        assert found.object_class is C.SIDEWALK, name
+
+
+def test_pair_with_container_block_keeps_the_new_material() -> None:
+    found = WORDS.infer(BERZARINA_BLOCK, f"{BERZARINA_BLOCK}$0$ДВ_ПП_Бетон_У за счет Газона")
+    assert found is None or found.object_class is not C.LAWN
+
+
+def test_removal_in_one_name_beats_lawn_in_the_other() -> None:
+    found = WORDS.infer("Блок_газон", "Демонтаж")
+    assert found is None or found.object_class is not C.LAWN

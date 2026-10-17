@@ -46,5 +46,18 @@ class Settings(BaseSettings):
     photo_upscaler: str = "4xNomos8kSC"
     photo_max_vram_gb: float = Field(default=6.0, ge=2, le=96)
     photo_timeout_s: int = Field(default=900, ge=60, le=7200)
+    # Город вокруг съёмки в 3D-виде из OpenStreetMap: auto - квадраты на диске
+    # (tools/osm_moscow.py, в образе - /app/data/osm/moscow), для участка вне них - Overpass
+    # (нужна сеть); tiles - только квадраты; online - только Overpass; off - без окружения.
+    # Ответ хранится в каталоге прогона.
+    osm_context: Literal["auto", "tiles", "online", "off"] = "auto"
+    osm_tiles_dir: Path = Path("data/osm/moscow")
+    osm_overpass_urls: list[str] = Field(
+        default_factory=lambda: [
+            "https://overpass-api.de/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        ]
+    )
+    osm_timeout_s: int = Field(default=90, ge=5, le=300)
     log_json: bool = False
     log_level: str = "INFO"

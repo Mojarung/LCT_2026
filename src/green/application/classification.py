@@ -11,6 +11,7 @@ import shapely
 from shapely.geometry import Point, Polygon
 
 from green.application.errors import InputError
+from green.application.name_model import NameModel
 from green.application.name_semantics import Vocabulary
 from green.application.semantic_names import (
     base_name,
@@ -93,6 +94,8 @@ class LayerMap:
     symbols: SymbolCatalog = field(default_factory=SymbolCatalog)
     # Слова имён (config/vocabulary.yaml): вывод для незнакомого, когда правила молчат.
     vocabulary: Vocabulary = field(default_factory=Vocabulary)
+    # Похожие имена слоёв пилота (config/name_model.json): третья ступень, когда молчат и слова.
+    names: NameModel = field(default_factory=NameModel)
 
     def classify(self, feature: Feature) -> ObjectClass:
         return self.decide(feature)[0]
@@ -124,7 +127,7 @@ class LayerCoverage:
     features: int
 
 
-def classify_scene(
+def classify_scene(  # noqa: C901 - ступени классификации по порядку
     scene: Scene, layer_map: LayerMap, params: PlanParams | None = None
 ) -> tuple[Scene, tuple[LayerCoverage, ...]]:
     """Присваивает классы всем объектам и возвращает отчёт покрытия по слоям.
@@ -163,6 +166,12 @@ def classify_scene(
                 cache[key] = layer_map.decide(feature)
                 if infer and cache[key][0] is ObjectClass.UNKNOWN:
                     cache[key] = _inferred(feature, layer_map.vocabulary, cache[key][1])
+                if (
+                    infer
+                    and cache[key][0] is ObjectClass.UNKNOWN
+                    and (params is None or params.name_model)
+                ):
+                    cache[key] = _modelled(feature, layer_map.names, cache[key][1])
             decided = cache[key]
             if (
                 infer
@@ -219,6 +228,18 @@ def _inferred(
         return ObjectClass.UNKNOWN, previous
     return found.object_class, ClassificationEvidence(
         found.method, previous.matched_rules, previous.chosen_rules
+    )
+
+
+def _modelled(
+    feature: Feature, names: NameModel, previous: ClassificationEvidence
+) -> tuple[ObjectClass, ClassificationEvidence]:
+    """Класс по похожему имени слоя пилота, если модель уверена (name_model.py)."""
+    guess = names.guess(feature.layer, feature.block)
+    if guess is None:
+        return ObjectClass.UNKNOWN, previous
+    return guess.object_class, ClassificationEvidence(
+        guess.method, previous.matched_rules, previous.chosen_rules
     )
 
 
@@ -508,6 +529,70 @@ class ClassificationReport:
     @property
     def ready(self) -> bool:
         return not self.unresolved_features and not self.unused_overrides
+
+
+# Как решён класс объекта: по виду основания (часть ClassificationEvidence.method до «:»).
+_RECOGNITION_KINDS = {
+    "name_rule": "by_name_rule",
+    "inferred_name": "by_words",
+    "inferred_annotation": "by_words",
+    "inferred_removed": "by_words",
+    "inferred_proposed": "by_words",
+    "inferred_weak": "by_weak_hint",
+    "model": "by_name_model",
+    "assumed_geometry": "by_geometry_only",
+}
+GUESSED_TOP = 20
+
+
+def recognition_summary(report: ClassificationReport) -> dict[str, object]:
+    """Сколько объектов решено правилом имени, знаком, словами имени, слабым намёком, одной
+    геометрией и сколько не решено; имена, решённые наугад (намёк, геометрия, не решено),
+    по убыванию числа объектов. Чекпоинт 16.10.2026, п. 2: жюри видело отброшенное, но не
+    видело почему."""
+    counts = dict.fromkeys(
+        (
+            "by_name_rule",
+            "by_symbol",
+            "by_words",
+            "by_name_model",
+            "by_weak_hint",
+            "by_geometry_only",
+            "other",
+        ),
+        0,
+    )
+    guessed: list[tuple[int, dict[str, object]]] = []
+    for group in report.groups:
+        method = group.evidence.method
+        kind = method.split(":", 1)[0]
+        if group.object_class is ObjectClass.UNKNOWN or kind in {"unmatched", "conflict"}:
+            bucket = "unresolved"
+        elif kind.startswith(("symbol", "tree_strip", "shrub_strip", "topographic")):
+            bucket = "by_symbol"
+        else:
+            bucket = _RECOGNITION_KINDS.get(kind, "other")
+        counts[bucket] = counts.get(bucket, 0) + group.features
+        if bucket in {"by_weak_hint", "by_geometry_only", "unresolved"}:
+            guessed.append(
+                (
+                    group.features,
+                    {
+                        "layer": group.layer,
+                        "block": group.block,
+                        "object_class": group.object_class.value,
+                        "method": method,
+                        "features": group.features,
+                    },
+                )
+            )
+    guessed.sort(key=lambda item: -item[0])
+    return {
+        **counts,
+        "unresolved": counts.get("unresolved", 0),
+        "total": report.features,
+        "guessed": [item for _, item in guessed[:GUESSED_TOP]],
+    }
 
 
 def classification_report(

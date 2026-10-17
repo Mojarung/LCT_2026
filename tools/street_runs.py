@@ -8,17 +8,24 @@
     uv run python tools/street_runs.py                         все улицы каталога
     uv run python tools/street_runs.py --only 6 --only 18      выбранные
     uv run python tools/street_runs.py --profile strict --catalog dataset/streets_oda
+    uv run python tools/street_runs.py --workers 7 --ram-fill 0.93 --skip-done   параллельно
+
+Параллельный режим запускает следующую улицу, только если хватает памяти: оценка пика улицы -
+1 ГБ + 25 x размер комплекта (Олимпийская деревня, 337 МБ -> 8,2 ГБ по замеру 28.09), сумма
+оценок идущих улиц и новой не выходит за долю ram-fill от всей памяти минус уже занятое.
 """
 # ruff: noqa: INP001, T201 - инструмент прогона
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
+import os
 import sys
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,11 +88,49 @@ def run(job: tuple[str, str, str]) -> dict:
     }
 
 
+def _need_gb(street: object, factor: float = 25.0) -> float:
+    size = sum(p.stat().st_size for p in (street.main, *street.extra))  # ty: ignore[unresolved-attribute]
+    return 1.0 + factor * size / 1e9
+
+
+def _memory_gb() -> tuple[float, float]:
+    """Вся и свободная память, ГБ (Windows - GlobalMemoryStatusEx, Linux - /proc/meminfo)."""
+    if os.name == "nt":
+
+        class _Status(ctypes.Structure):
+            _fields_ = [
+                ("length", ctypes.c_ulong),
+                ("load", ctypes.c_ulong),
+                ("total", ctypes.c_ulonglong),
+                ("free", ctypes.c_ulonglong),
+                ("page_total", ctypes.c_ulonglong),
+                ("page_free", ctypes.c_ulonglong),
+                ("virtual_total", ctypes.c_ulonglong),
+                ("virtual_free", ctypes.c_ulonglong),
+                ("extended", ctypes.c_ulonglong),
+            ]
+
+        status = _Status()
+        status.length = ctypes.sizeof(_Status)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))  # ty: ignore[unresolved-attribute]
+        return status.total / 2**30, status.free / 2**30
+    info = dict(line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines())
+    total = int(info["MemTotal"].split()[0]) / 2**20
+    return total, int(info["MemAvailable"].split()[0]) / 2**20
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=ROOT / "dataset" / "streets_oda")
     parser.add_argument("--only", action="append", type=int, help="номера улиц")
     parser.add_argument("--profile", default="strict")
+    # Параллельно: процесс на улицу, не больше ядер и памяти (тяжёлая улица - до 8 ГБ).
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--skip-done", action="store_true", help="не перегонять succeeded")
+    parser.add_argument("--ram-fill", type=float, default=0.93, help="доля всей памяти")
+    parser.add_argument(
+        "--ram-factor", type=float, default=25.0, help="пик памяти улицы / размер комплекта"
+    )
     args = parser.parse_args()
     streets = [
         s
@@ -96,21 +141,54 @@ def main() -> None:
     streets.sort(key=lambda s: sum(p.stat().st_size for p in (s.main, *s.extra)))
     OUT.mkdir(parents=True, exist_ok=True)
     rows = []
-    with ProcessPoolExecutor(max_workers=1, max_tasks_per_child=1) as pool:
-        jobs = [(s.slug, str(args.catalog), args.profile) for s in streets]
-        for street, row in zip(streets, pool.map(run, jobs), strict=True):
-            row["number"] = street.number
-            rows.append(row)
-            (OUT / f"{street.slug}.json").write_text(
-                json.dumps(row, ensure_ascii=False, indent=1, default=str), encoding="utf-8"
-            )
-            print(
-                f"{street.number:>2} {street.slug[:30]:<30} {row['state']:<10} "
-                f"{row.get('seconds', 0):>7} с  {row.get('summary', {})}  {row.get('error') or ''}"[
-                    :400
-                ],
-                flush=True,
-            )
+    if args.skip_done:
+        for street in list(streets):
+            done = OUT / f"{street.slug}.json"
+            if (
+                done.exists()
+                and json.loads(done.read_text(encoding="utf-8")).get("state") == "succeeded"
+            ):
+                rows.append(json.loads(done.read_text(encoding="utf-8")))
+                streets.remove(street)
+    queue = list(streets)
+    total_gb, free_gb = _memory_gb()
+    budget = max(0.0, free_gb - (1 - args.ram_fill) * total_gb)
+    print(
+        f"память {total_gb:.1f} ГБ, свободно {free_gb:.1f}, бюджет прогонов {budget:.1f} ГБ, "
+        f"процессов до {args.workers}",
+        flush=True,
+    )
+    running: dict[object, tuple[object, float]] = {}
+    with ProcessPoolExecutor(max_workers=args.workers, max_tasks_per_child=1) as pool:
+        while queue or running:
+            committed = sum(need for _, need in running.values())
+            while queue and len(running) < args.workers:
+                need = _need_gb(queue[0], args.ram_factor)
+                # Первая улица идёт всегда; дальше - пока оценки помещаются в бюджет.
+                if running and committed + need > budget:
+                    break
+                street = queue.pop(0)
+                job = (street.slug, str(args.catalog), args.profile)
+                running[pool.submit(run, job)] = (street, need)
+                committed += need
+            done, _ = wait(list(running), return_when=FIRST_COMPLETED)
+            for future in done:
+                street, _ = running.pop(future)
+                try:
+                    row = future.result()
+                except Exception as error:  # noqa: BLE001 - упавший воркер (память) - строка итога
+                    row = {"slug": street.slug, "state": "crashed", "error": repr(error)}
+                row["number"] = street.number
+                rows.append(row)
+                (OUT / f"{street.slug}.json").write_text(
+                    json.dumps(row, ensure_ascii=False, indent=1, default=str), encoding="utf-8"
+                )
+                print(
+                    f"{street.number:>2} {street.slug[:30]:<30} {row['state']:<10} "
+                    f"{row.get('seconds', 0):>7} с  {row.get('summary', {})}  "
+                    f"{row.get('error') or ''}"[:400],
+                    flush=True,
+                )
     lines = [
         "| № | Улица | Итог | Секунд | Посадок | Отказов | Целостность | План верен | Ошибка |",
         "|---" * 9 + "|",

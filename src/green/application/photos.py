@@ -136,7 +136,8 @@ FOLIAGE: dict[str, str] = {
 
 NEGATIVE = (
     "3d render, CGI, video game, low poly, cartoon, illustration, plastic, flat textures, "
-    "oversaturated, blurry, text, watermark, user interface"
+    "oversaturated, blurry, blurry foliage, smeared leaves, mushy tree crowns, text, watermark, "
+    "user interface"
 )
 SCENERY_NEGATIVE = f"{NEGATIVE}, topiary, clipped round bushes, empty flat horizon, blue foliage"
 # Современная московская жилая застройка 2020-х: керамогранит и клинкер в два-три оттенка,
@@ -150,6 +151,27 @@ MODERN_FACADES = (
     "shops and cafes, clean new granite curbs and fresh concrete paving, modern street lamps."
 )
 PLAIN_FACADES = "real facades with window frames"
+# Улица из 3D-вида так, как её строят в Москве (17.10.2026): проезд ниже тротуара за гранитным
+# бортом, плитка тротуара. Край дорожки в кадре 3D местами волнистый - растр карты покрытий;
+# модель его повторяла, а дорожки строят прямыми и плавными дугами. Положение дорожки
+# сохраняется, выпрямляется только край. Скамейки, люки и решётки не перечисляются: по списку
+# модель их дорисовывает, даже с припиской «только то, что есть» (тест 17.10.2026).
+STREET_DETAILS = (
+    " Keep where every path, lawn and road runs, but give their edges the clean engineered "
+    "shape of a built Moscow street: straight parallel sides and smooth even arcs at the turns, "
+    "never wavy, jagged or blobby; where paths meet each other or the road they join with clean "
+    "straight or neatly rounded corners, with no stray scraps of asphalt or paving between them. "
+    "Kerbs are light grey granite kerbstones, the carriageway lies one kerb lower than the "
+    "sidewalk, sidewalks are grey concrete paving tiles in neat rows."
+)
+# Цвет: без просьбы Turbo даёт кислотную траву, с «тусклой оливковой» при CFG 2 газоны выгорали
+# до соломы (сравнение 17.10.2026). Середина - свежая летняя зелень, чуть приглушённая.
+NATURAL_COLOURS = (
+    " Colour it like an unedited photograph of a real Moscow street in summer: realistic white "
+    "balance and natural tones; the lawns are a fresh natural summer green, slightly muted, "
+    "with a few worn patches, not neon or emerald; tree leaves in varied deep natural greens; "
+    "asphalt neutral grey; soft natural contrast."
+)
 MODERN_NEGATIVE = (
     "soviet panel building, khrushchevka, old balconies, peeling paint, rust, dilapidated facade"
 )
@@ -160,7 +182,21 @@ MODERN_NEGATIVE = (
 PLAN_NEGATIVE = (
     f"{NEGATIVE}, extra trees, additional trees, new trees, trees in front of the building, "
     "hedge, extra bushes, added vegetation, fence replaced by bushes, new buildings, "
-    "extra buildings, added houses, city skyline"
+    "extra buildings, added houses, city skyline, added benches, added manhole covers"
+)
+# Листва Turbo на 8 шагах сливалась в зелёную кашу: чёткость кроны - отдельной просьбой.
+CRISP_FOLIAGE = (
+    " Every tree crown is crisp: individual leaves and leaf clusters are readable, branches "
+    "are clearly separated, the sky shows through gaps in the crowns, never a blurry green mass."
+)
+# Свет как у 2.1 с CFG 4: она сама давала тёплое направленное солнце, длинные мягкие тени и
+# глубину, Turbo без подсказки - ровный плоский свет (сравнение 17.10.2026).
+REAL_LIGHT = (
+    " Light it like a professional architectural photograph: clear directional sunlight with "
+    "warm highlights on facades, tree crowns and kerbs, long soft natural shadows that follow "
+    "the shadows of the render, cool skylight in the shade, reflections of the sky in the "
+    "windows, gentle atmospheric depth towards the horizon, rich contrast between sunlit and "
+    "shaded surfaces."
 )
 # Фасады по плану - только у домов, что есть в кадре; край сцены - открытый газон, не город.
 PLAN_NO_NEW_BUILDINGS = (
@@ -225,7 +261,12 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
             f"and size. Make everything look real: {trees} with {foliage} and visible branches, "
             f"loose natural groups of flowering and evergreen shrubs{kinds} of different heights "
             "(not topiary, not clipped balls), mowed lawn with slight unevenness, worn grey "
-            "asphalt with patches, concrete curbs, paving tiles, soft realistic shadows. "
+            "asphalt with patches, soft realistic shadows."
+            + STREET_DETAILS
+            + NATURAL_COLOURS
+            + CRISP_FOLIAGE
+            + REAL_LIGHT
+            + " "
             + facades
             + " All foliage in natural greens, no blue or cyan tints. Behind the street, in the "
             "distance, other residential blocks and trees fade into light haze instead of an "
@@ -250,8 +291,15 @@ def build_prompt(options: PhotoOptions) -> PhotoPrompt:
         "no new trees, shrubs, hedges, buildings or cars; where the render shows bare lawn, "
         "pavement or wall, keep it bare. Only make the materials real: "
         f"{trees}, with {foliage} and visible branches{shrubs}; mowed lawn with slight "
-        "unevenness, worn grey asphalt with patches, concrete curbs, paving tiles, metal fences, "
-        "soft realistic shadows. " + facades + PLAN_NO_NEW_BUILDINGS + finish
+        "unevenness, worn grey asphalt with patches, soft realistic shadows."
+        + STREET_DETAILS
+        + NATURAL_COLOURS
+        + CRISP_FOLIAGE
+        + REAL_LIGHT
+        + " "
+        + facades
+        + PLAN_NO_NEW_BUILDINGS
+        + finish
     )
     return PhotoPrompt(text=text, negative=with_modern(PLAN_NEGATIVE, options))
 
@@ -281,7 +329,7 @@ def png_size(data: bytes) -> tuple[int, int]:
 
 def check_source(data: bytes) -> tuple[int, int]:
     if len(data) > MAX_SOURCE_BYTES:
-        raise InputError("Кадр больше 16 МБ: для фото хватает 1024 x 576")
+        raise InputError("Кадр больше 16 МБ: для фото хватает 1536 x 864")
     width, height = png_size(data)
     for side in (width, height):
         if side % SIDE_STEP or not SIDE_MIN <= side <= SIDE_MAX:

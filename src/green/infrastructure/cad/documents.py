@@ -16,11 +16,15 @@ from ezdxf.audit import AuditError, ErrorEntry
 from ezdxf.entities import DXFTagStorage
 
 from green.application.errors import InputError
+from green.infrastructure.cad import acis_index
 from green.infrastructure.cad.structure import require_complete_container
 
 if TYPE_CHECKING:
     from ezdxf.audit import Auditor
     from ezdxf.document import Drawing
+    from ezdxf.entities import DXFEntity
+
+acis_index.install()  # поиск ACIS по индексу, а не перебором (acis_index.py)
 
 RESULT_PREFIX = "GREEN_"
 APPID = "LCT_GREEN"
@@ -115,6 +119,11 @@ class DocumentCache:
         if loaded is None:
             return frozenset()
         return frozenset(doc.entitydb.keys()) - loaded
+
+
+def entity_layer(entity: DXFEntity) -> str:
+    """Слой сущности; у неизвестной ezdxf сущности (ARCALIGNEDTEXT и т.п.) атрибута нет - «0»."""
+    return str(entity.dxf.get("layer", "0")) if entity.dxf.is_supported("layer") else "0"
 
 
 def _key(path: Path) -> tuple[str, int, int]:

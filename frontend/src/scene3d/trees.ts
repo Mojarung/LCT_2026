@@ -16,12 +16,14 @@ import * as THREE from 'three';
 import {
   type Archetype,
   archetypeOf,
+  CONIFERS,
   foliageColor,
   leafless,
   type Season,
   SHRUBS,
 } from './archetypes';
 import { existingSize, isTreeForm, sizeAt, type Size } from './growth';
+import { moduleMaterial } from './facadeModules';
 import { neutralLeaves } from './textures';
 import type { Plant } from './types';
 
@@ -147,6 +149,10 @@ function lighten(options: Options): void {
 export interface Model {
   branches: THREE.BufferGeometry;
   leaves: THREE.BufferGeometry;
+  /** Плотная середина кроны: сквозь листья виден не просвет неба, а тень листвы. */
+  core: THREE.BufferGeometry;
+  /** Дальняя детализация: силуэт кроны и ствол, около сотни треугольников. */
+  far: THREE.BufferGeometry;
   bark: string;
   leafType: string;
   /** Высота и ширина кроны модели в её единицах: по ним экземпляр масштабируется в метры. */
@@ -209,6 +215,130 @@ function shadeLeaves(geometry: THREE.BufferGeometry): void {
   geometry.setAttribute('color', new THREE.Uint8BufferAttribute(tones, 3, true));
 }
 
+/** У ажурных крон (берёза, тополь, плакучие) ядро меньше: иначе сквозь листья видно шар. */
+const SPARSE_CORE: Partial<Record<Archetype, number>> = {
+  birch: 0.17,
+  poplar: 0.2,
+  weeping: 0.18,
+  ash: 0.22,
+};
+
+/** Ядро кроны в единицах модели: бугристый эллипсоид, у хвойных - конус ярусами. Сидит внутри
+ *  облака листьев, поэтому снаружи видна листва, а в просветах - тёмная масса, как у живой
+ *  взрослой кроны, а не небо сквозь ветки. */
+export function crownCore(
+  leaves: THREE.Box3,
+  archetype: Archetype,
+  seed: number,
+): THREE.BufferGeometry {
+  const size = leaves.getSize(new THREE.Vector3());
+  const center = leaves.getCenter(new THREE.Vector3());
+  const conifer = CONIFERS.has(archetype) && archetype !== 'creeper';
+  const fill = SHRUBS.has(archetype) ? 0.33 : (SPARSE_CORE[archetype] ?? 0.24);
+  const geometry = conifer
+    ? new THREE.ConeGeometry(1, 1, 10, 6)
+    : new THREE.IcosahedronGeometry(1, 4);
+  const pos = geometry.getAttribute('position');
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+    // Бугры по сфере: крона из нескольких масс листвы, а не мяч.
+    const bump =
+      1 +
+      0.16 * Math.sin(v.x * 3.1 + seed) * Math.cos(v.z * 2.7 - seed * 0.5) +
+      0.1 * Math.sin(v.y * 4.3 + v.x * 1.7 + seed * 1.3);
+    if (conifer) {
+      // Конус хвойного: основание в нижней трети кроны, ярусы - зубцами по высоте.
+      const tier = 1 - 0.12 * Math.abs(Math.sin((v.y + 0.5) * Math.PI * 4));
+      pos.setXYZ(
+        i,
+        center.x + v.x * size.x * 0.4 * tier,
+        center.y + v.y * size.y * 0.82,
+        center.z + v.z * size.z * 0.4 * tier,
+      );
+    } else {
+      pos.setXYZ(
+        i,
+        center.x + v.x * size.x * fill * bump,
+        center.y + v.y * size.y * (fill + 0.02) * bump,
+        center.z + v.z * size.z * fill * bump,
+      );
+    }
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Дерево вдали: в сотнях метров ни листьев, ни веток не различить, виден силуэт кроны цвета
+ *  листвы и тёмный ствол под ней. Около сотни треугольников вместо тысяч у модели ez-tree,
+ *  поэтому фон квартала из тысяч деревьев не съедает кадры. Крона - с цветом экземпляра
+ *  (aAccent = 1), ствол - своим. */
+export function farGeometry(leaves: THREE.Box3, archetype: Archetype): THREE.BufferGeometry {
+  const size = leaves.getSize(new THREE.Vector3());
+  const center = leaves.getCenter(new THREE.Vector3());
+  const conifer = CONIFERS.has(archetype) && archetype !== 'creeper';
+  const crown = conifer ? new THREE.ConeGeometry(1, 1, 7, 1) : new THREE.IcosahedronGeometry(1, 1);
+  const shape = crown.index ? crown.toNonIndexed() : crown;
+  const pos = shape.getAttribute('position');
+  // Бугры: вершины одной точки сферы сдвигаются одинаково, иначе грани разойдутся щелями.
+  const bump = (x: number, y: number, z: number) =>
+    1 + 0.16 * Math.sin(x * 5.1 + y * 2.3) * Math.cos(z * 4.7 - y * 3.1);
+  for (let i = 0; i < pos.count; i++) {
+    const k = conifer ? 0.45 : 0.46;
+    const x0 = pos.getX(i);
+    const y0 = pos.getY(i);
+    const z0 = pos.getZ(i);
+    const b = conifer ? 1 : bump(x0, y0, z0);
+    pos.setXYZ(
+      i,
+      center.x + x0 * size.x * k * b,
+      center.y + y0 * size.y * (conifer ? 0.95 : 0.47) * b,
+      center.z + z0 * size.z * k * b,
+    );
+  }
+  shape.computeVertexNormals();
+  const trunk = new THREE.CylinderGeometry(0.5, 0.6, 1, 5, 1).toNonIndexed();
+  const radius = Math.max(size.x, size.z) * 0.035;
+  trunk.scale(radius, Math.max(leaves.min.y + size.y * 0.25, 0.1), radius);
+  trunk.translate(center.x, Math.max(leaves.min.y + size.y * 0.25, 0.1) / 2, center.z);
+  const out: number[] = [];
+  const nor: number[] = [];
+  const col: number[] = [];
+  const acc: number[] = [];
+  const push = (g: THREE.BufferGeometry, color: readonly number[], accent: number) => {
+    const p = g.getAttribute('position');
+    const n = g.getAttribute('normal');
+    for (let i = 0; i < p.count; i++) {
+      out.push(p.getX(i), p.getY(i), p.getZ(i));
+      nor.push(n.getX(i), n.getY(i), n.getZ(i));
+      col.push(color[0] ?? 1, color[1] ?? 1, color[2] ?? 1);
+      acc.push(accent);
+    }
+  };
+  // Издалека крона темнее и глуше, чем лист на солнце: внутри неё тень.
+  push(shape, [0.4, 0.4, 0.4], 1);
+  push(trunk, [0.07, 0.06, 0.05], 0);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aAccent', new THREE.Float32BufferAttribute(acc, 1));
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** Городское дерево гуще лесного пресета ez-tree: листьев больше и они крупнее. */
+function densify(options: Options, archetype: Archetype): void {
+  const leaves = options.leaves;
+  if (SHRUBS.has(archetype)) {
+    leaves.count = Math.round(leaves.count * 1.5);
+    leaves.size *= 1.25;
+  } else if (!CONIFERS.has(archetype)) {
+    leaves.count = Math.round(leaves.count * 1.4);
+    leaves.size *= 1.12;
+  }
+}
+
 export function generateModel(archetype: Archetype, variant: number, lod: Lod): Model {
   const spec = SPECS[archetype];
   const tree = new Tree();
@@ -223,6 +353,7 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
     tree.options.leaves.count = Math.max(5, Math.round(tree.options.leaves.count * 0.88));
     tree.options.leaves.size *= 0.94;
   }
+  densify(tree.options, archetype);
   if (lod === 'lo') lighten(tree.options);
   tree.generate();
   const branches = tree.branchesMesh.geometry;
@@ -241,6 +372,8 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
   const model: Model = {
     branches,
     leaves,
+    core: crownCore(crown, archetype, variant * 3.7 + 1),
+    far: farGeometry(crown, archetype),
     bark: tree.options.bark.type,
     leafType: tree.options.leaves.type,
     height: Math.max(box.max.y, 1e-3),
@@ -370,7 +503,63 @@ totalEmissiveRadiance += diffuseColor.rgb * uSunColor * (0.05 + 0.4 * backLit);`
 interface Pair {
   branches: THREE.InstancedMesh;
   leaves: THREE.InstancedMesh;
+  core: THREE.InstancedMesh;
   count: number;
+}
+
+/** Материал ядра кроны: цвет листвы экземпляра, приглушённый тенью внутри кроны. */
+export function coreMaterial(wind: WindUniforms): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: 0x767676, roughness: 1, metalness: 0 });
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, wind);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `${windHead(false)}\nvarying vec3 vCoreWorld;`)
+      .replace('#include <project_vertex>', `${WIND_VERTEX}\nvCoreWorld = windWorld.xyz;`);
+    // Поверхность ядра - пятна листвы по 30 см с дырами: на краю кроны оно не читается
+    // гладким шаром, а в глубине закрывает небо.
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform float uSnow;
+varying vec3 vCoreWorld;
+float coreHash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+// Плавный объёмный шум: пятна листвы округлые, а не клетками.
+float coreNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(coreHash(i), coreHash(i + vec3(1, 0, 0)), f.x),
+        mix(coreHash(i + vec3(0, 1, 0)), coreHash(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(coreHash(i + vec3(0, 0, 1)), coreHash(i + vec3(1, 0, 1)), f.x),
+        mix(coreHash(i + vec3(0, 1, 1)), coreHash(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+float clump = coreNoise(vCoreWorld * 1.7) * 0.65 + coreNoise(vCoreWorld * 4.1 + 7.0) * 0.35;
+// Ядро нужно издали, где листья сливаются; вблизи крону видно и без него, а само ядро
+// читалось тёмным яйцом. Ближе 18 м его нет, к 45 м проявляется целиком.
+float coreNear = smoothstep(18.0, 45.0, length(vViewPosition));
+if (clump < mix(1.01, 0.47, coreNear)) discard;`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+diffuseColor.rgb *= 0.7 + 0.45 * clump;
+float snowUp = max(dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)), 0.0);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.82, 0.86), uSnow * 0.6 * smoothstep(0.2, 0.8, snowUp));`,
+      );
+  };
+  m.customProgramCacheKey = () => 'green-crown-core';
+  return m;
 }
 
 interface Group {
@@ -378,8 +567,14 @@ interface Group {
   variant: number;
   hi: Pair;
   lo: Pair;
+  /** Дальняя детализация: своя матрица экземпляров, тени не отбрасывает. */
+  far: THREE.InstancedMesh;
+  farCount: number;
   capacity: number;
 }
+
+/** Дальше lodDistance x FAR_FACTOR (180 м на «обычно») дерево рисуется силуэтом (farGeometry). */
+const FAR_FACTOR = 3;
 
 interface Instance {
   plant: Plant;
@@ -423,6 +618,8 @@ export class Forest {
   };
   private readonly barkMaterials = new Map<string, THREE.MeshStandardMaterial>();
   private readonly leafMaterials = new Map<string, THREE.MeshStandardMaterial>();
+  private coreMaterialShared: THREE.MeshStandardMaterial | null = null;
+  private farMaterialShared: THREE.MeshStandardMaterial | null = null;
   private readonly extras: Extras;
   private dirty = true;
   private bodyCache: Body3[] | null = null;
@@ -470,6 +667,8 @@ export class Forest {
         variant: job.variant,
         hi: await this.pair(hi, list.length),
         lo: await this.pair(lo, list.length),
+        far: this.farMesh(lo, list.length),
+        farCount: 0,
         capacity: list.length,
       };
       this.groups.set(key, group);
@@ -486,13 +685,21 @@ export class Forest {
     const leaf = await this.leafMaterial(model);
     const branches = new THREE.InstancedMesh(model.branches, bark, Math.max(1, capacity));
     const leaves = new THREE.InstancedMesh(model.leaves, leaf, Math.max(1, capacity));
-    // Одна матрица экземпляра на ветви и листву: один буфер, одна выгрузка на GPU.
+    this.coreMaterialShared ??= coreMaterial(this.wind);
+    const core = new THREE.InstancedMesh(
+      model.core,
+      this.coreMaterialShared,
+      Math.max(1, capacity),
+    );
+    // Одна матрица экземпляра на ветви, листву и ядро: один буфер, одна выгрузка на GPU.
     leaves.instanceMatrix = branches.instanceMatrix;
+    core.instanceMatrix = branches.instanceMatrix;
     leaves.instanceColor = new THREE.InstancedBufferAttribute(
       new Float32Array(Math.max(1, capacity) * 3),
       3,
     );
-    for (const mesh of [branches, leaves]) {
+    core.instanceColor = leaves.instanceColor;
+    for (const mesh of [branches, leaves, core]) {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.count = 0;
       mesh.frustumCulled = false;
@@ -501,7 +708,22 @@ export class Forest {
       this.root.add(mesh);
     }
     branches.userData.model = model;
-    return { branches, leaves, count: 0 };
+    return { branches, leaves, core, count: 0 };
+  }
+
+  private farMesh(model: Model, capacity: number): THREE.InstancedMesh {
+    this.farMaterialShared ??= moduleMaterial({ roughness: 1 });
+    const mesh = new THREE.InstancedMesh(model.far, this.farMaterialShared, Math.max(1, capacity));
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(
+      new Float32Array(Math.max(1, capacity) * 3),
+      3,
+    );
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    this.root.add(mesh);
+    return mesh;
   }
 
   private barkMaterial(model: Model): THREE.MeshStandardMaterial {
@@ -610,6 +832,7 @@ export class Forest {
     for (const group of this.groups.values()) {
       group.hi.count = 0;
       group.lo.count = 0;
+      group.farCount = 0;
     }
     const sphere = new THREE.Sphere();
     for (const instance of this.instances) {
@@ -622,6 +845,13 @@ export class Forest {
       const near = SHRUBS.has(instance.group.archetype)
         ? this.settings.lodDistance * 0.5
         : this.settings.lodDistance;
+      if (d >= near * FAR_FACTOR) {
+        const group = instance.group;
+        group.far.setMatrixAt(group.farCount, instance.matrix);
+        group.far.setColorAt(group.farCount, instance.color);
+        group.farCount += 1;
+        continue;
+      }
       const pair = d < near ? instance.group.hi : instance.group.lo;
       pair.branches.setMatrixAt(pair.count, instance.matrix);
       pair.leaves.setColorAt(pair.count, instance.color);
@@ -630,9 +860,13 @@ export class Forest {
     for (const group of this.groups.values()) {
       // Зимой у лиственных листвы нет: рисуются только ветви, и тень от них же.
       const bare = leafless(group.archetype, this.settings.season);
+      group.far.count = group.farCount;
+      group.far.instanceMatrix.needsUpdate = true;
+      if (group.far.instanceColor) group.far.instanceColor.needsUpdate = true;
       for (const pair of [group.hi, group.lo]) {
         pair.branches.count = pair.count;
         pair.leaves.count = bare ? 0 : pair.count;
+        pair.core.count = bare ? 0 : pair.count;
         pair.branches.instanceMatrix.needsUpdate = true;
         if (pair.leaves.instanceColor) pair.leaves.instanceColor.needsUpdate = true;
       }
@@ -659,10 +893,18 @@ export class Forest {
       for (const pair of [group.hi, group.lo]) {
         pair.branches.geometry.dispose();
         pair.leaves.geometry.dispose();
+        pair.core.geometry.dispose();
         pair.branches.dispose();
         pair.leaves.dispose();
+        pair.core.dispose();
       }
     }
+    for (const group of this.groups.values()) {
+      group.far.geometry.dispose();
+      group.far.dispose();
+    }
+    this.coreMaterialShared?.dispose();
+    this.farMaterialShared?.dispose();
     for (const m of [...this.barkMaterials.values(), ...this.leafMaterials.values()]) {
       if (m.map && m.map instanceof THREE.CanvasTexture) m.map.dispose();
       m.dispose();

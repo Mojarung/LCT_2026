@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from test_pipeline_synthetic import ROOT
 
 from green.application.errors import InputError
@@ -31,6 +32,7 @@ from green.application.photos import (
 )
 from green.bootstrap.container import build_container
 from green.bootstrap.settings import Settings
+from green.infrastructure.photo import sdcpp as sdcpp_module
 from green.infrastructure.photo.sdcpp import SdCppPhotoRenderer
 from green.infrastructure.storage.photos import FileSystemPhotoStore
 from green.infrastructure.storage.runs import FileSystemRunStore
@@ -216,6 +218,16 @@ def test_sdcpp_renderer_names_missing_model_files(tmp_path: Path) -> None:
     assert "qwen-image-2.1-Q4_K_S.gguf" in reason
 
 
+def test_sdcpp_renderer_takes_turbo_when_its_file_is_there(tmp_path: Path) -> None:
+    (tmp_path / "qwen-image-2.1-turbo-Q4_K_S.gguf").write_bytes(b"")
+    reason = SdCppPhotoRenderer(models_dir=tmp_path).unavailable_reason()
+
+    # Обычная 2.1 при Turbo не нужна: не хватает только общих файлов.
+    assert reason is not None
+    assert "qwen-image-2.1-Q4_K_S.gguf" not in reason
+    assert "qwen_image_2.1_vae_bf16" in reason
+
+
 @pytest.fixture
 def client(tmp_path: Path) -> Iterator[TestClient]:
     settings = Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs")
@@ -287,7 +299,6 @@ def test_api_says_why_photos_are_unavailable(tmp_path: Path) -> None:
 
 
 def test_frame_with_alpha_is_flattened_on_white(tmp_path: Path) -> None:
-    from PIL import Image  # noqa: PLC0415 - Pillow нужен только этому тесту
 
     from green.infrastructure.photo.sdcpp import _to_rgb  # noqa: PLC0415
 
@@ -392,3 +403,30 @@ def test_photo_in_work_is_not_deleted(runs: FileSystemRunStore) -> None:
 
     with pytest.raises(PhotoBusyError):
         service.delete(run.run_id, job.id)
+
+
+def test_prompt_straightens_edges_and_names_the_street_details() -> None:
+    for scenery in (False, True):
+        prompt = build_prompt(PhotoOptions(scenery=scenery))
+        assert "never wavy, jagged or blobby" in prompt.text
+        assert "Keep where every path, lawn and road runs" in prompt.text
+        assert "granite kerbstones" in prompt.text
+        assert "no stray scraps of asphalt" in prompt.text
+        assert "not neon or emerald" in prompt.text
+        assert "directional sunlight" in prompt.text
+        assert "never a blurry green mass" in prompt.text
+        # Перечень мелочей модель читает как просьбу их поставить.
+        assert "bench" not in prompt.text
+        assert "manhole" not in prompt.text
+
+
+def test_upscaled_photo_is_shrunk_to_two_and_a_half_frames(tmp_path: Path) -> None:
+    # Выход апскейлера x4 кадра 400 x 224 - 1600 x 896; итог - x2,5 от кадра.
+    photo = tmp_path / "photo.jpg"
+    Image.new("RGB", (1600, 896), (90, 120, 80)).save(photo, "JPEG")
+
+    sdcpp_module._shrink(photo, sdcpp_module.OUTPUT_SCALE)  # noqa: SLF001
+
+    with Image.open(photo) as image:
+        assert image.size == (1000, 560)
+        assert image.format == "JPEG"

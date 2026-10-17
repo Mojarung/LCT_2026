@@ -87,6 +87,8 @@ export interface Plant {
   existing: boolean;
   /** Радиус кроны с подосновы у существующих: знак съёмки не несёт высоты. */
   existingRadius?: number;
+  /** Крона ряда «полосы деревьев» съёмки: рисуется, но в счёт стволов не идёт. */
+  strip?: boolean;
   seed: number;
 }
 
@@ -107,6 +109,10 @@ export interface World {
   buildings: Building[];
   plants: Plant[];
   curbs: Line[];
+  /** Подземные сети и воздушные линии подосновы по классу (utility.*), для рабочего слоя. */
+  utilities?: { kind: string; lines: Line[] }[];
+  /** Граница работ. */
+  boundary?: Line[];
   fences: Line[];
   poles: Flat[];
   lawns: Ring[][];

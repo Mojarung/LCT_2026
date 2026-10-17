@@ -209,7 +209,9 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
             <button
               className="scene-light-preset"
               type="button"
-              onClick={() => onChange({ hour: showcaseHour(settings.season), clouds: 0.2 })}
+              onClick={() => {
+                onChange({ hour: showcaseHour(settings.season), clouds: 0.2 });
+              }}
             >
               Мягкий вечерний свет
             </button>
@@ -261,6 +263,57 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
               />
               Существующие насаждения с подосновы
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.cars}
+                onChange={(e) => {
+                  onChange({ cars: e.target.checked });
+                }}
+              />
+              Машины у бортов (условно: в подоснове их нет)
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.city}
+                onChange={(e) => {
+                  onChange({ city: e.target.checked });
+                }}
+              />
+              Город вокруг съёмки (OpenStreetMap)
+            </label>
+          </Section>
+          <Section
+            id="layers"
+            title="Слои плана"
+            summary={
+              [settings.utilities ? 'сети' : '', settings.boundary ? 'граница' : '']
+                .filter(Boolean)
+                .join(', ') || 'выключены'
+            }
+          >
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.utilities}
+                onChange={(e) => {
+                  onChange({ utilities: e.target.checked });
+                }}
+              />
+              Подземные сети - цветами плана
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.boundary}
+                onChange={(e) => {
+                  onChange({ boundary: e.target.checked });
+                }}
+              />
+              Граница работ
+            </label>
+            <p className="hint">В кадры для фото ИИ слои не попадают.</p>
           </Section>
           <Section
             id="weather"
@@ -343,7 +396,9 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 type="checkbox"
                 checked={settings.enhanced}
                 disabled={settings.quality === 'low'}
-                onChange={(e) => onChange({ enhanced: e.target.checked })}
+                onChange={(e) => {
+                  onChange({ enhanced: e.target.checked });
+                }}
               />
               Объёмный свет и сглаживание
             </label>

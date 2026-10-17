@@ -17,6 +17,7 @@ import {
   type ExistingPlant,
 } from '../map/existing';
 import { isShrubType } from '../map/models';
+import { simplifyRing } from './facades';
 import { poleSites } from './poles';
 import type {
   Building,
@@ -186,6 +187,8 @@ export function distinctFeatures(features: readonly BasemapFeature[]): BasemapFe
 }
 
 interface Linework {
+  utilities: Map<string, Line[]>;
+  boundary: Line[];
   treeStrips: Flat[][];
   shrubStrips: Line[];
   curbs: Line[];
@@ -243,6 +246,18 @@ function takeFeature(
     poleParts.push(geometry);
     return;
   }
+  if (kind.startsWith('utility.') || kind === 'power_line_overhead' || kind === 'work_boundary') {
+    const target =
+      kind === 'work_boundary'
+        ? into.boundary
+        : (into.utilities.get(kind) ?? into.utilities.set(kind, []).get(kind) ?? []);
+    for (const line of lines(geometry)) {
+      if (line.length > 1 && inBox(line, box)) {
+        target.push({ points: line.map(([x, y]) => frame.toFlat(x, y)) });
+      }
+    }
+    return;
+  }
   if (kind === 'curb' || kind === 'fence') {
     const target = kind === 'curb' ? into.curbs : into.fences;
     for (const line of lines(geometry)) {
@@ -260,6 +275,41 @@ function takeFeature(
       into[area].push(polygon.map((ring) => flatRing(ring, frame)));
     }
   }
+}
+
+/** Ближе этого две опоры в 3D - одна мачта, м. */
+const POLE_MERGE_M = 1.2;
+
+/** Шаг крон ряда полосы, м: знаки полосы стоят по 1-2 м и числа стволов не несут. */
+const STRIP_STEP_M = 4.5;
+
+/** Полоса деревьев съёмки - рядом крон по её знакам с шагом взрослой кроны. Знаками-кольцами
+ *  на земле в 3D она читалась как непонятные круги. В счёт деревьев ряд не идёт (strip). */
+function stripCrowns(strips: readonly Flat[][]): Plant[] {
+  const out: Plant[] = [];
+  for (const strip of strips) {
+    let last: Flat | null = null;
+    for (const p of strip) {
+      if (last && Math.hypot(p.x - last.x, p.z - last.z) < STRIP_STEP_M) continue;
+      last = p;
+      const seed = hashOf(`strip:${p.x.toFixed(2)}:${p.z.toFixed(2)}`);
+      const radius = 2 + (seed % 1000) / 1000;
+      out.push({
+        id: `strip-${String(out.length)}`,
+        x: p.x,
+        z: p.z,
+        type: 'existing_tree',
+        code: 'existing_tree',
+        name: 'Полоса деревьев (знак съёмки)',
+        species: speciesFallback('existing_tree', 'tree_large', '', radius * 2),
+        existing: true,
+        existingRadius: radius,
+        strip: true,
+        seed,
+      });
+    }
+  }
+  return out;
 }
 
 function existingPlants(features: readonly BasemapFeature[], box: Box, frame: Frame): Plant[] {
@@ -295,7 +345,8 @@ function sceneBuildings(scene: SceneJson, box: Box, frame: Frame): Building[] {
     if (!outer || outer.length < 3 || !inBox(outer, box) || b.height_m <= 0) continue;
     const first = outer[0] ?? [0, 0];
     out.push({
-      rings: b.rings.map((ring) => flatRing(ring, frame)),
+      // Контур без дрожания съёмки: стена дома идёт ровно, а не изломами.
+      rings: b.rings.map((ring) => simplifyRing(flatRing(ring, frame))),
       height: b.height_m,
       floors: b.floors ?? Math.max(1, Math.round(b.height_m / STOREY_M)),
       source: b.floors_source,
@@ -321,7 +372,7 @@ function basemapBuildings(features: readonly BasemapFeature[], box: Box, frame: 
       const floors = floorsByArea(area);
       const first = outer[0] ?? [0, 0];
       out.push({
-        rings: polygon.map((ring) => flatRing(ring, frame)),
+        rings: polygon.map((ring) => simplifyRing(flatRing(ring, frame))),
         height: heightOf(floors),
         floors,
         source: 'assumed',
@@ -415,6 +466,8 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     seed: hashOf(p.id),
   }));
   const linework: Linework = {
+    utilities: new Map(),
+    boundary: [],
     treeStrips: [],
     shrubStrips: [],
     curbs: [],
@@ -428,9 +481,15 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   const poleParts: Geometry[] = [];
   for (const feature of features) takeFeature(feature, box, frame, linework, poleParts);
   for (const [x, y] of poleSites(poleParts)) {
-    if (inBox([[x, y]], box)) linework.poles.push(frame.toFlat(x, y));
+    if (!inBox([[x, y]], box)) continue;
+    const site = frame.toFlat(x, y);
+    // Опора и её подкос или повторный знак съёмки в метре друг от друга - одна мачта в 3D:
+    // соседние опоры освещения стоят минимум в десятке метров.
+    if (linework.poles.some((q) => Math.hypot(q.x - site.x, q.z - site.z) < POLE_MERGE_M)) continue;
+    linework.poles.push(site);
   }
   plants.push(...existingPlants(features, box, frame));
+  plants.push(...stripCrowns(linework.treeStrips));
   const buildings = scene
     ? sceneBuildings(scene, box, frame)
     : basemapBuildings(features, box, frame);
@@ -444,6 +503,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     buildings,
     plants,
     ...linework,
+    utilities: [...linework.utilities].map(([kind, list]) => ({ kind, lines: list })),
     floorsBy,
     fallback: !scene,
   };

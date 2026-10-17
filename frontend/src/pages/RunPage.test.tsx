@@ -395,7 +395,8 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    // Файлы - в левой панели, у названия прогона.
+    const right = await screen.findByRole('complementary', { name: 'Прогон' });
     const dxf = await within(right).findByRole('link', { name: /Скачать план DXF/ });
     expect(dxf).toBeVisible();
     expect(dxf).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/result.dxf');

@@ -176,3 +176,20 @@ def test_invalid_baseline_is_an_error(baseline: Sequence[int]) -> None:
 def test_invalid_problem_is_an_error(changes: dict[str, object]) -> None:
     with pytest.raises(ValueError, match="Candidate"):
         select_candidates(replace(_trap(), **changes), ())
+
+
+def test_weight_sum_beyond_float_precision_keeps_the_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ВДНХ green-atlas (3,4 км², 17.10.2026): сумма весов мест вышла за точность float, и прогон
+    падал. Задача выбора мест тогда не решается, остаётся проверенный жадный план."""
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Weight-limited case must not call the MILP solver")
+
+    monkeypatch.setattr("green.application.candidate_selection.milp", fail)
+    heavy = SelectionProblem(((0, 0), (10, 0)), (10**12, 10**12), ("a", "b"), 1)
+    report = select_candidates(heavy, (0, 1))
+    assert report.solver_status == "weight_limit"
+    assert report.selected == (0, 1)
+    assert not report.optimal

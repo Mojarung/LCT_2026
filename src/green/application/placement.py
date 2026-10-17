@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import math
 import re
 from dataclasses import dataclass, field, replace
@@ -22,8 +23,14 @@ import shapely
 from green.application.approximation import reserved_buffer
 from green.application.barriers import BARRIER_NOTE, NEAR_M, barrier_distance
 from green.application.candidate_selection import SelectionProblem, select_candidates
-from green.application.constraints import ConstraintIndex, EvaluationBatch, boundary_gaps
+from green.application.constraints import (
+    ConstraintIndex,
+    EvaluationBatch,
+    boundary_gaps,
+    work_boundary,
+)
 from green.application.errors import InputError
+from green.application.kerbs import is_kerb
 from green.application.params import (
     REJECTIONS_CEILING,
     active_distance_rules,
@@ -35,18 +42,25 @@ from green.application.places import Place, place_map
 from green.application.species_norms import species_norms
 from green.application.surfaces import Material, build_surface_map
 from green.application.wording import counted
-from green.application.zones import CAPACITY_STAT, MAX_ZONE_POINTS, build_zones, pack_count
+from green.application.zones import (
+    CAPACITY_STAT,
+    MAX_ZONE_POINTS,
+    blocked_shares,
+    build_zones,
+    pack_count,
+)
 from green.domain.norms import PlantingType
 from green.domain.objects import ObjectClass
 from green.domain.planting import CheckOutcome, Placement, Plan, Rejection, Verdict, Zone
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from numpy.typing import NDArray
     from shapely.geometry import LineString
     from shapely.geometry.base import BaseGeometry
 
+    from green.application.likeness import LikenessModel
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
     from green.domain.norms import DistanceRule, RuleBook
@@ -57,6 +71,7 @@ if TYPE_CHECKING:
 MODE_ALLEY = "alley"
 MODE_LAWN = "lawn"
 MODE_FILL = "fill"  # добор зоны; посадки подписаны как заполнение газона
+MODE_EXISTING_ROW = "existing_row"
 MODE_SHRUB_GROUP = "shrub_group"
 MODE_SHRUB_ROW = "shrub_row"
 MODE_CURB_HEDGE = "curb_hedge"
@@ -65,6 +80,7 @@ MODE_SHRUB_FILL = "shrub_fill"
 MODE_LABELS = {
     MODE_ALLEY: "аллея вдоль борта",
     MODE_LAWN: "заполнение газона",
+    MODE_EXISTING_ROW: "продолжение ряда существующих деревьев",
     MODE_SHRUB_GROUP: "группа кустарников на месте дерева",
     MODE_SHRUB_ROW: "ряд кустарника у борта под кронами аллеи",
     MODE_CURB_HEDGE: "живая изгородь вдоль борта",
@@ -135,6 +151,19 @@ def _outside_yards(candidates: list[_Candidate], features: Sequence[Feature]) ->
 class GreedyPlantingStrategy:
     """Аллея вдоль борта, затем заполнение газона; первый допустимый вариант на станции."""
 
+    def __init__(self, likeness: LikenessModel | None = None) -> None:
+        # Скоркарта практики проектировщиков: только добавка к весу места в задаче выбора.
+        self.likeness = likeness
+
+    def _selector(
+        self, features: Sequence[Feature], species: Species, params: PlanParams
+    ) -> _Selector:
+        selector = _Selector(species=species, params=params)
+        if self.likeness is not None and params.likeness_weight > 0:
+            model = self.likeness
+            selector.likeness = lambda xy: model.probability(xy, features)
+        return selector
+
     def plan(  # noqa: PLR0913 - входы прогона плюс его карта покрытий
         self,
         features: Sequence[Feature],
@@ -182,8 +211,12 @@ class GreedyPlantingStrategy:
         )
         if params.require_soil:
             index.surface = surface or _surface_map(features, labels, index, params)
-        selector = _Selector(species=species, params=params)
+        selector = self._selector(features, species, params)
         stats: dict[str, int | float] = {}
+        if MODE_EXISTING_ROW in params.modes:
+            candidates = existing_row_candidates(features, params)
+            stats["row_candidates"] = len(candidates)
+            stats["row_plantable"] = _offer(index, selector, candidates)
         if MODE_ALLEY in params.modes:
             reach = max((abs(offset) for offset in params.curb_offsets_m), default=0.0)
             lines = _curb_lines(features, index.boundary, reach + _ROUNDING_PAIR_RESERVE_M)
@@ -297,6 +330,9 @@ def _zones(
     zones = build_zones(index, params.zone_cell_m) if params.zones else ()
     for zone in zones:
         stats[f"zone_{zone.verdict.value}_m2"] = round(zone.area_m2)
+    # Почему пусто: какая норма закрыла какую часть грунта.
+    if params.zones:
+        stats.update(blocked_shares(index, params.zone_cell_m))
     return zones
 
 
@@ -363,6 +399,7 @@ def _surface_map(
         ambiguity_m=params.surface_ambiguity_m,
         tree_distance_m=params.tree_seed_distance_m,
         inference_mode=params.surface_inference_mode,
+        open_ground=params.open_ground,
     )
 
 
@@ -379,7 +416,7 @@ def _curb_lines(
 ) -> list[LineString]:
     parts = []
     for feature in features:
-        if feature.object_class is not ObjectClass.CURB:
+        if not is_kerb(feature):
             continue
         geometry = feature.geometry
         if geometry.geom_type in {"Polygon", "MultiPolygon"}:
@@ -471,6 +508,116 @@ def _hedge_room(params: PlanParams) -> float:
     кустарника, ямы дерева и куста не перекрываются (как в shrub_rows.Blockers)."""
     offsets = params.shrub_row_curb_offsets_m or (0.0,)
     return min(offsets) + params.planting_radius_m + params.shrub_planting_radius_m
+
+
+# Ряд существующих деревьев: шаг, отклонение от прямой и сколько мест продолжать за край.
+ROW_STEP_M = (4.0, 12.0)
+ROW_TOLERANCE = 0.1  # доля шага: насколько дерево может уйти от места ряда
+ROW_MIN_TREES = 4  # ряд - 4 дерева подряд (ревью 16.10.2026: тройки в облаке дают ложные ряды)
+ROW_MAX_GAP = 2  # в ряду пропущено не больше одного места подряд
+ROW_EXTEND = 6
+ROW_REACH_M = 50.0  # деревья дальше от границы работ ряд не задают
+_ROW_STATION = 1_000_000  # станции рядов не пересекаются со станциями аллеи
+
+
+def existing_row_candidates(features: Sequence[Feature], params: PlanParams) -> list[_Candidate]:
+    """Места, продолжающие ряды существующих деревьев их же шагом (идея greenai).
+
+    Ряд - ROW_MIN_TREES и больше стволов подряд на прямой с шагом ROW_STEP_M (отклонение не
+    больше ROW_TOLERANCE шага, пропущено не больше одного места подряд). Ряд продолжается на
+    ROW_EXTEND мест за каждый край и заполняет пропуски. Берутся только стволы (точки): полоса
+    деревьев - не ствол; только у границы работ. Нормы место проходит как любой кандидат.
+    """
+    del params
+    boundary = work_boundary(features)
+    reach = boundary.buffer(ROW_REACH_M) if boundary is not None else None
+    trees = [
+        (float(f.geometry.x), float(f.geometry.y))
+        for f in features
+        if f.object_class is ObjectClass.EXISTING_TREE
+        and f.geometry.geom_type == "Point"
+        and (reach is None or reach.contains(f.geometry))
+    ]
+    if len(trees) < ROW_MIN_TREES:
+        return []
+    points = np.array(trees)
+    index = shapely.STRtree(shapely.points(points))
+    low, high = ROW_STEP_M
+    seen: set[tuple[int, ...]] = set()
+    taken: set[tuple[int, int]] = set()
+    out: list[_Candidate] = []
+    for a, (ax, ay) in enumerate(trees):
+        for b in index.query(shapely.Point(ax, ay), predicate="dwithin", distance=high):
+            if b <= a:
+                continue
+            bx, by = trees[b]
+            step = math.hypot(bx - ax, by - ay)
+            if not low <= step <= high:
+                continue
+            ux, uz = (bx - ax) / step, (by - ay) / step
+            ks = _row_ks(points, (ax, ay), (ux, uz), step)
+            if len(ks) < ROW_MIN_TREES:
+                continue
+            key = (round(math.degrees(math.atan2(uz, ux)) % 180), round(step), *ks[:2])
+            if key in seen:
+                continue
+            seen.add(key)
+            for candidate in _row_places(ks, (ax, ay), (ux, uz), step, _ROW_STATION + len(out)):
+                spot = (round(candidate.x * 2), round(candidate.y * 2))
+                if spot not in taken:
+                    taken.add(spot)
+                    out.append(candidate)
+    return out
+
+
+def _row_ks(
+    points: NDArray[np.float64], origin: tuple[float, float], u: tuple[float, float], step: float
+) -> list[int]:
+    """Номера мест ряда origin + k * step * u, занятые стволами, - связная часть с k = 0 и 1."""
+    rel = points - np.array(origin)
+    along = rel @ np.array(u)
+    across = rel @ np.array((-u[1], u[0]))
+    k = np.round(along / step)
+    near = (np.abs(across) <= ROW_TOLERANCE * step) & (
+        np.abs(along - k * step) <= ROW_TOLERANCE * step
+    )
+    ks = sorted(set(k[near].astype(int).tolist()))
+    if 0 not in ks or 1 not in ks:
+        return []
+    lo = hi = ks.index(0)
+    while lo > 0 and ks[lo] - ks[lo - 1] <= ROW_MAX_GAP:
+        lo -= 1
+    while hi < len(ks) - 1 and ks[hi + 1] - ks[hi] <= ROW_MAX_GAP:
+        hi += 1
+    part = ks[lo : hi + 1]
+    # Ядро ряда - ROW_MIN_TREES стволов подряд без пропуска: случайное облако так не ложится.
+    run = best = 1
+    for left, right in itertools.pairwise(part):
+        run = run + 1 if right - left == 1 else 1
+        best = max(best, run)
+    return part if best >= ROW_MIN_TREES else []
+
+
+def _row_places(
+    ks: list[int],
+    origin: tuple[float, float],
+    u: tuple[float, float],
+    step: float,
+    station: int,
+) -> list[_Candidate]:
+    taken = set(ks)
+    wanted = [k for k in range(ks[0], ks[-1]) if k not in taken]  # пропуски
+    wanted += [ks[-1] + i for i in range(1, ROW_EXTEND + 1)]
+    wanted += [ks[0] - i for i in range(1, ROW_EXTEND + 1)]
+    return [
+        _Candidate(
+            station=station + i,
+            mode=MODE_EXISTING_ROW,
+            x=origin[0] + k * step * u[0],
+            y=origin[1] + k * step * u[1],
+        )
+        for i, k in enumerate(wanted)
+    ]
 
 
 def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
@@ -632,6 +779,8 @@ class _Selector:
     _chosen: list[_Candidate] = field(default_factory=list)
     # Все предложенные места с принимаемым вердиктом, по порядку: из них - вместимость участка.
     admissible: list[tuple[float, float]] = field(default_factory=list)
+    # Вероятность «так посадил бы проектировщик» по точкам места (likeness.py); None - не нужна.
+    likeness: Callable[[NDArray[np.float64]], NDArray[np.float64]] | None = None
 
     def offer(self, candidate: _Candidate, row: int) -> None:
         if candidate.station != self._station:
@@ -701,7 +850,8 @@ class _Selector:
         baseline = tuple(indices[id(candidate)] for candidate in self._chosen)
         # One extra place outweighs the sum of all secondary preferences. These are
         # project preferences, not law and not a measured ecological benefit.
-        base = 15 * len(pool) + 1
+        likeness = self._likeness_points(pool)
+        base = (15 + max(likeness, default=0)) * len(pool) + 1
         hedge_room = _hedge_room(self.params)
         problem = SelectionProblem(
             xy=tuple((c.x, c.y) for c, _, _ in pool),
@@ -711,8 +861,10 @@ class _Selector:
                 + 8 * (batch.verdict(row) is Verdict.ALLOWED)
                 + 4 * (not batch.needs_barrier(row))
                 + 2 * (c.mode == MODE_ALLEY)
+                + 3 * (c.mode == MODE_EXISTING_ROW)
                 + (c.mode == MODE_ALLEY and c.offset >= hedge_room)
-                for c, batch, row in pool
+                + extra
+                for (c, batch, row), extra in zip(pool, likeness, strict=True)
             ),
             min_gap_m=max(
                 step_with_tolerance(self.params.spacing_m, self.params.planting_type),
@@ -720,7 +872,9 @@ class _Selector:
             ),
             objective_description=(
                 "First maximize eligible places; then sum preferences: allowed=8, "
-                "no root barrier=4, alley=2, alley tree leaving room for a curb hedge=1. "
+                "no root barrier=4, continuing a row of existing trees=3, alley=2, "
+                "alley tree leaving room for a curb hedge=1, designer-likeness scorecard "
+                f"up to {self.params.likeness_weight:g}. "
                 "Species feasibility and aesthetic quality are not part of this objective."
             ),
         )
@@ -740,6 +894,16 @@ class _Selector:
             occupied.add(placement.x, placement.y)
         self.rejections = [r for r in self.rejections if not occupied.near(r.x, r.y)]
         return report
+
+    def _likeness_points(
+        self, pool: Sequence[tuple[_Candidate, EvaluationBatch, int]]
+    ) -> list[int]:
+        """Очки скоркарты практики проектировщиков: 0..likeness_weight целыми."""
+        if self.likeness is None or not pool or self.params.likeness_weight <= 0:
+            return [0] * len(pool)
+        xy = np.array([(c.x, c.y) for c, _, _ in pool], dtype=np.float64)
+        scores = self.likeness(xy) * self.params.likeness_weight
+        return [round(float(s)) for s in scores]
 
     def _placement(self, candidate: _Candidate, batch: EvaluationBatch, row: int) -> Placement:
         return Placement(
@@ -852,12 +1016,17 @@ def _warnings(
         warnings.append(
             "Заполнение газона пропущено: без карты покрытий сервис не знает, где грунт."
         )
-    if MODE_ALLEY in params.modes and not any(f.object_class is ObjectClass.CURB for f in features):
+    if MODE_ALLEY in params.modes and not any(is_kerb(f) for f in features):
         warnings.append("В чертеже не найден бортовой камень: рядовая посадка не построена.")
     if not index.has_utility_data:
         warnings.append(
-            "В чертеже нет подземных сетей: отступы от сетей не проверены, "
-            "посадки не допускаются или помечены 'требует согласования' (по профилю)."
+            "В чертеже нет подземных сетей: отступы от сетей не проверены, посадки не "
+            "допускаются (require_utility_data=true)."
+            if params.require_utility_data
+            else "Исправлено автоматически: в чертеже нет подземных сетей - отступы от сетей "
+            "не проверены, посадки поставлены с пометкой «требует согласования» с владельцами "
+            "сетей. Если сети есть на слоях, которые сервис не узнал, назначьте их классы "
+            "(layer_classes); чтобы отказывать в посадке, запустите с require_utility_data=true."
         )
     if index.boundary is None:
         warnings.append(

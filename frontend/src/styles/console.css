@@ -159,7 +159,18 @@
 .registry td {
   padding: 9px 10px 9px 0;
   border-bottom: 1px solid var(--hair);
-  vertical-align: baseline;
+  vertical-align: middle;
+}
+/* Все прогоны в панели, длинный список прокручивается внутри неё; шапка таблицы остаётся. */
+.registry-wrap {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.registry-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
 }
 .registry td:last-child,
 .registry th:last-child {
@@ -718,5 +729,99 @@
   }
   .hero-plan {
     display: none;
+  }
+}
+
+/* Главная - рабочий стол: короткая шапка, под ней запуск и реестр, ниже справка. */
+.console-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px 40px;
+}
+/* Продукт на первом экране: план на слоях и фото по 3D-кадру, небольшой полосой. */
+.console-shots {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+}
+.console-shots img {
+  display: block;
+  height: 132px;
+  width: auto;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+}
+.console-shots figcaption {
+  align-self: flex-end;
+  max-width: 16ch;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+.console-head h1 {
+  margin: 0;
+  font-size: clamp(26px, 1.1rem + 1.4vw, 38px);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--bone);
+}
+.console-head .lead {
+  margin-top: 10px;
+  max-width: 68ch;
+  font-size: var(--fs-body);
+}
+.console-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+.console-links a {
+  color: var(--bone-2);
+}
+.console-links a:hover {
+  color: var(--bone);
+}
+.how-section {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: clamp(20px, 3vw, 48px);
+  align-items: start;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair);
+}
+.how-section .how {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.how-visual {
+  margin: 0;
+}
+.how-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+}
+.how-visual figcaption {
+  margin-top: 8px;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
+}
+@media (max-width: 900px) {
+  .console-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-shots img {
+    height: 96px;
+  }
+  .how-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .how-section .how {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

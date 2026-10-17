@@ -5,27 +5,31 @@
  * поэтому окно на любой стене одного размера, а этаж ровно 3 м, как у здания в чертеже.
  * Все здания сливаются в две сетки (стены и крыши): тысяча домов - два вызова отрисовки.
  *
- * Фасад процедурный: по этажности, признаку «жилое/нежилое» и материалу стен из подписей
- * (К - кирпич, М - металл) выбирается рисунок - кирпичный дом, панельный, павильон с
- * витринами, металлический ангар. Это не фотография конкретного дома: съёмка Мосгеотреста
- * фасадов не несёт, и выдавать догадку за точность нельзя. */
+ * Фасад процедурный: серия дома (facades.ts) по этажности и назначению задаёт рисунок -
+ * панельная башня и пластина, пятиэтажка, кирпичный дом, павильон с витринами, ангар - и цвет
+ * стены и акцента. Лоджии, подъезды и парапеты - объёмом (facadeModules.ts). Это не фотография
+ * конкретного дома: съёмка Мосгеотреста фасадов не несёт, и выдавать догадку за точность
+ * нельзя. */
 
 import * as THREE from 'three';
+import { bayOf, mainAxis, paletteOf, type Rgb, seriesOf, STYLE_OF } from './facades';
 import { RELIEF_NORMAL } from './relief';
 
 import type { Building, Flat, Ring } from './types';
 
 /** Стиль фасада, номер уходит в шейдер атрибутом. */
-export const STYLE = { panel: 0, brick: 1, pavilion: 2, metal: 3, porch: 4 } as const;
+export const STYLE = {
+  panel: 0,
+  brick: 1,
+  pavilion: 2,
+  metal: 3,
+  porch: 4,
+  khrushchev: 5,
+} as const;
 export type Style = (typeof STYLE)[keyof typeof STYLE];
 
 export function styleOf(b: Building): Style {
-  if (b.kind === 'porch' || b.kind === 'container' || b.kind === 'structure') return STYLE.porch;
-  if (b.wall === 'metal') return STYLE.metal;
-  if (b.floors <= 2) return b.use === 'residential' ? STYLE.brick : STYLE.pavilion;
-  if (b.wall === 'brick') return b.floors >= 12 ? STYLE.panel : STYLE.brick;
-  // Без материала: высокие дома в Москве чаще панельные, средние - кирпичные.
-  return b.floors >= 9 || b.seed % 3 === 0 ? STYLE.panel : STYLE.brick;
+  return STYLE_OF[seriesOf(b)] as Style;
 }
 
 function ringArea(ring: Ring): number {
@@ -43,7 +47,12 @@ interface Buffers {
   nor: number[];
   uv: number[];
   info: number[];
+  /** Цвет стены и акцента (ограждения лоджий, цоколь, вывеска), линейный. */
+  colors: number[];
 }
+
+/** Атрибуты вершины дома: стиль, этажность, высота, разброс; цвет стены; цвет акцента; пролёт. */
+type VertexInfo = [number[], number[]];
 
 /** Стены одного кольца. Нормаль наружу: у внешнего контура и у двора обход противоположный,
  *  поэтому сторона выбирается по знаку площади кольца, а не по порядку в данных. */
@@ -52,7 +61,7 @@ function pushWalls(
   ring: Ring,
   height: number,
   hole: boolean,
-  info: [number, number, number, number],
+  [info, colors]: VertexInfo,
 ): void {
   // В координатах сцены (x, z) площадь > 0 - обход по часовой, если смотреть сверху.
   // У такого кольца внутренность справа по ходу, наружу - нормаль (dz, -dx); у двора наоборот.
@@ -92,10 +101,12 @@ function pushWalls(
             [a, u0, height],
           ];
     for (const [p, u, v] of quad) {
-      out.pos.push(p.x, v, p.z);
+      // Низ стены - на 20 см под землёй: дом у опущенного проезда не висит над асфальтом.
+      out.pos.push(p.x, v > 0 ? v : -0.2, p.z);
       out.nor.push(nx, 0, nz);
       out.uv.push(u, v);
       out.info.push(...info);
+      out.colors.push(...colors);
     }
   }
 }
@@ -106,12 +117,26 @@ function geometryOf(b: Buffers): THREE.BufferGeometry {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
   g.setAttribute('aInfo', new THREE.Float32BufferAttribute(b.info, 4));
+  // Семь чисел на вершину в двух атрибутах: больше четырёх в один WebGL не берёт.
+  const wall: number[] = [];
+  const accent: number[] = [];
+  for (let i = 0; i + 6 < b.colors.length; i += 7) {
+    wall.push(b.colors[i] ?? 0, b.colors[i + 1] ?? 0, b.colors[i + 2] ?? 0);
+    accent.push(
+      b.colors[i + 3] ?? 0,
+      b.colors[i + 4] ?? 0,
+      b.colors[i + 5] ?? 0,
+      b.colors[i + 6] ?? 3,
+    );
+  }
+  g.setAttribute('aWall', new THREE.Float32BufferAttribute(wall, 3));
+  g.setAttribute('aAccent', new THREE.Float32BufferAttribute(accent, 4));
   g.computeBoundingSphere();
   return g;
 }
 
 /** Крыша: плоская, треугольники контура с дворами. */
-function pushRoof(out: Buffers, b: Building, info: [number, number, number, number]): void {
+function pushRoof(out: Buffers, b: Building, [info, colors]: VertexInfo): void {
   const [outer, ...holes] = b.rings;
   if (!outer || outer.length < 3) return;
   const contour = outer.map((p) => new THREE.Vector2(p.x, p.z));
@@ -133,6 +158,7 @@ function pushRoof(out: Buffers, b: Building, info: [number, number, number, numb
       out.nor.push(0, 1, 0);
       out.uv.push(p.x, p.y);
       out.info.push(...info);
+      out.colors.push(...colors);
     }
   }
 }
@@ -142,167 +168,105 @@ export interface BuildingMeshes {
   roofs: THREE.BufferGeometry;
 }
 
-interface AccentBuffers {
-  pos: number[];
-  nor: number[];
-  color: number[];
+function linear(rgb: Rgb): number[] {
+  const c = new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
+  return [c.r, c.g, c.b];
 }
 
-type AccentColor = readonly [number, number, number];
-
-function accentColor(hex: number): AccentColor {
-  const color = new THREE.Color(hex);
-  return [color.r, color.g, color.b];
-}
-
-const STONE = accentColor(0xb8b5ac);
-const SHADOW = accentColor(0x414748);
-const RAIL = accentColor(0x26323a);
-const GLASS = accentColor(0x526575);
-
-/** A few real projections break the flat building silhouette without one draw call per window. */
-export function facadeAccentsGeometry(buildings: readonly Building[]): THREE.BufferGeometry {
-  const out: AccentBuffers = { pos: [], nor: [], color: [] };
-  let balconies = 0;
-  const balconyLimit = 1800;
-  for (const building of buildings) {
-    const style = styleOf(building);
-    if (building.floors < 3 || (style !== STYLE.panel && style !== STYLE.brick)) continue;
-    const residential = building.use !== 'non_residential';
-    const storey = (building.height - 1.2) / building.floors;
-    const plinth = 0.9;
-    building.rings.forEach((ring, index) => {
-      const clockwise = ringArea(ring) > 0;
-      const hole = index > 0;
-      const outwardSign = clockwise !== hole ? 1 : -1;
-      let along = 0;
-      for (let segment = 0; segment < ring.length; segment++) {
-        const a = ring[segment];
-        const b = ring[(segment + 1) % ring.length];
-        if (!a || !b) continue;
-        const dx = b.x - a.x;
-        const dz = b.z - a.z;
-        const length = Math.hypot(dx, dz);
-        if (length < 0.05) continue;
-        const wallStart = along;
-        along += length;
-        if (length < 7) continue;
-        const tangent = new THREE.Vector3(dx / length, 0, dz / length);
-        const normal = new THREE.Vector3(
-          (dz / length) * outwardSign,
-          0,
-          (-dx / length) * outwardSign,
-        );
-        const point = (u: number, y: number, depth: number) =>
-          new THREE.Vector3(
-            a.x + tangent.x * u + normal.x * depth,
-            y,
-            a.z + tangent.z * u + normal.z * depth,
-          );
-        const face = (corners: THREE.Vector3[], wanted: THREE.Vector3, color: AccentColor) => {
-          const cross = new THREE.Vector3()
-            .subVectors(corners[1]!, corners[0]!)
-            .cross(new THREE.Vector3().subVectors(corners[2]!, corners[0]!));
-          const order = cross.dot(wanted) >= 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
-          for (const i of order) {
-            const p = corners[i];
-            if (!p) continue;
-            out.pos.push(p.x, p.y, p.z);
-            out.nor.push(wanted.x, wanted.y, wanted.z);
-            out.color.push(...color);
-          }
-        };
-        const box = (
-          u0: number,
-          u1: number,
-          y0: number,
-          y1: number,
-          n0: number,
-          n1: number,
-          color: AccentColor,
-        ) => {
-          face(
-            [point(u0, y0, n1), point(u1, y0, n1), point(u1, y1, n1), point(u0, y1, n1)],
-            normal,
-            color,
-          );
-          face(
-            [point(u1, y0, n0), point(u0, y0, n0), point(u0, y1, n0), point(u1, y1, n0)],
-            normal.clone().negate(),
-            color,
-          );
-          face(
-            [point(u0, y1, n0), point(u0, y1, n1), point(u1, y1, n1), point(u1, y1, n0)],
-            new THREE.Vector3(0, 1, 0),
-            color,
-          );
-          face(
-            [point(u0, y0, n1), point(u0, y0, n0), point(u1, y0, n0), point(u1, y0, n1)],
-            new THREE.Vector3(0, -1, 0),
-            color,
-          );
-          face(
-            [point(u0, y0, n0), point(u0, y0, n1), point(u0, y1, n1), point(u0, y1, n0)],
-            tangent.clone().negate(),
-            color,
-          );
-          face(
-            [point(u1, y0, n1), point(u1, y0, n0), point(u1, y1, n0), point(u1, y1, n1)],
-            tangent,
-            color,
-          );
-        };
-
-        // Horizontal cornices catch the low sun and make floor groups legible at street scale.
-        for (let floor = 3; floor < building.floors; floor += 3) {
-          const y = plinth + floor * storey;
-          box(0.1, length - 0.1, y - 0.07, y + 0.02, 0.015, 0.11, STONE);
-        }
-        if (!residential || length < 12 || balconies >= balconyLimit) continue;
-        const bayWidth = style === STYLE.panel ? 3 : 2.8;
-        const firstBay = Math.ceil(wallStart / bayWidth);
-        const lastBay = Math.floor((wallStart + length) / bayWidth);
-        for (let floor = 2; floor < building.floors && balconies < balconyLimit; floor++) {
-          for (let bay = firstBay; bay < lastBay && balconies < balconyLimit; bay++) {
-            if ((bay * 17 + floor * 11 + building.seed + segment * 7) % 7 !== 0) continue;
-            const u = (bay + 0.5) * bayWidth - wallStart;
-            if (u - 1.15 < 0.35 || u + 1.15 > length - 0.35) continue;
-            const y = plinth + floor * storey + 0.1;
-            box(u - 1.1, u + 1.1, y - 0.14, y, 0.01, 0.82, STONE);
-            box(u - 1.04, u + 1.04, y + 0.03, y + 0.75, 0.76, 0.8, GLASS);
-            box(u - 1.1, u + 1.1, y + 0.74, y + 0.79, 0.73, 0.84, RAIL);
-            box(u - 1.09, u - 1.04, y, y + 0.79, 0.72, 0.84, SHADOW);
-            box(u + 1.04, u + 1.09, y, y + 0.79, 0.72, 0.84, SHADOW);
-            balconies++;
-          }
-        }
-      }
-    });
+/** Двускатная крыша - у малоэтажного жилого или кирпичного дома почти прямоугольного плана
+ *  шириной 4-20 м: так выглядят частные и двухэтажные дома (идея и правило - ветка
+ *  fix/final-wave1). Панельные, высокие и сложные по плану дома - с плоской крышей. */
+export function pitchedRoof(b: Building): boolean {
+  const [outer, ...holes] = b.rings;
+  if (!outer || outer.length < 4 || holes.length || b.floors > 3 || b.kind !== 'building') {
+    return false;
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(out.nor, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(out.color, 3));
-  geometry.computeBoundingSphere();
-  return geometry;
+  if (b.use !== 'residential' && b.wall !== 'brick') return false;
+  const axis = mainAxis(outer);
+  if (axis.width < 4 || axis.width > 20) return false;
+  return Math.abs(ringArea(outer)) >= 0.85 * axis.length * axis.width;
+}
+
+/** Свес кровли за стену и подъём конька: 0,3 ширины дома, 1,6-4,5 м. */
+const EAVES_M = 0.35;
+const RIDGE_SHARE = 0.3;
+
+function pushTriangle(
+  out: Buffers,
+  points: readonly THREE.Vector3[],
+  normal: THREE.Vector3,
+  uv: (p: THREE.Vector3) => [number, number],
+  [info, colors]: VertexInfo,
+): void {
+  for (const q of points) {
+    out.pos.push(q.x, q.y, q.z);
+    out.nor.push(normal.x, normal.y, normal.z);
+    out.uv.push(...uv(q));
+    out.info.push(...info);
+    out.colors.push(...colors);
+  }
+}
+
+/** Скаты - в сетку крыш, фронтоны - в сетку стен (без окон: выше последнего этажа). */
+function pushGableRoof(roofs: Buffers, walls: Buffers, b: Building, vertex: VertexInfo): void {
+  const outer = b.rings[0];
+  if (!outer) return;
+  const r = mainAxis(outer);
+  const half = r.length / 2 + EAVES_M;
+  const side = r.width / 2 + EAVES_M;
+  const rise = Math.min(4.5, Math.max(1.6, RIDGE_SHARE * r.width));
+  const vx = -r.dz;
+  const vz = r.dx;
+  const at = (s: number, t: number, y: number) =>
+    new THREE.Vector3(r.cx + r.dx * s + vx * t, y, r.cz + r.dz * s + vz * t);
+  const facing = (a: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, want: THREE.Vector3) => {
+    const n = new THREE.Vector3().subVectors(c, a).cross(new THREE.Vector3().subVectors(d, a));
+    return n.dot(want) >= 0
+      ? { pts: [a, c, d], n: n.normalize() }
+      : { pts: [a, d, c], n: n.negate().normalize() };
+  };
+  const roofUv = (q: THREE.Vector3): [number, number] => [q.x, q.z];
+  for (const sign of [-1, 1]) {
+    const a = at(-half, sign * side, b.height);
+    const c = at(half, sign * side, b.height);
+    const d = at(half, 0, b.height + rise);
+    const e = at(-half, 0, b.height + rise);
+    const up = new THREE.Vector3(vx * sign, 1, vz * sign);
+    for (const [p0, p1, p2] of [
+      [a, c, d],
+      [a, d, e],
+    ] as const) {
+      const t = facing(p0, p1, p2, up);
+      pushTriangle(roofs, t.pts, t.n, roofUv, vertex);
+    }
+  }
+  for (const sign of [-1, 1]) {
+    const a = at(sign * (half - EAVES_M), -side + EAVES_M, b.height);
+    const c = at(sign * (half - EAVES_M), side - EAVES_M, b.height);
+    const d = at(sign * (half - EAVES_M), 0, b.height + rise - (rise * EAVES_M) / side);
+    const outward = new THREE.Vector3(r.dx * sign, 0, r.dz * sign);
+    const t = facing(a, c, d, outward);
+    // Развёртка фронтона: v выше высоты дома, поэтому шейдер не рисует на нём окна.
+    pushTriangle(walls, t.pts, outward, (q) => [q.x * r.dz - q.z * r.dx, q.y], vertex);
+  }
 }
 
 export function buildingGeometry(buildings: readonly Building[]): BuildingMeshes {
-  const walls: Buffers = { pos: [], nor: [], uv: [], info: [] };
-  const roofs: Buffers = { pos: [], nor: [], uv: [], info: [] };
+  const walls: Buffers = { pos: [], nor: [], uv: [], info: [], colors: [] };
+  const roofs: Buffers = { pos: [], nor: [], uv: [], info: [], colors: [] };
   for (const b of buildings) {
-    const style = styleOf(b);
-    // info: стиль, этажей, высота, разброс цвета 0..1.
-    const info: [number, number, number, number] = [
-      style,
-      Math.max(1, b.floors),
-      b.height,
-      (b.seed % 997) / 997,
+    const series = seriesOf(b);
+    const palette = paletteOf(b, series);
+    // info: стиль, этажей, высота, разброс 0..1; colors: стена, акцент, пролёт.
+    const vertex: VertexInfo = [
+      [STYLE_OF[series], Math.max(1, b.floors), b.height, (b.seed % 997) / 997],
+      [...linear(palette.wall), ...linear(palette.accent), bayOf(series)],
     ];
     b.rings.forEach((ring, i) => {
-      if (ring.length >= 3) pushWalls(walls, ring, b.height, i > 0, info);
+      if (ring.length >= 3) pushWalls(walls, ring, b.height, i > 0, vertex);
     });
-    pushRoof(roofs, b, info);
+    if (pitchedRoof(b)) pushGableRoof(roofs, walls, b, vertex);
+    else pushRoof(roofs, b, vertex);
   }
   return { walls: geometryOf(walls), roofs: geometryOf(roofs) };
 }
@@ -320,9 +284,13 @@ export function facadeMaterial(uniforms: FacadeUniforms): THREE.MeshStandardMate
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec4 aInfo;\nvarying vec4 vInfo;\nvarying vec2 vFacade;',
+        '#include <common>\nattribute vec4 aInfo;\nattribute vec3 aWall;\nattribute vec4 aAccent;\n' +
+          'varying vec4 vInfo;\nvarying vec3 vWall;\nvarying vec4 vAccent;\nvarying vec2 vFacade;',
       )
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvInfo = aInfo;\nvFacade = uv;');
+      .replace(
+        '#include <uv_vertex>',
+        '#include <uv_vertex>\nvInfo = aInfo;\nvWall = aWall;\nvAccent = aAccent;\nvFacade = uv;',
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FACADE_HEAD}\n${RELIEF_NORMAL}`)
       .replace('#include <map_fragment>', FACADE_MAP)
@@ -343,6 +311,8 @@ export function facadeMaterial(uniforms: FacadeUniforms): THREE.MeshStandardMate
 
 const FACADE_HEAD = /* glsl */ `
 varying vec4 vInfo;
+varying vec3 vWall;
+varying vec4 vAccent;
 varying vec2 vFacade;
 uniform float uNight;
 uniform sampler2D uNoise;
@@ -374,47 +344,54 @@ const FACADE_MAP = /* glsl */ `
   float fv = (v - plinth) / storey;
   float level = floor(fv);
   float lv = fract(fv);
-  float bay = style == 0 ? 3.0 : 2.8;
+  float bay = vAccent.w;
   float cell = floor(u / bay);
   float lu = fract(u / bay);
-  vec3 wall;
-  if (style == 0) {
-    float block = mod(floor(cell / 3.0 + tint * 2.0), 4.0);
-    float darkCladding = step(2.0, block);
-    wall = mix(vec3(0.43, 0.39, 0.34), vec3(0.045, 0.055, 0.065), darkCladding);
-    wall = mix(wall, vec3(0.55, 0.47, 0.38), tint * (1.0 - darkCladding) * 0.2);
-    if (level < 1.0) wall = mix(wall, vec3(0.035, 0.042, 0.048), 0.85);
-  }
-  else if (style == 1) wall = mix(vec3(0.52, 0.28, 0.20), vec3(0.68, 0.48, 0.34), tint);
-  else if (style == 2) wall = mix(vec3(0.78, 0.76, 0.72), vec3(0.64, 0.66, 0.68), tint);
-  else if (style == 3) wall = mix(vec3(0.55, 0.58, 0.60), vec3(0.40, 0.45, 0.48), tint);
-  else wall = vec3(0.62, 0.61, 0.58);
+  vec3 wall = vWall;
+  vec3 accent = vAccent.rgb;
   float grime = texture2D(uNoise, vec2(u, v) / 37.0).r;
-  wall *= 0.86 + 0.22 * grime;
+  wall *= 0.9 + 0.16 * grime;
+  bool panel = style == 0 || style == 5;
+  if (panel) {
+    // Панели темнеют неравномерно; швы - по перекрытиям и стыкам панелей.
+    float sw = style == 0 ? bay * 2.0 : bay;
+    wall *= 0.95 + 0.07 * hash12(vec2(floor(u / sw), level) + tint * 5.0);
+    vec2 aa2 = max(fwidth(vec2(u / sw, lv)), vec2(0.0001));
+    float fu = fract(u / sw);
+    float seamV = 1.0 - smoothstep(0.0, aa2.x * 1.5, min(fu, 1.0 - fu));
+    float seamH = 1.0 - smoothstep(0.0, aa2.y * 1.5, min(lv, 1.0 - lv));
+    wall *= 1.0 - 0.16 * max(seamV, seamH);
+  }
   if (style == 1) {
     float row = floor(v / 0.075);
     float brick = step(0.08, fract(v / 0.075)) * step(0.04, fract(u / 0.25 + mod(row, 2.0) * 0.5));
-    wall *= mix(0.78, 1.0, brick) * (0.94 + 0.12 * hash12(vec2(floor(u / 0.25), row)));
-  }
-  if (style == 0) {
-    // Швы панелей: горизонталь на перекрытии, вертикаль через пролёт.
-    float seam = (1.0 - step(0.012, abs(lv - 0.0))) + (1.0 - step(0.006, abs(fract(u / 6.0) - 0.0)));
-    wall *= 1.0 - 0.18 * clamp(seam, 0.0, 1.0);
-    // Подоконные панели и простенки читаются как материал, а не как белая плоскость.
-    wall *= 1.0 - 0.12 * step(0.12, lv) * (1.0 - step(0.28, lv));
+    wall *= mix(0.8, 1.0, brick) * (0.94 + 0.12 * hash12(vec2(floor(u / 0.25), row)));
   }
   if (style == 3) {
-    wall *= 0.9 + 0.1 * step(0.5, fract(u / 0.2));
+    wall *= 0.88 + 0.12 * step(0.5, fract(u / 0.2));
   }
+  // Цоколь - плитка цвета акцента, темнее стены, как синий цоколь панельных домов.
+  if (style != 2 && style != 4 && floors > 1.0 && v < plinth) {
+    wall = mix(accent, vec3(0.32), 0.35) * (0.7 + 0.12 * grime);
+  }
+  // Павильон: над витриной - полоса вывески цвета акцента.
+  if (style == 2 && level < 1.0 && lv > 0.8) wall = accent * (0.85 + 0.1 * grime);
   float glass = 0.0;
   float reveal = 0.0;
   float mullion = 0.0;
   bool facade = style != 4 && v > plinth && level < floors;
   if (facade) {
-    vec2 size = style == 2 && level < 1.0 ? vec2(0.86, 0.72) :
-      style == 0 ? (level < 1.0 ? vec2(0.86, 0.72) : vec2(0.59, 0.6)) : vec2(0.5, 0.52);
+    // Окно в ячейке: у панельного дома широкое окно комнаты чередуется с узким кухонным.
+    vec2 size = vec2(0.46, 0.52);
+    float cy = 0.52;
+    if (style == 0) size = vec2(mod(cell, 2.0) < 1.0 ? 0.56 : 0.42, 0.5);
+    if (style == 5) size = vec2(0.46, 0.5);
+    if (style == 2) {
+      size = level < 1.0 ? vec2(0.92, 0.62) : vec2(0.92, 0.42);
+      cy = level < 1.0 ? 0.42 : 0.55;
+    }
     if (style == 3) size = vec2(0.0);
-    vec2 d = abs(vec2(lu, lv) - vec2(0.5, 0.52));
+    vec2 d = abs(vec2(lu, lv) - vec2(0.5, cy));
     float frame = step(d.x, size.x * 0.5 + 0.035) * step(d.y, size.y * 0.5 + 0.035);
     vec2 aa = max(fwidth(vec2(lu, lv)), vec2(0.0001));
     vec2 pane = 1.0 - smoothstep(size * 0.5 - aa, size * 0.5 + aa, d);
@@ -422,8 +399,10 @@ const FACADE_MAP = /* glsl */ `
     // A shallow recess and slim crossbars give windows depth without extra meshes.
     reveal = frame;
     mullion = (1.0 - smoothstep(0.006, 0.006 + aa.x, abs(lu - 0.5))) * glass;
-    mullion = max(mullion, (1.0 - smoothstep(0.007, 0.007 + aa.y, abs(lv - 0.64))) * glass);
-    wall = mix(wall, vec3(0.17, 0.18, 0.18), clamp(frame - glass + mullion, 0.0, 1.0));
+    mullion = max(mullion, (1.0 - smoothstep(0.007, 0.007 + aa.y, abs(lv - cy - 0.12))) * glass);
+    // Рамы жилых домов - белый пластик, у павильона - тёмный алюминий.
+    vec3 frameColor = style == 2 ? vec3(0.17, 0.18, 0.18) : vec3(0.78, 0.78, 0.76);
+    wall = mix(wall, frameColor, clamp(frame - glass + mullion, 0.0, 1.0));
     glass *= 1.0 - mullion;
   }
   // Горит примерно каждое третье окно, у каждого своя яркость и оттенок лампы; витрина
@@ -431,7 +410,7 @@ const FACADE_MAP = /* glsl */ `
   float roll = hash12(vec2(cell, level) + tint * 17.0);
   float shop = style == 2 && level < 1.0 ? 0.35 : 1.0;
   float lit = step(0.68, roll) * glass * uNight * shop * (0.35 + 0.65 * hash12(vec2(level, cell) * 1.3));
-  vec3 glassColor = mix(vec3(0.06, 0.08, 0.10), vec3(0.16, 0.19, 0.22), hash12(vec2(cell * 1.7, level)));
+  vec3 glassColor = mix(vec3(0.09, 0.11, 0.13), vec3(0.22, 0.25, 0.29), hash12(vec2(cell * 1.7, level)));
   // Recess shadows and varied blinds stay attached to each window, at every angle.
   float blind = step(0.7, roll) * smoothstep(0.57, 0.59, lv) * (1.0 - uNight);
   glassColor = mix(glassColor, vec3(0.36, 0.34, 0.29), blind * 0.65);

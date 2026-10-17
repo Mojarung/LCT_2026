@@ -59,13 +59,23 @@ export function PanelToggle({ panel, label }: { panel: 'left' | 'right'; label: 
   );
 }
 
-export function RunHeader({ run }: { run: RunOut }) {
+/** Имя файла с местами для переноса после «_», «-» и «.»: у «00.1_10004141_Топография» нет
+ *  пробелов, и без них строка рвалась посреди слова. */
+function breakable(name: string): ReactNode[] {
+  return name.split(/(?<=[_\-.])/u).flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]));
+}
+
+/** Шапка прогона - одна на плане и в 3D-виде: откуда пришёл, что за чертёж, с какими
+ *  параметрами, и переключатель «План / 3D-вид» на одном месте на обоих экранах. Раньше
+ *  переход был текстовой ссылкой в разных углах двух страниц, и его искали глазами. */
+export function RunHeader({ run, view = 'plan' }: { run: RunOut; view?: 'plan' | '3d' }) {
+  const base = `/runs/${encodeURIComponent(run.id)}`;
   return (
     <div className="hud-head">
       <Link className="back" to="/">
         ← все прогоны
       </Link>
-      <h1 title={run.source_name}>{drawingName(run.source_name)}</h1>
+      <h1 title={run.source_name}>{breakable(drawingName(run.source_name))}</h1>
       <p className="run-sub" title={`Прогон ${run.id}`}>
         <span>{profileTitle(run.profile)}</span>
         {Object.entries(run.overrides).map(([key, value]) => (
@@ -73,13 +83,14 @@ export function RunHeader({ run }: { run: RunOut }) {
         ))}
       </p>
       {run.state === 'succeeded' ? (
-        <p className="scene-links">
-          {/* Один вход: кадры улицы и фото - кнопками внутри 3D-вида. Две ссылки рядом
-              («3D и снимки», «кадры улицы») не объясняли, чем отличаются. */}
-          <Link className="scene-link" to={`/runs/${encodeURIComponent(run.id)}/3d`}>
-            3D-вид, снимки и фото →
+        <nav className="view-switch" aria-label="Вид прогона">
+          <Link to={base} aria-current={view === 'plan' ? 'page' : undefined}>
+            План
           </Link>
-        </p>
+          <Link to={`${base}/3d`} aria-current={view === '3d' ? 'page' : undefined}>
+            3D-вид и фото
+          </Link>
+        </nav>
       ) : null}
     </div>
   );

@@ -7,7 +7,9 @@ import { drawingName, integer, stamp } from '../../lib/format';
 import { profileTitle } from '../../lib/profiles';
 import { IconDelete } from '../icons';
 
-export const RECENT_LIMIT = 12;
+/** Реестр показывает все прогоны (предел API - 200), длинный список прокручивается внутри
+ *  панели: урезанный до 12 список прятал нужную улицу, а счётчик считал срез. */
+export const RECENT_LIMIT = 200;
 
 const STATE_RU: Record<string, string> = {
   queued: 'в очереди',
@@ -159,30 +161,32 @@ export function RunsRegistry() {
     );
   }
   return (
-    <table className="registry">
-      <thead>
-        <tr>
-          <th scope="col">
-            <span className="visually-hidden">состояние</span>
-          </th>
-          <th scope="col">чертёж</th>
-          <th scope="col">профиль</th>
-          <th scope="col" className="num">
-            посадок
-          </th>
-          <th scope="col" className="num">
-            когда
-          </th>
-          <th scope="col">
-            <span className="visually-hidden">действия</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {runs.data.map((run) => (
-          <RunRow key={run.id} run={run} />
-        ))}
-      </tbody>
-    </table>
+    <div className="registry-wrap">
+      <table className="registry">
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="visually-hidden">состояние</span>
+            </th>
+            <th scope="col">чертёж</th>
+            <th scope="col">профиль</th>
+            <th scope="col" className="num">
+              посадок
+            </th>
+            <th scope="col" className="num">
+              когда
+            </th>
+            <th scope="col">
+              <span className="visually-hidden">действия</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.data.map((run) => (
+            <RunRow key={run.id} run={run} />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

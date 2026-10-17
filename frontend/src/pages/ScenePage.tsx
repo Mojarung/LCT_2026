@@ -6,11 +6,11 @@
 import { SourceConflictNotice } from '../components/run/SourceConflictNotice';
 import '../styles/scene.css';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 
 import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
-import { artifactUrl } from '../api/client';
+import { artifactUrl, getJson } from '../api/client';
 import {
   useArtifact,
   useCreatePhoto,
@@ -23,11 +23,12 @@ import { BarButton } from '../components/scene/BarButton';
 import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
 import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
+import { RunHeader } from '../components/run/RunParts';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
 import { type GalleryShot, ShotGallery } from '../components/scene/ShotGallery';
-import { plural } from '../lib/format';
+import { integer, plural } from '../lib/format';
 import { SHOT_HEIGHT, SHOT_WIDTH, type ShotTarget } from '../scene3d/autoshots';
 import {
   type CameraState,
@@ -46,6 +47,7 @@ import { fitForPhoto } from '../lib/photos';
 import { clock } from '../scene3d/solar';
 import { formatView, parseView } from '../scene3d/viewHash';
 import type { Plant, SceneJson } from '../scene3d/types';
+import type { ContextJson } from '../scene3d/context';
 import { buildWorld } from '../scene3d/world';
 
 const STAGE_TITLES: Record<Stage, string> = {
@@ -111,7 +113,14 @@ async function loadSurfaceImage(runId: string, meta: SurfaceMeta): Promise<Surfa
   } catch {
     return null;
   }
-  return { img, origin: meta.origin, cell: meta.cell_m, width: meta.width, height: meta.height };
+  return {
+    img,
+    origin: meta.origin,
+    cell: meta.cell_m,
+    width: meta.width,
+    height: meta.height,
+    areas: meta.areas ?? null,
+  };
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -213,6 +222,34 @@ export function ScenePage() {
     total: 1,
   });
   const [failure, setFailure] = useState<string | null>(null);
+  /** Подпись окружения из OpenStreetMap: ODbL требует указать источник. */
+  const [city, setCity] = useState<string | null>(null);
+
+  /** Город вокруг съёмки из OpenStreetMap - в фоне и один раз: из квадратов карты на диске
+   *  сервиса - сразу, из интернета - до минуты; без карты сцена остаётся как есть. */
+  const cityRequested = useRef<SceneEngine | null>(null);
+  const loadCity = useCallback(
+    (e: SceneEngine) => {
+      if (cityRequested.current === e) return;
+      cityRequested.current = e;
+      void getJson<ContextJson>(`/api/v1/runs/${encodeURIComponent(runId)}/context`)
+        .then((json) => {
+          const houses = engine.current === e ? e.addContext(json) : 0;
+          if (engine.current === e && houses) {
+            setCity(
+              `Город вокруг съёмки: ${count(houses, 'дом', 'дома', 'домов')}, дороги и стоянки квартала. Внутри съёмки - только чертёж. Источник: ${json.source}.`,
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          if (engine.current === e) {
+            setCity(`Города вокруг нет: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        });
+    },
+    [runId],
+  );
+
   const [hover, setHover] = useState<Hover | null>(null);
   const [cam, setCam] = useState<CameraState>({
     mode: 'fly',
@@ -313,10 +350,16 @@ export function ScenePage() {
           e.dispose();
           return;
         }
+        if (e.softwareRendering && settingsRef.current.quality !== 'low') {
+          // Без видеокарты кадр на «обычно» - единицы в секунду: сразу «быстро».
+          settingsRef.current = { ...settingsRef.current, quality: 'low', enhanced: false };
+          setSettings(settingsRef.current);
+        }
         e.apply(settingsRef.current);
         const view = parseView(window.location.hash);
         if (view) e.setView(view.pose, view.mode);
         engine.current = e;
+        if (settingsRef.current.city) loadCity(e);
       })
       .catch((error: unknown) => {
         if (alive) setFailure(error instanceof Error ? error.message : String(error));
@@ -327,11 +370,12 @@ export function ScenePage() {
       created?.dispose();
       canvas.remove();
     };
-  }, [world, surfaceReady, supported]);
+  }, [world, surfaceReady, supported, loadCity]);
 
   const change = (patch: Partial<ViewSettings>) => {
     setSettings((s) => ({ ...s, ...patch }));
     engine.current?.apply(patch);
+    if (patch.city && engine.current) loadCity(engine.current);
   };
 
   const shoot = async (scale: number) => {
@@ -557,7 +601,7 @@ export function ScenePage() {
     ? {
         trees: world.plants.filter((p) => !p.existing && p.type === 'tree').length,
         shrubs: world.plants.filter((p) => !p.existing && p.type !== 'tree').length,
-        existing: world.plants.filter((p) => p.existing).length,
+        existing: world.plants.filter((p) => p.existing && !p.strip).length,
         buildings: world.buildings.filter((b) => b.kind === 'building').length,
       }
     : null;
@@ -587,39 +631,53 @@ export function ScenePage() {
                 icon="street"
                 onToggle={toggleHead}
               />
-              <div className="hud-head">
-                <Link className="back" to={`/runs/${encodeURIComponent(runId)}`}>
-                  ← план прогона
-                </Link>
-                <h1 title={data?.source_name}>{title}</h1>
-                <p className="run-sub">
-                  <span>3D-вид</span>
-                  <span>{runId.slice(0, 8)}</span>
-                </p>
-              </div>
+              {data ? (
+                <RunHeader run={data} view="3d" />
+              ) : (
+                <div className="hud-head">
+                  <h1>{title}</h1>
+                </div>
+              )}
               {counts && world ? (
                 <div className="hud-scroll scene-facts">
                   <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
-                  <p>
-                    {count(counts.trees, 'дерево', 'дерева', 'деревьев')} и{' '}
-                    {count(counts.shrubs, 'кустарник', 'кустарника', 'кустарников')} плана,{' '}
-                    {count(
-                      counts.existing,
-                      'отдельная отметка',
-                      'отдельные отметки',
-                      'отдельных отметок',
-                    )}{' '}
-                    насаждений, {count(counts.buildings, 'здание', 'здания', 'зданий')}.
-                    {!!world.shrubStrips?.length &&
-                      ` Кустарниковые полосы: ${world.shrubStrips.length}. Высота и ширина показаны условно; порода и число кустов не заданы.`}
-                    {!!world.treeStrips?.length &&
-                      ` Полосы насаждений: ${world.treeStrips.length}. Показаны условными знаками на земле; число стволов не задано.`}
-                  </p>
-                  <details className="scene-more">
-                    <summary>Этажность и допущения</summary>
+                  {/* Сводка - теми же строками «что - сколько», что на плане прогона. */}
+                  <dl className="run-breakdown scene-breakdown">
+                    <div>
+                      <dt>Деревья плана</dt>
+                      <dd>{integer(counts.trees)}</dd>
+                    </div>
+                    <div>
+                      <dt>Кустарники плана</dt>
+                      <dd>{integer(counts.shrubs)}</dd>
+                    </div>
+                    <div>
+                      <dt>Существующие</dt>
+                      <dd>{integer(counts.existing)}</dd>
+                    </div>
+                    <div>
+                      <dt>Здания</dt>
+                      <dd>{integer(counts.buildings)}</dd>
+                    </div>
+                  </dl>
+                  {world.shrubStrips?.length || world.treeStrips?.length ? (
                     <p className="hint">
-                      {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет.
+                      {world.treeStrips?.length
+                        ? `Полосы насаждений: ${String(world.treeStrips.length)}, рядом крон; число стволов съёмка не задаёт. `
+                        : ''}
+                      {world.shrubStrips?.length
+                        ? `Кустарниковые полосы: ${String(world.shrubStrips.length)}, размеры условные.`
+                        : ''}
                     </p>
+                  ) : null}
+                  <details className="scene-more">
+                    <summary>Что в сцене условно</summary>
+                    <p className="hint">
+                      {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет, серия дома
+                      выбрана по этажности и назначению. Машины у бортов условные: в подоснове их
+                      нет.
+                    </p>
+                    {city ? <p className="hint">{city}</p> : null}
                   </details>
                   {world.fallback ? (
                     <p className="notice">
@@ -747,6 +805,9 @@ export function ScenePage() {
               <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
                 {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
                 {stats ? ` · ${String(stats.fps)} к/с` : ''}
+                {stats && stats.scale < 0.99
+                  ? ` · разрешение ${String(Math.round(stats.scale * 100))}%`
+                  : ''}
               </span>
             </div>
           ) : null}

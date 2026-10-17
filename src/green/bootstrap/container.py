@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from green.application.audit import AuditSite
+from green.application.city_context import CityContextService
 from green.application.editing import RunContextCache
 from green.application.photos import PhotoService
 from green.application.placement import GreedyPlantingStrategy
@@ -22,10 +24,17 @@ from green.infrastructure.config.repositories import (
     YamlProfileSource,
     YamlRuleBookSource,
     YamlSpeciesCatalog,
+    load_likeness,
 )
 from green.infrastructure.convert.libredwg import LibreDwgConverter
 from green.infrastructure.convert.oda import OdaFileConverter
 from green.infrastructure.gis.layers import YamlGisLayerSource
+from green.infrastructure.gis.osm import (
+    ChainedContextSource,
+    OverpassContextSource,
+    TileContextSource,
+    drawing_crs,
+)
 from green.infrastructure.inventory import read_inventory
 from green.infrastructure.photo.sdcpp import SdCppPhotoRenderer
 from green.infrastructure.reports.artifacts import FileArtifactSink
@@ -36,6 +45,10 @@ from green.infrastructure.storage.runs import FileSystemRunStore
 from green.infrastructure.streets import JsonStreetCatalog
 
 type Converter = LibreDwgConverter | OdaFileConverter
+
+
+if TYPE_CHECKING:
+    from green.application.ports import CityContextSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +72,7 @@ class Container:
     # Контексты прогонов для правки на карте: живут в памяти, переживают запрос, но не рестарт.
     contexts: RunContextCache
     photos: PhotoService
+    city: CityContextService
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -79,11 +93,12 @@ def build_container(settings: Settings | None = None) -> Container:
         rules=rules,
         layers=layers,
         species=species,
-        strategy=GreedyPlantingStrategy(),
+        strategy=GreedyPlantingStrategy(likeness=load_likeness(config / "likeness.json")),
         writer=EzdxfPlanWriter(text_font=settings.text_font, documents=documents),
         integrity=integrity,
         merger=EzdxfDrawingMerger(documents=documents),
         gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
+        schools=settings.config_dir / "gis" / "osm_schools_moscow.geojson",
     )
     audit = AuditSite(
         reader=reader,
@@ -148,6 +163,10 @@ def build_container(settings: Settings | None = None) -> Container:
         streets=streets,
         contexts=contexts,
         photos=photos,
+        city=CityContextService(
+            _city_source(settings),
+            store,
+        ),
     )
 
 
@@ -163,3 +182,24 @@ def _converters(settings: Settings) -> tuple[Converter, ...]:
         "none": (),
     }
     return choice[settings.converter]
+
+
+def _city_source(settings: Settings) -> CityContextSource | None:
+    """Источник города вокруг съёмки по GREEN_OSM_CONTEXT: квадраты на диске, Overpass или оба."""
+    if settings.osm_context == "off":
+        return None
+    tiles = (
+        TileContextSource(settings.osm_tiles_dir)
+        if (settings.osm_tiles_dir / "index.json").is_file()
+        else None
+    )
+    online = OverpassContextSource(
+        drawing_crs(settings.config_dir / "geo_layers.yaml"),
+        urls=settings.osm_overpass_urls,
+        timeout_s=settings.osm_timeout_s,
+    )
+    if settings.osm_context == "tiles":
+        return tiles
+    if settings.osm_context == "online":
+        return online
+    return ChainedContextSource([tiles, online] if tiles else [online])

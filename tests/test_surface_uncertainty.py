@@ -31,15 +31,37 @@ def material(surface, x: float, y: float) -> Material:  # noqa: ANN001
     return Material(surface.material(shapely.points([(x, y)]))[0])
 
 
-def test_no_surface_evidence_means_no_automatic_planting() -> None:
+def test_no_surface_evidence_plants_only_on_assumed_open_ground() -> None:
+    """Без единого признака грунта посадка возможна только с запасным «свободная земля в
+    границе работ - газон» (open_ground, с пометкой «Исправлено автоматически»); без него -
+    ни одной посадки, как раньше. Проезжая часть полигоном вырезается из запасного грунта."""
+    features = [
+        feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
+        feature(ObjectClass.ROAD, box(0, 0, 100, 10)),
+        feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
+        feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
+    ]
+    strict = PlanParams(open_ground=False)
+    plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, strict)
+    assert not plan.placements
+    assert not plan.zones
+    assumed = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
+    assert assumed.placements
+    assert all(p.y > 10 for p in assumed.placements)  # не на проезжей части
+
+
+def test_kerb_line_without_a_carriageway_polygon_keeps_trees_off_the_narrow_side() -> None:
+    """Ревью 17.10.2026: борт линией без полигона проезжей части не говорит, с какой стороны
+    дорога - запасной грунт заливал проезд, и деревья вставали в 3 м от борта на асфальте.
+    Теперь узкая полоса от борта до границы работ принята проездом, сажают по другую сторону."""
     features = [
         feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
         feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
         feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
     ]
     plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
-    assert not plan.placements
-    assert not plan.zones
+    assert plan.placements
+    assert all(p.y > 10 for p in plan.placements)
 
 
 def test_missing_work_boundary_does_not_mean_the_entire_drawing() -> None:

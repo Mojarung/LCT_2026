@@ -307,3 +307,30 @@ def test_edit_recounts_lawn_around_the_new_plan(
     assert _lawn_warnings(edited) == _lawn_warnings(before)
     texts = {e.subject_id for e in edited.explanations}
     assert {lawn.lawn_id for lawn in edited.lawns} <= texts
+
+
+def test_assumed_open_ground_becomes_new_lawn() -> None:
+    """Чертёж без признаков грунта (входы других финалистов): запасной грунт в границе работ -
+    устраиваемый газон (ТЗ п. 3, травянистые покрытия), а не «газоны не выделены»."""
+    features = [
+        _feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 60, 40), "boundary"),
+        _feature(ObjectClass.ROAD, box(0, 0, 60, 8), "road"),
+        _feature(ObjectClass.BUILDING, box(30, 20, 50, 35), "house"),
+    ]
+    surface = build_surface_map(features, [], work_boundary(features), 0.5)
+    assert surface is not None
+    assert surface.open_ground_m2 > 0
+    plan = plan_lawns(
+        Plan(placements=(_placement(1, TREE, 10, 20),), rejections=()),
+        features=features,
+        labels=[],
+        surface=surface,
+        rulebook=BOOK,
+        params=PlanParams(),
+    )
+    assert plan.lawns
+    assert {lawn.kind for lawn in plan.lawns} == {LawnKind.NEW}
+    area = sum(lawn.geometry.area for lawn in plan.lawns)
+    assert 60 * 32 - 20 * 15 - 60 < area < 60 * 32 - 20 * 15  # минус яма дерева
+    assert not any(lawn.geometry.intersects(box(30.5, 20.5, 49.5, 34.5)) for lawn in plan.lawns)
+    assert not _lawn_warnings(plan)

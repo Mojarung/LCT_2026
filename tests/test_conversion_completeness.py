@@ -147,3 +147,17 @@ def test_valid_conversion_replaces_previous_output_only_after_checking(
     result = converter.to_dxf(source, work)
     assert result.read_bytes() == valid_bytes
     assert source.read_bytes() == b"original input"
+
+
+def test_git_lfs_pointer_is_named_as_such(tmp_path: Path) -> None:
+    """Sylvitect: в репозитории лежит указатель Git LFS вместо чертежа - сказать прямо, что
+    это не DXF и как получить файл, а не «нет конечного маркера EOF»."""
+    source = tmp_path / "input.dxf"
+    source.write_text(
+        "version https://git-lfs.github.com/spec/v1\n"
+        "oid sha256:a58369ba24b35b86be9ac70a20de4e81b6e49d78156692696a86e0eedfc855b3\n"
+        "size 347508736\n",
+        encoding="ascii",
+    )
+    with pytest.raises(InputError, match="указатель Git LFS"):
+        require_complete_container(source)

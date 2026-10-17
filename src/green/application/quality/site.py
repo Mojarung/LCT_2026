@@ -18,9 +18,9 @@ from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components, dijkstra
 
 from green.application.constraints import work_boundary
+from green.application.kerbs import is_kerb
 from green.application.stock import EMPTY_STOCK, EXISTING_CROWN_M, Stock, stock_of
 from green.application.surfaces import Material
-from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -218,7 +218,7 @@ def curb_segments(
 ) -> NDArray[np.float64]:
     lines: list[BaseGeometry] = []
     for feature in features:
-        if feature.object_class is not ObjectClass.CURB:
+        if not is_kerb(feature):
             continue
         geometry = feature.geometry
         if geometry.geom_type in _AREA_TYPES:

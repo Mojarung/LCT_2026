@@ -206,6 +206,7 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
             ambiguity_m=params.surface_ambiguity_m,
             tree_distance_m=params.tree_seed_distance_m,
             inference_mode=params.surface_inference_mode,
+            open_ground=params.open_ground,
         )
     for (_, kind), placements in groups.items():
         local = replace(params, planting_type=kind)
@@ -395,6 +396,11 @@ def _barrier_documented(placement: Placement) -> bool:
             for reason in placement.assortment.reasons
         )
     )
+
+
+def spacing_issues(placements: Sequence[Placement], params: PlanParams) -> list[ValidationIssue]:
+    """Пары посадок ближе требуемого шага или с пересекающимися посадочными местами."""
+    return _spacing(placements, params)
 
 
 def _spacing(placements: Sequence[Placement], params: PlanParams) -> list[ValidationIssue]:

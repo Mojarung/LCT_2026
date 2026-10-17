@@ -486,3 +486,17 @@ def test_bad_run_ids_are_not_found_and_delete_nothing(
     assert _entries(runs) == before
     assert _entries(work) == around
     assert (ROOT / "pyproject.toml").is_file()
+
+
+def test_city_context_off_is_service_unavailable_not_a_crash(
+    work: Path, finished: dict[str, object]
+) -> None:
+    """Окружение из OpenStreetMap выключено (или нет сети) - 503 с причиной, 3D-вид живёт без
+    него; неизвестный прогон - 404."""
+    settings = Settings(config_dir=ROOT / "config", runs_dir=work / "runs", osm_context="off")
+    with TestClient(create_app(build_container(settings))) as offline:
+        response = offline.get(f"{API_PREFIX}/runs/{finished['id']}/context")
+        unknown = offline.get(f"{API_PREFIX}/runs/missing-run/context")
+    problem = _assert_problem(response, 503)
+    assert "OpenStreetMap" in str(problem["detail"])
+    _assert_problem(unknown, 404)
