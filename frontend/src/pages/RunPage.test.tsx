@@ -465,7 +465,9 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const toggle = await screen.findByRole('button', { name: 'Легенда' });
+    // Кнопка у карты; та же легенда - вкладкой правой панели.
+    const toolbar = await screen.findByRole('toolbar', { name: 'Карта' });
+    const toggle = within(toolbar).getByRole('button', { name: 'Легенда' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
 
@@ -485,7 +487,8 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Легенда' }));
+    const toolbar = await screen.findByRole('toolbar', { name: 'Карта' });
+    await userEvent.click(within(toolbar).getByRole('button', { name: 'Легенда' }));
     const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
     const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
     expect(weak).not.toBeChecked();

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
@@ -19,6 +19,8 @@ interface DetailProps {
   placements: readonly MapItem[];
   rules: Record<string, Rule>;
   quality: QualityJson | undefined;
+  /** Условные обозначения - третья вкладка панели (Legend docked). */
+  legend?: ReactNode;
 }
 
 /** Перенос без перетаскивания (WCAG 2.2, 2.5.7): кнопка включает ожидание, следующий клик по
@@ -114,9 +116,12 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
 
 /** Правая панель: без выбора - качество и состав плана (первый вопрос эксперта «что
  *  посажено»), с выбором - норма, по которой стоит посадка или отказ. */
-export function DetailPanel({ placements, rules, quality }: DetailProps) {
+export function DetailPanel({ placements, rules, quality, legend = null }: DetailProps) {
   const selected = useWorkspace((s) => s.selected);
   const [section, setSection] = useState<'plants' | 'effect'>('plants');
+  // Вкладка обозначений - состояние рабочего места: её же открывает кнопка «Легенда» у карты.
+  const legendOpen = useWorkspace((s) => s.panels.legend) && legend !== null;
+  const setLegend = useWorkspace((s) => s.setLegend);
   // Отметка изменяемая: после переноса у неё новый вердикт и проверки.
   useWorkspace((s) => s.revision);
   const scrollRef = useOverflowMark<HTMLDivElement>();
@@ -136,8 +141,9 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
           <div className="plan-sections" role="group" aria-label="Раздел плана">
             <button
               type="button"
-              aria-pressed={section === 'plants'}
+              aria-pressed={!legendOpen && section === 'plants'}
               onClick={() => {
+                setLegend(false);
                 setSection('plants');
               }}
             >
@@ -145,15 +151,29 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
             </button>
             <button
               type="button"
-              aria-pressed={section === 'effect'}
+              aria-pressed={!legendOpen && section === 'effect'}
               onClick={() => {
+                setLegend(false);
                 setSection('effect');
               }}
             >
               Эффект
             </button>
+            {legend ? (
+              <button
+                type="button"
+                aria-pressed={legendOpen}
+                onClick={() => {
+                  setLegend(true);
+                }}
+              >
+                Легенда
+              </button>
+            ) : null}
           </div>
-          {section === 'plants' ? (
+          {legendOpen ? (
+            legend
+          ) : section === 'plants' ? (
             <>
               <p className="composition-guide">Выберите вид, чтобы найти его на плане.</p>
               <Composition placements={placements} />

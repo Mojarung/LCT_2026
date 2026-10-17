@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { useEngine } from '../../state/engine';
 import { useWorkspace } from '../../state/workspace';
-import { UiIcon } from '../icons';
+import { UiIcon, type UiGlyph } from '../icons';
 
 /** Переключатель из двух вариантов: оба названы, выбранный нажат. Одна кнопка с подписью
  *  текущего состояния («по улице») читалась то как состояние, то как действие. */
@@ -14,12 +14,12 @@ function Pair<T extends string>({
 }: {
   label: string;
   value: T;
-  options: readonly [T, string, string][];
+  options: readonly [T, string, string, UiGlyph][];
   onChange: (value: T) => void;
 }) {
   return (
     <span className="hud-pair" role="group" aria-label={label}>
-      {options.map(([key, text, title]) => (
+      {options.map(([key, text, title, icon]) => (
         <button
           key={key}
           type="button"
@@ -29,6 +29,7 @@ function Pair<T extends string>({
             if (value !== key) onChange(key);
           }}
         >
+          <UiIcon name={icon} size={16} />
           {text}
         </button>
       ))}
@@ -63,8 +64,8 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
           label="Поворот плана"
           value={orientation}
           options={[
-            ['street', 'Вдоль улицы', 'Улица горизонтально'],
-            ['north', 'Север вверх', 'Север вверху, как на топосъёмке'],
+            ['street', 'Вдоль улицы', 'Повернуть план так, чтобы улица шла слева направо', 'road'],
+            ['north', 'Север вверх', 'Север сверху, как на топосъёмке', 'northUp'],
           ]}
           onChange={() => {
             const current = engine.current;
@@ -79,8 +80,8 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
           label="Стиль карты"
           value={mapStyle}
           options={[
-            ['engineering', 'Чертёж', 'Условные знаки дендроплана'],
-            ['illustrated', 'Кроны', 'Иллюстрация: кроны моделей видов'],
+            ['engineering', 'Чертёж', 'Условные знаки дендроплана, как в CAD', 'drawing'],
+            ['illustrated', 'Кроны', 'Иллюстрация: кроны моделей видов', 'trees'],
           ]}
           onChange={setMapStyle}
         />
@@ -141,6 +142,13 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
           aria-controls="legend"
           title="Показать или скрыть условные обозначения и слои"
           onClick={() => {
+            // У готового прогона легенда - вкладка правой панели: открыть её - снять выбор
+            // посадки (иначе панель показывает карточку) и развернуть панель, если свёрнута.
+            const state = useWorkspace.getState();
+            if (!legend && editable) {
+              state.select(null);
+              if (state.panels.right) state.togglePanel('right');
+            }
             setLegend(!legend);
           }}
         >

@@ -101,19 +101,27 @@ const line = (token: string): CSSProperties => ({ borderColor: `var(${token})` }
 export function Legend({
   done,
   shrub = null,
+  docked = false,
 }: {
   done: boolean;
   /** Код самого частого лиственного кустарника плана (models.commonest). */
   shrub?: string | null;
+  /** Вкладка правой панели готового прогона, а не окошко над картой: обозначения не
+   *  закрывают план (просьба владельца, 17.10.2026). Окошко остаётся идущему прогону - у него
+   *  правой панели нет. */
+  docked?: boolean;
 }) {
   const open = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
   const drawing = useWorkspace((s) => s.mapStyle) === 'engineering';
 
-  // Окошко над полосой кнопок, поверх карты: план под ним не перестраивается, когда легенду
-  // открывают и закрывают.
   return (
-    <aside className="hud hud-legend" id="legend" aria-label="Условные обозначения" hidden={!open}>
+    <aside
+      className={docked ? 'legend-docked' : 'hud hud-legend'}
+      id="legend"
+      aria-label="Условные обозначения"
+      hidden={!open}
+    >
       <div className="legend-head">
         <h2 className="hud-label">Условные обозначения</h2>
         <button

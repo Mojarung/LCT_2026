@@ -123,28 +123,14 @@ export function ConsolePage() {
         <h2 className="home-title" id="steps-title">
           Как это работает
         </h2>
-        <div className="how-body">
-          <ol className="how">
-            {steps(meta.data?.species.length).map((step) => (
-              <li key={step.title}>
-                <b>{step.title}</b>
-                <span>{step.text}</span>
-              </li>
-            ))}
-          </ol>
-          {/* Ответ на «почему дерево здесь» - настоящая карточка посадки, снятая с прогона:
-              замер, норма и пункт акта одним кликом по кроне. */}
-          <figure className="how-card">
-            <img
-              src="/landing/planting-card.webp"
-              width={678}
-              height={813}
-              alt="Карточка посадки № 151, сосна горная: допускается; ближе всего к норме - до силового кабеля 2,49 м при норме 2,00 м, СП 42.13330.2016, п. 9.6, табл. 9.1"
-              loading="lazy"
-            />
-            <figcaption>Клик по кроне на плане открывает такую карточку.</figcaption>
-          </figure>
-        </div>
+        <ol className="how">
+          {steps(meta.data?.species.length).map((step) => (
+            <li key={step.title}>
+              <b>{step.title}</b>
+              <span>{step.text}</span>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

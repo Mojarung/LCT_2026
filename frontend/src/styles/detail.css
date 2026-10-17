@@ -349,7 +349,8 @@
 /* Разделы правой панели - те же плашки, что вкладки шапки: один приём на переключение. */
 .plan-sections {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 2px;
   margin: 0 40px 18px 0;
   padding: 3px;

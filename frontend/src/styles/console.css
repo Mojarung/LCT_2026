@@ -280,12 +280,12 @@
   background: var(--panel);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
-  animation: plan-in var(--dur-4) var(--ease-spring) 520ms backwards;
+  animation: plan-in var(--dur-4) var(--ease-out) 360ms backwards;
 }
 @keyframes plan-in {
   from {
     opacity: 0;
-    transform: translateY(28px) rotate(1.5deg);
+    transform: translateY(16px);
   }
 }
 .collage-inset img {
@@ -403,63 +403,33 @@
   letter-spacing: -0.025em;
   color: var(--bone);
 }
-/* Слева шаги крупным текстом, справа настоящая карточка посадки на тоне - разворот, а не
-   ряд одинаковых карточек. */
-.how-body {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(280px, 4fr);
-  gap: clamp(24px, 4vw, 72px);
-  align-items: center;
-  padding: clamp(24px, 3vw, 44px);
-  border-radius: var(--r-panel);
-  background: var(--panel-3);
-}
+/* Четыре шага одной полосой на тоне: текст по колонкам, без карточек, значков и картинок.
+   Порядок читается слева направо. */
 .how {
   display: grid;
-  gap: clamp(18px, 2vw, 28px);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(20px, 3vw, 48px);
   margin: 0;
-  padding: 0;
+  padding: clamp(24px, 3vw, 40px);
+  border-radius: var(--r-panel);
+  background: var(--panel-3);
   list-style: none;
 }
 .how li {
   display: grid;
-  gap: 4px;
-  max-width: 58ch;
+  align-content: start;
+  gap: 8px;
 }
 .how b {
-  font-size: clamp(18px, 1rem + 0.4vw, 22px);
+  font-size: clamp(17px, 1rem + 0.3vw, 20px);
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--bone);
 }
 .how span {
-  font-size: var(--fs-strong);
-  line-height: 1.5;
+  font-size: var(--fs-body);
+  line-height: 1.55;
   color: var(--bone-2);
-}
-.how-card {
-  margin: 0;
-}
-.how-card img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: var(--r-panel);
-  background: var(--panel);
-  box-shadow:
-    var(--lift),
-    0 0 0 1px var(--hair);
-  transform: rotate(1.2deg);
-  transition: transform var(--dur-3) var(--ease-spring);
-}
-.how-card:hover img {
-  transform: rotate(0deg) scale(1.01);
-}
-.how-card figcaption {
-  margin-top: 14px;
-  font-size: var(--fs-small);
-  color: var(--bone-3);
-  text-align: center;
 }
 .how a {
   color: inherit;
@@ -834,11 +804,8 @@
   .home-side {
     position: static;
   }
-  .how-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .how-card {
-    max-width: 380px;
+  .how {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 900px) {
@@ -853,6 +820,9 @@
   }
 }
 @media (max-width: 560px) {
+  .how {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .collage-inset {
     width: 42%;
     right: 8px;

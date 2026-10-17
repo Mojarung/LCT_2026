@@ -364,7 +364,8 @@ export function RunPage() {
             </div>
           )}
           {withMap ? <MapHud editable={done} /> : null}
-          {withMap ? <Legend done={done} shrub={shrub} /> : null}
+          {/* У идущего прогона правой панели нет: обозначения - окошком над картой. */}
+          {live ? <Legend done={false} /> : null}
           {choice ? (
             <PickChooser
               key={choice.id}
@@ -441,6 +442,7 @@ export function RunPage() {
               placements={planned}
               rules={rules.data?.rules ?? {}}
               quality={quality.data}
+              legend={<Legend done shrub={shrub} docked />}
             />
           </aside>
         ) : null}

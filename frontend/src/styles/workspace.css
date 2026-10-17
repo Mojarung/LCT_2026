@@ -248,6 +248,18 @@ body.shell-map .topbar {
   background: none;
   animation: rise var(--dur-3) var(--ease-out) 120ms backwards;
 }
+/* Свёрнутая левая панель - кнопка в том же углу: переключатели встают правее неё. */
+.workspace:has(> .hud-left.collapsed) .hud-view {
+  left: calc(var(--inset) * 2 + 44px);
+}
+.hud-view button .icon {
+  color: var(--bone-3);
+  transition: color var(--dur-1);
+}
+.hud-view button[aria-pressed='true'] .icon,
+.hud-view button:hover .icon {
+  color: var(--bone);
+}
 .hud-view .hud-pair {
   margin: 0;
   padding: 3px;
@@ -730,6 +742,15 @@ body.shell-map .topbar {
     transform: translateY(8px) scale(0.97);
   }
 }
+/* Легенда вкладкой правой панели: без шапки окошка, заголовок группы - первая строка. */
+.legend-docked .legend-head {
+  display: none;
+}
+.legend-docked .legend-scroll {
+  padding: 0;
+  animation: unfold var(--dur-2) var(--ease-out);
+}
+.legend-docked[hidden],
 .hud-legend[hidden] {
   display: none;
 }
@@ -880,17 +901,17 @@ body.shell-map .topbar {
 
 /* В узкой панели подписи переносятся, а не обрезаются многоточием: «силовой кабель» и
    «требует согласования» в одну строку не помещаются, а обрезанные они бесполезны. */
-.hud-legend .legend span {
+:is(.hud-legend, .legend-docked) .legend span {
   align-items: flex-start;
 }
-.hud-legend .legend i {
+:is(.hud-legend, .legend-docked) .legend i {
   margin-top: 6px;
 }
-.hud-legend .legend i.dot,
-.hud-legend .legend i.cross {
+:is(.hud-legend, .legend-docked) .legend i.dot,
+:is(.hud-legend, .legend-docked) .legend i.cross {
   margin-top: 2px;
 }
-.hud-legend .legend b {
+:is(.hud-legend, .legend-docked) .legend b {
   overflow: visible;
   white-space: normal;
   text-overflow: clip;
@@ -1264,7 +1285,7 @@ body.shell-map .topbar {
   grid-template-columns: 1fr 1fr;
   gap: 4px 10px;
 }
-.hud-legend .legend-models span {
+:is(.hud-legend, .legend-docked) .legend-models span {
   align-items: center;
 }
 /* Знаки чертежа подписаны формулировками легенд проектировщиков: длинно, поэтому в одну
@@ -1273,7 +1294,7 @@ body.shell-map .topbar {
   grid-template-columns: 1fr;
   gap: 2px;
 }
-.hud-legend .legend-models i {
+:is(.hud-legend, .legend-docked) .legend-models i {
   margin-top: 0;
 }
 /* Кольцо вердикта «требует согласования» - как на карте: пунктир вокруг кроны. */
