@@ -53,6 +53,26 @@ const OCCLUDER_REACH_M = 60;
 /** Потолок высоты кадров улицы: выше улица превращается в план сверху. */
 export const SHOT_CEILING_M = 40;
 
+/** Ближе этого стена перед кадром улицы закрывает его целиком: автокадр «Участок 2 из 6»
+ *  показывал фасад вплотную (жюри дизайна, итерация 12). */
+export const WALL_CLEAR_M = 15;
+
+/** Упирается ли взгляд кадра в здание ближе reach метров: точки луча через метр. */
+export function wallAhead(
+  pose: Pose,
+  obstacles: readonly ShotObstacle[],
+  reach = WALL_CLEAR_M,
+): boolean {
+  const level = Math.cos(pose.pitch);
+  for (let d = 2; d <= reach; d += 1) {
+    const x = pose.x - Math.sin(pose.yaw) * level * d;
+    const z = pose.z - Math.cos(pose.yaw) * level * d;
+    const y = pose.y + Math.sin(pose.pitch) * d;
+    if (solid(obstacles, x, y, z)) return true;
+  }
+  return false;
+}
+
 export function framing(): Framing {
   return { fov: SHOT_FOV, aspect: SHOT_WIDTH / SHOT_HEIGHT };
 }
@@ -182,7 +202,10 @@ export function streetShots(
     const capped = Math.min(h, SHOT_CEILING_M);
     return p && solid(obstacles, p.x, capped, p.z) ? h : capped;
   });
-  const poses = streetPoses(route, low);
+  // Кадры, упёртые в стену, отбрасываются; если такие все - лучше они, чем пустая галерея.
+  const all = streetPoses(route, low);
+  const open = all.filter((pose) => !wallAhead(pose, obstacles));
+  const poses = open.length ? open : all;
   return poses.map((pose, i) => ({
     key: `street-${i}`,
     pose,
