@@ -1,9 +1,11 @@
-"""Declared DXF units or an explicit project override, never a guess from site size.
+"""Declared DXF units, an explicit override, or units the geometry confirms with a note.
 
-Geometry alone cannot distinguish a small millimetre drawing from a large metre
-drawing. Pilot files with incorrect headers need an explicit override. Unitless
-input requires one too. Blocks retain their explicit INSERT scale; their unit
-metadata must not cause a second, implicit conversion (ezdxf units documentation).
+A declared header is trusted unless the geometry clearly contradicts it. A unitless
+drawing takes metres or millimetres only where the site size leaves no doubt: a street
+in metres is not longer than 10 km and one in millimetres is not shorter than 10 m, so
+10 000 units split the two; text height, when present, must agree. Anything else still
+asks for drawing_unit. Blocks retain their explicit INSERT scale; their unit metadata
+must not cause a second, implicit conversion (ezdxf units documentation).
 
 A header that the geometry clearly contradicts (two signs at once: site size and text
 height) is corrected to the unit the geometry confirms, and the note says so with the numbers
@@ -194,13 +196,16 @@ def _unitless_guess(doc: Drawing) -> tuple[str, str, str] | None:
         return None
     size, text = spread.size, spread.text_height
     extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
-    metric_text = text is None or text < _METRE_TEXT_UNITS
-    if _MIN_SITE_M <= size <= _MAX_SITE_M and metric_text:
+    # Улица в метрах не длиннее 10 км, в миллиметрах не короче 10 м: 10 000 единиц делят их.
+    if _MIN_SITE_M <= size <= _UNITLESS_SPLIT and (text is None or text < _METRE_TEXT_UNITS):
         return "m", f"{extent}, участок {size:.0f} м" + _text(text), "mm"
     mm = size * EXPLICIT_UNITS["mm"]
-    if _MIN_SITE_M <= mm <= _MAX_SITE_M and text is not None and text >= _METRE_TEXT_UNITS:
+    if size > _UNITLESS_SPLIT and mm <= _MAX_SITE_M and (text is None or text >= _METRE_TEXT_UNITS):
         return "mm", f"{extent}, участок {mm:.0f} м" + _text(text), "m"
     return None
+
+
+_UNITLESS_SPLIT = 10_000.0
 
 
 def _text(height: float | None) -> str:

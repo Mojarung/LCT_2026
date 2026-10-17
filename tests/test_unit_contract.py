@@ -94,3 +94,32 @@ def test_same_basename_in_different_input_folders_does_not_overwrite_conversion(
     assert first != second
     assert first.read_bytes() == b"first file"
     assert second.read_bytes() == b"second file"
+
+
+def _unitless(width: float, height: float, text: float | None = None) -> ezdxf.document.Drawing:
+    doc = ezdxf.new("R2018")
+    doc.units = 0
+    msp = doc.modelspace()
+    for i in range(120):
+        x = width * (i % 12) / 11
+        y = height * (i // 12) / 9
+        msp.add_line((x, y), (x + 1, y))
+    if text is not None:
+        msp.add_text("ГАЗОН", height=text).set_placement((width / 2, height / 2))
+    return doc
+
+
+def test_unitless_street_in_millimetres_without_text_is_not_taken_for_kilometres() -> None:
+    """Ревью 17.10.2026: улица 48 x 29 м в миллиметрах без текста принималась за 48 км в
+    метрах. Улица в метрах не бывает длиннее 20 км, а в миллиметрах 10 м - 20 км правдоподобны."""
+    decision = decide_units(_unitless(47_734, 28_900))
+    assert decision.unit_m == pytest.approx(0.001)
+
+
+def test_unitless_metre_street_without_text_is_taken_in_metres() -> None:
+    assert decide_units(_unitless(480, 290)).unit_m == 1.0
+
+
+def test_unitless_drawing_in_the_ambiguous_band_still_asks() -> None:
+    with pytest.raises(InputError, match="drawing_unit"):
+        decide_units(_unitless(25_000, 2_000, text=3.5))
