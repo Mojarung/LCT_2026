@@ -136,25 +136,22 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
           </button>
         </span>
         <Sep />
-        <button
-          type="button"
-          aria-pressed={legend}
-          aria-controls="legend"
-          title="Показать или скрыть условные обозначения и слои"
-          onClick={() => {
-            // У готового прогона легенда - вкладка правой панели: открыть её - снять выбор
-            // посадки (иначе панель показывает карточку) и развернуть панель, если свёрнута.
-            const state = useWorkspace.getState();
-            if (!legend && editable) {
-              state.select(null);
-              if (state.panels.right) state.togglePanel('right');
-            }
-            setLegend(!legend);
-          }}
-        >
-          <UiIcon name="layers" />
-          <span className="hud-text">Легенда</span>
-        </button>
+        {/* У готового прогона легенда - вкладка правой панели, вторая кнопка была бы дублем.
+            У идущего правой панели нет: обозначения открываются окошком отсюда. */}
+        {editable ? null : (
+          <button
+            type="button"
+            aria-pressed={legend}
+            aria-controls="legend"
+            title="Показать или скрыть условные обозначения и слои"
+            onClick={() => {
+              setLegend(!legend);
+            }}
+          >
+            <UiIcon name="layers" />
+            <span className="hud-text">Легенда</span>
+          </button>
+        )}
         {editable ? (
           <button
             type="button"

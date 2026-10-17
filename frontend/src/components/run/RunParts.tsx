@@ -171,34 +171,33 @@ export function RunMetrics({
           и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
       {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
         <div className="notice check-block">
-          <p className="notice-title">{sketch ? 'Эскиз · проверить' : 'Проверить'}</p>
+          {/* Заголовок говорит, что это за план; строки - что именно смотреть, числом. */}
+          <p className="notice-title">{sketch ? 'План-эскиз: что проверить' : 'Что проверить'}</p>
           {conflicts}
           <dl className="run-facts">
             {approval > 0 ? (
               <div className="run-approval">
-                <dt>На согласование</dt>
+                <dt>Посадки на согласование</dt>
                 <dd>{integer(approval)}</dd>
               </div>
             ) : null}
             {sketch && unconfirmed > 0 ? (
               <div>
-                <dt>Грунт под ямой не подтверждён</dt>
+                <dt>Грунт под ямой - по подписям, а не по контуру</dt>
                 <dd>
-                  {unconfirmed === total
-                    ? 'у всех'
-                    : `${integer(unconfirmed)} из ${integer(total)}`}
+                  {unconfirmed === total ? 'все' : `${integer(unconfirmed)} из ${integer(total)}`}
                 </dd>
               </div>
             ) : null}
             {rejected > 0 ? (
               <div>
-                <dt>Отклонено мест</dt>
+                <dt>Места, отклонённые нормами</dt>
                 <dd>{integer(rejected)}</dd>
               </div>
             ) : null}
             {barrierPlaces > 0 ? (
-              <div>
-                <dt>Возможно с прикорневым барьером</dt>
+              <div className="run-sub-fact">
+                <dt>из них возможны с прикорневым барьером</dt>
                 <dd>{integer(barrierPlaces)}</dd>
               </div>
             ) : null}
@@ -208,10 +207,14 @@ export function RunMetrics({
           ))}
           {sketch ? (
             <details className="fold notice-details">
-              <summary>Почему эскиз и что сделать</summary>
+              <summary>Почему эскиз и как это исправить</summary>
               <p>
-                Допустимость посадок не подтверждена. Уточните объекты и границы покрытий: грунт под
-                всей посадочной ямой должен быть подтверждён замкнутыми контурами.
+                Допустимость посадок не подтверждена:{' '}
+                {summary.semantic_assignments_complete === false
+                  ? 'часть объектов чертежа сервис не распознал. '
+                  : 'на чертеже нет замкнутых контуров газона под посадками, и грунт определён по ближайшим подписям. '}
+                Уточните объекты и границы покрытий: грунт под всей посадочной ямой должен быть
+                подтверждён замкнутыми контурами.
               </p>
               <ReviewLinks run={run} />
             </details>

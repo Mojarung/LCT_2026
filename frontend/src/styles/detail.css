@@ -352,7 +352,7 @@
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 2px;
-  margin: 0 40px 18px 0;
+  margin: 0 32px 18px 0;
   padding: 3px;
   border-radius: calc(var(--r-control) + 3px);
   background: var(--panel-2);
@@ -432,4 +432,30 @@
 }
 .download-more > .fold {
   margin-top: 12px;
+}
+
+/* Значок и подпись вкладки - в одну строку; ширина вкладки - по содержимому, чтобы три
+   вкладки со значками помещались в узкую панель. */
+.plan-sections {
+  display: flex;
+}
+.plan-sections button {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+.plan-sections .icon {
+  width: 15px;
+  height: 15px;
+}
+.plan-sections .icon {
+  color: var(--bone-3);
+}
+.plan-sections button[aria-pressed='true'] .icon {
+  color: var(--bone);
 }

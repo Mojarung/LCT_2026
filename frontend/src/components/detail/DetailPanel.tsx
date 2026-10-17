@@ -13,6 +13,7 @@ import { Composition } from './Composition';
 import { EffectBlock } from './EffectBlock';
 import { QualityBlock } from './QualityBlock';
 import { SpeciesBlock } from './SpeciesBlock';
+import { UiIcon } from '../icons';
 import { BarrierBlock, ValueBlock } from './ValueBlock';
 
 interface DetailProps {
@@ -145,6 +146,7 @@ export function DetailPanel({ placements, rules, quality, legend = null }: Detai
                 setSection('plants');
               }}
             >
+              <UiIcon name="trees" size={16} />
               Посадки
             </button>
             <button
@@ -155,6 +157,7 @@ export function DetailPanel({ placements, rules, quality, legend = null }: Detai
                 setSection('effect');
               }}
             >
+              <UiIcon name="effect" size={16} />
               Эффект
             </button>
             {legend ? (
@@ -165,6 +168,7 @@ export function DetailPanel({ placements, rules, quality, legend = null }: Detai
                   setLegend(true);
                 }}
               >
+                <UiIcon name="layers" size={16} />
                 Легенда
               </button>
             ) : null}

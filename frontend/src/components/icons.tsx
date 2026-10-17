@@ -5,6 +5,7 @@ import {
   type Icon,
   IconAlertTriangle,
   IconArrowRight,
+  IconChartBar,
   IconCircleCheck,
   IconCompass,
   IconDownload,
@@ -128,6 +129,7 @@ const UI_GLYPHS = {
   docs: TablerBook,
   files: IconFiles,
   journal: IconListDetails,
+  effect: IconChartBar,
   inspect: IconZoomCheck,
 } satisfies Record<string, Icon>;
 

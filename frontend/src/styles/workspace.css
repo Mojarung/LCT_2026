@@ -1864,3 +1864,23 @@ body.shell-map .topbar {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* Кнопки сворачивания панелей - всегда на тоне, а не только под курсором: стрелка без фона
+   читалась как значок, а не как кнопка (просьба владельца, 17.10.2026). */
+.panel-toggle,
+.page-run > .hud > .panel-toggle {
+  background: var(--panel-2);
+  color: var(--bone-2);
+}
+.panel-toggle:hover,
+.page-run > .hud > .panel-toggle:hover {
+  background: var(--panel-3);
+  color: var(--bone);
+}
+/* Подстрока блока «Что проверить»: часть отклонённых мест, сдвинута под свою строку. */
+.run-facts .run-sub-fact {
+  padding-left: 12px;
+}
+.run-facts .run-sub-fact dt {
+  color: var(--bone-3);
+}

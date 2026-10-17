@@ -181,14 +181,14 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
     // План на предположении о грунте - эскиз, и это сказано у числа, а не в журнале.
-    const title = await within(left).findByText('Эскиз · проверить');
+    const title = await within(left).findByText('План-эскиз: что проверить');
     expect(title).toBeVisible();
     const notice = title.closest('.notice');
     // Когда не подтверждено у всех посадок, так и сказано, без «40 из 40».
-    expect(notice).toHaveTextContent('Грунт под ямой не подтверждёну всех');
+    expect(notice).toHaveTextContent('Грунт под ямой - по подписям, а не по контурувсе');
     expect(left).not.toHaveTextContent('все без ограничений');
     // Почему эскиз и что делать - под раскрытием в том же блоке.
-    await openFold(left, 'Почему эскиз и что сделать');
+    await openFold(left, 'Почему эскиз и как это исправить');
     expect(within(left).getByText(/Допустимость посадок не подтверждена/)).toBeVisible();
     expect(
       within(left).getByText(/грунт под всей посадочной ямой должен быть подтверждён/i),
@@ -208,7 +208,7 @@ describe('RunPage: finished run', () => {
     expect(left.querySelector('.metric')).toHaveTextContent(/^302посадки в плане$/);
     // Целая подоснова - не тревога: нарушение сказано у числа, иначе строка в деталях.
     expect(left.querySelector('.metric-bad')).toBeNull();
-    expect(fact(left, 'Отклонено мест')).toHaveTextContent(/^161$/);
+    expect(fact(left, 'Места, отклонённые нормами')).toHaveTextContent(/^161$/);
     // Целая подоснова - отметкой среди проверок результата, а не строкой деталей.
     expect(within(left).getByText('Исходные слои чертежа целы')).toBeVisible();
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
@@ -467,9 +467,9 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    // Кнопка у карты; та же легенда - вкладкой правой панели.
-    const toolbar = await screen.findByRole('toolbar', { name: 'Карта' });
-    const toggle = within(toolbar).getByRole('button', { name: 'Легенда' });
+    // Легенда готового прогона - вкладка правой панели.
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    const toggle = within(right).getByRole('button', { name: 'Легенда' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
 
@@ -489,8 +489,8 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const toolbar = await screen.findByRole('toolbar', { name: 'Карта' });
-    await userEvent.click(within(toolbar).getByRole('button', { name: 'Легенда' }));
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    await userEvent.click(within(right).getByRole('button', { name: 'Легенда' }));
     const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
     const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
     expect(weak).not.toBeChecked();

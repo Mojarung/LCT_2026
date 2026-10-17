@@ -965,14 +965,14 @@ fieldset.field > legend {
   padding: 0;
   border: 0;
   border-radius: var(--r-control);
-  background: none;
+  background: var(--panel-2);
   color: var(--bone-2);
   transition:
     background-color var(--dur-1),
     color var(--dur-1);
 }
 .modal-close:hover {
-  background: var(--panel-2);
+  background: var(--panel-3);
   color: var(--bone);
 }
 .modal-content {
@@ -1010,8 +1010,8 @@ fieldset.field > legend {
   padding: 8px 10px;
   border: 0;
   border-radius: var(--r-control);
-  background: none;
-  color: var(--bone-2);
+  background: var(--panel-2);
+  color: var(--bone);
   font-size: var(--fs-small);
   font-weight: 600;
   text-align: left;
@@ -1020,8 +1020,10 @@ fieldset.field > legend {
     color var(--dur-1);
 }
 .sheet-button:hover {
-  background: var(--panel-2);
-  color: var(--bone);
+  background: var(--panel-3);
+}
+.sheet-button + .sheet-button {
+  margin-top: 6px;
 }
 .sheet-button .icon {
   color: var(--bone-3);
