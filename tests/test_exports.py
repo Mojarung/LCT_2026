@@ -83,3 +83,17 @@ def test_layers_file_saved_under_the_pending_name_is_reused_not_reread(
     light = write_result_layers(result, tmp_path / "result_layers.dxf")
     assert light.exists()
     assert not (tmp_path / ".result.pending_layers.dxf").exists()  # служебный файл не остаётся
+
+
+def test_rebuild_replaces_the_stale_result_layers_file(tmp_path: Path) -> None:
+    """Ревью 17.10.2026: после правки свежий «.result.pending_layers.dxf» лежал сиротой, а
+    отдавался result_layers.dxf исходного прогона."""
+    stale = tmp_path / "result_layers.dxf"
+    stale.write_text("old", encoding="utf-8")
+    fresh = tmp_path / ".result.pending_layers.dxf"
+    fresh.write_text("new", encoding="utf-8")
+    result = tmp_path / "result.dxf"
+    result.write_text("plan", encoding="utf-8")
+    write_result_layers(result, stale)
+    assert stale.read_text(encoding="utf-8") == "new"
+    assert not fresh.exists()

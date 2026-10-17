@@ -933,13 +933,15 @@ def write_result_layers(result: Path, target: Path) -> Path:
     """
     # Сценарий пишет результат во временный скрытый файл и переименовывает его: слои тогда
     # лежат под временным именем («.result.pending_layers.dxf») и переезжают на место.
+    # Слои под временным именем свежее: после правки они от новой записи, а файл под
+    # итоговым именем - от прошлой (ревью 17.10.2026).
     candidates = [
-        result.with_name(f"{result.stem}{RESULT_LAYERS_SUFFIX}"),
         *sorted(
             result.parent.glob(f".*{RESULT_LAYERS_SUFFIX}"),
             key=lambda path: path.stat().st_mtime,
             reverse=True,
         ),
+        result.with_name(f"{result.stem}{RESULT_LAYERS_SUFFIX}"),
     ]
     ready = next((path for path in candidates if path.exists()), None)
     if ready is not None:
