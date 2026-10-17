@@ -5,21 +5,25 @@ import { useMeta, useRuns, useStreets } from '../api/queries';
 import { RunForm } from '../components/console/RunForm';
 import { RECENT_LIMIT, RunsRegistry } from '../components/console/RunsRegistry';
 import { InfoTip } from '../components/InfoTip';
+import { UiIcon, type UiGlyph } from '../components/icons';
 import { plural } from '../lib/format';
 
 /** Шаги - действия человека и то, что в ответ делает сервис: по ним видно, зачем форма выше и
  *  что будет после кнопки. Порядок - настоящий список, без номеров и значков. */
-function steps(species: number | undefined): { title: string; text: ReactNode }[] {
+function steps(species: number | undefined): { icon: UiGlyph; title: string; text: ReactNode }[] {
   return [
     {
+      icon: 'upload',
       title: 'Выберите улицу',
       text: 'Улица пилота или свой DXF/DWG; сети, опись и слои ГИС - по желанию.',
     },
     {
+      icon: 'check',
       title: 'Сервис проверит нормы',
-      text: 'Отступы от сетей, зданий, бортов и опор по СП 42.13330, 743-ПП и 623-ПП.',
+      text: 'Отступы от сетей, зданий, бортов и опор по СП 42.13330, 743‑ПП и 623‑ПП.',
     },
     {
+      icon: 'trees',
       title: 'Получите план',
       text: (
         <>
@@ -35,6 +39,7 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
       ),
     },
     {
+      icon: 'inspect',
       title: 'Проверьте и поправьте',
       text: 'Клик по кроне - норма и метры; посадку можно перенести, улицу - открыть в 3D.',
     },
@@ -114,6 +119,9 @@ export function ConsolePage() {
           <ol className="how">
             {steps(meta.data?.species.length).map((step) => (
               <li key={step.title}>
+                <span className="how-icon">
+                  <UiIcon name={step.icon} size={18} />
+                </span>
                 <b>{step.title}</b>
                 <span>{step.text}</span>
               </li>

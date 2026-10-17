@@ -972,3 +972,102 @@ body.shell-home .footer {
 .home[data-intro] .h1-line + .h1-line > span {
   animation-delay: 290ms;
 }
+
+/* Шаги: значок в кружке над заголовком, между шагами - стрелка: полоса читается как путь
+   «чертёж - проверка - план - правка», а не как четыре абзаца. */
+.how li {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+}
+.how li > b,
+.how li > span:not(.how-icon) {
+  grid-column: 2;
+}
+.how-icon {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--brand);
+  box-shadow: 0 0 0 1px var(--hair);
+}
+.how li + li::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * clamp(14px, 1.8vw, 28px) / 2 - 4px);
+  top: 13px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--bone-3);
+  border-top: 1.6px solid var(--bone-3);
+  transform: rotate(45deg);
+  opacity: 0.7;
+}
+.home[data-intro] .how-icon {
+  animation: inset-in 600ms var(--ease-spring) backwards;
+  animation-delay: inherit;
+}
+@media (max-width: 1100px) {
+  .how li + li::before {
+    display: none;
+  }
+}
+
+/* Встроенный участок - вариант с отметкой: кружок с точкой, пока выбран (своего чертежа нет),
+   пустой кружок, когда выбран файл. Щелчок снова выбирает участок. */
+.field.sample {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition:
+    box-shadow var(--dur-1),
+    background-color var(--dur-1);
+}
+.field.sample:hover {
+  background: var(--panel-3);
+}
+.field.sample[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1.5px var(--bone);
+}
+.sample-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--bone-3);
+  transition: box-shadow var(--dur-2) var(--ease-out);
+}
+.field.sample[aria-pressed='true'] .sample-mark {
+  box-shadow:
+    inset 0 0 0 1.5px var(--bone),
+    inset 0 0 0 5px var(--panel-2),
+    inset 0 0 0 9px var(--bone);
+}
+.sample-text {
+  display: grid;
+  gap: 2px;
+}
+.sample-text .sample-title {
+  margin: 0;
+}
+.sample-text .hint {
+  margin: 0;
+}
+
+/* Выбранный свой чертёж выделен той же рамкой, что выбранный встроенный участок. */
+.filefield.drop:has(.chosen[data-chosen='1']) {
+  border-style: solid;
+  border-color: var(--bone);
+}
