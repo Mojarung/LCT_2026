@@ -1471,7 +1471,8 @@
 /* Между прилегающими панелями полоса камеры с метками клавиш не помещается до 1600 px:
    клавиши остаются в подсказке над полосой и во всплывающей подсказке кнопки. */
 @media (max-width: 1600px) {
-  .page-scene .scene-bar .bar-key {
+  .page-scene .scene-bar .bar-key,
+  .page-scene .scene-bar .bar-meta {
     display: none;
   }
 }
