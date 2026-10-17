@@ -208,7 +208,6 @@ describe('RunPage: finished run', () => {
     expect(left.querySelector('.metric')).toHaveTextContent(/^302посадки в плане$/);
     // Целая подоснова - не тревога: нарушение сказано у числа, иначе строка в деталях.
     expect(left.querySelector('.metric-bad')).toBeNull();
-    await openFold(left, 'Детали расчёта');
     expect(fact(left, 'Отклонено мест')).toHaveTextContent(/^161$/);
     // Целая подоснова - отметкой среди проверок результата, а не строкой деталей.
     expect(within(left).getByText('Исходные слои чертежа целы')).toBeVisible();
@@ -440,7 +439,6 @@ describe('RunPage: finished run', () => {
     expect(copies.map((node) => Boolean(node.closest('.notice')))).toEqual([true, false]);
     expect(copies[0]).toBeVisible();
     expect(copies[1]).not.toBeVisible();
-    await openFold(left, 'Детали расчёта');
     await openFold(left, 'Как собран план · 2');
     expect(copies[1]).toBeVisible();
     expect(within(left).getByText('Слой 0 пуст.')).toBeVisible();

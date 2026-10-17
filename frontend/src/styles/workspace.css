@@ -1836,3 +1836,8 @@ body.shell-map .topbar {
     transform: translate(calc(-1 * (var(--hud-right-w) + var(--inset) + 2px)), -6px);
   }
 }
+
+/* Строка газонов в сводке - текстом между блоком «Проверить» и журналом сборки. */
+.hud-scroll > .quality-line {
+  margin-top: 14px;
+}

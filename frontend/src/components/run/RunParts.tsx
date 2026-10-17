@@ -217,20 +217,19 @@ export function RunMetrics({
           ) : null}
         </div>
       ) : null}
-      <details className="hud-block fold run-details">
-        <summary>Детали расчёта</summary>
-        <LawnLine summary={summary} />
-        {warnings.length ? (
-          <details className="fold">
-            <summary>Как собран план · {warnings.length}</summary>
-            <ul className="warn-list">
-              {warnings.map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-      </details>
+      {/* Без обёртки «Детали расчёта»: внутри неё бывало одно-единственное раскрытие. Строка
+          газонов - обычным текстом, журнал сборки плана - своим раскрытием. */}
+      <LawnLine summary={summary} />
+      {warnings.length ? (
+        <details className="hud-block fold run-details">
+          <summary>Как собран план · {warnings.length}</summary>
+          <ul className="warn-list">
+            {warnings.map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </>
   );
 }
