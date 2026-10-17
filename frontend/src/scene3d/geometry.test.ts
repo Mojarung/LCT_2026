@@ -148,6 +148,25 @@ describe('борт, ограда и опоры', () => {
     expect(has(10.1, 0)).toBe(false);
   });
 
+  it('фаска по верхним рёбрам: верх уже бруса на две фаски, грань кончается ниже верха', () => {
+    const straight = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+      ],
+    };
+    const g = ribbonBox([straight], 0.2, 0.15, 0, 0.02);
+    const pos = g.getAttribute('position');
+    const zsAt = (y: number) => {
+      const zs = new Set<number>();
+      for (let i = 0; i < pos.count; i++)
+        if (Math.abs(pos.getY(i) - y) < 1e-6) zs.add(Math.round(pos.getZ(i) * 1000) / 1000);
+      return [...zs].sort((u, v) => u - v);
+    };
+    expect(zsAt(0.15)).toEqual([-0.08, 0.08]); // верх: 0,2 - 2 x 0,02
+    expect(zsAt(0.13)).toEqual([-0.1, 0.1]); // начало фаски - полная ширина
+  });
+
   it('замкнутое кольцо борта без торцов: начало и конец сходятся стыком', () => {
     const ring = {
       points: [

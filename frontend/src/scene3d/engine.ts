@@ -43,7 +43,13 @@ import { pick } from './pick';
 import type { ScenePostprocessing } from './postprocessing';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import { concrete, fenceBars, hedgeLeaves, noiseTexture } from './textures';
+import {
+  CURB_STONES_PER_TEXTURE,
+  curbStone,
+  fenceBars,
+  hedgeLeaves,
+  noiseTexture,
+} from './textures';
 import { loadGroundMaterials } from './materials';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
@@ -315,7 +321,11 @@ export class SceneEngine {
     const roadGeo = roadPolygons.length ? roadGeometry(roadPolygons, this.world.origin) : null;
     if (roadGeo) {
       this.add(
-        groundMesh(this.world, mask, tex, this.groundWeather, { geometry: roadGeo, name: 'road' }),
+        groundMesh(this.world, mask, tex, this.groundWeather, {
+          geometry: roadGeo,
+          roadTone: true,
+          name: 'road',
+        }),
       );
     }
     const ground = groundMesh(this.world, mask, tex, this.groundWeather, { cutRoad: !!roadGeo });
@@ -426,24 +436,28 @@ export class SceneEngine {
           )
         : [];
     if (curbLines.length || gardenLines.length) {
-      const curbTex = concrete();
-      curbTex.anisotropy = 4;
-      this.disposables.push(curbTex);
-      // Гранитный борт серый: светлый бетон на солнце читался белой полосой.
+      // Гранит: камни по метру со швами и зерном, рельеф из той же текстуры, фаска по рёбрам.
+      const stoneTex = curbStone();
+      stoneTex.anisotropy = 8;
+      stoneTex.repeat.set(1 / CURB_STONES_PER_TEXTURE, 0.05);
+      this.disposables.push(stoneTex);
       const stone = new THREE.MeshStandardMaterial({
-        color: 0xbdbcb6,
-        map: curbTex,
-        roughness: 0.85,
+        color: 0xffffff,
+        map: stoneTex,
+        bumpMap: stoneTex,
+        bumpScale: 1.5,
+        roughness: 0.92,
+        metalness: 0,
       });
       // Дорожный борт с проезжей частью стоит от асфальта проезда, верх - чуть выше тротуара.
       const roadLift = hasRoads ? -ROAD_DROP_M : 0;
       const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
-      for (const [lines, width, height, lift, name] of [
-        [curbLines, CURB_W, roadHeight, roadLift, 'curbs'],
-        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 'garden-curbs'],
+      for (const [lines, width, height, lift, bevel, name] of [
+        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs'],
+        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 0.01, 'garden-curbs'],
       ] as const) {
         if (!lines.length) continue;
-        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift), stone);
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel), stone);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.name = name;

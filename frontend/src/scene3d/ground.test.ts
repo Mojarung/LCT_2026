@@ -182,3 +182,66 @@ describe('проезжая часть ниже тротуара', () => {
     expect(fills).toEqual(['rgb(90, 92, 100)', 'rgb(176, 142, 120)', 'rgb(140, 142, 150)']);
   });
 });
+
+describe('борт без обрывков и изломов (пользователь 17.10.2026: «хуйня у борта вблизи»)', () => {
+  // Квадрат 20 x 20 м, вершины через метр: короткие отрезки, как у контура карты покрытий.
+  const square: number[][] = [];
+  for (let i = 0; i < 20; i++) square.push([i, 0]);
+  for (let i = 0; i < 20; i++) square.push([20, i]);
+  for (let i = 20; i > 0; i--) square.push([i, 20]);
+  for (let i = 20; i > 0; i--) square.push([0, i]);
+  square.push([0, 0]);
+  const areas: SurfaceAreas = { soil: [], paved: [[square]] };
+
+  it('короткий пропуск в ряду (до 1,5 м) заделывается: борт идёт одной линией', () => {
+    // Отрезок (5..6, 0) сервис не узнал - щель в метр.
+    const lines = areaCurbs(areas, [0, 0], (a) => !(a.z === 0 && a.x === 5));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.points).toHaveLength(square.length);
+  });
+
+  it('обрывок борта короче метра не ставится', () => {
+    // Борт только на отрезке (7..7.5) - стоял бы отдельным кубиком.
+    const tiny: SurfaceAreas = {
+      soil: [],
+      paved: [
+        [
+          [
+            [0, 0],
+            [7, 0],
+            [7.5, 0],
+            [20, 0],
+            [20, 20],
+            [0, 20],
+            [0, 0],
+          ],
+        ],
+      ],
+    };
+    const lines = areaCurbs(tiny, [0, 0], (a) => a.x === 7 && a.z === 0);
+    expect(lines).toEqual([]);
+  });
+
+  it('шпилька контура (разворот назад) из борта убирается: брус не перекручивается', () => {
+    const spike: SurfaceAreas = {
+      soil: [],
+      paved: [
+        [
+          [
+            [0, 0],
+            [10, 0],
+            [10, 3],
+            [10.05, 0],
+            [20, 0],
+            [20, 20],
+            [0, 20],
+            [0, 0],
+          ],
+        ],
+      ],
+    };
+    const [line] = areaCurbs(spike, [0, 0]);
+    const zs = (line?.points ?? []).map((p) => p.z);
+    expect(zs).not.toContain(-3);
+  });
+});

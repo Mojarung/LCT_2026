@@ -112,10 +112,12 @@ export function areaCurbs(
   const lines: Line[] = [];
   for (const rings of areas.paved) {
     for (const ring of rings) {
-      const pts = ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y }));
+      const pts = withoutHairpins(ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y })));
       const n = pts.length - 1; // кольцо замкнуто: последняя точка - первая
       if (n < 2) continue;
+      const lengths = Array.from({ length: n }, (_, i) => dist(pts[i] as Flat, pts[i + 1] as Flat));
       const keep = Array.from({ length: n }, (_, i) => edge(pts[i] as Flat, pts[i + 1] as Flat));
+      bridgeGaps(keep, lengths);
       if (keep.every(Boolean)) {
         lines.push({ points: pts });
         continue;
@@ -123,20 +125,84 @@ export function areaCurbs(
       // Обход с отрезка без борта: бортовые отрезки по обе стороны начала кольца - одна линия.
       const start = keep.indexOf(false);
       let run: Flat[] = [];
+      let runLength = 0;
+      const flush = () => {
+        if (run.length && runLength >= CURB_MIN_RUN_M) lines.push({ points: run });
+        run = [];
+        runLength = 0;
+      };
       for (let k = 1; k <= n; k++) {
         const i = (start + k) % n;
         if (keep[i]) {
           if (!run.length) run.push(pts[i] as Flat);
           run.push(pts[i + 1] as Flat);
-        } else if (run.length) {
-          lines.push({ points: run });
-          run = [];
-        }
+          runLength += lengths[i] ?? 0;
+        } else flush();
       }
-      if (run.length) lines.push({ points: run });
+      flush();
     }
   }
   return lines;
+}
+
+/** Пропуск в ряду бортов короче этого заделывается, ряд короче CURB_MIN_RUN_M не ставится:
+ *  иначе вблизи борт выходил обрывками с торцами. */
+const CURB_GAP_M = 1.5;
+const CURB_MIN_RUN_M = 1.0;
+/** Разворот контура круче этого (угол между отрезками, градусы) - шпилька, а не поворот. */
+const HAIRPIN_DEG = 150;
+
+function dist(a: Flat, b: Flat): number {
+  return Math.hypot(b.x - a.x, b.z - a.z);
+}
+
+/** Заделать короткие пропуски кольца между двумя бортовыми отрезками (по кругу). */
+function bridgeGaps(keep: boolean[], lengths: number[]): void {
+  const n = keep.length;
+  if (keep.every(Boolean) || !keep.some(Boolean)) return;
+  const start = keep.indexOf(true);
+  let k = 1;
+  while (k <= n) {
+    const i = (start + k) % n;
+    if (keep[i]) {
+      k++;
+      continue;
+    }
+    let total = 0;
+    let j = 0;
+    while (j < n && !keep[(i + j) % n]) {
+      total += lengths[(i + j) % n] ?? 0;
+      j++;
+    }
+    if (total < CURB_GAP_M) for (let m = 0; m < j; m++) keep[(i + m) % n] = true;
+    k += j;
+  }
+}
+
+/** Убрать вершины-шпильки (контур разворачивается назад): брус бортового камня на них
+ *  перекручивался. Кольцо остаётся замкнутым. */
+function withoutHairpins(points: Flat[]): Flat[] {
+  let pts = points.slice(0, -1);
+  for (let pass = 0; pass < 3 && pts.length > 3; pass++) {
+    const kept = pts.filter((v, i) => {
+      const p = pts[(i - 1 + pts.length) % pts.length] as Flat;
+      const q = pts[(i + 1) % pts.length] as Flat;
+      const ax = v.x - p.x;
+      const az = v.z - p.z;
+      const bx = q.x - v.x;
+      const bz = q.z - v.z;
+      const la = Math.hypot(ax, az);
+      const lb = Math.hypot(bx, bz);
+      if (la < 0.05 || lb < 0.05) return false;
+      const turn =
+        (Math.acos(Math.max(-1, Math.min(1, (ax * bx + az * bz) / (la * lb)))) * 180) / Math.PI;
+      return turn < HAIRPIN_DEG;
+    });
+    if (kept.length === pts.length) break;
+    pts = kept;
+  }
+  const first = pts[0];
+  return first ? [...pts, first] : [];
 }
 
 /** Отрезок - граница двух покрытий: по одну его сторону покрытие вида a, по другую - вида b
@@ -377,7 +443,12 @@ export function groundMesh(
   mask: MaskInfo,
   tex: GroundTextures,
   weather: GroundWeather,
-  options: { geometry?: THREE.BufferGeometry; cutRoad?: boolean; name?: string } = {},
+  options: {
+    geometry?: THREE.BufferGeometry;
+    cutRoad?: boolean;
+    roadTone?: boolean;
+    name?: string;
+  } = {},
 ): THREE.Mesh {
   const [minX, minZ, maxX, maxZ] = world.bounds;
   const cx = (minX + maxX) / 2;
@@ -416,6 +487,8 @@ export function groundMesh(
     uPaversArm: { value: tex.paversArmMap ?? tex.noise },
     // Земля на уровне тротуара вырезает проезжую часть: там видна сетка проезда ниже.
     uCutRoad: { value: options.cutRoad ? 1 : 0 },
+    // Асфальт проезжей части темнее тротуарного: свежий и мокрее, перепад у борта читается.
+    uRoadTone: { value: options.roadTone ? 1 : 0 },
     ...weather,
   };
   material.onBeforeCompile = (shader) => {
@@ -457,6 +530,7 @@ uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
 uniform float uCutRoad;
+uniform float uRoadTone;
 vec3 groundWeights;
 float groundSnow;
 float groundWet;
@@ -503,7 +577,7 @@ export const GROUND_MAP = /* glsl */ `
   // Дальнее поле за краем съёмки глуше: оно фон, а не газон участка.
   g = mix(g * vec3(0.86, 0.84, 0.8), g, outside);
   vec3 pv = texture2D(uPavers, p / 2.1).rgb * (0.9 + 0.16 * macro);
-  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.84 + 0.3 * macro);
+  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.84 + 0.3 * macro) * mix(1.0, 0.72, uRoadTone);
   vec3 col = g * lawn + pv * paver + a * asph;
   // Мокрое покрытие темнее, газон темнеет меньше; лужи - пятнами шума.
   float puddle = smoothstep(0.55, 0.7, texture2D(uNoise, p / 9.0).g) * (1.0 - lawn);
@@ -557,6 +631,7 @@ export function ribbonBox(
   width: number,
   height: number,
   lift = 0,
+  bevel = 0,
 ): THREE.BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
@@ -577,6 +652,11 @@ export function ribbonBox(
   const hw = width / 2;
   const y0 = lift;
   const y1 = lift + height;
+  // Фаска по верхним рёбрам: на ребре ловится блик, как у тёсаного камня, а не у бруса.
+  const b = Math.min(Math.max(bevel, 0), hw * 0.8, height * 0.8);
+  const yb = y1 - b;
+  const inset = (hw - b) / hw;
+  const sq = Math.SQRT1_2;
   for (const line of lines) {
     const pts: Flat[] = [];
     for (const p of line.points) {
@@ -629,20 +709,44 @@ export function ribbonBox(
       const r0 = [p.x - ox0, p.z - oz0];
       const l1 = [q.x + ox1, q.z + oz1];
       const r1 = [q.x - ox1, q.z - oz1];
-      // Верх, левая и правая грани.
+      const li0 = [p.x + ox0 * inset, p.z + oz0 * inset];
+      const ri0 = [p.x - ox0 * inset, p.z - oz0 * inset];
+      const li1 = [q.x + ox1 * inset, q.z + oz1 * inset];
+      const ri1 = [q.x - ox1 * inset, q.z - oz1 * inset];
+      // Верх, фаски, левая и правая грани.
       quad(
-        [l0[0] ?? 0, y1, l0[1] ?? 0],
-        [r0[0] ?? 0, y1, r0[1] ?? 0],
-        [r1[0] ?? 0, y1, r1[1] ?? 0],
-        [l1[0] ?? 0, y1, l1[1] ?? 0],
+        [li0[0] ?? 0, y1, li0[1] ?? 0],
+        [ri0[0] ?? 0, y1, ri0[1] ?? 0],
+        [ri1[0] ?? 0, y1, ri1[1] ?? 0],
+        [li1[0] ?? 0, y1, li1[1] ?? 0],
         [0, 1, 0],
         u0,
         u1,
       );
+      if (b > 0) {
+        quad(
+          [l0[0] ?? 0, yb, l0[1] ?? 0],
+          [li0[0] ?? 0, y1, li0[1] ?? 0],
+          [li1[0] ?? 0, y1, li1[1] ?? 0],
+          [l1[0] ?? 0, yb, l1[1] ?? 0],
+          [nx * sq, sq, nz * sq],
+          u0,
+          u1,
+        );
+        quad(
+          [ri1[0] ?? 0, y1, ri1[1] ?? 0],
+          [ri0[0] ?? 0, y1, ri0[1] ?? 0],
+          [r0[0] ?? 0, yb, r0[1] ?? 0],
+          [r1[0] ?? 0, yb, r1[1] ?? 0],
+          [-nx * sq, sq, -nz * sq],
+          u1,
+          u0,
+        );
+      }
       quad(
         [l0[0] ?? 0, y0, l0[1] ?? 0],
-        [l0[0] ?? 0, y1, l0[1] ?? 0],
-        [l1[0] ?? 0, y1, l1[1] ?? 0],
+        [l0[0] ?? 0, yb, l0[1] ?? 0],
+        [l1[0] ?? 0, yb, l1[1] ?? 0],
         [l1[0] ?? 0, y0, l1[1] ?? 0],
         [nx, 0, nz],
         u0,
@@ -650,8 +754,8 @@ export function ribbonBox(
       );
       quad(
         [r1[0] ?? 0, y0, r1[1] ?? 0],
-        [r1[0] ?? 0, y1, r1[1] ?? 0],
-        [r0[0] ?? 0, y1, r0[1] ?? 0],
+        [r1[0] ?? 0, yb, r1[1] ?? 0],
+        [r0[0] ?? 0, yb, r0[1] ?? 0],
         [r0[0] ?? 0, y0, r0[1] ?? 0],
         [-nx, 0, -nz],
         u1,
@@ -669,17 +773,30 @@ export function ribbonBox(
       const [nx, nz] = normals[sign < 0 ? 0 : segments - 1] ?? [0, 0];
       const dir = [nz * sign, -nx * sign];
       const a = [p.x + ox, p.z + oz];
-      const b = [p.x - ox, p.z - oz];
-      const [first, second] = sign < 0 ? [a, b] : [b, a];
+      const c = [p.x - ox, p.z - oz];
+      const ai = [p.x + ox * inset, p.z + oz * inset];
+      const ci = [p.x - ox * inset, p.z - oz * inset];
+      const [first, second, firstIn, secondIn] = sign < 0 ? [a, c, ai, ci] : [c, a, ci, ai];
+      const nrm = [dir[0] ?? 0, 0, dir[1] ?? 0];
       quad(
         [first[0] ?? 0, y0, first[1] ?? 0],
-        [first[0] ?? 0, y1, first[1] ?? 0],
-        [second[0] ?? 0, y1, second[1] ?? 0],
+        [first[0] ?? 0, yb, first[1] ?? 0],
+        [second[0] ?? 0, yb, second[1] ?? 0],
         [second[0] ?? 0, y0, second[1] ?? 0],
-        [dir[0] ?? 0, 0, dir[1] ?? 0],
+        nrm,
         0,
         width,
       );
+      if (b > 0)
+        quad(
+          [first[0] ?? 0, yb, first[1] ?? 0],
+          [firstIn[0] ?? 0, y1, firstIn[1] ?? 0],
+          [secondIn[0] ?? 0, y1, secondIn[1] ?? 0],
+          [second[0] ?? 0, yb, second[1] ?? 0],
+          nrm,
+          0,
+          width,
+        );
     }
   }
   const g = new THREE.BufferGeometry();
