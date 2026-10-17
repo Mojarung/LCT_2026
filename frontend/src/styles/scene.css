@@ -1523,3 +1523,15 @@
     padding-top: 16px;
   }
 }
+
+/* Полоса камеры - тоже по центру экрана: сворачивание пульта её не двигает. */
+@media (min-width: 1081px) {
+  .page-scene .scene-bar,
+  .page-scene .scene-help {
+    left: 50%;
+    transition: none;
+  }
+  .page-scene .scene-bar {
+    max-width: calc(100% - 2 * (var(--hud-right-w) + var(--inset) * 2));
+  }
+}
