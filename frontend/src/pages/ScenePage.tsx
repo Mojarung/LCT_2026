@@ -684,134 +684,128 @@ export function ScenePage() {
                 </div>
               ) : null}
             </aside>
-            {readyToFly ? (
-              <MediaPanel
-                items={media}
-                photos={photos.data?.photos ?? []}
-                available={photosAvailable}
-                reason={photos.data?.reason ?? null}
-                scenery={scenery}
-                onScenery={setScenery}
-                modern={modern}
-                onModern={setModern}
-                customPrompt={promptDraft !== null}
-                onPrompt={() => {
-                  setPromptOpen(true);
-                }}
-                collapsed={mediaCollapsed}
-                onToggle={toggleMedia}
-                shotScale={shotScale}
-                onShotScale={setShotScale}
-                shooting={shooting}
-                sending={sendingView}
-                onShot={() => {
-                  void shoot(shotScale);
-                }}
-                onPhotoView={() => {
-                  void photoFromView();
-                }}
-                photoBusy={photoBusy}
-                onShots={() => {
-                  void openGallery({ kind: 'street' }, 'Кадры улицы');
-                }}
-                onRemoveShot={(id) => {
-                  setShots((list) => {
-                    const gone = list.find((s) => s.id === id);
-                    if (gone) URL.revokeObjectURL(gone.url);
-                    return list.filter((s) => s.id !== id);
-                  });
-                }}
-                onDeletePhoto={(id) => {
-                  if (!window.confirm('Удалить фото с сервера? Вернуть его будет нельзя.')) return;
-                  deletePhoto.mutate(id, {
-                    onError: (error) => {
-                      toast(error.message);
-                    },
-                  });
-                }}
-                onPhoto={(shot) => {
-                  void photoFromSnapshot(shot);
-                }}
-                onOpen={setViewer}
-              />
-            ) : null}
-          </div>
-          {readyToFly ? (
-            <ScenePanel
-              settings={settings}
-              onChange={change}
-              speed={cam.speed}
-              onSpeed={(speed) => engine.current?.setSpeed(speed)}
+            <MediaPanel
+              items={media}
+              photos={photos.data?.photos ?? []}
+              available={photosAvailable}
+              reason={photos.data?.reason ?? null}
+              scenery={scenery}
+              onScenery={setScenery}
+              modern={modern}
+              onModern={setModern}
+              customPrompt={promptDraft !== null}
+              onPrompt={() => {
+                setPromptOpen(true);
+              }}
+              collapsed={mediaCollapsed}
+              onToggle={toggleMedia}
+              shotScale={shotScale}
+              onShotScale={setShotScale}
+              shooting={shooting}
+              sending={sendingView}
+              onShot={() => {
+                void shoot(shotScale);
+              }}
+              onPhotoView={() => {
+                void photoFromView();
+              }}
+              photoBusy={photoBusy}
+              onShots={() => {
+                void openGallery({ kind: 'street' }, 'Кадры улицы');
+              }}
+              onRemoveShot={(id) => {
+                setShots((list) => {
+                  const gone = list.find((s) => s.id === id);
+                  if (gone) URL.revokeObjectURL(gone.url);
+                  return list.filter((s) => s.id !== id);
+                });
+              }}
+              onDeletePhoto={(id) => {
+                if (!window.confirm('Удалить фото с сервера? Вернуть его будет нельзя.')) return;
+                deletePhoto.mutate(id, {
+                  onError: (error) => {
+                    toast(error.message);
+                  },
+                });
+              }}
+              onPhoto={(shot) => {
+                void photoFromSnapshot(shot);
+              }}
+              onOpen={setViewer}
             />
-          ) : null}
-          {readyToFly ? (
-            <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
-              <div className="bar-group" role="group" aria-label="Режим камеры">
-                <BarButton
-                  icon="fly"
-                  label="Полёт"
-                  keyHint="G"
-                  pressed={cam.mode === 'fly'}
-                  title="Свободный полёт"
-                  onClick={() => engine.current?.setMode('fly')}
-                />
-                <BarButton
-                  icon="walk"
-                  label="Пешеход"
-                  keyHint="G"
-                  pressed={cam.mode === 'walk'}
-                  title="Пешеход на высоте глаз 1,7 м"
-                  onClick={() => engine.current?.setMode('walk')}
-                />
-              </div>
-              <div className="bar-group" role="group" aria-label="Куда смотреть">
-                <BarButton
-                  icon="overview"
-                  label="Общий вид"
-                  keyHint="R"
-                  title="Вернуться к общему виду"
-                  onClick={() => engine.current?.resetView()}
-                />
-                <BarButton
-                  icon="tour"
-                  label="Облёт"
-                  keyHint="T"
-                  pressed={cam.touring}
-                  title="Облёт над улицей; мышь или WASD - взять управление"
-                  onClick={() => {
-                    const e = engine.current;
-                    if (!e) return;
-                    if (cam.touring) e.stopTour();
-                    else e.startTour();
-                  }}
-                />
-              </div>
-              <div className="bar-group" role="group" aria-label="Панели">
-                <BarButton
-                  icon="hide"
-                  label="Без панелей"
-                  keyHint="H"
-                  title="Скрыть панели для чистого кадра"
-                  onClick={() => {
-                    setHudHidden(true);
-                  }}
-                />
-              </div>
-              <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
-                {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
-                {stats ? ` · ${String(stats.fps)} к/с` : ''}
-                {stats && stats.scale < 0.99
-                  ? ` · разрешение ${String(Math.round(stats.scale * 100))}%`
-                  : ''}
-              </span>
+          </div>
+          <ScenePanel
+            settings={settings}
+            onChange={change}
+            speed={cam.speed}
+            onSpeed={(speed) => engine.current?.setSpeed(speed)}
+          />
+          <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
+            <div className="bar-group" role="group" aria-label="Режим камеры">
+              <BarButton
+                icon="fly"
+                label="Полёт"
+                keyHint="G"
+                pressed={cam.mode === 'fly'}
+                title="Свободный полёт"
+                onClick={() => engine.current?.setMode('fly')}
+              />
+              <BarButton
+                icon="walk"
+                label="Пешеход"
+                keyHint="G"
+                pressed={cam.mode === 'walk'}
+                title="Пешеход на высоте глаз 1,7 м"
+                onClick={() => engine.current?.setMode('walk')}
+              />
             </div>
-          ) : null}
-          {notice && readyToFly ? (
+            <div className="bar-group" role="group" aria-label="Куда смотреть">
+              <BarButton
+                icon="overview"
+                label="Общий вид"
+                keyHint="R"
+                title="Вернуться к общему виду"
+                onClick={() => engine.current?.resetView()}
+              />
+              <BarButton
+                icon="tour"
+                label="Облёт"
+                keyHint="T"
+                pressed={cam.touring}
+                title="Облёт над улицей; мышь или WASD - взять управление"
+                onClick={() => {
+                  const e = engine.current;
+                  if (!e) return;
+                  if (cam.touring) e.stopTour();
+                  else e.startTour();
+                }}
+              />
+            </div>
+            <div className="bar-group" role="group" aria-label="Панели">
+              <BarButton
+                icon="hide"
+                label="Без панелей"
+                keyHint="H"
+                title="Скрыть панели для чистого кадра"
+                onClick={() => {
+                  setHudHidden(true);
+                }}
+              />
+            </div>
+            <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
+              {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
+              {stats ? ` · ${String(stats.fps)} к/с` : ''}
+              {stats && stats.scale < 0.99
+                ? ` · разрешение ${String(Math.round(stats.scale * 100))}%`
+                : ''}
+            </span>
+          </div>
+          {notice ? (
             <div className="hud scene-toast" role="status">
               {notice}
             </div>
           ) : null}
-          {readyToFly && !cam.locked && !everLocked ? (
+          {!cam.locked && !everLocked ? (
             <div className="hud scene-help" role="note">
               <p>
                 <strong>Щёлкните по сцене</strong> и управляйте мышью, Esc - отпустить.
