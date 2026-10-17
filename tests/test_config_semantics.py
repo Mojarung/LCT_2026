@@ -174,3 +174,25 @@ def test_bare_english_boundary_and_comm_cable(name: str, expected: ObjectClass) 
         assert inferred is not None, name
         found = inferred.object_class
     assert found is expected
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Ревью 17.10.2026: фраза не должна перебивать пометку сноса.
+        ("Край проезжей части_демонтаж", ObjectClass.IGNORE),
+        ("Край дороги (демонтаж)", ObjectClass.IGNORE),
+        ("кабель связи демонтаж", ObjectClass.IGNORE),
+        # Чужие границы - не граница работ.
+        ("Граница территории ОКН", ObjectClass.CONTOUR),
+        ("Граница объекта культурного наследия", ObjectClass.CONTOUR),
+        ("Граница проекта планировки", ObjectClass.CONTOUR),
+        # Подписи и выноски границы работ - оформление, только рамка/border - граница.
+        ("Подписи границы работ", ObjectClass.IGNORE),
+        ("Выноски граница работ", ObjectClass.IGNORE),
+    ],
+)
+def test_review_regressions_in_the_vocabulary(name: str, expected: ObjectClass) -> None:
+    inferred = LAYER_MAP.vocabulary.infer(None, name)
+    assert inferred is not None, name
+    assert inferred.object_class is expected, (name, inferred)

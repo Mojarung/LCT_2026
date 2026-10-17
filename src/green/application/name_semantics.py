@@ -43,6 +43,9 @@ class Rank(IntEnum):
     BOUNDARY = 4
 
 
+_FRAME_WORDS = frozenset({"рамк", "border"})
+
+
 @dataclass(frozen=True, slots=True)
 class Inference:
     """Вывод по имени: класс, слово-основание и вид вывода (name, removed, proposed,
@@ -104,7 +107,7 @@ class Vocabulary:
         tokens = text.split()
         if not tokens:
             return None
-        if (word := self._annotation(text, tokens)) and not self._boundary(text):
+        if (word := self._annotation(text, tokens)) and not self._boundary(text, word):
             return Inference(ObjectClass.IGNORE, word, "annotation")
         head = self._head(name, tokens)
         hits = self._hits(" ".join(head), head)
@@ -130,9 +133,11 @@ class Vocabulary:
     def _service(self) -> frozenset[str]:
         return self.removal | self.proposed | self.existing | self.negations
 
-    def _boundary(self, text: str) -> bool:
-        """Фраза границы работ сильнее слова оформления: «РАМКА_ГРАНИЦА_УЧАСТКА», «SITE_BORDER»
-        у других команд - граница участка, а не рамка листа (17.10.2026)."""
+    def _boundary(self, text: str, word: str) -> bool:
+        """Фраза границы работ сильнее только слов рамки: «РАМКА_ГРАНИЦА_УЧАСТКА», «SITE_BORDER»
+        у других команд - граница участка (17.10.2026), а «Подписи границы работ» - подписи."""
+        if word not in _FRAME_WORDS:
+            return False
         return any(
             kind is ObjectClass.WORK_BOUNDARY and _has_phrase(text, phrase)
             for phrase, (kind, _) in self.phrases.items()
@@ -167,10 +172,14 @@ class Vocabulary:
 
     def _hits(self, text: str, tokens: list[str]) -> list[_Hit]:
         hits = []
+        taken: set[int] = set()
         for phrase, (kind, rank) in self.phrases.items():
             if _has_phrase(text, phrase):
-                hits.append(_Hit(_phrase_position(tokens, phrase), phrase, kind, rank))
-        taken = {hit.position for hit in hits}
+                start = _phrase_position(tokens, phrase)
+                hits.append(_Hit(start, phrase, kind, rank))
+                # Фраза занимает все свои слова: «край дороги» не даёт ещё и «дорогу», и снос
+                # («_демонтаж») снимает фразу как одно слово (ревью 17.10.2026).
+                taken.update(range(start, start + len(phrase.split())))
         for pattern, kind, rank in self.patterns:
             if pattern.search(text):
                 hits.append(_Hit(0, pattern.pattern, kind, rank))
