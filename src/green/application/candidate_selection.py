@@ -51,8 +51,6 @@ class SelectionProblem:
             raise ValueError("Candidate coordinates must be finite two-dimensional points")
         if any(type(w) is not int or w <= 0 for w in self.weights):
             raise ValueError("Candidate weights must be positive integers")
-        if sum(self.weights) > _MAX_WEIGHT_SUM:
-            raise ValueError("Candidate weight sum exceeds the numerical precision budget")
 
     def feasible(self, selected: Sequence[int]) -> bool:
         """Independent check in coordinates, without trusting the MILP constraint matrix."""
@@ -106,6 +104,9 @@ def select_candidates(
     status, optimal, conflicts = "candidate_limit", False, None
     if not problem.xy:
         status, optimal = "empty", True
+    elif sum(problem.weights) > _MAX_WEIGHT_SUM:
+        # Float objective loses integer precision: the checked greedy plan stays (large sites).
+        status = "weight_limit"
     elif len(problem.xy) <= max_candidates:
         pairs = _conflicts(problem, max_conflicts)
         if pairs is None:
