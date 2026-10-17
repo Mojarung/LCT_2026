@@ -5,8 +5,9 @@
  * та же, по которой считались посадки) и поверх неё - полигоны газонов, тротуаров и проезжей
  * части с подосновы. Всё это рисуется в маску: R - газон, G - плитка, B - асфальт. Что
  * сервис не разметил, и всё за краем съёмки - газон, покрытие делится на тротуар и проезд
- * по ширине полосы (surfaceMask.ts). Шейдер земли смешивает по маске три фактуры, а шум
- * сбивает ступеньку растра на границе газона. */
+ * по ширине полосы (surfaceMask.ts). Шейдер земли смешивает по маске три фактуры с ровным
+ * порогом. Карта покрытий приходит контурами (surface.json, areas): край проезда и газона -
+ * прямая, а не лесенка клеток; у старых прогонов без контуров растр размывается на клетку. */
 
 import * as THREE from 'three';
 
@@ -16,8 +17,19 @@ import type { Flat, Line, Ring, World } from './types';
 /** Метров на пиксель маски: борт шириной 15 см маска не рисует, его ставит геометрия. */
 const MASK_M_PER_PX = 0.25;
 const MASK_MAX_PX = 4096;
+/** Размытие маски у контуров, пикселей (softenCells берёт 0,9 от него). */
+const CONTOUR_SOFTEN_PX = 1.6;
 /** Земля продолжается за границу сцены, чтобы горизонт не обрывался краем плиты. */
 export const GROUND_PAD_M = 3000;
+
+/** Полигон - кольца в координатах чертежа: внешнее, затем дыры. */
+export type AreaPolygon = number[][][];
+
+/** Контуры карты покрытий: грунт и поверх него покрытие (surface.json, areas). */
+export interface SurfaceAreas {
+  soil: AreaPolygon[];
+  paved: AreaPolygon[];
+}
 
 export interface SurfaceImage {
   img: HTMLImageElement;
@@ -26,6 +38,127 @@ export interface SurfaceImage {
   cell: number;
   width: number;
   height: number;
+  areas?: SurfaceAreas | null;
+}
+
+/** Цвета карты покрытий без прозрачности: classifySurface отличает грунт от покрытия по цвету. */
+const SOIL_FILL = 'rgb(104, 158, 104)';
+const PAVED_FILL = 'rgb(140, 142, 150)';
+
+/** Кольца полигонов чертежа в пикселях маски: x сцены = X - начало, z сцены = -(Y - начало). */
+export function areaRings(
+  polygons: AreaPolygon[],
+  origin: [number, number],
+  minX: number,
+  minZ: number,
+  mpp: number,
+): [number, number][][][] {
+  const [ox, oy] = origin;
+  return polygons.map((rings) =>
+    rings.map((ring) =>
+      ring.map(([x = 0, y = 0]): [number, number] => [
+        (x - ox - minX) / mpp,
+        (-(y - oy) - minZ) / mpp,
+      ]),
+    ),
+  );
+}
+
+function tracePolygon(ctx: CanvasRenderingContext2D, rings: [number, number][][]): void {
+  ctx.beginPath();
+  for (const ring of rings) {
+    ring.forEach(([x, y], i) => {
+      if (i) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+    });
+    ctx.closePath();
+  }
+}
+
+/** Бортовой камень по краям покрытия (пользователь, 17.10.2026): кольца контуров покрытия
+ *  линиями в координатах сцены, только отрезки, где edge подтверждает газон по одну сторону:
+ *  шов между тротуаром и проездом бортом не обводится, линии бортов чертежа идут отдельно
+ *  (world.curbs). */
+export function areaCurbs(
+  areas: SurfaceAreas,
+  origin: [number, number],
+  edge: (a: Flat, b: Flat) => boolean = () => true,
+): Line[] {
+  const [ox, oy] = origin;
+  const lines: Line[] = [];
+  for (const rings of areas.paved) {
+    for (const ring of rings) {
+      const pts = ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y }));
+      const n = pts.length - 1; // кольцо замкнуто: последняя точка - первая
+      if (n < 2) continue;
+      const keep = Array.from({ length: n }, (_, i) => edge(pts[i] as Flat, pts[i + 1] as Flat));
+      if (keep.every(Boolean)) {
+        lines.push({ points: pts });
+        continue;
+      }
+      // Обход с отрезка без борта: бортовые отрезки по обе стороны начала кольца - одна линия.
+      const start = keep.indexOf(false);
+      let run: Flat[] = [];
+      for (let k = 1; k <= n; k++) {
+        const i = (start + k) % n;
+        if (keep[i]) {
+          if (!run.length) run.push(pts[i] as Flat);
+          run.push(pts[i + 1] as Flat);
+        } else if (run.length) {
+          lines.push({ points: run });
+          run = [];
+        }
+      }
+      if (run.length) lines.push({ points: run });
+    }
+  }
+  return lines;
+}
+
+/** Отрезок - край газона, если по одну его сторону газон маски, а по другую - нет. */
+export function grassEdge(mask: MaskInfo, offsetM = 0.4): (a: Flat, b: Flat) => boolean {
+  const [minX, minZ] = mask.rect;
+  const grassAt = (x: number, z: number): boolean => {
+    const col = Math.floor((x - minX) / mask.metresPerPx);
+    const row = Math.floor((z - minZ) / mask.metresPerPx);
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return true;
+    return (mask.kinds[row * mask.width + col] ?? GRASS) === GRASS;
+  };
+  return (a, b) => {
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (!len) return false;
+    const nx = (-dz / len) * offsetM;
+    const nz = (dx / len) * offsetM;
+    const mx = (a.x + b.x) / 2;
+    const mz = (a.z + b.z) / 2;
+    return grassAt(mx + nx, mz + nz) !== grassAt(mx - nx, mz - nz);
+  };
+}
+
+/** Контуры карты покрытий вместо её растра: грунт и поверх него покрытие, как в растре. */
+export function drawSurfaceAreas(
+  ctx: CanvasRenderingContext2D,
+  areas: SurfaceAreas,
+  origin: [number, number],
+  minX: number,
+  minZ: number,
+  mpp: number,
+): void {
+  const soil = areaRings(areas.soil, origin, minX, minZ, mpp);
+  const paved = areaRings(areas.paved, origin, minX, minZ, mpp);
+  for (const [polygons, color] of [
+    [soil, SOIL_FILL],
+    [paved, PAVED_FILL],
+  ] as const) {
+    if (!polygons.length) continue;
+    ctx.fillStyle = color;
+    for (const rings of polygons) {
+      tracePolygon(ctx, rings);
+      ctx.fill('evenodd');
+    }
+  }
 }
 
 export interface MaskInfo {
@@ -84,8 +217,8 @@ function surfaceToMask(
 }
 
 /** Размыть растр карты покрытий на размер клетки: ступенька в метр читается сверху как
- *  пиксельная лесенка, а настоящая граница газона плавная. Полигоны подосновы рисуются
- *  после, чётко. */
+ *  пиксельная лесенка, а у размытой на клетку лесенки порог 0,5 идёт почти прямой. Полигоны
+ *  подосновы рисуются после, чётко. */
 function softenCells(c: HTMLCanvasElement, ctx: CanvasRenderingContext2D, cellPx: number): void {
   if (cellPx < 1.5) return;
   const copy = document.createElement('canvas');
@@ -93,7 +226,7 @@ function softenCells(c: HTMLCanvasElement, ctx: CanvasRenderingContext2D, cellPx
   copy.height = c.height;
   copy.getContext('2d')?.drawImage(c, 0, 0);
   ctx.save();
-  ctx.filter = `blur(${(cellPx * 0.6).toFixed(1)}px)`;
+  ctx.filter = `blur(${(cellPx * 0.9).toFixed(1)}px)`;
   ctx.drawImage(copy, 0, 0);
   ctx.restore();
 }
@@ -113,7 +246,12 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   // Карта покрытий полупрозрачная: рисуется на прозрачный холст, иначе её цвет смешается с
   // фоном и грунт перестанет отличаться от покрытия. Пустое после разбора - газон.
   ctx.clearRect(0, 0, w, h);
-  if (surface) {
+  // Контуры карты покрытий (surface.json, areas) - прямые края без лесенки клеток; растр - для
+  // прогонов, сделанных до них.
+  const areas = surface?.areas;
+  if (surface && areas) {
+    drawSurfaceAreas(ctx, areas, world.origin, minX, minZ, mpp);
+  } else if (surface) {
     // Строка 0 растра - минимальный Y чертежа, то есть наибольший z сцены: рисуем с
     // отражением по вертикали, от нижнего края вверх.
     const [ox, oy] = world.origin;
@@ -130,7 +268,9 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ctx.restore();
   }
   const kinds = surfaceToMask(ctx, w, h, mpp);
-  if (surface) softenCells(c, ctx, surface.cell / mpp);
+  // Край контура на пикселе маски (у большой сцены до 0,4 м) - лесенка; лёгкое размытие
+  // выравнивает порог шейдера. У растра без контуров - размытие на клетку.
+  if (surface) softenCells(c, ctx, areas ? CONTOUR_SOFTEN_PX : surface.cell / mpp);
   const toPx = (p: Flat): [number, number] => [(p.x - minX) / mpp, (p.z - minZ) / mpp];
   ctx.fillStyle = '#0000ff';
   for (const rings of world.roads) ringPath(ctx, rings, toPx);
@@ -264,7 +404,7 @@ vec3 antiTile(sampler2D tex, vec2 p, float scale) {
 }
 `;
 
-const GROUND_MAP = /* glsl */ `
+export const GROUND_MAP = /* glsl */ `
 {
   vec2 p = vGroundPos.xz;
   vec2 muv = (p - uMaskRect.xy) / uMaskRect.zw;
@@ -272,9 +412,10 @@ const GROUND_MAP = /* glsl */ `
   // За границей сцены данных нет: газон квартала, край уходит в дымку.
   float outside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
   vec4 nz = texture2D(uNoise, p / 23.0);
-  float edge = (nz.g - 0.5) * 0.5 + (texture2D(uNoise, p / 3.1).b - 0.5) * 0.35;
-  float lawn = smoothstep(0.42, 0.58, m.r + edge);
-  float paver = smoothstep(0.45, 0.55, m.g + edge * 0.3) * (1.0 - lawn);
+  // Граница газона, плитки и асфальта - порог маски без шума: шум делал край «обгрызенным»
+  // (пользователь, 17.10.2026). Лесенку клеток растра снимает размытие маски (softenCells).
+  float lawn = smoothstep(0.45, 0.55, m.r);
+  float paver = smoothstep(0.45, 0.55, m.g) * (1.0 - lawn);
   lawn = mix(1.0, lawn, outside);
   paver *= outside;
   float asph = clamp(1.0 - lawn - paver, 0.0, 1.0);

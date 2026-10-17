@@ -111,7 +111,14 @@ async function loadSurfaceImage(runId: string, meta: SurfaceMeta): Promise<Surfa
   } catch {
     return null;
   }
-  return { img, origin: meta.origin, cell: meta.cell_m, width: meta.width, height: meta.height };
+  return {
+    img,
+    origin: meta.origin,
+    cell: meta.cell_m,
+    width: meta.width,
+    height: meta.height,
+    areas: meta.areas ?? null,
+  };
 }
 
 function isTyping(target: EventTarget | null): boolean {

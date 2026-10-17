@@ -22,11 +22,13 @@ import { buildingGeometry, facadeAccentsGeometry, facadeMaterial, roofMaterial }
 import { Walls } from './collide';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
+  areaCurbs,
   buildMask,
   type MaskInfo,
   CURB_H,
   CURB_W,
   fenceGeometry,
+  grassEdge,
   groundMesh,
   ribbonBox,
   type SurfaceImage,
@@ -303,7 +305,7 @@ export class SceneEngine {
     this.noise = noise;
     const ground = groundMesh(this.world, mask, tex, this.groundWeather);
     this.add(ground);
-    this.addStreetFurniture();
+    this.addStreetFurniture(surface);
     if (this.world.shrubStrips?.length) {
       const leaves = hedgeLeaves();
       this.disposables.push(leaves);
@@ -372,14 +374,21 @@ export class SceneEngine {
     if (m) for (const one of Array.isArray(m) ? m : [m]) this.disposables.push(one);
   }
 
-  private addStreetFurniture(): void {
+  private addStreetFurniture(surface: SurfaceImage | null): void {
     const world = this.world;
-    if (world.curbs.length) {
+    // Борт по краю покрытия из контуров карты покрытий: проезды и тротуары ограничены камнем.
+    const curbLines = [
+      ...world.curbs,
+      ...(surface?.areas && this.mask
+        ? areaCurbs(surface.areas, world.origin, grassEdge(this.mask))
+        : []),
+    ];
+    if (curbLines.length) {
       const curbTex = concrete();
       curbTex.anisotropy = 4;
       this.disposables.push(curbTex);
       const curbs = new THREE.Mesh(
-        ribbonBox(world.curbs, CURB_W, CURB_H),
+        ribbonBox(curbLines, CURB_W, CURB_H),
         new THREE.MeshStandardMaterial({ color: 0xd0cec8, map: curbTex, roughness: 0.85 }),
       );
       curbs.castShadow = true;

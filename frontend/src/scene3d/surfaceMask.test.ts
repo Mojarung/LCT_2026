@@ -54,4 +54,43 @@ describe('покрытие земли в 3D', () => {
     expect(at(13, 8)).toBe(ASPHALT);
     expect(at(18, 18)).toBe(GRASS);
   });
+
+  it('щель по линии борта закрывается покрытием, тротуар остаётся плиткой', () => {
+    // 0,25 м на пиксель: газон 1 м, тротуар 2 м, щель борта 0,5 м, проезд 10 м, щель 0,5 м,
+    // газон 3 м.
+    const w = 84;
+    const h = 10;
+    const rgba = raster(w, h, (x) => {
+      if (x < 4) return SOIL;
+      if (x < 12) return PAVED;
+      if (x < 14) return null;
+      if (x < 54) return PAVED;
+      if (x < 56) return null;
+      if (x < 68) return SOIL;
+      return null;
+    });
+    const kind = classifySurface(rgba, w, h, 0.25);
+    const at = (x: number) => kind[5 * w + x];
+    expect(at(8)).toBe(PAVERS);
+    expect(at(13)).not.toBe(GRASS); // щель между тротуаром и проездом
+    expect(at(34)).toBe(ASPHALT);
+    expect(at(55)).toBe(GRASS); // щель между проездом и газоном - край газона
+    expect(at(62)).toBe(GRASS);
+    expect(at(2)).toBe(GRASS);
+  });
+
+  it('узкий газон между тротуаром и проездом остаётся газоном: закрывается только пустая щель', () => {
+    // 0,25 м на пиксель: газон, тротуар 2 м, газон 0,75 м (лунки деревьев), проезд 10 м.
+    const w = 70;
+    const h = 10;
+    const rgba = raster(w, h, (x) => {
+      if (x < 4) return SOIL;
+      if (x < 12) return PAVED;
+      if (x < 15) return SOIL;
+      if (x < 55) return PAVED;
+      return SOIL;
+    });
+    const kind = classifySurface(rgba, w, h, 0.25);
+    expect(kind[5 * w + 13]).toBe(GRASS);
+  });
 });

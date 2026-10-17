@@ -17,6 +17,8 @@ export const ASPHALT = 2;
 export const TROTTOIR_M = 4.6;
 /** Радиус окна, в котором ищется середина полосы: больше половины ширины тротуара с запасом. */
 const WINDOW_M = 3;
+/** Щель уже двух таких отступов посреди покрытия - линия борта на карте покрытий, а не газон. */
+const SEAM_M = 0.5;
 const DIAGONAL = Math.SQRT2;
 
 /** Грунт на карте покрытий зеленее, чем красен (как в map/paper.ts), покрытие - серое. */
@@ -61,7 +63,9 @@ export function distanceInside(paved: Uint8Array, w: number, h: number): Float32
   return d;
 }
 
-/** Максимум в окне ±r по одной оси за линейное время (van Herk - Gil-Werman). */
+/** Максимум в окне ±r по одной оси за линейное время (van Herk - Gil-Werman). Линия
+ *  дополняется r нулями с обеих сторон: окно у края растра той же длины, что внутри, и не
+ *  захватывает чужой блок (расстояния неотрицательны, ноль максимума не меняет). */
 function maxLine(
   src: Float32Array,
   out: Float32Array,
@@ -71,21 +75,14 @@ function maxLine(
   r: number,
 ): void {
   const size = 2 * r + 1;
-  const g = new Float32Array(n);
-  const hh = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = src[offset + i * stride] ?? 0;
-    g[i] = i % size === 0 ? v : Math.max(g[i - 1] ?? 0, v);
-  }
-  for (let i = n - 1; i >= 0; i--) {
-    const v = src[offset + i * stride] ?? 0;
-    hh[i] = i === n - 1 || (i + 1) % size === 0 ? v : Math.max(hh[i + 1] ?? 0, v);
-  }
-  for (let i = 0; i < n; i++) {
-    const lo = Math.max(0, i - r);
-    const hi = Math.min(n - 1, i + r);
-    out[offset + i * stride] = Math.max(hh[lo] ?? 0, g[hi] ?? 0);
-  }
+  const m = n + 2 * r;
+  const v = (j: number) => (j < r || j >= n + r ? 0 : (src[offset + (j - r) * stride] ?? 0));
+  const g = new Float32Array(m);
+  const hh = new Float32Array(m);
+  for (let j = 0; j < m; j++) g[j] = j % size === 0 ? v(j) : Math.max(g[j - 1] ?? 0, v(j));
+  for (let j = m - 1; j >= 0; j--)
+    hh[j] = j === m - 1 || (j + 1) % size === 0 ? v(j) : Math.max(hh[j + 1] ?? 0, v(j));
+  for (let i = 0; i < n; i++) out[offset + i * stride] = Math.max(hh[i] ?? 0, g[i + 2 * r] ?? 0);
 }
 
 export function maxFilter(src: Float32Array, w: number, h: number, r: number): Float32Array {
@@ -94,6 +91,36 @@ export function maxFilter(src: Float32Array, w: number, h: number, r: number): F
   const out = new Float32Array(src.length);
   for (let x = 0; x < w; x++) maxLine(rows, out, h, w, x, r);
   return out;
+}
+
+/** Линии бортов на карте покрытий - пустые клетки посреди покрытия: на 3D это зелёная нитка
+ *  по асфальту. Тротуар и проезд делятся по ширине до закрытия щели (по ней тротуар узкий),
+ *  а потом щель закрывается покрытием (замыкание радиуса r): у тротуара - плиткой. */
+function closeSeams(
+  kind: Uint8Array,
+  paved: Uint8Array,
+  empty: Uint8Array,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const dilated = maxFilter(Float32Array.from(paved), w, h, r);
+  const outside = maxFilter(
+    dilated.map((v) => 1 - v),
+    w,
+    h,
+    r,
+  );
+  const pavers = maxFilter(
+    Float32Array.from(kind, (k) => (k === PAVERS ? 1 : 0)),
+    w,
+    h,
+    r,
+  );
+  for (let i = 0; i < kind.length; i++) {
+    // Только пустая щель: газон, даже узкий (лунки деревьев), остаётся газоном.
+    if (empty[i] && !outside[i]) kind[i] = pavers[i] ? PAVERS : ASPHALT;
+  }
 }
 
 /** Покрытие каждого пикселя по RGBA карты покрытий, уже положенной в масштаб маски. */
@@ -105,10 +132,12 @@ export function classifySurface(
 ): Uint8Array {
   const kind = new Uint8Array(w * h);
   const paved = new Uint8Array(w * h);
+  const empty = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) {
     const a = rgba[i * 4 + 3] ?? 0;
     const soil = isSoil(rgba[i * 4] ?? 0, rgba[i * 4 + 1] ?? 0, a);
     paved[i] = a > 0 && !soil ? 1 : 0;
+    empty[i] = a > 0 ? 0 : 1;
     kind[i] = paved[i] ? ASPHALT : GRASS;
   }
   const middle = maxFilter(
@@ -121,5 +150,6 @@ export function classifySurface(
   for (let i = 0; i < kind.length; i++) {
     if (paved[i] && (middle[i] ?? 0) < half) kind[i] = PAVERS;
   }
+  closeSeams(kind, paved, empty, w, h, Math.max(1, Math.round(SEAM_M / metresPerPx)));
   return kind;
 }
