@@ -532,6 +532,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
 # но сервис их не понял: грунт тогда не угадывается, остаётся неизвестным (материал места
 # решает уточнение, а не запасной вариант).
 _SURFACE_LINEWORK = frozenset({ObjectClass.CONTOUR, ObjectClass.PAVEMENT_EDGE, ObjectClass.UNKNOWN})
+_EDGE_LINES = frozenset({ObjectClass.CURB, ObjectClass.ROAD, ObjectClass.SIDEWALK})
 
 
 # Площади, где грунта для посадки нет: здания, сооружения, препятствия, массивы, пути.
@@ -548,11 +549,22 @@ _NOT_GROUND = frozenset(
 
 
 def _surface_linework(features: Sequence[Feature]) -> bool:
-    return any(
+    """Чертёж говорит о покрытиях, но не так, чтобы запасной грунт был безопасен: неясные
+    линии и площади, или борта и края покрытий линиями без полигона проезжей части - тогда
+    неизвестно, с какой стороны борта асфальт (ревью 17.10.2026: деревья на проезде)."""
+    if any(
         f.object_class in _SURFACE_LINEWORK
         or (f.object_class is ObjectClass.IGNORE and f.geometry.geom_type in _AREA_TYPES)
         for f in features
+    ):
+        return True
+    carriageway = any(
+        f.object_class is ObjectClass.ROAD and f.geometry.geom_type in _AREA_TYPES for f in features
     )
+    edges = any(
+        f.object_class in _EDGE_LINES and f.geometry.geom_type not in _AREA_TYPES for f in features
+    )
+    return edges and not carriageway
 
 
 def _open_ground(  # noqa: PLR0913 - растр, объекты, граница и исключения

@@ -34,9 +34,10 @@ def material(surface, x: float, y: float) -> Material:  # noqa: ANN001
 def test_no_surface_evidence_plants_only_on_assumed_open_ground() -> None:
     """Без единого признака грунта посадка возможна только с запасным «свободная земля в
     границе работ - газон» (open_ground, с пометкой «Исправлено автоматически»); без него -
-    ни одной посадки, как раньше."""
+    ни одной посадки, как раньше. Проезжая часть полигоном вырезается из запасного грунта."""
     features = [
         feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
+        feature(ObjectClass.ROAD, box(0, 0, 100, 10)),
         feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
         feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
     ]
@@ -46,6 +47,19 @@ def test_no_surface_evidence_plants_only_on_assumed_open_ground() -> None:
     assert not plan.zones
     assumed = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
     assert assumed.placements
+    assert all(p.y > 10 for p in assumed.placements)  # не на проезжей части
+
+
+def test_kerb_lines_without_a_carriageway_polygon_keep_the_strict_reading() -> None:
+    """Ревью 17.10.2026: борта линиями без полигона проезжей части не говорят, с какой стороны
+    дорога - запасной грунт залил бы проезд, и деревья встали бы в 3 м от борта на асфальте."""
+    features = [
+        feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 100, 50)),
+        feature(ObjectClass.CURB, LineString([(0, 10), (100, 10)])),
+        feature(ObjectClass.UTILITY_WATER, LineString([(0, 45), (100, 45)])),
+    ]
+    plan = GreedyPlantingStrategy().plan(features, [], RULES, TREE, PlanParams())
+    assert not plan.placements
 
 
 def test_missing_work_boundary_does_not_mean_the_entire_drawing() -> None:
