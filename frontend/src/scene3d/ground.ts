@@ -11,7 +11,18 @@
 
 import * as THREE from 'three';
 
-import { ASPHALT, classifySurface, GRASS, PAVERS } from './surfaceMask';
+import {
+  ASPHALT_RGB,
+  classifySurface,
+  EMPTY,
+  GRASS,
+  PAVED_RGB,
+  PAVERS,
+  PAVERS_RGB,
+  ROAD,
+  ROAD_RGB,
+  SOIL_RGB,
+} from './surfaceMask';
 import type { Flat, Line, Ring, World } from './types';
 
 /** Метров на пиксель маски: борт шириной 15 см маска не рисует, его ставит геометрия. */
@@ -29,7 +40,14 @@ export type AreaPolygon = number[][][];
 export interface SurfaceAreas {
   soil: AreaPolygon[];
   paved: AreaPolygon[];
+  /** Вид каждой части покрытия: road - проезжая часть, asphalt, pavers, paved - неизвестно. */
+  paved_kind?: string[];
+  /** Проезжая часть с запасом под край тротуара: сетка асфальта ниже уровня земли. */
+  road_mesh?: AreaPolygon[];
 }
+
+/** Проезжая часть ниже тротуара и газона на высоту дорожного борта. */
+export const ROAD_DROP_M = 0.15;
 
 export interface SurfaceImage {
   img: HTMLImageElement;
@@ -41,9 +59,15 @@ export interface SurfaceImage {
   areas?: SurfaceAreas | null;
 }
 
-/** Цвета карты покрытий без прозрачности: classifySurface отличает грунт от покрытия по цвету. */
-const SOIL_FILL = 'rgb(104, 158, 104)';
-const PAVED_FILL = 'rgb(140, 142, 150)';
+const rgb = ([r, g, b]: readonly [number, number, number]) => `rgb(${r}, ${g}, ${b})`;
+/** Цвета контуров без прозрачности: classifySurface читает вид покрытия по цвету. */
+const SOIL_FILL = rgb(SOIL_RGB);
+const PAVED_FILLS: Record<string, string> = {
+  road: rgb(ROAD_RGB),
+  asphalt: rgb(ASPHALT_RGB),
+  pavers: rgb(PAVERS_RGB),
+};
+const PAVED_FILL = rgb(PAVED_RGB);
 
 /** Кольца полигонов чертежа в пикселях маски: x сцены = X - начало, z сцены = -(Y - начало). */
 export function areaRings(
@@ -127,8 +151,8 @@ export function edgeBetween(
   const kindAt = (x: number, z: number): number => {
     const col = Math.floor((x - minX) / mask.metresPerPx);
     const row = Math.floor((z - minZ) / mask.metresPerPx);
-    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return GRASS;
-    return mask.kinds[row * mask.width + col] ?? GRASS;
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return EMPTY;
+    return mask.kinds[row * mask.width + col] ?? EMPTY;
   };
   return (a, b) => {
     const dx = b.x - a.x;
@@ -156,17 +180,41 @@ export function drawSurfaceAreas(
 ): void {
   const soil = areaRings(areas.soil, origin, minX, minZ, mpp);
   const paved = areaRings(areas.paved, origin, minX, minZ, mpp);
-  for (const [polygons, color] of [
-    [soil, SOIL_FILL],
-    [paved, PAVED_FILL],
-  ] as const) {
-    if (!polygons.length) continue;
+  const groups = new Map<string, [number, number][][][]>();
+  if (soil.length) groups.set(SOIL_FILL, soil);
+  paved.forEach((rings, i) => {
+    const color = PAVED_FILLS[areas.paved_kind?.[i] ?? ''] ?? PAVED_FILL;
+    groups.set(color, [...(groups.get(color) ?? []), rings]);
+  });
+  for (const [color, polygons] of groups) {
     ctx.fillStyle = color;
     for (const rings of polygons) {
       tracePolygon(ctx, rings);
       ctx.fill('evenodd');
     }
   }
+}
+
+/** Сетка проезжей части из контура road_mesh: на ROAD_DROP_M ниже земли, в координатах сцены. */
+export function roadGeometry(
+  polygons: AreaPolygon[],
+  origin: [number, number],
+): THREE.BufferGeometry | null {
+  const [ox, oy] = origin;
+  const shapes = polygons
+    .filter((rings) => (rings[0]?.length ?? 0) > 3)
+    .map((rings) => {
+      const toVec = (ring: number[][]) =>
+        ring.map(([x = 0, y = 0]) => new THREE.Vector2(x - ox, y - oy));
+      const shape = new THREE.Shape(toVec(rings[0] ?? []));
+      shape.holes = rings.slice(1).map((ring) => new THREE.Path(toVec(ring)));
+      return shape;
+    });
+  if (!shapes.length) return null;
+  const geometry = new THREE.ShapeGeometry(shapes);
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -ROAD_DROP_M, 0);
+  return geometry;
 }
 
 export interface MaskInfo {
@@ -216,9 +264,11 @@ function surfaceToMask(
   const kind = classifySurface(d, w, h, mpp, minAlpha);
   for (let i = 0; i < kind.length; i++) {
     const k = kind[i];
-    d[i * 4] = k === GRASS ? 255 : 0;
+    // R - газон (и пустое), G - плитка, B - проезжая часть: её землю шейдер вырезает, под ней
+    // лежит сетка проезда ниже на высоту борта. Асфальт тротуара - где нет ни одного канала.
+    d[i * 4] = k === GRASS || k === EMPTY ? 255 : 0;
     d[i * 4 + 1] = k === PAVERS ? 255 : 0;
-    d[i * 4 + 2] = k === ASPHALT ? 255 : 0;
+    d[i * 4 + 2] = k === ROAD ? 255 : 0;
     d[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
@@ -327,14 +377,18 @@ export function groundMesh(
   mask: MaskInfo,
   tex: GroundTextures,
   weather: GroundWeather,
+  options: { geometry?: THREE.BufferGeometry; cutRoad?: boolean; name?: string } = {},
 ): THREE.Mesh {
   const [minX, minZ, maxX, maxZ] = world.bounds;
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
   const size = Math.max(maxX - minX, maxZ - minZ) + GROUND_PAD_M * 2;
-  const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
-  geometry.rotateX(-Math.PI / 2);
-  geometry.translate(cx, 0, cz);
+  let geometry = options.geometry;
+  if (!geometry) {
+    geometry = new THREE.PlaneGeometry(size, size, 1, 1);
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(cx, 0, cz);
+  }
   const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.92,
@@ -360,6 +414,8 @@ export function groundMesh(
     uGrassArm: { value: tex.grassArmMap ?? tex.noise },
     uAsphaltArm: { value: tex.asphaltArmMap ?? tex.noise },
     uPaversArm: { value: tex.paversArmMap ?? tex.noise },
+    // Земля на уровне тротуара вырезает проезжую часть: там видна сетка проезда ниже.
+    uCutRoad: { value: options.cutRoad ? 1 : 0 },
     ...weather,
   };
   material.onBeforeCompile = (shader) => {
@@ -379,7 +435,7 @@ export function groundMesh(
   material.customProgramCacheKey = () => 'green-ground';
   const mesh = new THREE.Mesh(geometry, material);
   mesh.receiveShadow = true;
-  mesh.name = 'ground';
+  mesh.name = options.name ?? 'ground';
   return mesh;
 }
 
@@ -400,6 +456,7 @@ uniform sampler2D uAsphaltArm;
 uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
+uniform float uCutRoad;
 vec3 groundWeights;
 float groundSnow;
 float groundWet;
@@ -423,6 +480,7 @@ export const GROUND_MAP = /* glsl */ `
   vec3 m = texture2D(uMask, clamp(muv, 0.0, 1.0)).rgb;
   // За границей сцены данных нет: газон квартала, край уходит в дымку.
   float outside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
+  if (uCutRoad > 0.5 && outside > 0.5 && m.b > 0.5) discard;
   vec4 nz = texture2D(uNoise, p / 23.0);
   // Граница газона, плитки и асфальта - порог маски без шума: шум делал край «обгрызенным»
   // (пользователь, 17.10.2026). Лесенку клеток растра снимает размытие маски (softenCells).
@@ -484,6 +542,8 @@ export const CURB_W = 0.15;
 export const CURB_H = 0.15;
 /** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665): 8 см шириной, над
  *  газоном выступает на несколько сантиметров. */
+/** Верх дорожного борта над тротуаром: борт обычно чуть выше плитки. */
+export const CURB_ABOVE_WALK_M = 0.02;
 export const GARDEN_CURB_W = 0.08;
 export const GARDEN_CURB_H = 0.06;
 

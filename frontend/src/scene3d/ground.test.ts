@@ -6,6 +6,8 @@ import {
   drawSurfaceAreas,
   edgeBetween,
   GROUND_MAP,
+  ROAD_DROP_M,
+  roadGeometry,
   type MaskInfo,
   type SurfaceAreas,
 } from './ground';
@@ -140,5 +142,43 @@ describe('борт по маске: дорожный у асфальта, сад
   it('внутри одного покрытия борта нет', () => {
     expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
     expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
+  });
+});
+
+describe('проезжая часть ниже тротуара', () => {
+  it('сетка проезда лежит на высоту борта ниже земли, в координатах сцены', () => {
+    const geometry = roadGeometry(AREAS.paved, [10, 20]);
+    expect(geometry).not.toBeNull();
+    geometry?.computeBoundingBox();
+    const box = geometry?.boundingBox;
+    expect(box?.min.y).toBeCloseTo(-ROAD_DROP_M);
+    expect(box?.max.y).toBeCloseTo(-ROAD_DROP_M);
+    // x сцены = X - 10, z сцены = 20 - Y: контур от (0, 0) до (60, 14) чертежа.
+    expect(box?.min.x).toBeCloseTo(-10);
+    expect(box?.max.x).toBeCloseTo(50);
+    expect(box?.min.z).toBeCloseTo(6);
+    expect(box?.max.z).toBeCloseTo(20);
+  });
+
+  it('части покрытия кладутся цветом своего вида: проезд, плитка, неизвестное', () => {
+    const fills: string[] = [];
+    const ctx = {
+      beginPath: () => undefined,
+      moveTo: () => undefined,
+      lineTo: () => undefined,
+      closePath: () => undefined,
+      fill: () => fills.push(ctx.fillStyle as string),
+      fillStyle: '',
+    } as unknown as CanvasRenderingContext2D;
+    const three = [...AREAS.paved, ...AREAS.paved, ...AREAS.paved];
+    drawSurfaceAreas(
+      ctx,
+      { soil: [], paved: three, paved_kind: ['road', 'pavers', 'paved'] },
+      [0, 0],
+      0,
+      0,
+      0.25,
+    );
+    expect(fills).toEqual(['rgb(90, 92, 100)', 'rgb(176, 142, 120)', 'rgb(140, 142, 150)']);
   });
 });

@@ -25,6 +25,7 @@ import {
   areaCurbs,
   buildMask,
   type MaskInfo,
+  CURB_ABOVE_WALK_M,
   CURB_H,
   CURB_W,
   fenceGeometry,
@@ -33,9 +34,11 @@ import {
   GARDEN_CURB_W,
   groundMesh,
   ribbonBox,
+  ROAD_DROP_M,
+  roadGeometry,
   type SurfaceImage,
 } from './ground';
-import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
+import { ASPHALT, GRASS, PAVERS, ROAD } from './surfaceMask';
 import { pick } from './pick';
 import type { ScenePostprocessing } from './postprocessing';
 import { Atmosphere } from './sky';
@@ -306,7 +309,16 @@ export class SceneEngine {
     this.disposables.push(mask.texture);
     this.mask = mask;
     this.noise = noise;
-    const ground = groundMesh(this.world, mask, tex, this.groundWeather);
+    // Проезжая часть ниже тротуара на высоту борта: своя сетка асфальта под землёй, а земля
+    // на уровне тротуара вырезает её по маске.
+    const roadPolygons = surface?.areas?.road_mesh ?? [];
+    const roadGeo = roadPolygons.length ? roadGeometry(roadPolygons, this.world.origin) : null;
+    if (roadGeo) {
+      this.add(
+        groundMesh(this.world, mask, tex, this.groundWeather, { geometry: roadGeo, name: 'road' }),
+      );
+    }
+    const ground = groundMesh(this.world, mask, tex, this.groundWeather, { cutRoad: !!roadGeo });
     this.add(ground);
     this.addStreetFurniture(surface);
     if (this.world.shrubStrips?.length) {
@@ -379,25 +391,28 @@ export class SceneEngine {
 
   private addStreetFurniture(surface: SurfaceImage | null): void {
     const world = this.world;
-    // Борт по краю покрытия из контуров карты покрытий: дорожный - где асфальт проезда
-    // встречает тротуар или газон, садовый - между плиткой тротуара и газоном. Шов внутри
-    // одного покрытия бортом не обводится.
+    // Борт по краю покрытия из контуров карты покрытий (Москва): дорожный - по краю проезжей
+    // части, от асфальта проезда до уровня тротуара; садовый - между тротуаром (плитка или
+    // асфальт) и газоном. Шов внутри одного покрытия и край пустого (сервис не знает, что
+    // там) садовым бортом не обводятся. Линии бортов чертежа нужны только без контуров: иначе
+    // борт двоится и не совпадает с краем асфальта.
     const areas = surface?.areas;
     const mask = this.mask;
-    const curbLines = [
-      ...world.curbs,
-      ...(areas && mask
-        ? areaCurbs(
-            areas,
-            world.origin,
-            edgeBetween(
-              mask,
-              (k) => k === ASPHALT,
-              (k) => k !== ASPHALT,
-            ),
-          )
-        : []),
-    ];
+    const hasRoads = !!areas?.road_mesh?.length;
+    const curbLines =
+      areas && mask
+        ? hasRoads
+          ? areaCurbs(
+              areas,
+              world.origin,
+              edgeBetween(
+                mask,
+                (k) => k === ROAD,
+                (k) => k !== ROAD,
+              ),
+            )
+          : []
+        : world.curbs;
     const gardenLines =
       areas && mask
         ? areaCurbs(
@@ -405,7 +420,7 @@ export class SceneEngine {
             world.origin,
             edgeBetween(
               mask,
-              (k) => k === PAVERS,
+              (k) => k === PAVERS || k === ASPHALT,
               (k) => k === GRASS,
             ),
           )
@@ -414,17 +429,21 @@ export class SceneEngine {
       const curbTex = concrete();
       curbTex.anisotropy = 4;
       this.disposables.push(curbTex);
+      // Гранитный борт серый: светлый бетон на солнце читался белой полосой.
       const stone = new THREE.MeshStandardMaterial({
-        color: 0xd0cec8,
+        color: 0xbdbcb6,
         map: curbTex,
         roughness: 0.85,
       });
-      for (const [lines, width, height, name] of [
-        [curbLines, CURB_W, CURB_H, 'curbs'],
-        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 'garden-curbs'],
+      // Дорожный борт с проезжей частью стоит от асфальта проезда, верх - чуть выше тротуара.
+      const roadLift = hasRoads ? -ROAD_DROP_M : 0;
+      const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
+      for (const [lines, width, height, lift, name] of [
+        [curbLines, CURB_W, roadHeight, roadLift, 'curbs'],
+        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 'garden-curbs'],
       ] as const) {
         if (!lines.length) continue;
-        const mesh = new THREE.Mesh(ribbonBox(lines, width, height), stone);
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift), stone);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.name = name;

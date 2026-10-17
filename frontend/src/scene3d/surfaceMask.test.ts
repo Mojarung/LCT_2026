@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { ASPHALT, classifySurface, distanceInside, GRASS, maxFilter, PAVERS } from './surfaceMask';
+import {
+  ASPHALT,
+  ASPHALT_RGB,
+  classifySurface,
+  distanceInside,
+  EMPTY,
+  GRASS,
+  maxFilter,
+  PAVERS,
+  PAVERS_RGB,
+  ROAD,
+  ROAD_RGB,
+  SOIL_RGB,
+} from './surfaceMask';
 
 const PAVED: [number, number, number, number] = [140, 142, 150, 96];
 const SOIL: [number, number, number, number] = [104, 158, 104, 88];
@@ -34,7 +47,7 @@ describe('покрытие земли в 3D', () => {
     expect(Array.from(maxFilter(src, 7, 1, 1))).toEqual([5, 5, 5, 2, 7, 7, 7]);
   });
 
-  it('узкая полоса покрытия - плитка тротуара, широкая - асфальт, грунт и пустое - газон', () => {
+  it('узкая полоса покрытия - плитка тротуара, широкая - асфальт, грунт - газон, пусто - пусто', () => {
     // Метр на пиксель: газон, полоса 3 м, газон, проезд 12 м, газон; внизу пусто.
     const w = 30;
     const h = 20;
@@ -52,7 +65,7 @@ describe('покрытие земли в 3D', () => {
     expect(at(6, 8)).toBe(GRASS);
     expect(at(18, 8)).toBe(ASPHALT);
     expect(at(13, 8)).toBe(ASPHALT);
-    expect(at(18, 18)).toBe(GRASS);
+    expect(at(18, 18)).toBe(EMPTY);
   });
 
   it('щель по линии борта закрывается покрытием, тротуар остаётся плиткой', () => {
@@ -74,7 +87,7 @@ describe('покрытие земли в 3D', () => {
     expect(at(8)).toBe(PAVERS);
     expect(at(13)).not.toBe(GRASS); // щель между тротуаром и проездом
     expect(at(34)).toBe(ASPHALT);
-    expect(at(55)).toBe(GRASS); // щель между проездом и газоном - край газона
+    expect(at(55)).toBe(GRASS); // щель между проездом и газоном - газон
     expect(at(62)).toBe(GRASS);
     expect(at(2)).toBe(GRASS);
   });
@@ -103,8 +116,32 @@ describe('покрытие земли в 3D', () => {
     const rgba = raster(w, h, (x) => (x < 20 ? opaque : x === 20 ? edge : null));
     const kind = classifySurface(rgba, w, h, 0.25, 128);
     expect(kind[2 * w + 19]).not.toBe(GRASS);
-    expect(kind[2 * w + 20]).toBe(GRASS);
+    expect(kind[2 * w + 20]).toBe(EMPTY);
     // Растр старых прогонов полупрозрачный: там покрытие - любой непустой пиксель.
     expect(classifySurface(rgba, w, h, 0.25)[2 * w + 20]).not.toBe(GRASS);
+  });
+
+  it('вид покрытия контура читается по цвету: проезд, асфальт тротуара, плитка, газон', () => {
+    const w = 40;
+    const h = 4;
+    const colors = [ROAD_RGB, ASPHALT_RGB, PAVERS_RGB, SOIL_RGB];
+    const rgba = raster(w, h, (x) => [...(colors[Math.floor(x / 10)] ?? SOIL_RGB), 255]);
+    const kind = classifySurface(rgba, w, h, 0.25, 128);
+    expect([5, 15, 25, 35].map((x) => kind[2 * w + x])).toEqual([ROAD, ASPHALT, PAVERS, GRASS]);
+  });
+
+  it('щель между тротуаром и газоном - газон: садовый борт встаёт по краю тротуара', () => {
+    // 0,25 м на пиксель: плитка 2 м, щель 0,5 м (линия борта), газон 3 м, дальше пусто.
+    const w = 60;
+    const h = 4;
+    const rgba = raster(w, h, (x) => {
+      if (x < 8) return [...PAVERS_RGB, 255];
+      if (x < 10) return null;
+      if (x < 22) return [...SOIL_RGB, 255];
+      return null;
+    });
+    const kind = classifySurface(rgba, w, h, 0.25, 128);
+    expect(kind[2 * w + 9]).toBe(GRASS);
+    expect(kind[2 * w + 40]).toBe(EMPTY);
   });
 });
