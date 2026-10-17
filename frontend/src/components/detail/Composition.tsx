@@ -63,7 +63,9 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
     }));
   return (
     <>
-      <h2 className="detail-heading">Состав плана: {integer(total)}</h2>
+      {/* Число посадок крупно стоит в сводке слева, список подписан вкладкой «Посадки»:
+          заголовок - только для читалки экрана и навигации по заголовкам. */}
+      <h2 className="visually-hidden">Состав плана: {integer(total)}</h2>
       {visible === total ? null : (
         <p className="detail-note">
           Показано {integer(visible)} из {integer(total)}.{' '}
