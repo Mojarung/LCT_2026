@@ -65,3 +65,22 @@ def test_school_rules_are_ten_and_one_and_a_half_metres() -> None:
     assert rules["tree"].min_distance_m == 10.0
     assert rules["shrub"].min_distance_m == 1.5
     assert "3.6.1" in rules["tree"].citation.clause
+
+
+def test_only_the_wall_pieces_along_the_outline_become_school() -> None:
+    """Ревью 17.10.2026: фасадная полилиния квартала 720 м целиком становилась школой из-за
+    контура OSM 40 x 20 м - отступ 10 м вдоль 600 м чужих фасадов."""
+    facade = _f(ObjectClass.BUILDING, LineString([(-300, 0), (420, 0)]), "facade")
+    back = _f(ObjectClass.BUILDING, LineString([(40, 0), (40, 20), (0, 20), (0, 0)]), "back")
+    osm = [_f(ObjectClass.SCHOOL, box(0, 0, 40, 20), "osm")]
+    features, _ = mark_schools([facade, back], osm)
+    schools = [f for f in features if f.object_class is ObjectClass.SCHOOL]
+    assert schools
+    assert sum(f.geometry.length for f in schools) <= 120 + 4 * 2 * 2  # периметр с запасом
+
+
+def test_small_outline_inside_a_large_house_does_not_make_it_a_school() -> None:
+    house = _f(ObjectClass.BUILDING, box(0, 0, 100, 50), "house")
+    osm = [_f(ObjectClass.SCHOOL, box(2, 2, 6, 7), "osm")]
+    features, _ = mark_schools([house], osm)
+    assert not any(f.object_class is ObjectClass.SCHOOL for f in features)

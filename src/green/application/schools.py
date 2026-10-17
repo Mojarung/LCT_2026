@@ -5,11 +5,12 @@
 (docs/notes/21): школа там такое же «Н», как магазин. Контуры школ и детсадов Москвы - выгрузка
 OpenStreetMap (tools/fetch_osm_schools.py), пересчитанная в систему координат чертежа.
 
-Школой становится только здание самого чертежа, которое контур OSM подтверждает: площадь
-пересечения с контуром - не меньше половины площади здания или контура, а у здания, нарисованного
-линиями стен, - не меньше половины периметра контура лежит у стен (в 2 м). Сдвиг выгрузки,
-чужая система координат или контур без нарисованного здания школ не создают. Здание остаётся
-зданием (5 м и всё прочее), школа добавляется отдельным объектом с той же геометрией.
+Школой становится только здание самого чертежа, которое контур OSM подтверждает: пересечение -
+не меньше половины и площади здания, и площади контура, а у здания, нарисованного линиями стен, -
+не меньше половины периметра контура лежит у стен (в 2 м), и школой становятся только куски
+стен вдоль контура (фасадная линия квартала целиком школой не становится, ревью 17.10.2026).
+Сдвиг выгрузки, чужая система координат или контур без нарисованного здания школ не создают.
+Здание остаётся зданием (5 м и всё прочее), школа добавляется отдельным объектом.
 """
 
 from __future__ import annotations
@@ -41,23 +42,23 @@ def mark_schools(
     if not buildings or not outlines:
         return tuple(features), ""
     tree = shapely.STRtree([b.geometry for b in buildings])
-    chosen: dict[int, None] = {}
+    pieces: list[Feature] = []
     matched = 0
     for outline in outlines:
-        near = tree.query(outline.buffer(WALL_GAP_M), predicate="intersects")
-        found = _confirmed(outline, [buildings[i] for i in near])
+        near = [
+            buildings[i] for i in tree.query(outline.buffer(WALL_GAP_M), predicate="intersects")
+        ]
+        found = _confirmed(outline, near)
         if found:
             matched += 1
-            chosen.update(dict.fromkeys(near[i] for i in found))
-    if not chosen:
+            pieces.extend(found)
+    if not pieces:
         return tuple(features), ""
     schools = tuple(
         replace(
-            buildings[i],
-            object_class=ObjectClass.SCHOOL,
-            classification=ClassificationEvidence(METHOD),
+            piece, object_class=ObjectClass.SCHOOL, classification=ClassificationEvidence(METHOD)
         )
-        for i in sorted(chosen)
+        for piece in pieces
     )
     buildings_text = counted(len(schools), "здание", "здания", "зданий")
     outlines_text = counted(matched, "контуром", "контурами", "контурами")
@@ -70,19 +71,21 @@ def mark_schools(
     return (*features, *schools), note
 
 
-def _confirmed(outline: shapely.Geometry, near: Sequence[Feature]) -> list[int]:
-    """Индексы зданий из near, которые подтверждают контур OSM."""
-    areas = [i for i, b in enumerate(near) if b.geometry.area > 0]
-    for i in areas:
-        shared = near[i].geometry.intersection(outline).area
-        if shared >= MIN_SHARE * min(near[i].geometry.area, outline.area):
-            return [i]
-    walls = [i for i, b in enumerate(near) if b.geometry.area == 0]
+def _confirmed(outline: shapely.Geometry, near: Sequence[Feature]) -> list[Feature]:
+    """Здания (или куски стен) из near, которые подтверждают контур OSM."""
+    for building in near:
+        area = building.geometry.area
+        if area > 0:
+            shared = building.geometry.intersection(outline).area
+            if shared >= MIN_SHARE * area and shared >= MIN_SHARE * outline.area:
+                return [building]
+    walls = [b for b in near if b.geometry.area == 0]
     if not walls:
         return []
     perimeter = outline.exterior
-    lines = shapely.union_all([near[i].geometry for i in walls])
-    covered = perimeter.intersection(lines.buffer(WALL_GAP_M)).length
-    if covered >= MIN_SHARE * perimeter.length:
-        return [i for i in walls if near[i].geometry.distance(perimeter) <= WALL_GAP_M]
-    return []
+    band = perimeter.buffer(WALL_GAP_M)
+    lines = shapely.union_all([w.geometry for w in walls])
+    if perimeter.intersection(lines.buffer(WALL_GAP_M)).length < MIN_SHARE * perimeter.length:
+        return []
+    clipped = (replace(w, geometry=w.geometry.intersection(band)) for w in walls)
+    return [w for w in clipped if w.geometry.length > 0]
