@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react';
 import { Link, NavLink, useMatch } from 'react-router';
 
 import { useRun } from '../api/queries';
@@ -6,6 +7,43 @@ import { overrideLabel } from '../lib/overrides';
 import { profileTitle } from '../lib/profiles';
 import { UiIcon } from './icons';
 import { ThemeToggle } from './ThemeToggle';
+import { Modal } from './ui/Modal';
+import { SquareLoader } from './ui/SquareLoader';
+
+// Каталог тянет код карты (спрайты моделей): грузится, только когда окно открыли.
+const ModelsCatalog = lazy(() => import('./ModelsCatalog'));
+
+/** На прогоне «Модели растений» открывают окно поверх плана: переход на /models уводил с
+ *  рабочего места, и настроенный вид терялся. */
+function ModelsButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="topbar-link"
+        aria-haspopup="dialog"
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        Модели растений
+      </button>
+      <Modal
+        open={open}
+        title="Модели растений"
+        wide
+        onClose={() => {
+          setOpen(false);
+        }}
+      >
+        <Suspense fallback={<SquareLoader size={48} label="Загружаем каталог" />}>
+          <ModelsCatalog />
+        </Suspense>
+      </Modal>
+    </>
+  );
+}
 
 /** Шапка во всю ширину на каждом экране. Слева - знак сервиса и где ты сейчас: на прогоне это
  *  путь «Прогоны / имя чертежа» и переход «План / 3D и фото» на одном месте для обоих видов
@@ -25,11 +63,7 @@ export function TopBar() {
       </Link>
       {runId ? <RunCrumbs runId={runId} /> : <MainNav />}
       <nav className="topbar-end" aria-label="Справка">
-        {runId ? (
-          <NavLink className="topbar-link" to="/models">
-            Модели растений
-          </NavLink>
-        ) : null}
+        {runId ? <ModelsButton /> : null}
         {/* Обычная ссылка, а не переход роутера: /docs отдаёт сервер. */}
         <a
           className="topbar-link"

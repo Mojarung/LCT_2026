@@ -1062,3 +1062,21 @@ fieldset.field > legend {
   padding: 20px 24px 24px;
   overflow-y: auto;
 }
+
+/* Широкое окно - каталог моделей растений поверх плана. */
+.modal.modal-wide {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(86dvh, 900px);
+}
+.modal-wide .models-grid li {
+  background: var(--panel-2);
+  box-shadow: none;
+}
+.modal-wide .square-loader {
+  display: block;
+  margin: 48px auto;
+}
+/* Кнопка «Модели растений» в шапке прогона - как ссылки рядом, с полями под подпись. */
+.topbar-end > button.topbar-link {
+  padding: 0 10px;
+}

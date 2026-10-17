@@ -14,11 +14,14 @@ export function Modal({
   title,
   onClose,
   children,
+  wide = false,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Широкое окно - для каталога и таблиц. */
+  wide?: boolean;
 }) {
   const box = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -75,7 +78,7 @@ export function Modal({
   return createPortal(
     <dialog
       ref={box}
-      className="modal"
+      className={wide ? 'modal modal-wide' : 'modal'}
       aria-labelledby={titleId}
       data-closing={closing ? '1' : undefined}
       onCancel={(event) => {
