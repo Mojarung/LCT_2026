@@ -467,17 +467,27 @@ export class SceneEngine {
     if (world.fences.length) {
       const bars = fenceBars();
       this.disposables.push(bars);
+      // Прутья вдали сливаются в мипмапе в полупрозрачную дымку: срез по альфе 0,5 их стирал, и
+      // от ограды оставались чёрные палочки перекладин вдоль асфальта (17.10.2026). Решётка
+      // смешивается по альфе, тень - по срезу, как вблизи.
       const fences = new THREE.Mesh(
         fenceGeometry(world.fences, 1.0, 1.0),
         new THREE.MeshStandardMaterial({
           color: 0x24292b,
           map: bars,
-          alphaTest: 0.5,
+          transparent: true,
+          alphaTest: 0.02,
           side: THREE.DoubleSide,
           roughness: 0.55,
           metalness: 0.6,
         }),
       );
+      fences.customDepthMaterial = new THREE.MeshDepthMaterial({
+        depthPacking: THREE.RGBADepthPacking,
+        map: bars,
+        alphaTest: 0.5,
+      });
+      this.disposables.push(fences.customDepthMaterial);
       fences.castShadow = true;
       fences.name = 'fences';
       this.add(fences);

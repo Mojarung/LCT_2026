@@ -12,12 +12,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import Point, Polygon, box
 
 from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.surfaces import build_surface_map
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.infrastructure.reports.artifacts import _round_turns, _surface
+from green.infrastructure.reports.artifacts import _round_turns, _smoothed, _surface
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -168,6 +168,32 @@ def test_paved_spikes_and_notches_are_smoothed(tmp_path: Path) -> None:
     assert not smooth.intersects(box(30.1, 10.6, 30.4, 11.4))  # зубец снят
     assert smooth.contains(box(40.1, 9.1, 40.4, 9.9))  # выемка закрыта
     assert smooth.contains(box(1, 1, 59, 9))
+
+
+def test_sawtooth_wall_of_a_bite_becomes_one_edge() -> None:
+    """Стенка выемки проезда пилой с зубцами 0,5-0,75 м (Камчатская, 17.10.2026): борт по ней
+    шёл крест-накрест «палочками». Зубцы снимаются, выемка остаётся пустой."""
+    road = Polygon(
+        [
+            (180, -83.83),
+            (193.25, -83.83),
+            (192.75, -82.83),
+            (193.5, -82.83),
+            (193.09, -82.0),
+            (195.75, -82.0),
+            (195.75, -83.83),
+            (205, -83.83),
+            (205, -78),
+            (180, -78),
+        ]
+    )
+    smooth = _smoothed(road)
+    teeth = box(192.6, -83.7, 193.6, -82.1)
+    inside = [p for p in shapely.get_coordinates(smooth.boundary) if teeth.contains(Point(p))]
+    assert inside == []
+    assert not smooth.intersects(box(194, -83.7, 195.5, -82.2))
+    assert smooth.contains(box(181, -83.5, 192, -78.5))
+    assert smooth.contains(box(197, -83.5, 204, -78.5))
 
 
 def test_smoothing_does_not_glue_parts_across_a_curb_seam(tmp_path: Path) -> None:

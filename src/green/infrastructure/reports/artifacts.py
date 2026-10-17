@@ -886,13 +886,17 @@ def _paved_parts(
 
 def _smoothed(area: BaseGeometry) -> BaseGeometry:
     """Снять зубцы и закрыть выемки уже PAVED_SMOOTH_M x 2 (размыкание и замыкание с
-    прямыми углами): лесенка разлива давала на краю проезда рваный борт, углы остаются."""
+    прямыми углами), выпрямить пилу с тем же допуском: лесенка разлива давала на краю проезда
+    рваный борт, углы остаются."""
     r = PAVED_SMOOTH_M
     opened = area.buffer(-r, join_style="mitre").buffer(r, join_style="mitre")
     closed = opened.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
     # Замыкание только заполняет выемки: наружу за исходный контур оно не выходит.
     notches = area.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
-    return shapely.make_valid(closed.intersection(notches))
+    # Пила из зубцов в полметра (стенка выемки, Камчатская) переживает срез и заливку с
+    # прямыми углами: она выпрямляется упрощением с тем же допуском, дуги потом скругляет
+    # _round_turns.
+    return _simplified(closed.intersection(notches), r) or shapely.Polygon()
 
 
 def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry | None) -> str:
