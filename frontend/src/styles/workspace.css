@@ -1623,3 +1623,205 @@ body.shell-map .topbar {
 .source-conflicts-dialog .source-conflicts {
   margin-bottom: 0;
 }
+
+/* Уточнение типов на основной подоснове: панель и отметки вместо второго чертежа. */
+.semantic-review-trigger {
+  position: absolute;
+  z-index: 4;
+  top: var(--inset);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  color: var(--bone);
+  cursor: pointer;
+  font: inherit;
+}
+.semantic-review-trigger[aria-expanded='true'] {
+  background: var(--bone);
+  color: var(--panel);
+}
+.workspace.semantic-review-on > .hud-left,
+.workspace.semantic-review-on > .hud-right,
+.workspace.semantic-review-on .legend {
+  visibility: hidden;
+  pointer-events: none;
+}
+.semantic-review-panel {
+  position: absolute;
+  top: 64px;
+  right: var(--inset);
+  bottom: calc(var(--tools) + var(--inset) * 2);
+  width: min(640px, 52vw);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+}
+.semantic-review-panel[hidden] {
+  display: none;
+}
+.semantic-review-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.semantic-review-panel h2 {
+  margin: 0;
+  font-size: var(--fs-title);
+}
+.semantic-review-panel > p {
+  margin: 0;
+}
+.semantic-review-panel .review-filters {
+  gap: 6px 12px;
+}
+.semantic-review-panel .review-filters .field,
+.semantic-review-panel .review-filters .check {
+  margin-bottom: 0;
+}
+.semantic-review-panel .review-table-scroll {
+  flex: 1;
+  min-height: 60px;
+  max-height: none;
+}
+.semantic-review-panel .review-table select {
+  min-width: 150px;
+}
+.semantic-review-panel footer {
+  border-top: 1px solid var(--hair-2);
+  padding-top: 10px;
+}
+.semantic-review-panel footer > p {
+  margin: 0 0 8px;
+}
+.semantic-review-panel footer .hint {
+  margin: 8px 0 0;
+}
+.semantic-review-panel footer .primary {
+  margin: 0 12px 8px 0;
+}
+.semantic-selection {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-small);
+}
+.semantic-map-key {
+  position: absolute;
+  z-index: 3;
+  left: var(--inset);
+  top: 64px;
+  max-width: min(340px, 40vw);
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-control);
+  overflow-wrap: anywhere;
+}
+.semantic-map-key > span {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--fs-small);
+}
+.semantic-map-key i {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin: 0 5px 3px 10px;
+}
+.semantic-key-selected {
+  background: var(--review-group);
+}
+.semantic-map-key .semantic-key-changed {
+  border-top: 3px dashed var(--review-label-active);
+}
+@media (max-width: 760px) {
+  .semantic-review-trigger {
+    left: var(--inset);
+    transform: none;
+    max-width: 50vw;
+  }
+  .semantic-review-panel {
+    top: 44%;
+    left: var(--inset);
+    right: var(--inset);
+    width: auto;
+    bottom: calc(var(--tools) + 12px);
+    padding: 10px;
+    overflow: auto;
+  }
+  .semantic-review-panel .review-table-scroll {
+    flex: none;
+    max-height: 35vh;
+  }
+  .semantic-review-panel > .hint {
+    display: none;
+  }
+  .semantic-map-key {
+    top: 64px;
+    max-width: 70vw;
+    padding: 8px;
+  }
+}
+.semantic-review-panel > .hint {
+  font-size: var(--fs-micro);
+}
+.semantic-review-panel footer > .hint {
+  font-size: var(--fs-micro);
+}
+.semantic-review-panel footer > a {
+  font-size: var(--fs-small);
+}
+.semantic-summary {
+  font-size: var(--fs-small);
+}
+.review-download-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+body.semantic-review-mode {
+  height: 100dvh;
+  overflow: hidden;
+}
+body.semantic-review-mode .topbar {
+  position: fixed;
+}
+.workspace.semantic-review-on {
+  position: fixed;
+  inset: 0;
+  display: block;
+  height: 100dvh;
+  overflow: hidden;
+}
+.workspace.semantic-review-on .canvas-holder {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 0;
+}
+.workspace.semantic-review-on > .hud-left,
+.workspace.semantic-review-on > .hud-right,
+.workspace.semantic-review-on .hud-legend {
+  display: none;
+}
+@media (max-width: 760px) {
+  .workspace.semantic-review-on .hud-bottom {
+    display: none;
+  }
+  .semantic-review-panel {
+    bottom: 12px;
+  }
+}

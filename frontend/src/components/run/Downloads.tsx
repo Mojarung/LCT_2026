@@ -29,12 +29,14 @@ export function Downloads({
   runId,
   artifacts,
   notes = [],
+  onReview,
 }: {
   runId: string;
   artifacts: readonly ArtifactOut[];
   /** Журнал чтения чертежа и склейки комплекта (summary.load_notes): рядом с файлами, а не
    *  в сводке плана - это про исходник, а не про посадки. */
   notes?: readonly string[];
+  onReview?: () => void;
 }) {
   const byName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
   const headline = HEADLINE.filter((file) => byName.has(file.name));
@@ -60,9 +62,15 @@ export function Downloads({
           <ul className="artifact-list">
             {byName.has('semantic-review.geojson') ? (
               <li>
-                <Link to={`/runs/${encodeURIComponent(runId)}/review`}>
-                  Проверить распознавание объектов
-                </Link>
+                {onReview ? (
+                  <button type="button" className="review-download-link" onClick={onReview}>
+                    Проверить распознавание объектов
+                  </button>
+                ) : (
+                  <Link to={`/runs/${encodeURIComponent(runId)}/review`}>
+                    Проверить распознавание объектов
+                  </Link>
+                )}
               </li>
             ) : null}
             {headline

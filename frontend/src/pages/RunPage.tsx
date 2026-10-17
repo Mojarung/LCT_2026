@@ -13,6 +13,7 @@ import type {
 } from '../api/artifacts';
 import { ApiError } from '../api/client';
 import { keys, useArtifact, useRun } from '../api/queries';
+import { SemanticReviewPanel } from '../components/review/SemanticReviewPanel';
 import { DetailPanel } from '../components/detail/DetailPanel';
 import { SourceConflictNotice } from '../components/run/SourceConflictNotice';
 import { Downloads } from '../components/run/Downloads';
@@ -69,6 +70,14 @@ function revealDetail(): void {
 export function RunPage() {
   const { runId = '' } = useParams();
   const location = useLocation();
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => {
+    document.body.classList.toggle('semantic-review-mode', reviewOpen);
+    return () => {
+      document.body.classList.remove('semantic-review-mode');
+    };
+  }, [reviewOpen]);
   const client = useQueryClient();
   const enter = useWorkspace((s) => s.enter);
   const panels = useWorkspace((s) => s.panels);
@@ -307,13 +316,13 @@ export function RunPage() {
   useEffect(() => engine.current?.setLayers(layers), [layers]);
   useEffect(() => engine.current?.setSpeciesOff(speciesOff), [speciesOff]);
   useEffect(() => engine.current?.setHighlight(highlight), [highlight]);
-  useEffect(() => engine.current?.setEditing(editing), [editing]);
+  useEffect(() => engine.current?.setEditing(editing && !reviewOpen), [editing, reviewOpen]);
   useEffect(() => engine.current?.setSelected(selected), [selected]);
 
   // Панели сменили размер: вид удерживается за центр свободной области.
   useLayoutEffect(() => {
     engine.current?.relayout();
-  }, [panels.left, panels.right, panels.legend, live, done]);
+  }, [panels.left, panels.right, panels.legend, live, done, reviewOpen]);
 
   const rebuilt = () => {
     void client.invalidateQueries({ queryKey: keys.run(runId) });
@@ -355,7 +364,7 @@ export function RunPage() {
   return (
     <EngineContext.Provider value={engine}>
       <div
-        className={`workspace page-run${withMap && panels.legend ? ' legend-on' : ''}`}
+        className={`workspace page-run${withMap && panels.legend ? ' legend-on' : ''}${reviewOpen ? ' semantic-review-on' : ''}`}
         data-state={state}
         ref={root}
       >
@@ -371,7 +380,7 @@ export function RunPage() {
               {data ? <RunStatus run={data} /> : <span className="spinner" aria-hidden="true" />}
             </div>
           )}
-          {withMap ? <MapHud editable={done} /> : null}
+          {withMap ? <MapHud editable={done && !reviewOpen} /> : null}
           {withMap ? <Legend done={done} shrub={shrub} /> : null}
           {choice ? (
             <PickChooser
@@ -386,6 +395,32 @@ export function RunPage() {
             />
           ) : null}
         </div>
+
+        {done && data && names.has('semantic-review.geojson') ? (
+          <>
+            <button
+              type="button"
+              ref={reviewTrigger}
+              className="semantic-review-trigger"
+              aria-expanded={reviewOpen}
+              aria-controls="semantic-review-panel"
+              onClick={() => {
+                setReviewOpen((value) => !value);
+              }}
+            >
+              Объекты чертежа
+            </button>
+            <SemanticReviewPanel
+              key={runId}
+              run={data}
+              open={reviewOpen}
+              onClose={() => {
+                setReviewOpen(false);
+                reviewTrigger.current?.focus();
+              }}
+            />
+          </>
+        ) : null}
 
         {live && data ? <ProgressHud run={data} fetchedAt={run.dataUpdatedAt} /> : null}
 
@@ -429,6 +464,9 @@ export function RunPage() {
             {done && data ? (
               <Downloads
                 runId={runId}
+                onReview={() => {
+                  setReviewOpen(true);
+                }}
                 artifacts={data.artifacts ?? []}
                 notes={
                   Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []

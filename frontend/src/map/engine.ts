@@ -13,6 +13,7 @@ import type {
   Position,
   RuleCheck,
   SourceConflict,
+  Geometry,
   ZonesJson,
 } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
@@ -104,6 +105,7 @@ const validBox = (box: Box | null | undefined): Box | null =>
   box && (box[2] - box[0] > 0 || box[3] - box[1] > 0) ? box : null;
 
 export class PlanEngine {
+  private semanticReview: { selected: Path2D; changed: Path2D } | null = null;
   private sourceConflicts: readonly SourceConflict[] = [];
   private sourceConflictSelected: string | null = null;
   private readonly view: ViewState = { scale: 1, tx: 0, ty: 0, rot: 0 };
@@ -500,6 +502,37 @@ export class PlanEngine {
     this.revealSelected();
   }
 
+  /** Пути собираются при выборе, а не на каждом кадре панорамирования. */
+  setSemanticReview(
+    value: { selected: readonly Geometry[]; changed: readonly Geometry[] } | null,
+  ): void {
+    if (!value) this.semanticReview = null;
+    else {
+      const selected = new Path2D();
+      const changed = new Path2D();
+      for (const geometry of value.selected) addGeometry(selected, geometry);
+      for (const geometry of value.changed) addGeometry(changed, geometry);
+      this.semanticReview = { selected, changed };
+    }
+    this.schedule();
+  }
+
+  focusSemanticReview(box: Box): void {
+    const [x0, y0, x1, y1] = box;
+    const margin = 3;
+    const points = [
+      { x: x0 - margin, y: y0 - margin },
+      { x: x1 + margin, y: y0 - margin },
+      { x: x1 + margin, y: y1 + margin },
+      { x: x0 - margin, y: y1 + margin },
+    ];
+    Object.assign(this.view, fitView(extentOf(this.view, points), this.clearArea()));
+    this.touched = true;
+    this.invalidate();
+    this.schedule();
+    this.hooks.viewChanged();
+  }
+
   setSourceConflicts(items: readonly SourceConflict[], selected: string | null): void {
     this.sourceConflicts = items;
     this.sourceConflictSelected = selected;
@@ -583,14 +616,29 @@ export class PlanEngine {
     let bottom = rect.height;
     for (const panel of this.root.querySelectorAll<HTMLElement>('[data-map-obstacle="side"]')) {
       const box = panel.getBoundingClientRect();
-      if (box.width === 0 || getComputedStyle(panel).position !== 'absolute') continue;
-      if (box.left - rect.left < rect.width / 2)
+      if (
+        box.width === 0 ||
+        getComputedStyle(panel).visibility === 'hidden' ||
+        getComputedStyle(panel).position !== 'absolute'
+      )
+        continue;
+      // На телефоне та же панель занимает низ, оставляя карту над собой.
+      if (box.width > rect.width * 0.8 && box.top - rect.top > rect.height * 0.25) {
+        bottom = Math.min(bottom, box.top - rect.top - PANEL_GAP);
+        continue;
+      }
+      if ((box.left + box.right) / 2 - rect.left < rect.width / 2)
         left = Math.max(left, box.right - rect.left + PANEL_GAP);
       else right = Math.min(right, box.left - rect.left - PANEL_GAP);
     }
     // Кнопки масштаба и полоса хода лежат по нижней кромке: план не прячется под ними.
     for (const strip of this.root.querySelectorAll<HTMLElement>('[data-map-obstacle="bottom"]')) {
-      if (strip.hidden || getComputedStyle(strip).position !== 'absolute') continue;
+      if (
+        strip.hidden ||
+        strip.getBoundingClientRect().width === 0 ||
+        getComputedStyle(strip).position !== 'absolute'
+      )
+        continue;
       bottom = Math.min(bottom, strip.getBoundingClientRect().top - rect.top - PANEL_GAP);
     }
     // Значки шапки висят над правой панелью; отступ сверху нужен, только где они накрывают план.
@@ -706,6 +754,24 @@ export class PlanEngine {
     ctx.lineCap = 'round';
     const visible = worldBounds(this.view, 0, 0, rect.width, rect.height);
     drawPlan(ctx, visible, this.view, this.scene, this.marks, this.palette, dpr, this.style);
+
+    if (this.semanticReview) {
+      ctx.save();
+      for (const [path, color, dashed] of [
+        [this.semanticReview.selected, this.palette.get('--review-group'), false],
+        [this.semanticReview.changed, this.palette.get('--review-label-active'), true],
+      ] as const) {
+        ctx.strokeStyle = this.palette.get('--panel');
+        ctx.lineWidth = 7 / this.view.scale;
+        ctx.stroke(path);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3 / this.view.scale;
+        ctx.setLineDash(dashed ? [6 / this.view.scale, 3 / this.view.scale] : []);
+        ctx.stroke(path);
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
 
     // Отметка выбранного, север и линейка - в экранных пикселях: их размер не зависит от
     // масштаба, иначе на общем виде обводка вырождается в волос.

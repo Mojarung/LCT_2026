@@ -95,7 +95,7 @@ export function ReviewPage() {
   const [objectValue, setObjectValue] = useState('0');
   const [kind, setKind] = useState('');
   const [assignments, setAssignments] = useState<Record<string, string>>({});
-  const [labelsVisible, setLabelsVisible] = useState(true);
+  const [labelsVisible, setLabelsVisible] = useState(false);
   const [labelValue, setLabelValue] = useState('0');
   const [labelRole, setLabelRole] = useState('ignore');
   const [labelAssignments, setLabelAssignments] = useState<Record<string, string>>({});
