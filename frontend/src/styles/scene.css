@@ -736,10 +736,8 @@
 .section-body {
   padding-bottom: 6px;
 }
-.scene-more summary {
-  font-size: var(--fs-micro);
-  color: var(--bone-2);
-  cursor: pointer;
+.scene-more {
+  margin-top: 12px;
 }
 .scene-more[open] summary {
   margin-bottom: 6px;
@@ -1252,13 +1250,16 @@
 }
 
 /* Сводка сцены - сеткой 2 x 2, как сводка прогона: разделитель только между колонками. */
+/* Сводка сцены - те же плитки, что на плане (.run-breakdown), в две строки. */
 .scene-breakdown {
-  margin: 4px 0 12px;
-  row-gap: 12px;
+  margin: 4px 0 14px;
+  gap: 8px;
 }
-.scene-breakdown div:nth-child(odd) {
-  border-left: 0;
-  padding-left: 0;
+.scene-breakdown > div {
+  padding: 11px 12px;
+}
+.scene-breakdown dt {
+  white-space: nowrap;
 }
 
 /* --- 3D-вид в общей оболочке: тот же язык, что у плана ---

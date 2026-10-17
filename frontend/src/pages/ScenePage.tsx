@@ -642,7 +642,7 @@ export function ScenePage() {
                       <dd>{integer(counts.trees)}</dd>
                     </div>
                     <div>
-                      <dt>Кустарники плана</dt>
+                      <dt>Кустарник плана</dt>
                       <dd>{integer(counts.shrubs)}</dd>
                     </div>
                     <div>
@@ -665,7 +665,7 @@ export function ScenePage() {
                     </p>
                   ) : null}
                   <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
-                  <details className="scene-more">
+                  <details className="scene-more fold">
                     <summary>Что в сцене условно</summary>
                     <p className="hint">
                       {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет, серия дома
