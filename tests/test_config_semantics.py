@@ -264,3 +264,21 @@ def test_larch_is_not_a_sheet(name: str, expected: ObjectClass) -> None:
     inferred = LAYER_MAP.vocabulary.infer(None, name)
     assert inferred is not None, name
     assert inferred.object_class is expected, (name, inferred)
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        "17.Наташинский_ГЕО_ЦВЕТ$0$цвет_output[1-7]_edge001",
+        "17.Наташинский_ГЕО_ЦВЕТ$0$цвет_output[3]_edge003",
+        "цвет_output[1-7]_3ДЖКХ-25-00694kl",
+        "output[1-4]_edge001",
+    ],
+)
+def test_colour_sheet_regulation_lines_are_annotation(block: str) -> None:
+    """Наташинский: листы линий градрегулирования цветной съёмки («цвет_output[..]_edgeN», 382
+    тыс. объектов на слое 0) правило «output[..]_edge» не ловило из-за приставки «цвет_» -
+    они шли «контуром по геометрии» и делили газон."""
+    found, evidence = LAYER_MAP.decide(_feature("17.Наташинский_ГЕО_ЦВЕТ$0$_Внешние ссылки", block))
+    assert evidence.method == "name_rule"
+    assert found is ObjectClass.IGNORE

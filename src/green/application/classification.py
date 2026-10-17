@@ -20,6 +20,7 @@ from green.application.semantic_names import (
     material_context_requires_review,
     name_key,
 )
+from green.application.sheet_furniture import sheet_furniture
 from green.application.shrub_strips import recognise_shrub_strips
 from green.application.surface_labels import classify_labels, label_report_groups
 from green.application.symbols import SymbolCatalog, SymbolEntry, SymbolRole
@@ -217,6 +218,25 @@ def classify_scene(  # noqa: C901 - ступени классификации п
     )
     labels = classify_labels(scene.labels, layer_map, params.label_roles if params else {})
     return replace(scene, features=tuple(classified), labels=labels, callouts=callouts), coverage
+
+
+def _unnamed(
+    feature: Feature,
+    decided: tuple[ObjectClass, ClassificationEvidence],
+    furniture: dict[str, str],
+    *,
+    assume: bool,
+) -> tuple[ObjectClass, ClassificationEvidence]:
+    """Что делать с объектом, которого не решило имя: оформление листа, иначе замена по
+    геометрии (если разрешена), иначе остаётся неизвестным."""
+    if decided[0] is not ObjectClass.UNKNOWN:
+        return decided
+    reason = furniture.get(str(feature.ref))
+    if reason is not None:
+        return ObjectClass.IGNORE, ClassificationEvidence(
+            f"sheet_furniture:{reason}", decided[1].matched_rules, decided[1].chosen_rules
+        )
+    return _assumed(feature, decided[1]) if assume else decided
 
 
 def _apply_exact_assignments(features: list[Feature], overrides: _Overrides) -> list[Feature]:
