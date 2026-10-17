@@ -1480,3 +1480,46 @@
     display: none;
   }
 }
+
+/* Карточки 3D-вида - так же, как на плане: с отступом от шапки и краёв, скруглённые. */
+@media (min-width: 1081px) {
+  .page-scene .scene-left {
+    left: var(--inset);
+    top: var(--inset);
+    bottom: var(--inset);
+    gap: 10px;
+  }
+  .page-scene .scene-left > .hud:not(.collapsed) {
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .page-scene .scene-left > .hud.collapsed {
+    margin: 0;
+  }
+  .page-scene .scene-panel:not([data-collapsed='true']) {
+    top: var(--inset);
+    right: var(--inset);
+    bottom: var(--inset);
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .workspace.page-scene {
+    --side-l: calc(var(--hud-left-w) + var(--inset));
+    --side-r: calc(var(--hud-right-w) + var(--inset));
+  }
+  /* Шапка пульта - строка 52px, кнопка сворачивания по её середине. */
+  .page-scene .scene-panel .panel-head {
+    min-height: 52px;
+    padding: 0 52px 0 18px;
+  }
+  .page-scene .scene-panel > .panel-toggle {
+    top: 10px;
+  }
+  .scene-head-title {
+    padding-top: 16px;
+  }
+}

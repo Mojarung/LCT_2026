@@ -1726,3 +1726,33 @@ body.shell-map .topbar {
 .source-conflicts-dialog .source-conflicts {
   margin-bottom: 0;
 }
+
+/* --- панели - карточки с отступом от шапки и краёв (просьба владельца, 17.10.2026) ---
+   Панели стоят на расстоянии --inset от шапки, краёв и низа экрана, со скруглёнными углами и
+   тенью: план под ними виден по периметру. Ширина для центровки полосы кнопок учитывает
+   отступ. Кнопка сворачивания стоит на одной линии со строкой рядом. */
+@media (min-width: 1081px) {
+  .workspace {
+    --side-l: calc(var(--hud-left-w) + var(--inset));
+    --side-r: calc(var(--hud-right-w) + var(--inset));
+  }
+  .hud-left:not(.collapsed),
+  .hud-right:not(.collapsed) {
+    top: var(--inset);
+    bottom: var(--inset);
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .hud-left:not(.collapsed) {
+    left: var(--inset);
+  }
+  .hud-right:not(.collapsed) {
+    right: var(--inset);
+  }
+  /* Вкладки правой панели начинаются на 18px: кнопка - по их середине. */
+  .hud-right > .panel-toggle {
+    top: 21px;
+  }
+}
