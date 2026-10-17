@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { groundCutRings, roadEdges } from './edges';
 import {
   areaCurbs,
   areaRings,
@@ -9,6 +10,7 @@ import {
   groundGeometry,
   ROAD_DROP_M,
   roadGeometry,
+  smoothSurfaceAreas,
   type MaskInfo,
   type SurfaceAreas,
 } from './ground';
@@ -154,6 +156,75 @@ describe('борт по маске: дорожный у асфальта, сад
   });
 });
 
+describe('сглаживание контуров покрытий', () => {
+  it('излом в несколько градусов и прямой угол скругляются, прямая остаётся прямой', () => {
+    // Проезд 20 x 8 с изломом 6° посреди северного края и прямыми углами.
+    const ring = [
+      [0, 0],
+      [20, 0],
+      [20, 8],
+      [10, 8.6],
+      [0, 8],
+      [0, 0],
+    ];
+    const smooth = smoothSurfaceAreas({ soil: [], paved: [[ring]], paved_kind: ['road'] });
+    const pts = smooth.paved[0]?.[0] ?? [];
+    expect(pts[0]).toEqual(pts.at(-1));
+    // Излом снят: вершины (10, 8.6) больше нет, а край рядом - плавная дуга из многих точек.
+    expect(pts.some(([x, y]) => x === 10 && y === 8.6)).toBe(false);
+    expect(pts.filter(([, y = 0]) => y > 8.05).length).toBeGreaterThan(4);
+    // Прямой угол скруглён радиусным камнем: самого угла нет, скругление не дальше 1,6 м от
+    // него, а не расползается по прямой.
+    expect(pts.some(([x, y]) => x === 20 && y === 0)).toBe(false);
+    const corner = pts.filter(([x = 0, y = 0]) => x > 18 && y < 2);
+    expect(corner.length).toBeGreaterThan(2);
+    for (const [x = 0, y = 0] of corner) expect(Math.hypot(20 - x, y)).toBeLessThanOrEqual(1.6);
+    // Южный край - прямая от скругления до скругления.
+    const south = pts.filter(([, y = 0]) => y === 0);
+    expect(Math.min(...south.map(([x = 0]) => x))).toBeLessThanOrEqual(1.6);
+    expect(Math.max(...south.map(([x = 0]) => x))).toBeGreaterThanOrEqual(18.4);
+    // Вид части сохранён.
+    expect(smooth.paved_kind).toEqual(['road']);
+  });
+});
+
+describe('лесенка растра на контуре', () => {
+  it('ступени клеток заменяются прямой, а выемка в два метра остаётся', () => {
+    // Северный край проезда: лесенка из четырёх ступеней по метру между x 10 и 14, потом
+    // выемка 2 x 2 м на x 30..32.
+    const ring = [
+      [0, 0],
+      [60, 0],
+      [60, 8],
+      [32, 8],
+      [32, 6],
+      [30, 6],
+      [30, 8],
+      [14, 8],
+      [14, 9],
+      [13, 9],
+      [13, 10],
+      [12, 10],
+      [12, 11],
+      [11, 11],
+      [11, 12],
+      [10, 12],
+      [0, 12],
+      [0, 0],
+    ];
+    const pts = smoothSurfaceAreas({ soil: [], paved: [[ring]] }).paved[0]?.[0] ?? [];
+    // Ни одной вершины лесенки не осталось: край между (14, 8) и (10, 12) - прямая.
+    for (const [x = 0, y = 0] of pts) {
+      if (x > 10.5 && x < 13.5 && y > 8.5 && y < 11.5) {
+        const offLine = Math.abs(x + y - 22) / Math.SQRT2;
+        expect(offLine, `(${x}, ${y})`).toBeLessThan(0.3);
+      }
+    }
+    // Выемка на месте: внутри неё покрытия нет, дно выемки сохранено.
+    expect(pts.some(([x = 0, y = 0]) => x > 30 && x < 32 && Math.abs(y - 6) < 0.8)).toBe(true);
+  });
+});
+
 describe('земля с вырезом проезда по контуру', () => {
   /** Покрыта ли точка (x, z) сцены треугольниками сетки земли. */
   const covers = (g: ReturnType<typeof groundGeometry>, x: number, z: number): boolean => {
@@ -191,7 +262,8 @@ describe('земля с вырезом проезда по контуру', () =
         [0, 0],
       ],
     ];
-    const g = groundGeometry([-50, -50, 50, 50], [road], [0, 0]);
+    const edges = roadEdges({ soil: [], paved: [road], paved_kind: ['road'] }, [0, 0], () => false);
+    const g = groundGeometry([-50, -50, 50, 50], groundCutRings(edges, 1.2, 1));
     // z сцены = -Y.
     expect(covers(g, 5, -3)).toBe(false); // проезд
     expect(covers(g, 9.1, -4.1)).toBe(true); // угол выемки - земля

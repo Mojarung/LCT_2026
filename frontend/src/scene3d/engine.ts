@@ -22,6 +22,19 @@ import { buildingGeometry, facadeAccentsGeometry, facadeMaterial, roofMaterial }
 import { Walls } from './collide';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
+  apronGeometry,
+  APRON_W_M,
+  crossingTest,
+  curbProfile,
+  groundCutRings,
+  gutterGeometry,
+  GUTTER_W_M,
+  LOW_CURB_M,
+  roadEdges,
+  type RoadEdge,
+  TRANSITION_M,
+} from './edges';
+import {
   areaCurbs,
   buildMask,
   type MaskInfo,
@@ -35,6 +48,7 @@ import {
   groundGeometry,
   groundMesh,
   ribbonBox,
+  smoothSurfaceAreas,
   ROAD_DROP_M,
   roadGeometry,
   type SurfaceImage,
@@ -48,6 +62,7 @@ import {
   CURB_STONES_PER_TEXTURE,
   curbStone,
   fenceBars,
+  gutterShade,
   hedgeLeaves,
   noiseTexture,
 } from './textures';
@@ -227,6 +242,8 @@ export class SceneEngine {
   private readonly groundWeather = { uWet: { value: 0 }, uSnow: { value: 0 } };
   private grassQuality: Quality | null = null;
   private mask: MaskInfo | null = null;
+  /** Контуры проезжей части со съездами (edges.ts); пусто без контуров покрытий. */
+  private edges: RoadEdge[] = [];
   private noise: THREE.Texture | null = null;
   /** Курсор над сценой в координатах NDC, пока мышь не захвачена: подпись - того, что под ним. */
   private pointer: THREE.Vector2 | null = null;
@@ -299,7 +316,9 @@ export class SceneEngine {
     });
   }
 
-  private async build(surface: SurfaceImage | null): Promise<void> {
+  private async build(raw: SurfaceImage | null): Promise<void> {
+    // Контуры покрытий сглажены один раз: маска, вырез земли, борта и лоток - из одних линий.
+    const surface = raw?.areas ? { ...raw, areas: smoothSurfaceAreas(raw.areas) } : raw;
     await this.step('textures');
     if (this.renderer.extensions.has('EXT_color_buffer_float')) {
       this.effects = (await import('./postprocessing')).ScenePostprocessing;
@@ -329,16 +348,31 @@ export class SceneEngine {
         }),
       );
     }
-    // Земля с вырезом проезда по контурам частей проезжей части: край выреза - ось борта.
-    const roadParts = (surface?.areas?.paved ?? []).filter(
-      (_, i) => surface?.areas?.paved_kind?.[i] === 'road',
-    );
+    // Край проезда по контурам частей проезжей части (edges.ts): край выреза земли - ось
+    // борта; где по другую сторону тротуар, а не газон, - съезд или переход с пониженным
+    // бортом, и земля там спускается к нему пандусом.
+    const areas = surface?.areas;
+    this.edges = roadGeo && areas ? roadEdges(areas, this.world.origin, crossingTest(mask)) : [];
     const ground = groundMesh(this.world, mask, tex, this.groundWeather, {
       geometry: roadGeo
-        ? groundGeometry(this.world.bounds, roadParts, this.world.origin)
+        ? groundGeometry(this.world.bounds, groundCutRings(this.edges, APRON_W_M, TRANSITION_M))
         : undefined,
     });
     this.add(ground);
+    if (this.edges.some((e) => e.lowered.some(Boolean))) {
+      this.add(
+        groundMesh(this.world, mask, tex, this.groundWeather, {
+          geometry: apronGeometry(
+            this.edges,
+            APRON_W_M,
+            CURB_ABOVE_WALK_M,
+            LOW_CURB_M - ROAD_DROP_M,
+            TRANSITION_M,
+          ),
+          name: 'aprons',
+        }),
+      );
+    }
     this.addStreetFurniture(surface);
     if (this.world.shrubStrips?.length) {
       const leaves = hedgeLeaves();
@@ -418,17 +452,13 @@ export class SceneEngine {
     const areas = surface?.areas;
     const mask = this.mask;
     const hasRoads = !!areas?.road_mesh?.length;
+    // Дорожный борт - весь край выреза земли под проезд (edges.ts): на съезде понижен до
+    // LOW_CURB_M над асфальтом с переходными камнями по TRANSITION_M.
     const curbLines =
       areas && mask
         ? hasRoads
-          ? // Дорожный борт - весь край выреза земли под проезд (groundGeometry): на каждом
-            // его отрезке перепад высоты, проверка соседа по маске оставляла ступень без борта.
-            areaCurbs(
-              {
-                ...areas,
-                paved: areas.paved.filter((_, i) => areas.paved_kind?.[i] === 'road'),
-              },
-              world.origin,
+          ? this.edges.map((edge) =>
+              curbProfile(edge, CURB_ABOVE_WALK_M, LOW_CURB_M - ROAD_DROP_M, TRANSITION_M),
             )
           : []
         : world.curbs;
@@ -450,28 +480,69 @@ export class SceneEngine {
       stoneTex.anisotropy = 8;
       stoneTex.repeat.set(1 / CURB_STONES_PER_TEXTURE, 0.05);
       this.disposables.push(stoneTex);
-      const stone = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        map: stoneTex,
-        bumpMap: stoneTex,
-        bumpScale: 1.5,
-        roughness: 0.92,
-        metalness: 0,
-      });
+      const stoneMaterial = () =>
+        new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          map: stoneTex,
+          bumpMap: stoneTex,
+          bumpScale: 1.5,
+          roughness: 0.92,
+          metalness: 0,
+        });
       // Дорожный борт с проезжей частью стоит от асфальта проезда, верх - чуть выше тротуара.
       const roadLift = hasRoads ? -ROAD_DROP_M : 0;
       const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
-      for (const [lines, width, height, lift, bevel, name] of [
-        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs'],
-        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 0.01, 'garden-curbs'],
+      // Подошва дорожного борта у асфальта грязная и мокрая: нижние 7 см темнее.
+      const roadStone = stoneMaterial();
+      roadStone.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying float vCurbY;')
+          .replace(
+            '#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvCurbY = (modelMatrix * vec4(transformed, 1.0)).y;',
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying float vCurbY;')
+          .replace(
+            '#include <map_fragment>',
+            `#include <map_fragment>\ndiffuseColor.rgb *= mix(0.58, 1.0, smoothstep(${roadLift.toFixed(3)}, ${(roadLift + 0.07).toFixed(3)}, vCurbY));`,
+          );
+      };
+      for (const [lines, width, height, lift, bevel, name, material] of [
+        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs', roadStone],
+        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 0.01, 'garden-curbs', stoneMaterial()],
       ] as const) {
-        if (!lines.length) continue;
-        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel), stone);
+        if (!lines.length) {
+          material.dispose();
+          continue;
+        }
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel), material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.name = name;
         this.add(mesh);
       }
+    }
+    if (hasRoads && this.edges.length) {
+      // Лоток: вдоль полного борта асфальт темнее от воды и грязи, к середине проезда светлеет.
+      const shade = gutterShade();
+      this.disposables.push(shade);
+      const gutter = new THREE.Mesh(
+        gutterGeometry(this.edges, GUTTER_W_M, 0.004 - ROAD_DROP_M),
+        new THREE.MeshBasicMaterial({
+          color: 0x0a0c0e,
+          transparent: true,
+          opacity: 0.55,
+          alphaMap: shade,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        }),
+      );
+      gutter.name = 'gutters';
+      gutter.renderOrder = 1;
+      this.add(gutter);
     }
     if (world.fences.length) {
       const bars = fenceBars();

@@ -92,6 +92,8 @@ export interface Plant {
 
 export interface Line {
   points: Flat[];
+  /** Отметка верха бруса в каждой точке (борт с понижением); без неё верх ровный. */
+  tops?: number[];
 }
 
 /** Всё, что видно в 3D, в координатах сцены. */

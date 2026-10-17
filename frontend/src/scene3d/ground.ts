@@ -99,6 +99,113 @@ function tracePolygon(ctx: CanvasRenderingContext2D, rings: [number, number][][]
   }
 }
 
+/** Контуры покрытий, сглаженные для 3D: срез углов в три прохода. Контур из растра и
+ *  упрощения - ломаная с изломами в 3-15° через метр-два и прямыми углами лесенки, на 3D
+ *  борт по ней шёл «кривой» (пользователь, 17.10.2026). Пологий излом срезается на четверть
+ *  соседних отрезков (не дальше SMOOTH_CUT_M), прямой угол - радиусным камнем не дальше
+ *  SMOOTH_CORNER_M, разворот круче SMOOTH_KEEP_DEG остаётся углом. Сглаживаются и грунт, и
+ *  покрытие: маска, борта и вырез земли берутся из одних контуров. */
+export function smoothSurfaceAreas(areas: SurfaceAreas): SurfaceAreas {
+  const rings = (polygons: AreaPolygon[]) =>
+    polygons.map((polygon) => polygon.map((ring) => smoothRing(ring)));
+  return {
+    ...areas,
+    soil: rings(areas.soil),
+    paved: rings(areas.paved),
+  };
+}
+
+const SMOOTH_PASSES = 3;
+const SMOOTH_MIN_DEG = 2;
+const SMOOTH_GENTLE_DEG = 30;
+const SMOOTH_KEEP_DEG = 100;
+const SMOOTH_CUT_M = 1.5;
+const SMOOTH_CORNER_M = 0.75;
+/** Лесенка растра: подряд не меньше трёх поворотов около прямого угла, знак чередуется,
+ *  ступени короче этого. Выемка (два поворота в одну сторону подряд) лесенкой не считается. */
+const STAIR_STEP_M = 2.5;
+const STAIR_MIN_DEG = 60;
+const STAIR_MAX_DEG = 120;
+
+/** Поворот в вершине v между p и q: градусы со знаком (плюс - налево в координатах чертежа). */
+function signedTurn(p: number[], v: number[], q: number[]): number {
+  const ax = (v[0] ?? 0) - (p[0] ?? 0);
+  const ay = (v[1] ?? 0) - (p[1] ?? 0);
+  const bx = (q[0] ?? 0) - (v[0] ?? 0);
+  const by = (q[1] ?? 0) - (v[1] ?? 0);
+  return (Math.atan2(ax * by - ay * bx, ax * bx + ay * by) * 180) / Math.PI;
+}
+
+/** Лесенка клеток растра (чередующиеся повороты около прямого угла с короткими ступенями)
+ *  заменяется хордой от первой её вершины до последней. */
+function withoutStairs(pts: number[][]): number[][] {
+  const n = pts.length;
+  if (n < 5) return pts;
+  const stair = pts.map((v, i) => {
+    const p = pts[(i - 1 + n) % n] ?? v;
+    const q = pts[(i + 1) % n] ?? v;
+    const turn = signedTurn(p, v, q);
+    const short = Math.hypot((q[0] ?? 0) - (v[0] ?? 0), (q[1] ?? 0) - (v[1] ?? 0)) < STAIR_STEP_M;
+    return Math.abs(turn) >= STAIR_MIN_DEG && Math.abs(turn) <= STAIR_MAX_DEG && short
+      ? Math.sign(turn)
+      : 0;
+  });
+  // Ряд лесенки: подряд идущие вершины с чередующимся знаком, не меньше трёх. Снимаются все
+  // его вершины, кроме первой: хорда идёт от неё до вершины за последней ступенью.
+  const drop = pts.map(() => false);
+  const runStart = (i: number) => {
+    const s = stair[i] ?? 0;
+    return s !== 0 && stair[(i - 1 + n) % n] !== -s;
+  };
+  for (let i = 0; i < n; i++) {
+    if (!runStart(i)) continue;
+    let length = 1;
+    while (length < n && stair[(i + length) % n] === -(stair[(i + length - 1) % n] ?? 0)) length++;
+    if (length < 3) continue;
+    for (let k = 1; k < length; k++) drop[(i + k) % n] = true;
+  }
+  const out = pts.filter((_, i) => !drop[i]);
+  return out.length < n ? out : pts;
+}
+
+function smoothRing(ring: number[][]): number[][] {
+  let pts = withoutStairs(ring.slice(0, -1).map(([x = 0, y = 0]) => [x, y]));
+  for (let pass = 0; pass < SMOOTH_PASSES && pts.length > 3; pass++) {
+    // Каждый следующий проход срезает вдвое короче: скругление остаётся у угла, а не
+    // расползается по прямой.
+    const shrink = 2 ** pass;
+    const out: number[][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [px = 0, py = 0] = pts[(i - 1 + pts.length) % pts.length] ?? [];
+      const [vx = 0, vy = 0] = pts[i] ?? [];
+      const [qx = 0, qy = 0] = pts[(i + 1) % pts.length] ?? [];
+      const ax = vx - px;
+      const ay = vy - py;
+      const bx = qx - vx;
+      const by = qy - vy;
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 1e-6 || lb < 1e-6) continue;
+      const turn =
+        (Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)))) * 180) / Math.PI;
+      if (turn < SMOOTH_MIN_DEG || turn > SMOOTH_KEEP_DEG) {
+        out.push([vx, vy]);
+        continue;
+      }
+      const cap = (turn > SMOOTH_GENTLE_DEG ? SMOOTH_CORNER_M : SMOOTH_CUT_M) / shrink;
+      const ca = Math.min(cap, la / 4);
+      const cb = Math.min(cap, lb / 4);
+      out.push(
+        [vx - (ax / la) * ca, vy - (ay / la) * ca],
+        [vx + (bx / lb) * cb, vy + (by / lb) * cb],
+      );
+    }
+    pts = out;
+  }
+  const first = pts[0];
+  return first ? [...pts, [...first]] : ring;
+}
+
 /** Бортовой камень по краям покрытия (пользователь, 17.10.2026): кольца контуров покрытия
  *  линиями в координатах сцены, только отрезки, где edge подтверждает газон по одну сторону:
  *  шов между тротуаром и проездом бортом не обводится, линии бортов чертежа идут отдельно
@@ -181,7 +288,7 @@ function bridgeGaps(keep: boolean[], lengths: number[]): void {
 
 /** Убрать вершины-шпильки (контур разворачивается назад): брус бортового камня на них
  *  перекручивался. Кольцо остаётся замкнутым. */
-function withoutHairpins(points: Flat[]): Flat[] {
+export function withoutHairpins(points: Flat[]): Flat[] {
   let pts = points.slice(0, -1);
   for (let pass = 0; pass < 3 && pts.length > 3; pass++) {
     const kept = pts.filter((v, i) => {
@@ -283,27 +390,21 @@ export function roadGeometry(
   return geometry;
 }
 
-/** Земля на уровне тротуара: квадрат bounds с полем вокруг и вырезом проезжей части по её
- *  контуру (части покрытия вида road). Вырез по размытой маске скруглял углы проезда на
- *  полметра: газон наползал на проезд мимо борта, борт висел в воздухе (пользователь,
- *  17.10.2026). По контуру край земли совпадает с осью борта. Дыры внутри проезда (островки)
- *  - снова земля. */
+/** Земля на уровне тротуара: квадрат bounds с полем вокруг и вырезами под проезжую часть по
+ *  её контурам (edges.ts: на съездах контур обходит пандус). Вырез по размытой маске скруглял
+ *  углы проезда на полметра: газон наползал на проезд мимо борта, борт висел в воздухе
+ *  (пользователь, 17.10.2026). По контуру край земли совпадает с осью борта. Островки
+ *  (дыры проезда) - снова земля. */
 export function groundGeometry(
   bounds: [number, number, number, number],
-  roads: AreaPolygon[],
-  origin: [number, number],
+  cuts: readonly { points: readonly Flat[]; island: boolean }[],
 ): THREE.BufferGeometry {
   const [minX, minZ, maxX, maxZ] = bounds;
-  const [ox, oy] = origin;
   const half = Math.max(maxX - minX, maxZ - minZ) / 2 + GROUND_PAD_M;
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
-  // Плоскость фигуры: x сцены и -z сцены (после поворота на -90° вокруг X). Кольца чистятся
-  // от шпилек так же, как линии бортов (areaCurbs): край выреза - ось борта.
-  const toVec = (ring: number[][]) =>
-    withoutHairpins(ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y }))).map(
-      (p) => new THREE.Vector2(p.x, -p.z),
-    );
+  // Плоскость фигуры: x сцены и -z сцены (после поворота на -90° вокруг X).
+  const toVec = (ring: readonly Flat[]) => ring.map((p) => new THREE.Vector2(p.x, -p.z));
   const outer = new THREE.Shape([
     new THREE.Vector2(cx - half, -(cz + half)),
     new THREE.Vector2(cx + half, -(cz + half)),
@@ -311,14 +412,10 @@ export function groundGeometry(
     new THREE.Vector2(cx - half, -(cz - half)),
   ]);
   const shapes = [outer];
-  for (const rings of roads) {
-    const ring = rings[0] ? toVec(rings[0]) : [];
-    if (ring.length < 4) continue;
-    outer.holes.push(new THREE.Path(ring));
-    for (const island of rings.slice(1)) {
-      const points = toVec(island);
-      if (points.length >= 4) shapes.push(new THREE.Shape(points));
-    }
+  for (const cut of cuts) {
+    if (cut.points.length < 4) continue;
+    if (cut.island) shapes.push(new THREE.Shape(toVec(cut.points)));
+    else outer.holes.push(new THREE.Path(toVec(cut.points)));
   }
   const geometry = new THREE.ShapeGeometry(shapes);
   geometry.rotateX(-Math.PI / 2);
@@ -697,21 +794,30 @@ export function ribbonBox(
   const y1 = lift + height;
   // Фаска по верхним рёбрам: на ребре ловится блик, как у тёсаного камня, а не у бруса.
   const b = Math.min(Math.max(bevel, 0), hw * 0.8, height * 0.8);
-  const yb = y1 - b;
   const inset = (hw - b) / hw;
   const sq = Math.SQRT1_2;
   for (const line of lines) {
     const pts: Flat[] = [];
-    for (const p of line.points) {
+    const tops: number[] = [];
+    line.points.forEach((p, k) => {
       const last = pts.at(-1);
-      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= 0.01) pts.push(p);
-    }
+      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= 0.01) {
+        pts.push(p);
+        tops.push(line.tops?.[k] ?? y1);
+      }
+    });
     const first = pts[0];
     const end = pts.at(-1);
     const closed =
       pts.length > 3 && !!first && !!end && Math.hypot(first.x - end.x, first.z - end.z) < 0.01;
-    if (closed) pts.pop();
+    if (closed) {
+      pts.pop();
+      tops.pop();
+    }
     const n = pts.length;
+    // Верх и начало фаски в точке: борт с понижением на съезде.
+    const topAt = (k: number) => tops[k % n] ?? y1;
+    const bevelAt = (k: number) => topAt(k) - b;
     const segments = closed ? n : n - 1;
     if (segments < 1) continue;
     // Нормаль каждого пролёта.
@@ -756,31 +862,35 @@ export function ribbonBox(
       const ri0 = [p.x - ox0 * inset, p.z - oz0 * inset];
       const li1 = [q.x + ox1 * inset, q.z + oz1 * inset];
       const ri1 = [q.x - ox1 * inset, q.z - oz1 * inset];
+      const t0 = topAt(s);
+      const t1 = topAt(s + 1);
+      const b0 = bevelAt(s);
+      const b1 = bevelAt(s + 1);
       // Верх, фаски, левая и правая грани.
       quad(
-        [li0[0] ?? 0, y1, li0[1] ?? 0],
-        [ri0[0] ?? 0, y1, ri0[1] ?? 0],
-        [ri1[0] ?? 0, y1, ri1[1] ?? 0],
-        [li1[0] ?? 0, y1, li1[1] ?? 0],
+        [li0[0] ?? 0, t0, li0[1] ?? 0],
+        [ri0[0] ?? 0, t0, ri0[1] ?? 0],
+        [ri1[0] ?? 0, t1, ri1[1] ?? 0],
+        [li1[0] ?? 0, t1, li1[1] ?? 0],
         [0, 1, 0],
         u0,
         u1,
       );
       if (b > 0) {
         quad(
-          [l0[0] ?? 0, yb, l0[1] ?? 0],
-          [li0[0] ?? 0, y1, li0[1] ?? 0],
-          [li1[0] ?? 0, y1, li1[1] ?? 0],
-          [l1[0] ?? 0, yb, l1[1] ?? 0],
+          [l0[0] ?? 0, b0, l0[1] ?? 0],
+          [li0[0] ?? 0, t0, li0[1] ?? 0],
+          [li1[0] ?? 0, t1, li1[1] ?? 0],
+          [l1[0] ?? 0, b1, l1[1] ?? 0],
           [nx * sq, sq, nz * sq],
           u0,
           u1,
         );
         quad(
-          [ri1[0] ?? 0, y1, ri1[1] ?? 0],
-          [ri0[0] ?? 0, y1, ri0[1] ?? 0],
-          [r0[0] ?? 0, yb, r0[1] ?? 0],
-          [r1[0] ?? 0, yb, r1[1] ?? 0],
+          [ri1[0] ?? 0, t1, ri1[1] ?? 0],
+          [ri0[0] ?? 0, t0, ri0[1] ?? 0],
+          [r0[0] ?? 0, b0, r0[1] ?? 0],
+          [r1[0] ?? 0, b1, r1[1] ?? 0],
           [-nx * sq, sq, -nz * sq],
           u1,
           u0,
@@ -788,8 +898,8 @@ export function ribbonBox(
       }
       quad(
         [l0[0] ?? 0, y0, l0[1] ?? 0],
-        [l0[0] ?? 0, yb, l0[1] ?? 0],
-        [l1[0] ?? 0, yb, l1[1] ?? 0],
+        [l0[0] ?? 0, b0, l0[1] ?? 0],
+        [l1[0] ?? 0, b1, l1[1] ?? 0],
         [l1[0] ?? 0, y0, l1[1] ?? 0],
         [nx, 0, nz],
         u0,
@@ -797,8 +907,8 @@ export function ribbonBox(
       );
       quad(
         [r1[0] ?? 0, y0, r1[1] ?? 0],
-        [r1[0] ?? 0, yb, r1[1] ?? 0],
-        [r0[0] ?? 0, yb, r0[1] ?? 0],
+        [r1[0] ?? 0, b1, r1[1] ?? 0],
+        [r0[0] ?? 0, b0, r0[1] ?? 0],
         [r0[0] ?? 0, y0, r0[1] ?? 0],
         [-nx, 0, -nz],
         u1,
@@ -821,10 +931,12 @@ export function ribbonBox(
       const ci = [p.x - ox * inset, p.z - oz * inset];
       const [first, second, firstIn, secondIn] = sign < 0 ? [a, c, ai, ci] : [c, a, ci, ai];
       const nrm = [dir[0] ?? 0, 0, dir[1] ?? 0];
+      const tk = topAt(k);
+      const bk = bevelAt(k);
       quad(
         [first[0] ?? 0, y0, first[1] ?? 0],
-        [first[0] ?? 0, yb, first[1] ?? 0],
-        [second[0] ?? 0, yb, second[1] ?? 0],
+        [first[0] ?? 0, bk, first[1] ?? 0],
+        [second[0] ?? 0, bk, second[1] ?? 0],
         [second[0] ?? 0, y0, second[1] ?? 0],
         nrm,
         0,
@@ -832,10 +944,10 @@ export function ribbonBox(
       );
       if (b > 0)
         quad(
-          [first[0] ?? 0, yb, first[1] ?? 0],
-          [firstIn[0] ?? 0, y1, firstIn[1] ?? 0],
-          [secondIn[0] ?? 0, y1, secondIn[1] ?? 0],
-          [second[0] ?? 0, yb, second[1] ?? 0],
+          [first[0] ?? 0, bk, first[1] ?? 0],
+          [firstIn[0] ?? 0, tk, firstIn[1] ?? 0],
+          [secondIn[0] ?? 0, tk, secondIn[1] ?? 0],
+          [second[0] ?? 0, bk, second[1] ?? 0],
           nrm,
           0,
           width,
