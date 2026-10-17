@@ -1,8 +1,7 @@
 /* Уточнение объектов чертежа: разбор артефактов проверки и сборка JSON для повторного прогона.
  *
- * Перенос static/review.js тиммейта без изменения логики. Страница только толкует вход: всё,
- * что назначил человек, живёт в браузере до скачивания JSON, сервер о назначениях не знает.
- * Повторный прогон с этим JSON и есть единственный способ, которым уточнение попадает в план. */
+ * Назначения хранятся в браузере до применения. Сервер запускает новый расчёт с точным DXF
+ * и сохранёнными входами; JSON остаётся дополнительным способом воспроизведения. */
 
 import type { Geometry } from '../api/artifacts';
 
@@ -37,6 +36,13 @@ export interface ReviewGeometry {
   source_sha256: string;
   features: ReviewFeature[];
   labels?: ReviewLabel[];
+  callouts?: {
+    source_refs: string[];
+    label_ref: string;
+    text: string;
+    certain: boolean;
+    reason: string;
+  }[];
 }
 
 export interface ReviewGroup {
@@ -46,6 +52,7 @@ export interface ReviewGroup {
   object_class: string;
   evidence: { method: string };
   features: number;
+  review_reason?: string | null;
 }
 
 /** classification.json: группы объектов с классом и основанием классификации. */
@@ -117,6 +124,8 @@ const EVIDENCE_NAMES: Record<string, string> = {
   annotation_label: 'подпись оформления',
   explicit_label: 'роль подписи уточнена',
   symbol_assumed: 'незнакомый условный знак принят за препятствие',
+  callout_annotation: 'составная выноска, оформление',
+  callout_candidate: 'возможная составная выноска: требуется уточнение',
 };
 
 const ASSUMED: Record<string, string> = {
@@ -133,6 +142,8 @@ export function evidenceName(method: string | undefined | null): string {
   const known = EVIDENCE_NAMES[method];
   if (known) return known;
   const [head = '', tail = ''] = method.split(':', 2);
+  if (EVIDENCE_NAMES[head]) return EVIDENCE_NAMES[head];
+  if (head === 'symbol_inferred') return `назначено по имени знака или его слоя: ${tail}`;
   if (head.startsWith('inferred_') && tail) return `выведено по слову «${tail}» в имени`;
   if (head === 'assumed_geometry') return `замена по геометрии: ${ASSUMED[tail] ?? tail}`;
   if (head === 'symbol_stroke') return `штрих условного знака ${tail}`;
@@ -153,9 +164,43 @@ export function groupMembers(data: ReviewGeometry, groups: number): number[][] {
 /** Порядок групп в списке: сначала неизвестные - ради них страницу и открывают. */
 export function groupOrder(report: ClassificationJson): number[] {
   return report.groups
-    .map((group, index) => ({ unknown: UNKNOWN.has(group.object_class), index }))
+    .map((group, index) => ({ unknown: groupNeedsReview(group), index }))
     .sort((a, b) => Number(b.unknown) - Number(a.unknown))
     .map((entry) => entry.index);
+}
+
+export function groupNeedsReview(group: ReviewGroup): boolean {
+  if (group.review_reason !== undefined) return group.review_reason !== null;
+  if (UNKNOWN.has(group.object_class)) return true;
+  if (group.evidence.method.startsWith('explicit_')) return false;
+  return (
+    UNKNOWN.has(group.object_class) ||
+    /^(symbol_assumed|assumed_geometry|inferred_weak|model|callout_candidate)(:|$)/.test(
+      group.evidence.method,
+    )
+  );
+}
+
+export function relatedIndices(data: ReviewGeometry, indices: readonly number[]): number[] {
+  const refs = new Set(indices.map((i) => data.features[i]?.id));
+  const adjacent = new Map<string, string[]>();
+  for (const callout of data.callouts ?? []) {
+    for (const ref of callout.source_refs) {
+      adjacent.set(ref, [...(adjacent.get(ref) ?? []), ...callout.source_refs]);
+    }
+  }
+  const queue = [...refs];
+  for (let i = 0; i < queue.length; i++) {
+    const ref = queue[i];
+    if (!ref) continue;
+    for (const linked of adjacent.get(ref) ?? []) {
+      if (!refs.has(linked)) {
+        refs.add(linked);
+        queue.push(linked);
+      }
+    }
+  }
+  return data.features.flatMap((feature, index) => (refs.has(feature.id) ? [index] : []));
 }
 
 /** Выбранные объекты группы: 0 - вся группа, N - N-й объект, пусто или мимо - ничего. */
@@ -195,8 +240,14 @@ export function boundsOf(data: ReviewGeometry, indices: readonly number[]): Box 
 export function unresolvedCount(
   data: ReviewGeometry,
   assignments: Readonly<Record<string, string>>,
+  report?: ClassificationJson,
 ): number {
-  return data.features.filter((f) => UNKNOWN.has(assignments[f.id] ?? f.properties.class)).length;
+  return data.features.filter((f) => {
+    const assigned = assignments[f.id];
+    if (assigned) return UNKNOWN.has(assigned);
+    const group = report?.groups[f.properties.group];
+    return group ? groupNeedsReview(group) : UNKNOWN.has(f.properties.class);
+  }).length;
 }
 
 /** JSON уточнений для повторного прогона. Несмысловые параметры прогона сохраняются, широкие
@@ -227,5 +278,6 @@ export function reviewJson(
   values.label_roles = { ...explicitLabels, ...labelAssignments };
   values.semantic_source_sha256 = data.source_sha256;
   values.require_known_objects = true;
+  values.require_reviewed_objects = true;
   return `${JSON.stringify(values, null, 2)}\n`;
 }

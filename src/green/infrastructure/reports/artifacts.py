@@ -196,6 +196,11 @@ class FileArtifactSink:
             )
         }
         if scene is not None:
+            # Final classification may later include GIS and contextual refinements.
+            # Review assignments must refer to this exact CAD-only interpretation.
+            saved["review-classification.json"] = _write_json(
+                directory / "review-classification.json", classification_payload(report)
+            )
             saved.update(save_review_geometry(directory, report, scene, source))
         return saved
 

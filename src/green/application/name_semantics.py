@@ -30,6 +30,7 @@ _SHORT = 3  # слово словаря до трёх букв сравнива�
 _SPLIT = re.compile(r"[^0-9a-zа-я]+")
 _INITIALS = re.compile(r"(?<![0-9a-zа-я])([a-zа-я])\.([a-zа-я])(?![0-9a-zа-я])")
 _LETTERS = re.compile(r"^[a-zа-я]+")
+_NUMBERED_WORD = re.compile(r"^\d+([a-zа-я]+)$")
 _VEGETATION = frozenset({ObjectClass.EXISTING_TREE, ObjectClass.EXISTING_SHRUB})
 
 
@@ -186,9 +187,7 @@ class Vocabulary:
         for position, token in enumerate(tokens):
             if position in taken:
                 continue
-            word = _match_word(token, self.words)
-            if word is None and (letters := _LETTERS.match(token)) and letters.group() != token:
-                word = _match_word(letters.group(), self.words)
+            word = _name_word(token, self.words)
             if word is not None:
                 kind, rank = self.words[word]
                 hits.append(_Hit(position, word, kind, rank))
@@ -256,6 +255,16 @@ def _match(token: str, words: Iterable[str]) -> str | None:
 
 def _match_word(token: str, words: Mapping[str, object]) -> str | None:
     return _match(token, words.keys())
+
+
+def _name_word(token: str, words: Mapping[str, object]) -> str | None:
+    word = _match_word(token, words)
+    # Only a complete dictionary word, not an arbitrary substring of a code.
+    if word is None and (numbered := _NUMBERED_WORD.fullmatch(token)) and numbered[1] in words:
+        word = numbered[1]
+    if word is None and (letters := _LETTERS.match(token)) and letters.group() != token:
+        word = _match_word(letters.group(), words)
+    return word
 
 
 def _has_phrase(text: str, phrase: str) -> bool:

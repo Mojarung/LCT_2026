@@ -244,6 +244,17 @@ class ReadDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class Callout:
+    """An interpretation of connected ink, retaining every source reference."""
+
+    source_refs: tuple[str, ...]
+    label_ref: str
+    text: str
+    certain: bool
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Scene:
     """Прочитанная подоснова: все объекты в единых координатах, в метрах.
 
@@ -260,3 +271,4 @@ class Scene:
     unit_m: float = 1.0
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
     symbols: tuple[SymbolInstance, ...] = field(default=())
+    callouts: tuple[Callout, ...] = field(default=())

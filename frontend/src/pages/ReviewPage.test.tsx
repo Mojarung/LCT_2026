@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -37,12 +37,64 @@ function routes(names: string[] = ['semantic-review.geojson', 'classification.js
 }
 
 describe('уточнение объектов чертежа', () => {
+  it('пересчёт отправляет назначения и сохраняет их при ошибке сервера', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi({
+      ...routes(['semantic-review.geojson', 'classification.json', 'review-input.dxf']),
+      'POST /api/v1/runs/r1/review': () =>
+        Response.json({ detail: 'Попробуйте ещё раз' }, { status: 409 }),
+    });
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    await user.selectOptions(screen.getByLabelText('Класс по исходнику'), 'building');
+    await user.click(screen.getByRole('button', { name: 'Назначить класс (2 объекта)' }));
+    await user.click(screen.getByRole('button', { name: 'Применить и пересчитать' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Попробуйте ещё раз');
+    const request = calls.find((c) => c.method === 'POST');
+    const body = request?.init?.body;
+    if (typeof body !== 'string') throw new Error('Нет тела запроса уточнения');
+    expect(JSON.parse(body)).toEqual({
+      source_sha256: 'abc123',
+      feature_classes: { 'f:1': 'building', 'f:3': 'building', 'f:2': 'pole' },
+      label_roles: { 'l:2': 'paved' },
+    });
+    expect(screen.getByText(/Ваших назначений: 3/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeEnabled();
+  });
+
+  it('поиск и фильтр показывают сомнительные группы по имени', async () => {
+    const user = userEvent.setup();
+    const report = {
+      ...REPORT,
+      groups: [
+        ...REPORT.groups,
+        {
+          layer: '08TREE',
+          block: '394',
+          geometry: 'Point',
+          object_class: 'obstacle',
+          features: 1,
+          evidence: { method: 'symbol_assumed:394' },
+          review_reason: 'незнакомый знак',
+        },
+      ],
+    };
+    mockApi({ ...routes(), '/api/v1/runs/r1/artifacts/classification.json': report });
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено:/);
+    await user.click(screen.getByLabelText('Только требующие уточнения'));
+    await user.type(screen.getByLabelText('Поиск слоя или блока'), '394');
+    expect(screen.getByLabelText('Группа').querySelectorAll('option')).toHaveLength(1);
+    expect(screen.getByLabelText('Группа')).toHaveDisplayValue(/08TREE.*394/);
+  });
   it('первой открывается неизвестная группа, статус считает объекты и назначения', async () => {
     mockApi(routes());
     renderApp('/runs/r1/review');
 
     expect(
-      await screen.findByText('Объектов: 4. Не уточнено: 2. Ваших назначений: 0.'),
+      await screen.findByText(
+        'Элементов: 4. Автоматически: 1. Не уточнено: 2. Ваших назначений: 1.',
+      ),
     ).toBeInTheDocument();
     const group = screen.getByLabelText('Группа');
     expect(group).toHaveDisplayValue('0, LineString, 2 объекта: Неизвестно');
@@ -59,7 +111,7 @@ describe('уточнение объектов чертежа', () => {
     await user.click(screen.getByRole('button', { name: 'Назначить класс (2 объекта)' }));
 
     expect(
-      screen.getByText('Объектов: 4. Не уточнено: 0. Ваших назначений: 2.'),
+      screen.getByText('Элементов: 4. Автоматически: 1. Не уточнено: 0. Ваших назначений: 3.'),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Показать JSON' }));
     const values = JSON.parse(
@@ -86,9 +138,9 @@ describe('уточнение объектов чертежа', () => {
     expect(screen.getByText(/Погрешность геометрии, м: 0.01/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Класс по исходнику'), 'fence');
     await user.click(screen.getByRole('button', { name: 'Назначить класс (1 объект)' }));
-    expect(screen.getByText(/Не уточнено: 1\. Ваших назначений: 1\./)).toBeInTheDocument();
+    expect(screen.getByText(/Не уточнено: 1\. Ваших назначений: 2\./)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Отменить назначение' }));
-    expect(screen.getByText(/Не уточнено: 2\. Ваших назначений: 0\./)).toBeInTheDocument();
+    expect(screen.getByText(/Не уточнено: 2\. Ваших назначений: 1\./)).toBeInTheDocument();
   });
 
   it('роль подписи назначается по номеру на карте и попадает в JSON', async () => {
@@ -114,9 +166,11 @@ describe('уточнение объектов чертежа', () => {
   it('копия DXF для повторного прогона предлагается, если сервис её сохранил', async () => {
     mockApi(routes(['semantic-review.geojson', 'classification.json', 'review-input.dxf']));
     renderApp('/runs/r1/review');
-    const link = await screen.findByRole('link', { name: 'этот DXF' });
+    const link = await screen.findByRole('link', { name: 'Исходник для повторной проверки' });
     expect(link).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/review-input.dxf');
-    expect(screen.getByText(/с тем же профилем «Строгий»/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeEnabled(),
+    );
   });
 
   it('без геометрии - одна строка и дорога к прогону, формы нет', async () => {

@@ -257,6 +257,9 @@ class PlanSite:
                 )
             if params.unknown_lines_as_utility:
                 scene = promote_unknown_lines(scene)
+            publish = getattr(progress, "classification", None)
+            if publish is not None:
+                publish(semantics, scene, source)
             if request.gis_layers:
                 scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
             features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)

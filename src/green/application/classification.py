@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import shapely
 from shapely.geometry import Point, Polygon
 
+from green.application.callouts import recognise_callouts
 from green.application.errors import InputError
 from green.application.name_model import NameModel
 from green.application.name_semantics import Vocabulary
@@ -148,6 +149,15 @@ def classify_scene(  # noqa: C901 - ступени классификации п
             "Загрузите review-input.dxf из проверенного прогона или выполните уточнение заново."
         )
     overrides = _Overrides(params)
+    callouts = recognise_callouts(scene)
+    explicit_refs = {str(f.ref) for f in scene.features if overrides.decide(f) is not None}
+    callouts = tuple(
+        replace(c, certain=False, reason="есть ручное назначение элемента")
+        if explicit_refs.intersection(c.source_refs)
+        else c
+        for c in callouts
+    )
+    callout_by_ref = {ref: c for c in callouts for ref in c.source_refs}
     infer = params.infer_unknown if params else True
     entries = _symbol_entries(scene.symbols, layer_map, infer=infer)
     instances = {str(symbol.ref): symbol for symbol in scene.symbols}
@@ -180,6 +190,12 @@ def classify_scene(  # noqa: C901 - ступени классификации п
             ):
                 decided = _assumed(feature, decided[1])
         kind, evidence = decided
+        callout = callout_by_ref.get(str(feature.ref))
+        if callout is not None:
+            method = "callout_annotation" if callout.certain else "callout_candidate"
+            if callout.certain:
+                kind = ObjectClass.IGNORE
+            evidence = ClassificationEvidence(f"{method}:{callout.source_refs[0]}")
         explicit = overrides.decide(feature)
         if explicit is not None:
             kind, method, override_key = explicit
@@ -191,13 +207,30 @@ def classify_scene(  # noqa: C901 - ступени классификации п
             strokes[feature.symbol].append(feature.geometry)
     classified.extend(_symbol_features(scene.symbols, entries, overrides, strokes))
     classified = list(chain_tree_strips(recognise_shrub_strips(classified)))
+    # Derived strip objects do not exist during the primitive pass. Exact review
+    # assignments must also apply to their stable references after recognition.
+    classified = _apply_exact_assignments(classified, overrides)
     counts = Counter((f.layer, f.object_class) for f in classified)
     coverage = tuple(
         LayerCoverage(layer=layer, object_class=cls, features=n)
         for (layer, cls), n in sorted(counts.items(), key=lambda item: (item[0][0], item[0][1]))
     )
     labels = classify_labels(scene.labels, layer_map, params.label_roles if params else {})
-    return replace(scene, features=tuple(classified), labels=labels), coverage
+    return replace(scene, features=tuple(classified), labels=labels, callouts=callouts), coverage
+
+
+def _apply_exact_assignments(features: list[Feature], overrides: _Overrides) -> list[Feature]:
+    for index, feature in enumerate(features):
+        entry = overrides.maps["feature"].get(name_key(str(feature.ref)))
+        if entry is not None:
+            key, kind = entry
+            previous = feature.classification or ClassificationEvidence("unmatched")
+            features[index] = _classify_feature(
+                feature,
+                kind,
+                ClassificationEvidence("explicit_feature", previous.matched_rules, (), key),
+            )
+    return features
 
 
 # Малый круг без смысла - предмет в точке (колонка, столбик, ствол): препятствие, а не контур.
@@ -492,6 +525,23 @@ class ClassificationGroup:
     features: int
     source_refs: tuple[str, ...]
     max_geometry_error_m: float | None
+    review_reason: str | None = None
+
+
+def review_reason(kind: ObjectClass, evidence: ClassificationEvidence) -> str | None:
+    """The same interpretation queue is consumed by strict checks and the UI."""
+    method = evidence.method.split(":", 1)[0]
+    if kind in {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}:
+        return "тип объекта не установлен"
+    if method.startswith("explicit_"):
+        return None
+    return {
+        "symbol_assumed": "незнакомый знак принят за препятствие",
+        "assumed_geometry": "назначение только по геометрии",
+        "inferred_weak": "слабый намёк в имени",
+        "model": "предположение модели имени",
+        "callout_candidate": "возможная составная выноска",
+    }.get(method)
 
 
 @dataclass(frozen=True, slots=True)
@@ -518,6 +568,7 @@ class ClassificationReport:
     labels: int = 0
     excluded_surface_labels: int = 0
     label_groups: tuple[LabelGroup, ...] = ()
+    review_required_features: int = 0
     scope: str = (
         "Semantic assignments of imported geometry and label roles only. "
         "Name matches and explicit assignments "
@@ -528,7 +579,9 @@ class ClassificationReport:
 
     @property
     def ready(self) -> bool:
-        return not self.unresolved_features and not self.unused_overrides
+        return not (
+            self.unresolved_features or self.unused_overrides or self.review_required_features
+        )
 
 
 # Как решён класс объекта: по виду основания (часть ClassificationEvidence.method до «:»).
@@ -568,6 +621,10 @@ def recognition_summary(report: ClassificationReport) -> dict[str, object]:
         kind = method.split(":", 1)[0]
         if group.object_class is ObjectClass.UNKNOWN or kind in {"unmatched", "conflict"}:
             bucket = "unresolved"
+        elif kind == "symbol_assumed":
+            bucket = "by_geometry_only"
+        elif kind == "symbol_stroke":
+            bucket = "symbol_strokes"
         elif kind.startswith(("symbol", "tree_strip", "shrub_strip", "topographic")):
             bucket = "by_symbol"
         else:
@@ -591,6 +648,7 @@ def recognition_summary(report: ClassificationReport) -> dict[str, object]:
         **counts,
         "unresolved": counts.get("unresolved", 0),
         "total": report.features,
+        "review_required": report.review_required_features,
         "guessed": [item for _, item in guessed[:GUESSED_TOP]],
     }
 
@@ -653,6 +711,7 @@ def classification_report(
                 None
                 if any(f.geometry_error_m is None for f in items)
                 else max(f.geometry_error_m or 0.0 for f in items),
+                review_reason(key[3], key[4]),
             )
             for key, items in groups.items()
         ),
@@ -673,6 +732,11 @@ def classification_report(
         labels=len(scene.labels),
         excluded_surface_labels=sum(label.surface_role == "ignore" for label in scene.labels),
         label_groups=label_report_groups(scene.labels),
+        review_required_features=sum(
+            review_reason(f.object_class, f.classification or ClassificationEvidence("unmatched"))
+            is not None
+            for f in scene.features
+        ),
     )
 
 
@@ -687,11 +751,13 @@ class ClassificationError(InputError):
             dict.fromkeys(
                 group.layer
                 for group in report.groups
-                if group.object_class in {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}
+                if group.review_reason
+                or group.object_class in {ObjectClass.UNKNOWN, ObjectClass.UTILITY_UNKNOWN}
             )
         )[:500]
+        count = max(report.unresolved_features, report.review_required_features)
         super().__init__(
-            f"Требуется уточнить классы объектов: {report.unresolved_features}; слои: {examples}. "
+            f"Требуется уточнить классы объектов: {count}; слои: {examples}. "
             f"Не найдены соответствия: {', '.join(report.unused_overrides[:5]) or 'нет'}. "
             "См. classification.json; задайте layer_classes, block_classes или feature_classes."
         )
@@ -704,5 +770,9 @@ def require_classified(
     scene: Scene | None = None,
     source: Path | None = None,
 ) -> None:
-    if report.unused_overrides or (params.require_known_objects and not report.ready):
+    if (
+        report.unused_overrides
+        or (params.require_known_objects and report.unresolved_features)
+        or (params.require_reviewed_objects and report.review_required_features)
+    ):
         raise ClassificationError(report, scene, source)

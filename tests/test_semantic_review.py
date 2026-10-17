@@ -125,7 +125,8 @@ def test_unknown_geometry_is_replaced_carefully_by_default(
     source = scene(replace(feature("unknown"), geometry=geometry, circle_radius_m=radius))
     classified, _ = classify_scene(source, RULES, PlanParams())
     report = classification_report(classified, RULES, PlanParams())
-    assert report.ready
+    assert not report.ready
+    assert report.review_required_features == 1
     assert classified.features[0].object_class is expected
     assert report.groups[0].evidence.method == method
     if expected is ObjectClass.CONTOUR:
@@ -215,7 +216,9 @@ def test_unknown_utility_is_resolved_with_the_largest_utility_offset_by_default(
     classified, _ = classify_scene(scene(feature("Топливопровод")), RULES, PlanParams())
     report = classification_report(classified, RULES, PlanParams())
     assert classified.features[0].object_class is ObjectClass.UTILITY_UNKNOWN
-    assert report.ready
+    assert not report.ready
+    assert report.review_required_features == 1
+    require_classified(report, PlanParams())
 
 
 def test_samples_are_bounded_but_counts_are_complete() -> None:
@@ -321,6 +324,7 @@ def test_ordinary_demo_runs_with_inferred_semantics(tmp_path: Path) -> None:
         assert state["state"] == "succeeded", state
         assert (container.store.run_dir(run_id) / "result.dxf").exists()
         report = client.get(f"{API_PREFIX}/runs/{run_id}/artifacts/classification.json").json()
-        assert report["ready"]
+        assert not report["ready"]
+        assert report["review_required_features"] > 0
         methods = {group["evidence"]["method"] for group in report["groups"]}
         assert any(m.startswith(("inferred_", "assumed_")) for m in methods)

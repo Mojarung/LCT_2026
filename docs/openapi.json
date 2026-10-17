@@ -493,6 +493,51 @@
         "title": "MetaOut",
         "type": "object"
       },
+      "ObjectClass": {
+        "description": "Класс объекта подосновы, от которого считаются нормативные отступы.",
+        "enum": [
+          "utility.water",
+          "utility.sewer",
+          "utility.storm",
+          "utility.drain",
+          "utility.heat",
+          "utility.gas",
+          "utility.power_cable",
+          "utility.telecom",
+          "utility.unknown",
+          "utility.access",
+          "power_line_overhead",
+          "pole",
+          "curb",
+          "pavement_edge",
+          "fence",
+          "road",
+          "sidewalk",
+          "tram",
+          "railway",
+          "building",
+          "school",
+          "structure",
+          "slope",
+          "work_boundary",
+          "existing_tree",
+          "existing_shrub",
+          "existing_woodland",
+          "obstacle",
+          "zone.power_line",
+          "zone.gas",
+          "territory.street",
+          "territory.yard",
+          "territory.square",
+          "territory.park",
+          "lawn",
+          "contour",
+          "ignore",
+          "unknown"
+        ],
+        "title": "ObjectClass",
+        "type": "string"
+      },
       "PhotoListOut": {
         "properties": {
           "available": {
@@ -1178,6 +1223,40 @@
           "winter"
         ],
         "type": "string"
+      },
+      "SemanticReviewIn": {
+        "additionalProperties": false,
+        "properties": {
+          "feature_classes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ObjectClass"
+            },
+            "title": "Feature Classes",
+            "type": "object"
+          },
+          "label_roles": {
+            "additionalProperties": {
+              "enum": [
+                "soil",
+                "paved",
+                "ignore"
+              ],
+              "type": "string"
+            },
+            "title": "Label Roles",
+            "type": "object"
+          },
+          "source_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_sha256"
+        ],
+        "title": "SemanticReviewIn",
+        "type": "object"
       },
       "SpeciesOut": {
         "properties": {
@@ -2895,6 +2974,88 @@
         "summary": "Пересобрать DXF и отчёты по правкам",
         "tags": [
           "edits"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/review": {
+      "post": {
+        "operationId": "apply_review_api_v1_runs__run_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SemanticReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Не найдено"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Файл слишком большой"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Данные не приняты"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Внутренняя ошибка сервиса"
+          }
+        },
+        "summary": "Применить уточнения новым прогоном",
+        "tags": [
+          "runs"
         ]
       }
     },

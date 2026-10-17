@@ -1,11 +1,10 @@
 import { useId, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 
-import { ApiError, artifactUrl } from '../api/client';
+import { ApiError, artifactUrl, postJson } from '../api/client';
 import { useArtifact, useRun } from '../api/queries';
 import { type CenterRequest, type FitRequest, ReviewMap } from '../components/review/ReviewMap';
 import { integer, plural } from '../lib/format';
-import { profileTitle } from '../lib/profiles';
 import { geometryPath, joinPaths } from '../lib/reviewPaths';
 import {
   ASSIGNABLE,
@@ -14,6 +13,8 @@ import {
   evidenceName,
   groupMembers,
   groupOrder,
+  groupNeedsReview,
+  relatedIndices,
   LABEL_ROLES,
   type ReviewGeometry,
   reviewJson,
@@ -29,22 +30,28 @@ const REVIEW_DXF = 'review-input.dxf';
 /** Подпись группы в списке: слой, тип геометрии, число объектов и класс. */
 function groupText(group: ClassificationJson['groups'][number]): string {
   const count = `${integer(group.features)} ${plural(group.features, 'объект', 'объекта', 'объектов')}`;
-  return `${group.layer}, ${group.geometry}, ${count}: ${className(group.object_class)}`;
+  return `${group.layer}${group.block ? ` / ${group.block}` : ''}, ${group.geometry}, ${count}: ${className(group.object_class)}`;
 }
 
-/** Уточнение объектов чертежа. Перенос страницы тиммейта (static/review.js): человек смотрит
- *  неизвестные группы на самой геометрии исходника, назначает класс по легенде и роль
- *  подписям, а сервис получает это только JSON-ом повторного прогона. Здесь ничего не
- *  сохраняется на сервере и ничего не доказывается о полноте съёмки или грунте. */
+/** Уточнение объектов по геометрии исходного CAD. Применение создаёт отдельный прогон;
+ *  назначения привязаны к SHA-256 исходника, а не к его имени или показанной картинке. */
 export function ReviewPage() {
   const { runId = '' } = useParams();
+  const navigate = useNavigate();
   const ids = useId();
   const run = useRun(runId);
   const artifacts = run.data?.artifacts ?? [];
   const names = new Set(artifacts.map((a) => a.name));
   const loaded = Boolean(run.data);
   const geometry = useArtifact<ReviewGeometry>(runId, GEOMETRY, loaded && names.has(GEOMETRY));
-  const report = useArtifact<ClassificationJson>(runId, REPORT, loaded && names.has(REPORT));
+  const reportName = names.has('review-classification.json')
+    ? 'review-classification.json'
+    : REPORT;
+  const report = useArtifact<ClassificationJson>(
+    runId,
+    reportName,
+    loaded && names.has(reportName),
+  );
 
   const data = geometry.data;
   const classes = report.data;
@@ -56,7 +63,26 @@ export function ReviewPage() {
     [data, classes, mismatch],
   );
 
-  const order = useMemo(() => (classes ? groupOrder(classes) : []), [classes]);
+  const [search, setSearch] = useState('');
+  const [onlyReview, setOnlyReview] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState('');
+  const order = useMemo(
+    () =>
+      classes
+        ? groupOrder(classes).filter((i) => {
+            const item = classes.groups[i];
+            return (
+              item &&
+              (!onlyReview || groupNeedsReview(item)) &&
+              `${item.layer} ${item.block ?? ''}`
+                .toLocaleLowerCase()
+                .includes(search.toLocaleLowerCase())
+            );
+          })
+        : [],
+    [classes, search, onlyReview],
+  );
   const members = useMemo(
     () => (ready ? groupMembers(ready.data, ready.classes.groups.length) : []),
     [ready],
@@ -83,11 +109,27 @@ export function ReviewPage() {
   const [center, setCenter] = useState<CenterRequest | null>(null);
 
   // Первой открывается первая группа списка - неизвестная, если такая есть.
-  const currentGroup = group ?? order[0] ?? 0;
+  const currentGroup = group !== null && order.includes(group) ? group : (order[0] ?? 0);
   const inGroup = useMemo(() => members[currentGroup] ?? [], [members, currentGroup]);
-  const chosen = useMemo(() => selectedIndices(inGroup, objectValue), [inGroup, objectValue]);
+  const chosen = useMemo(
+    () =>
+      ready && order.length
+        ? relatedIndices(ready.data, selectedIndices(inGroup, objectValue))
+        : [],
+    [ready, order.length, inGroup, objectValue],
+  );
   const label = ready ? selectedLabel(ready.data, labelValue) : null;
   const labels = ready?.data.labels ?? [];
+  const manualCount = useMemo(() => {
+    if (!ready) return 0;
+    const refs = new Set(Object.keys(assignments));
+    for (const feature of ready.data.features) {
+      const method = ready.classes.groups[feature.properties.group]?.evidence.method ?? '';
+      if (method.startsWith('explicit_') && ASSIGNABLE.includes(feature.properties.class))
+        refs.add(feature.id);
+    }
+    return refs.size;
+  }, [ready, assignments]);
 
   const fitTo = (indices: readonly number[]) => {
     setFit((previous) => ({ indices, token: (previous?.token ?? 0) + 1 }));
@@ -106,9 +148,8 @@ export function ReviewPage() {
     if (geometry.isError) return geometry.error.message;
     if (report.isError) return report.error.message;
     if (!ready) return 'Читаем объекты…';
-    return `Объектов: ${integer(ready.data.features.length)}. Не уточнено: ${integer(
-      unresolvedCount(ready.data, assignments),
-    )}. Ваших назначений: ${integer(Object.keys(assignments).length)}.`;
+    const pending = unresolvedCount(ready.data, assignments, ready.classes);
+    return `Элементов: ${integer(ready.data.features.length)}. Автоматически: ${integer(Math.max(0, ready.data.features.length - pending - manualCount))}. Не уточнено: ${integer(pending)}. Ваших назначений: ${integer(manualCount)}.`;
   })();
 
   const groupInfo = ready?.classes.groups[currentGroup];
@@ -155,6 +196,31 @@ export function ReviewPage() {
     }, 1000);
   };
 
+  const apply = async () => {
+    if (!ready) return;
+    setApplying(true);
+    setApplyError('');
+    try {
+      const values = JSON.parse(json) as {
+        feature_classes: Record<string, string>;
+        label_roles: Record<string, string>;
+      };
+      const next = await postJson<{ id: string }>(
+        `/api/v1/runs/${encodeURIComponent(runId)}/review`,
+        {
+          source_sha256: ready.data.source_sha256,
+          feature_classes: values.feature_classes,
+          label_roles: values.label_roles,
+        },
+      );
+      await navigate(`/runs/${encodeURIComponent(next.id)}`);
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : 'Не удалось запустить пересчёт');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const hasFeatures = Boolean(ready?.data.features.length);
   const canExport = hasFeatures || labels.length > 0;
   const runLink = `/runs/${encodeURIComponent(runId)}`;
@@ -196,6 +262,28 @@ export function ReviewPage() {
               <p className="review-status" role="status">
                 {status}
               </p>
+              <div className="field">
+                <label htmlFor={`${ids}-search`}>Поиск слоя или блока</label>
+                <input
+                  type="text"
+                  id={`${ids}-search`}
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                  }}
+                />
+              </div>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={onlyReview}
+                  onChange={(e) => {
+                    setOnlyReview(e.target.checked);
+                  }}
+                />
+                Только требующие уточнения
+              </label>
+              {ready && order.length === 0 ? <p className="hint">Подходящих групп нет.</p> : null}
 
               <div className="field">
                 <label htmlFor={`${ids}-group`}>Группа</label>
@@ -222,6 +310,23 @@ export function ReviewPage() {
                     : null}
                 </select>
                 <p className="hint">{evidence}</p>
+                {groupInfo?.review_reason ? (
+                  <p className="hint">
+                    {chosen.length > 0 &&
+                    chosen.every((i) => assignments[ready?.data.features[i]?.id ?? ''])
+                      ? 'Выбранные элементы уточнены. Примените назначения для пересчёта.'
+                      : `Требует уточнения: ${groupInfo.review_reason}.`}
+                  </p>
+                ) : null}
+                {ready?.data.callouts
+                  ?.filter((c) =>
+                    chosen.some((i) => c.source_refs.includes(ready.data.features[i]?.id ?? '')),
+                  )
+                  .map((c) => (
+                    <p className="hint" key={c.label_ref}>
+                      Выноска «{c.text}»: {c.reason}. Связанные штрихи выбираются вместе.
+                    </p>
+                  ))}
               </div>
 
               <div className="field">
@@ -267,6 +372,30 @@ export function ReviewPage() {
                 </select>
               </div>
               <div className="review-actions">
+                <button
+                  type="button"
+                  className="ghost small"
+                  disabled={
+                    !chosen.length ||
+                    chosen.some(
+                      (i) => !ASSIGNABLE.includes(ready?.data.features[i]?.properties.class ?? ''),
+                    )
+                  }
+                  onClick={() => {
+                    if (!ready) return;
+                    setAssignments((previous) => ({
+                      ...previous,
+                      ...Object.fromEntries(
+                        chosen.map((i) => [
+                          ready.data.features[i]?.id ?? '',
+                          ready.data.features[i]?.properties.class ?? '',
+                        ]),
+                      ),
+                    }));
+                  }}
+                >
+                  Подтвердить текущий класс
+                </button>
                 <button
                   type="button"
                   className="primary small"
@@ -416,21 +545,26 @@ export function ReviewPage() {
               ) : null}
 
               {names.has(REVIEW_DXF) ? (
-                <p className="hint">
-                  Затем загрузите{' '}
+                <div className="review-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!canExport || applying}
+                    onClick={() => void apply()}
+                  >
+                    {applying ? 'Запускаем пересчёт…' : 'Применить и пересчитать'}
+                  </button>
                   <a href={artifactUrl(runId, REVIEW_DXF)} download>
-                    этот DXF
-                  </a>{' '}
-                  новым прогоном с тем же профилем «{run.data ? profileTitle(run.data.profile) : ''}
-                  » и вставьте JSON в поле «Параметры поверх профиля, JSON». Остальные файлы
-                  комплекта уже собраны в этом DXF.
-                </p>
+                    Исходник для повторной проверки
+                  </a>
+                </div>
               ) : run.data && names.has(GEOMETRY) ? (
                 <p className="hint">
                   Копию DXF сохранить не удалось. Для повторного прогона нужен исходник с хешем из
                   отчёта, изменённый файл придётся уточнять заново.
                 </p>
               ) : null}
+              {applyError ? <p role="alert">{applyError}</p> : null}
               <p className="hint">
                 Оранжевый - выбранная группа, красный - выбранный объект, серый - остальной чертёж.
                 Координаты местные, в метрах. Формы не упрощены, неизвестные объекты не скрыты.

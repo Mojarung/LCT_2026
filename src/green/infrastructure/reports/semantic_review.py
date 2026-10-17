@@ -30,6 +30,7 @@ def save_review_geometry(
         "type": "FeatureCollection",
         "source_sha256": scene.source_sha256,
         "units": "metres",
+        "callouts": [asdict(callout) for callout in scene.callouts],
         "scope": "Imported computational XY geometry, local CAD coordinates, not WGS84. "
         "No simplification or feature sampling. Assignments are input interpretation, "
         "not measured accuracy, complete survey or planting approval.",

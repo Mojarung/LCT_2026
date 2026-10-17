@@ -15,6 +15,7 @@ from green.infrastructure.cad.sample import SAMPLE_NAME, write_sample
 from green.interfaces.api.dependencies import ContainerDep
 from green.interfaces.api.errors import PROBLEM_RESPONSES, conflict_response
 from green.interfaces.api.intake import accept_run, accept_street_run
+from green.interfaces.api.review import SemanticReviewIn, replay_review
 from green.interfaces.api.schemas import RunListOut, RunOut
 
 if TYPE_CHECKING:
@@ -145,6 +146,21 @@ def create_demo_run(
     record = container.runs.register(SAMPLE_NAME, container.settings.default_profile, {})
     write_sample(container.store.input_path(record.run_id))
     background.add_task(container.runs.execute, record.run_id, None, ())
+    response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
+    return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
+
+
+@router.post("/{run_id}/review", status_code=202, summary="Применить уточнения новым прогоном")
+def apply_review(  # noqa: PLR0913 - FastAPI dependencies and request fields
+    *,
+    run_id: str,
+    body: SemanticReviewIn,
+    request: Request,
+    response: Response,
+    background: BackgroundTasks,
+    container: ContainerDep,
+) -> RunOut:
+    record = replay_review(container, background, run_id, body)
     response.headers["Location"] = str(request.app.url_path_for("get_run", run_id=record.run_id))
     return RunOut.from_record(record, _artifact_url(request), _artifact_size(container))
 

@@ -19,9 +19,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from green.application.basemap import Basemap
+    from green.application.classification import ClassificationReport
     from green.application.editing import RunContextCache
     from green.application.ports import ArtifactSink, InventoryCounts, ProfileSource, RunStore
     from green.application.use_case import PlanSite
+    from green.domain.objects import Scene
 
 DWG = ".dwg"
 
@@ -58,6 +60,17 @@ class _Reporter:
         self.record = replace(
             self.record,
             artifacts=(*self.record.artifacts, path.name),
+            updated_at=datetime.now(UTC),
+        )
+        self._store.save(self.record)
+
+    def classification(self, report: ClassificationReport, scene: Scene, source: Path) -> None:
+        saved = self._artifacts.save_classification(
+            self._run_dir, report, scene=scene, source=source
+        )
+        self.record = replace(
+            self.record,
+            artifacts=tuple(sorted(set(self.record.artifacts) | set(saved))),
             updated_at=datetime.now(UTC),
         )
         self._store.save(self.record)
@@ -187,7 +200,7 @@ class RunService:
                 reporter.record,
                 RunState.SUCCEEDED,
                 summary=report.summary(),
-                artifacts=tuple(sorted(saved)),
+                artifacts=tuple(sorted(set(saved) | set(reporter.record.artifacts))),
             )
 
     def rebuild(self, run_id: str) -> RunRecord:

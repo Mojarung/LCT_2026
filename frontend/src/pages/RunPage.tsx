@@ -428,6 +428,7 @@ export function RunPage() {
                 глядя на сводку. */}
             {done && data ? (
               <Downloads
+                runId={runId}
                 artifacts={data.artifacts ?? []}
                 notes={
                   Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []

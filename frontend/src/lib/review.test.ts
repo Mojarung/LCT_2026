@@ -7,6 +7,8 @@ import {
   evidenceName,
   groupMembers,
   groupOrder,
+  groupNeedsReview,
+  relatedIndices,
   reviewJson,
   selectedIndices,
   selectedLabel,
@@ -14,6 +16,38 @@ import {
 } from './review';
 
 describe('уточнение объектов: разбор', () => {
+  it('запасные классы требуют уточнения, подтверждённое препятствие — нет', () => {
+    const original = REPORT.groups[0];
+    if (!original) throw new Error('Нет группы в тестовом отчёте');
+    const assumed = {
+      ...original,
+      object_class: 'obstacle',
+      evidence: { method: 'symbol_assumed:1072KR' },
+    };
+    expect(groupNeedsReview(assumed)).toBe(true);
+    expect(groupNeedsReview({ ...assumed, evidence: { method: 'explicit_feature' } })).toBe(false);
+    expect(groupNeedsReview({ ...assumed, review_reason: null })).toBe(false);
+    const report = { ...REPORT, groups: [assumed, ...REPORT.groups.slice(1)] };
+    expect(unresolvedCount(REVIEW, {}, report)).toBe(2);
+    expect(unresolvedCount(REVIEW, { 'f:1': 'obstacle' }, report)).toBe(1);
+  });
+
+  it('штрихи одной выноски выбираются вместе', () => {
+    const data = {
+      ...REVIEW,
+      callouts: [
+        {
+          source_refs: ['f:1', 'f:3'],
+          label_ref: 'l:1',
+          text: 'каб. кол.',
+          certain: false,
+          reason: 'неоднозначность',
+        },
+      ],
+    };
+    expect(relatedIndices(data, [0])).toEqual([0, 2]);
+    expect(relatedIndices(data, [1])).toEqual([1]);
+  });
   it('объекты раскладываются по группам отчёта', () => {
     expect(groupMembers(REVIEW, 3)).toEqual([[0, 2], [1], [3]]);
   });
@@ -89,6 +123,7 @@ describe('уточнение объектов: JSON повторного про�
       label_roles: { 'l:2': 'paved', 'l:1': 'ignore' },
       semantic_source_sha256: 'abc123',
       require_known_objects: true,
+      require_reviewed_objects: true,
     });
   });
 

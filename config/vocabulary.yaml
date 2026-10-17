@@ -79,7 +79,7 @@ classes:
   pole:
     rank: point
     words: ["опор", "столб", "мачт", "светильн", "фонар", "торшер", "флагшт", "флаг",
-            "светофор", "стойк", "pole", "poles", "mast", "lamp"]
+            "светофор", "стойк", "pole", "poles", "mast", "lamp", "stolb"]
   power_line_overhead:
     rank: line
     words: ["вл", "вли", "лэп", "сип", "воздушн", "overhead"]
@@ -125,11 +125,11 @@ classes:
   fence:
     rank: line
     words: ["огражд", "ограда", "ограды", "забор", "ограничивающ", "удерживающ", "fence",
-            "barrier"]
+            "barrier", "zabor"]
   building:
     rank: object
     words: ["здани", "строени", "дом", "building", "wall", "подстанц", "трансформатор",
-            "substation", "transformer"]
+            "substation", "transformer", "dom"]
   structure:
     rank: object
     # Правило класса - подпорная стенка (3 / 1 м). Лестница, пандус и стела к ней не относятся:
@@ -165,7 +165,7 @@ classes:
     rank: surface
     words: ["проезж", "пч", "дорог", "дорожн", "автодорог", "уширен", "обочин", "кромк",
             "парковк", "стоянк", "въезд", "заезд", "щма", "мз", "road", "roads", "carriageway",
-            "parking"]
+            "parking", "doroga"]
   work_boundary:
     rank: boundary
     phrases: ["граница работ", "границы работ", "граница благоустр", "границы благоустр",

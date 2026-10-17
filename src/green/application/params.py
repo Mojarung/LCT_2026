@@ -128,6 +128,7 @@ class PlanParams:
     # False keeps vocabulary inference but requires review of unmatched spatial
     # objects. True preserves the main profile's geometric assumptions.
     assume_unknown_geometry: bool = True
+    require_reviewed_objects: bool = False
     # Generated review assignments are pinned to the exact computational DXF.
     semantic_source_sha256: str | None = None
     layer_classes: Mapping[str, str] = field(default_factory=dict)

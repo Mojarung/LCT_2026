@@ -1,4 +1,5 @@
 import type { ArtifactOut } from '../../api/types';
+import { Link } from 'react-router';
 import { humanSize } from '../../lib/format';
 
 /** Файлы, ради которых прогон и запускали. Что внутри - в подсказке у кнопки: абзац под
@@ -25,9 +26,11 @@ const HEADLINE: { name: string; label: string; what: string; open?: boolean }[] 
 /** Выгрузка - конец работы, поэтому она прибита к низу панели результата и не уезжает в
  *  прокрутку вместе со списком видов. Главные файлы - одной строкой, служебные свёрнуты. */
 export function Downloads({
+  runId,
   artifacts,
   notes = [],
 }: {
+  runId: string;
   artifacts: readonly ArtifactOut[];
   /** Журнал чтения чертежа и склейки комплекта (summary.load_notes): рядом с файлами, а не
    *  в сводке плана - это про исходник, а не про посадки. */
@@ -55,6 +58,13 @@ export function Downloads({
         <details className="fold download-more">
           <summary>Отчёты и другие файлы</summary>
           <ul className="artifact-list">
+            {byName.has('semantic-review.geojson') ? (
+              <li>
+                <Link to={`/runs/${encodeURIComponent(runId)}/review`}>
+                  Проверить распознавание объектов
+                </Link>
+              </li>
+            ) : null}
             {headline
               .filter((file) => file.name !== 'result.dxf')
               .map((file) => (
