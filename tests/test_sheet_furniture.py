@@ -107,20 +107,3 @@ def test_review_profile_leaves_the_legend_for_the_reviewer() -> None:
     features, labels = _legend()
     result = _classified(features, labels, infer_unknown=False)
     assert result["s0"].object_class is ObjectClass.UNKNOWN
-
-
-def test_non_plot_layers_are_never_objects_whatever_the_block() -> None:
-    """Defpoints и «Не печатать» AutoCAD не выводит на печать: это построения, а не объекты.
-    Аудит Берзарина 16.10: линии Defpoints в блоке борта считались бортом по имени блока."""
-    cases = [
-        ("Defpoints", "ПП_Борт_БР100"),
-        ("DEFPOINTS", "Бортовой камень"),
-        ("Не печатать", "Газон"),
-    ]
-    features = [
-        Feature(SourceRef("f", "x", str(i)), layer, LineString([(0, 0), (5, 0)]), block=block)
-        for i, (layer, block) in enumerate(cases)
-    ]
-    result = _classified(features, [])
-    for i in range(len(cases)):
-        assert result[str(i)].object_class is ObjectClass.IGNORE, cases[i]

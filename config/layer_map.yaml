@@ -18,11 +18,6 @@ rules:
   # «цвет_output[..]_edgeN» (Наташинский, 382 тыс. объектов, 17.10.2026).
   - {pattern: "^(?:цвет_)?output\\[[^\\]]*\\]_(?:\\S*kl|edge\\d+)$|^RL \\d", target: block, object_class: ignore,
      confirmed: true, reason: "лист красных линий (kl) или линий градостроительного регулирования (edge, знаки RL): не покрытие, не сеть и не препятствие"}
-  # Непечатаемые слои: AutoCAD не выводит Defpoints и слои «Не печатать» на лист, на них лежат
-  # построения, а не объекты. Аудит Берзарина 16.10.2026: линии Defpoints внутри блока борта
-  # считались бортом по словам имени блока.
-  - {pattern: "(?:^|[|$])(?:defpoints|не[ _-]?печат\\w*)$", object_class: ignore, confirmed: true, priority: 20,
-     reason: "непечатаемый слой: построения чертежа, не объект"}
   # Блоки-символы: определяются по имени блока раньше, чем по слою.
   - {pattern: "^(люк|решетка)$|^РСО_Люк_", target: block, object_class: utility.access, confirmed: true}
   - {pattern: "опор[аы].*(освещени|контактн)|^фонарь$|^светофор$", target: block, object_class: pole, confirmed: true}
