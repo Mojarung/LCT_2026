@@ -17,6 +17,7 @@ import { toScreen } from './view';
 /** Короткие имена объектов для подписи на карте: полное родительное - в панели. */
 const SHORT: Record<string, string> = {
   building: 'здание',
+  school: 'школа или детсад',
   structure: 'сооружение',
   road: 'проезжая часть',
   curb: 'борт',
