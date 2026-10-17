@@ -404,13 +404,15 @@ describe('RunPage: finished run', () => {
     expect(dxf).toHaveAttribute('download');
     expect(dxf).toHaveTextContent('1,5 МБ');
 
-    await openFold(right, 'Отчёты и другие файлы');
-    const csv = within(right).getByRole('link', { name: /Нормы · CSV/ });
+    // Отчёты и служебные файлы - в окне по центру экрана.
+    await userEvent.click(within(right).getByRole('button', { name: /Отчёты и другие файлы/ }));
+    const files = screen.getByRole('dialog', { name: 'Отчёты и файлы прогона' });
+    const csv = within(files).getByRole('link', { name: /Нормы · CSV/ });
     expect(csv).toBeVisible();
     expect(csv).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/interpretations.csv');
     expect(csv).toHaveTextContent('30 КБ');
     // Служебные файлы - ещё глубже, числом: plan, rules, quality, basemap.
-    expect(within(right).getByText('Файлы расчёта · 4', { selector: 'summary' })).toBeVisible();
+    expect(within(files).getByText('Файлы расчёта · 4', { selector: 'summary' })).toBeVisible();
   });
 
   it('puts warnings that change the meaning of the plan next to the number', async () => {
@@ -434,14 +436,15 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
 
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
-    // Ключевое предупреждение стоит у числа и остаётся в полном списке под раскрытием.
-    const copies = await within(left).findAllByText(warnings[0] ?? '');
-    expect(copies.map((node) => Boolean(node.closest('.notice')))).toEqual([true, false]);
-    expect(copies[0]).toBeVisible();
-    expect(copies[1]).not.toBeVisible();
-    await openFold(left, 'Как собран план · 2');
-    expect(copies[1]).toBeVisible();
-    expect(within(left).getByText('Слой 0 пуст.')).toBeVisible();
+    // Ключевое предупреждение стоит у числа и остаётся в полном списке журнала.
+    const key = await within(left).findByText(warnings[0] ?? '');
+    expect(key.closest('.notice')).not.toBeNull();
+    expect(key).toBeVisible();
+    // Журнал сборки - строкой со счётчиком, список - в окне по центру экрана.
+    await userEvent.click(within(left).getByRole('button', { name: /Как собран план/ }));
+    const journal = screen.getByRole('dialog', { name: 'Как собран план' });
+    expect(within(journal).getByText(warnings[0] ?? '')).toBeVisible();
+    expect(within(journal).getByText('Слой 0 пуст.')).toBeVisible();
   });
 
   it('remembers a collapsed panel', async () => {

@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { createPortal } from 'react-dom';
 
 import type { SourceConflict, SourceConflicts } from '../../api/artifacts';
+import { Modal, SheetButton } from '../ui/Modal';
 
 const AREA_NAMES: Record<string, string> = {
   sidewalk: 'тротуар',
@@ -38,6 +39,7 @@ export function SourceConflictNotice({
   onVisibilityChange,
 }: Props) {
   const [limit, setLimit] = useState(30);
+  const [clearOpen, setClearOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   if (!report) return null;
   const count = report.items.length;
@@ -61,17 +63,32 @@ export function SourceConflictNotice({
       ) : null}
     </>
   );
+  // Пересечений нет: строка в панели, что и как проверено - в окне по центру экрана.
   if (!count)
     return (
-      <details className="fold source-conflicts-clear">
-        <summary>Проверка пересечений подосновы</summary>
-        <p>
-          {!report.checked_trees || !report.checked_areas
-            ? 'Недостаточно распознанных деревьев или замкнутых контуров для проверки пересечений.'
-            : 'В проверенных контурах пересечений со стволами не найдено.'}
-        </p>
-        {scope}
-      </details>
+      <>
+        <SheetButton
+          icon="inspect"
+          label="Проверка пересечений подосновы"
+          onClick={() => {
+            setClearOpen(true);
+          }}
+        />
+        <Modal
+          open={clearOpen}
+          title="Проверка пересечений подосновы"
+          onClose={() => {
+            setClearOpen(false);
+          }}
+        >
+          <p className="modal-lead">
+            {!report.checked_trees || !report.checked_areas
+              ? 'Недостаточно распознанных деревьев или замкнутых контуров для проверки пересечений.'
+              : 'В проверенных контурах пересечений со стволами не найдено.'}
+          </p>
+          {scope}
+        </Modal>
+      </>
     );
   return (
     <>

@@ -1705,21 +1705,6 @@ body.shell-map .topbar {
   text-align: left;
   cursor: pointer;
 }
-.source-conflicts-dialog {
-  width: min(480px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  box-sizing: border-box;
-  overflow: auto;
-  padding: 20px;
-  border: 1px solid var(--bone-3);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--bone);
-  box-shadow: 0 16px 64px #0004;
-}
-.source-conflicts-dialog::backdrop {
-  background: #0005;
-}
 .source-conflicts-close {
   display: flex;
   justify-content: flex-end;
@@ -1851,4 +1836,31 @@ body.shell-map .topbar {
     max-width: calc(100% - 2 * (var(--hud-right-w) + var(--inset) * 2));
     transition: none;
   }
+}
+
+/* Отчёты в окне файлов: название, под ним что внутри, размер справа. */
+.artifact-main a {
+  align-items: center;
+  padding: 10px 12px;
+}
+.artifact-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.artifact-name b {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--bone);
+}
+.artifact-name span {
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+}
+.hud-foot .sheet-button {
+  margin-top: 6px;
+}
+.artifact-list .size {
+  flex-shrink: 0;
+  white-space: nowrap;
 }

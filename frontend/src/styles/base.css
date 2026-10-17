@@ -891,3 +891,172 @@ fieldset.field > legend {
     transform: translate(0, 0);
   }
 }
+
+/* --- модальное окно (components/ui/Modal.tsx) ---
+   По центру экрана поверх затемнённого и чуть размытого фона: размытие говорит, что фон
+   сейчас не главный. Окно выплывает с лёгким увеличением, уходит быстрее, чем появилось. */
+.modal,
+.source-conflicts-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(78dvh, 720px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--bone);
+  box-shadow:
+    0 24px 64px -16px rgba(20, 16, 10, 0.45),
+    0 0 0 1px var(--hair);
+}
+.modal[open],
+.source-conflicts-dialog[open] {
+  animation: modal-in var(--dur-3) var(--ease-out);
+}
+.modal[data-closing] {
+  animation: modal-out 150ms var(--ease-in) forwards;
+}
+.modal::backdrop,
+.source-conflicts-dialog::backdrop {
+  background: rgba(20, 18, 14, 0.42);
+  backdrop-filter: blur(3px);
+  animation: fade var(--dur-2) var(--ease-out);
+}
+.modal[data-closing]::backdrop {
+  animation: fade 150ms var(--ease-in) reverse forwards;
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+@keyframes modal-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px 12px 24px;
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.modal-close {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--bone-2);
+  transition:
+    background-color var(--dur-1),
+    color var(--dur-1);
+}
+.modal-close:hover {
+  background: var(--panel-2);
+  color: var(--bone);
+}
+.modal-content {
+  min-height: 0;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--bone-2);
+}
+.modal-content > p {
+  margin: 0 0 10px;
+}
+.modal-content .modal-lead {
+  color: var(--bone);
+  font-weight: 600;
+}
+.modal-content .fold {
+  margin-top: 14px;
+}
+.modal-content .warn-list {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+/* Строка панели, открывающая окно: значок, название, счётчик и стрелка «откроется». */
+.sheet-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--bone-2);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: left;
+  transition:
+    background-color var(--dur-1),
+    color var(--dur-1);
+}
+.sheet-button:hover {
+  background: var(--panel-2);
+  color: var(--bone);
+}
+.sheet-button .icon {
+  color: var(--bone-3);
+}
+.sheet-label {
+  flex: 1;
+  min-width: 0;
+}
+.sheet-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--bone-2);
+}
+.sheet-go {
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-right: 1.6px solid currentColor;
+  border-top: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.6;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.sheet-button:hover .sheet-go {
+  transform: translateX(2px) rotate(45deg);
+}
+
+/* Прежнее окно конфликтов подосновы - внутренние поля под общий вид окна. */
+.source-conflicts-dialog {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}

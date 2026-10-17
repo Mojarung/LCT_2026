@@ -9,6 +9,9 @@ import {
   IconCompass,
   IconDownload,
   IconFileText,
+  IconFiles,
+  IconListDetails,
+  IconZoomCheck,
   IconFocusCentered,
   IconMap,
   IconNavigationNorth,
@@ -123,6 +126,9 @@ const UI_GLYPHS = {
   scene: IconView360,
   trees: IconTrees,
   docs: TablerBook,
+  files: IconFiles,
+  journal: IconListDetails,
+  inspect: IconZoomCheck,
 } satisfies Record<string, Icon>;
 
 export type UiGlyph = keyof typeof UI_GLYPHS;

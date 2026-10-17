@@ -1,6 +1,9 @@
+import { useState } from 'react';
+
 import type { ArtifactOut } from '../../api/types';
 import { humanSize } from '../../lib/format';
 import { UiIcon } from '../icons';
+import { Modal, SheetButton } from '../ui/Modal';
 
 /** Файлы, ради которых прогон и запускали. Что внутри - в подсказке у кнопки: абзац под
  *  кнопками съедал строки списка видов на высоте проектора. */
@@ -34,6 +37,7 @@ export function Downloads({
    *  в сводке плана - это про исходник, а не про посадки. */
   notes?: readonly string[];
 }) {
+  const [open, setOpen] = useState(false);
   const byName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
   const headline = HEADLINE.filter((file) => byName.has(file.name));
   const service = artifacts.filter(
@@ -53,52 +57,70 @@ export function Downloads({
           <span className="size">{size(byName.get('result.dxf'))}</span>
         </a>
       ) : null}
-      {headline.some((file) => file.name !== 'result.dxf') || service.length ? (
-        <details className="fold download-more">
-          <summary>Отчёты и другие файлы</summary>
-          <ul className="artifact-list">
+      {headline.some((file) => file.name !== 'result.dxf') || service.length || notes.length ? (
+        <SheetButton
+          icon="files"
+          label="Отчёты и другие файлы"
+          onClick={() => {
+            setOpen(true);
+          }}
+        />
+      ) : null}
+      {/* Отчёты, служебные файлы и журнал чтения - в окне по центру: в узкой панели раскрытый
+          список из пятнадцати файлов выдавливал сводку. */}
+      <Modal
+        open={open}
+        title="Отчёты и файлы прогона"
+        onClose={() => {
+          setOpen(false);
+        }}
+      >
+        {headline.some((file) => file.name !== 'result.dxf') ? (
+          <ul className="artifact-list artifact-main">
             {headline
               .filter((file) => file.name !== 'result.dxf')
               .map((file) => (
                 <li key={file.name}>
                   <a
                     href={byName.get(file.name)?.url}
-                    title={file.what}
                     {...(file.open ? { target: '_blank', rel: 'noopener' } : { download: true })}
                   >
-                    <span>{file.label}</span>
+                    <span className="artifact-name">
+                      <b>{file.label}</b>
+                      <span>{file.what}</span>
+                    </span>
                     <span className="size">{size(byName.get(file.name))}</span>
                   </a>
                 </li>
               ))}
           </ul>
-          {service.length ? (
-            <details className="fold">
-              <summary>Файлы расчёта · {service.length}</summary>
-              <ul className="artifact-list">
-                {service.map((artifact) => (
-                  <li key={artifact.name}>
-                    <a href={artifact.url} download>
-                      <span>{artifact.name}</span>
-                      <span className="size">{size(artifact)}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </details>
-      ) : null}
-      {notes.length ? (
-        <details className="fold">
-          <summary>Чтение чертежа: {notes.length}</summary>
-          <ul className="warn-list">
-            {notes.map((text) => (
-              <li key={text}>{text}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+        ) : null}
+        {service.length ? (
+          <details className="fold">
+            <summary>Файлы расчёта · {service.length}</summary>
+            <ul className="artifact-list">
+              {service.map((artifact) => (
+                <li key={artifact.name}>
+                  <a href={artifact.url} download>
+                    <span>{artifact.name}</span>
+                    <span className="size">{size(artifact)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+        {notes.length ? (
+          <details className="fold">
+            <summary>Чтение чертежа · {notes.length}</summary>
+            <ul className="warn-list">
+              {notes.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </Modal>
     </div>
   );
 }

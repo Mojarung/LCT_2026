@@ -1,6 +1,6 @@
 /* Части левой панели прогона и подложки карты: шапка, сводка, предупреждения, статус. */
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 
 import { artifactUrl } from '../../api/client';
@@ -10,6 +10,7 @@ import { drawingName, integer, plural } from '../../lib/format';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
 import { IconChevron, UiIcon } from '../icons';
+import { Modal, SheetButton } from '../ui/Modal';
 import { SquareLoader } from '../ui/SquareLoader';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
@@ -220,16 +221,37 @@ export function RunMetrics({
       {/* Без обёртки «Детали расчёта»: внутри неё бывало одно-единственное раскрытие. Строка
           газонов - обычным текстом, журнал сборки плана - своим раскрытием. */}
       <LawnLine summary={summary} />
-      {warnings.length ? (
-        <details className="hud-block fold run-details">
-          <summary>Как собран план · {warnings.length}</summary>
-          <ul className="warn-list">
-            {warnings.map((text) => (
-              <li key={text}>{text}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      {warnings.length ? <PlanJournal warnings={warnings} /> : null}
+    </>
+  );
+}
+
+/** Журнал сборки плана - строкой в панели, сам список - в окне по центру экрана. */
+function PlanJournal({ warnings }: { warnings: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <SheetButton
+        icon="journal"
+        label="Как собран план"
+        count={warnings.length}
+        onClick={() => {
+          setOpen(true);
+        }}
+      />
+      <Modal
+        open={open}
+        title="Как собран план"
+        onClose={() => {
+          setOpen(false);
+        }}
+      >
+        <ul className="warn-list">
+          {warnings.map((text) => (
+            <li key={text}>{text}</li>
+          ))}
+        </ul>
+      </Modal>
     </>
   );
 }
