@@ -191,62 +191,65 @@
 
 /* --- главная --- */
 
+/* Один экран: колонки высотой с окно под шапкой. Слева герой (заголовок, кадр результата,
+   шаги), справа запуск и реестр; растягивается кадр результата и реестр, остальное - по
+   содержимому. Ниже 760 px высоты окна страница снова прокручивается. */
+body.shell-home .footer {
+  display: none;
+}
 .home {
   display: grid;
-  gap: clamp(32px, 4vw, 64px);
-  max-width: 1440px;
+  grid-template-columns: minmax(0, 7fr) minmax(380px, 5fr);
+  gap: clamp(20px, 2.4vw, 36px);
+  max-width: 1520px;
   width: 100%;
+  height: calc(100dvh - var(--bar));
+  min-height: 700px;
   margin: 0 auto;
-  padding: clamp(24px, 3vw, 48px) var(--gutter) clamp(40px, 5vw, 80px);
+  padding: clamp(18px, 2.2vw, 28px) var(--gutter);
 }
 
-/* Первый экран: слева что это и как выглядит результат, справа запуск. */
 .home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
-  gap: clamp(24px, 3vw, 48px);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.home-intro h1 {
+.home-hero h1 {
   margin: 0;
-  font-size: var(--fs-display);
+  font-size: clamp(36px, 3.6vw, 56px);
   font-weight: 700;
   line-height: 0.98;
   letter-spacing: -0.045em;
   color: var(--bone);
-  text-wrap: balance;
   animation: rise var(--dur-4) var(--ease-out) backwards;
 }
 .lead {
-  max-width: 52ch;
-  margin: 22px 0 0;
-  font-size: clamp(15px, 0.85rem + 0.35vw, 18px);
-  line-height: 1.55;
+  max-width: 58ch;
+  margin: 14px 0 0;
+  font-size: clamp(15px, 0.85rem + 0.25vw, 17px);
+  line-height: 1.5;
   color: var(--bone-2);
   animation: rise var(--dur-4) var(--ease-out) 80ms backwards;
 }
-.home-more {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  color: var(--bone);
-  animation: rise var(--dur-4) var(--ease-out) 120ms backwards;
-}
 
-/* Коллаж результата: фото улицы и поверх него тот же план на слоях чертежа - один участок,
-   чертёж и то, как он будет выглядеть. Фото медленно приближается, план приезжает снизу. */
+/* Кадр результата забирает всю свободную высоту колонки: план с выносками, фото врезкой. */
 .home-collage {
-  position: relative;
-  margin: clamp(24px, 3vw, 40px) 0 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 220px;
+  margin: 18px 0 0;
   animation: rise var(--dur-4) var(--ease-out) 160ms backwards;
 }
 .collage-stage {
   position: relative;
   display: block;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .collage-frame {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: block;
   overflow: hidden;
   border-radius: var(--r-panel);
@@ -263,19 +266,17 @@
 .collage-main {
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 10;
+  height: 100%;
   object-fit: cover;
 }
-/* Фото врезкой в правый нижний угол плана: тот же участок, каким он будет. Приезжает
-   снизу с лёгким поворотом после плана. */
+/* Фото врезкой в правый нижний угол плана: тот же участок, каким он будет. */
 .collage-inset {
   position: absolute;
-  right: clamp(12px, 2vw, 24px);
-  bottom: clamp(12px, 2vw, 24px);
+  right: clamp(10px, 1.6vw, 20px);
+  bottom: clamp(10px, 1.6vw, 20px);
   z-index: 2;
-  width: 40%;
-  padding: 6px;
+  width: min(38%, 340px);
+  padding: 5px;
   background: var(--panel);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
@@ -293,13 +294,13 @@
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: calc(var(--r-panel) - 5px);
+  border-radius: calc(var(--r-panel) - 4px);
 }
 .collage-inset span {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
-  padding: 4px 10px;
+  left: 12px;
+  bottom: 12px;
+  padding: 3px 9px;
   border-radius: 999px;
   background: rgb(28 26 22 / 86%);
   color: #fbfaf7;
@@ -308,108 +309,23 @@
   line-height: 1.4;
 }
 .home-collage figcaption {
-  max-width: 62ch;
-  margin: 10px 0 0 auto;
+  margin: 8px 0 0;
   font-size: var(--fs-small);
-  line-height: 1.45;
   text-align: right;
   color: var(--bone-3);
 }
 
-/* Запуск и готовые планы - колонка справа, стоит на месте, пока слева листают. */
-.home-side {
-  position: sticky;
-  top: 20px;
-  display: grid;
-  gap: 20px;
-}
-.home-start {
-  scroll-margin-top: 24px;
-  animation: rise var(--dur-4) var(--ease-out) 220ms backwards;
-}
-.recent {
-  animation: rise var(--dur-4) var(--ease-out) 320ms backwards;
-}
-.recent-title {
-  margin: 0 0 8px 4px;
-  font-size: var(--fs-body);
-  font-weight: 700;
-  color: var(--bone);
-}
-.recent ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.recent a {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  column-gap: 12px;
-  padding: 12px 16px;
-  border-radius: var(--r-panel);
-  background: var(--panel);
-  box-shadow: 0 0 0 1px var(--hair);
-  text-decoration: none;
-  transition:
-    box-shadow var(--dur-1),
-    transform var(--dur-2) var(--ease-out);
-}
-.recent a:hover {
-  box-shadow:
-    0 0 0 1px var(--hair-2),
-    0 10px 24px -16px rgba(40, 32, 20, 0.45);
-  transform: translateY(-1px);
-}
-.recent-name {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.recent-meta {
-  grid-row: 2;
-  font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--bone-3);
-}
-
-.home-runs {
-  scroll-margin-top: 24px;
-}
-/* Заголовок реестра со значком пояснения: значок у слова, а не у края панели. */
-.runs-head {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin: 0 0 16px;
-}
-.runs-head .panel-title {
-  margin: 0;
-}
-
-/* Как это работает: четыре шага в строку, значок вместо номера. */
+/* Как это работает - полоса из четырёх шагов под кадром, текст по колонкам. */
 .home-how {
-  scroll-margin-top: 24px;
+  margin-top: 14px;
+  animation: rise var(--dur-4) var(--ease-out) 240ms backwards;
 }
-.home-title {
-  margin: 0 0 20px;
-  font-size: clamp(22px, 1rem + 1vw, 30px);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--bone);
-}
-/* Четыре шага одной полосой на тоне: текст по колонкам, без карточек, значков и картинок.
-   Порядок читается слева направо. */
 .how {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(20px, 3vw, 48px);
+  gap: clamp(14px, 1.8vw, 28px);
   margin: 0;
-  padding: clamp(24px, 3vw, 40px);
+  padding: 16px 20px;
   border-radius: var(--r-panel);
   background: var(--panel-3);
   list-style: none;
@@ -417,21 +333,60 @@
 .how li {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 4px;
 }
 .how b {
-  font-size: clamp(17px, 1rem + 0.3vw, 20px);
+  font-size: var(--fs-body);
   font-weight: 700;
-  letter-spacing: -0.015em;
   color: var(--bone);
 }
 .how span {
-  font-size: var(--fs-body);
-  line-height: 1.55;
+  font-size: var(--fs-small);
+  line-height: 1.45;
   color: var(--bone-2);
 }
 .how a {
   color: inherit;
+}
+
+/* Справа запуск и реестр: форма по содержимому, реестр - на остаток высоты с прокруткой. */
+.home-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+.home-start {
+  flex: none;
+  padding: 20px 22px;
+  animation: rise var(--dur-4) var(--ease-out) 200ms backwards;
+}
+.home-start .panel-title {
+  margin-bottom: 14px;
+}
+.home-runs {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 200px;
+  padding: 18px 16px 8px 22px;
+  animation: rise var(--dur-4) var(--ease-out) 280ms backwards;
+}
+.home-runs .registry-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+/* Заголовок реестра со значком пояснения: значок у слова, а не у края панели. */
+.runs-head {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+.runs-head .panel-title {
+  margin: 0;
 }
 
 /* --- реестр прогонов --- */
@@ -796,15 +751,29 @@
   margin-top: 8px;
 }
 
+/* Узкое окно или низкое: колонки друг под другом, страница прокручивается. */
 @media (max-width: 1100px) {
-  .home-hero {
+  .home {
     grid-template-columns: minmax(0, 1fr);
+    height: auto;
   }
-  .home-side {
-    position: static;
+  .collage-stage {
+    flex: none;
+    aspect-ratio: 16 / 10;
   }
   .how {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home-runs .registry-wrap {
+    max-height: min(64vh, 620px);
+  }
+  body.shell-home .footer {
+    display: flex;
+  }
+}
+@media (max-height: 700px) and (min-width: 1101px) {
+  .home {
+    height: auto;
   }
 }
 @media (max-width: 900px) {
@@ -837,4 +806,20 @@
   .home-collage figcaption {
     text-align: left;
   }
+}
+
+/* Форма на главной - плотнее: реестру под ней нужна высота. */
+.home-start .filefield.drop {
+  min-height: 84px;
+  padding: 14px;
+}
+.home-start .field {
+  margin-bottom: 14px;
+}
+.home-start .advanced {
+  margin-bottom: 14px;
+  padding-top: 6px;
+}
+.home-start .field.sample {
+  padding: 12px 14px;
 }

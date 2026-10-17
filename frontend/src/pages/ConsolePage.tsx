@@ -1,8 +1,7 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Link } from 'react-router';
 
 import { useMeta, useRuns, useStreets } from '../api/queries';
-import { RecentRuns } from '../components/console/RecentRuns';
 import { RunForm } from '../components/console/RunForm';
 import { RECENT_LIMIT, RunsRegistry } from '../components/console/RunsRegistry';
 import { InfoTip } from '../components/InfoTip';
@@ -14,17 +13,17 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
   return [
     {
       title: 'Выберите улицу',
-      text: 'Улица пилотного проекта или свой чертёж DXF или DWG. Сети, опись деревьев и слои ГИС - по желанию.',
+      text: 'Улица пилота или свой DXF/DWG; сети, опись и слои ГИС - по желанию.',
     },
     {
       title: 'Сервис проверит нормы',
-      text: 'Каждое место посадки - на отступы от сетей, зданий, бортов и опор по СП 42.13330, 743-ПП и 623-ПП.',
+      text: 'Отступы от сетей, зданий, бортов и опор по СП 42.13330, 743-ПП и 623-ПП.',
     },
     {
       title: 'Получите план',
       text: (
         <>
-          Деревья и кустарник на слоях GREEN_* того же DXF, порода подобрана под место из{' '}
+          Деревья и кустарник на слоях GREEN_*, порода из{' '}
           <Link to="/models">
             каталога
             {species
@@ -37,7 +36,7 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
     },
     {
       title: 'Проверьте и поправьте',
-      text: 'На карте видно, почему дерево стоит здесь и почему не встало там. Посадку можно перенести, улицу - посмотреть в 3D.',
+      text: 'Клик по кроне - норма и метры; посадку можно перенести, улицу - открыть в 3D.',
     },
   ];
 }
@@ -50,89 +49,91 @@ export function ConsolePage() {
   const runs = useRuns(RECENT_LIMIT);
   const noCatalog = (streets.isSuccess && streets.data.length === 0) || streets.isError;
 
+  // Главная - один экран: подвал с логотипом уходил бы за сгиб и заставлял листать.
+  useEffect(() => {
+    document.body.classList.add('shell-home');
+    return () => {
+      document.body.classList.remove('shell-home');
+    };
+  }, []);
+
   return (
     <div className="home">
+      {/* Один экран без прокрутки: слева что это и как выглядит результат, под ним - как это
+          работает; справа запуск и реестр прогонов, реестр прокручивается внутри себя. */}
       <section className="home-hero" aria-labelledby="hero-title">
-        <div className="home-intro">
-          <h1 id="hero-title">
-            Озеленение
-            <br />
-            улиц по нормам
-          </h1>
-          <p className="lead">
-            Подоснова DXF или DWG на входе. На выходе - деревья и кустарник на слоях GREEN_* того же
-            чертежа, и у каждой посадки пункт нормы, по которому она здесь стоит.
-          </p>
-          <a className="home-more" href="#how">
-            Как это работает
-          </a>
-          {/* Результат на первом экране: план прогона с выбранной посадкой и её отступами в
-              метрах - то, ради чего сервис, - и фото той же улицы врезкой. Кадр плана снят с
-              настоящего прогона (10004141, режим «Кроны»), фото - его же фото по 3D-кадру. */}
-          <figure className="home-collage">
-            <span className="collage-stage">
-              <span className="collage-frame">
-                <img
-                  className="collage-main"
-                  src="/landing/plan-callout.webp"
-                  width={1760}
-                  height={1100}
-                  alt="План посадок на подоснове: у выбранной посадки выноски «борт 2,00 ≥ 2,00» и «опора 7,33 ≥ 4,00»"
-                  fetchPriority="high"
-                />
-              </span>
-              <span className="collage-inset">
-                <img
-                  src="/landing/street-photo.webp"
-                  width={1280}
-                  height={720}
-                  alt="Фото той же улицы по кадру 3D-вида: газон с гранитным бортом, кустарник, деревья вдоль дороги"
-                  loading="lazy"
-                />
-                <span>Фото по 3D-кадру</span>
-              </span>
+        <h1 id="hero-title">
+          Озеленение
+          <br />
+          улиц по нормам
+        </h1>
+        <p className="lead">
+          Подоснова DXF или DWG на входе. На выходе - деревья и кустарник на слоях GREEN_* того же
+          чертежа, и у каждой посадки пункт нормы, по которому она здесь стоит.
+        </p>
+        {/* Кадр плана снят с настоящего прогона (10004141, режим «Кроны»): выбранная посадка и
+            её отступы в метрах; фото - того же прогона по 3D-кадру. */}
+        <figure className="home-collage">
+          <span className="collage-stage">
+            <span className="collage-frame">
+              <img
+                className="collage-main"
+                src="/landing/plan-callout.webp"
+                width={1760}
+                height={1100}
+                alt="План посадок на подоснове: у выбранной посадки выноски «борт 2,00 ≥ 2,00» и «опора 7,33 ≥ 4,00»"
+                fetchPriority="high"
+              />
             </span>
-            <figcaption>Фото нарисовано нейросетью по 3D-кадру этого плана.</figcaption>
-          </figure>
-        </div>
-        <div className="home-side">
-          <section className="panel home-start" id="launch" aria-labelledby="launch-title">
-            <h2 className="panel-title" id="launch-title">
-              Новый прогон
-            </h2>
-            <RunForm demo={noCatalog} />
-          </section>
-          <RecentRuns />
-        </div>
-      </section>
-
-      <section className="panel home-runs" aria-labelledby="runs-title">
-        <div className="runs-head">
-          <h2 className="panel-title" id="runs-title">
-            Прогоны
-            {runs.data?.length ? <span className="count">{runs.data.length}</span> : null}
+            <span className="collage-inset">
+              <img
+                src="/landing/street-photo.webp"
+                width={1280}
+                height={720}
+                alt="Фото той же улицы по кадру 3D-вида: газон с гранитным бортом, кустарник, деревья вдоль дороги"
+                loading="lazy"
+              />
+              <span>Фото по 3D-кадру</span>
+            </span>
+          </span>
+          <figcaption>Фото нарисовано нейросетью по 3D-кадру этого плана.</figcaption>
+        </figure>
+        <section className="home-how" id="how" aria-labelledby="steps-title">
+          <h2 className="visually-hidden" id="steps-title">
+            Как это работает
           </h2>
-          <InfoTip term="Прогоны">
-            Прогон - один расчёт улицы с выбранными параметрами. Внутри план на карте, объяснение
-            каждой посадки, 3D-вид и выгрузка DXF.
-          </InfoTip>
-        </div>
-        <RunsRegistry />
+          <ol className="how">
+            {steps(meta.data?.species.length).map((step) => (
+              <li key={step.title}>
+                <b>{step.title}</b>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
       </section>
 
-      <section className="home-how" id="how" aria-labelledby="steps-title">
-        <h2 className="home-title" id="steps-title">
-          Как это работает
-        </h2>
-        <ol className="how">
-          {steps(meta.data?.species.length).map((step) => (
-            <li key={step.title}>
-              <b>{step.title}</b>
-              <span>{step.text}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <div className="home-side">
+        <section className="panel home-start" id="launch" aria-labelledby="launch-title">
+          <h2 className="panel-title" id="launch-title">
+            Новый прогон
+          </h2>
+          <RunForm demo={noCatalog} />
+        </section>
+        <section className="panel home-runs" aria-labelledby="runs-title">
+          <div className="runs-head">
+            <h2 className="panel-title" id="runs-title">
+              Прогоны
+              {runs.data?.length ? <span className="count">{runs.data.length}</span> : null}
+            </h2>
+            <InfoTip term="Прогоны">
+              Прогон - один расчёт улицы с выбранными параметрами. Внутри план на карте, объяснение
+              каждой посадки, 3D-вид и выгрузка DXF.
+            </InfoTip>
+          </div>
+          <RunsRegistry />
+        </section>
+      </div>
     </div>
   );
 }

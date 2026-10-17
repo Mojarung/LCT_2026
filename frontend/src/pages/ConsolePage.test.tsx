@@ -199,7 +199,8 @@ describe('консоль запуска', () => {
     );
     expect(screen.queryByText(/правил в своде норм/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ЛЦТ 2026/)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Как это работает' })).toHaveAttribute('href', '#how');
+    // Главная - один экран: шаги видны сразу, ссылка-якорь «Как это работает» не нужна.
+    expect(screen.queryByRole('link', { name: 'Как это работает' })).toBeNull();
   });
 
   it('профиль в реестре и в списке формы - по-русски, основной режим первым', async () => {
