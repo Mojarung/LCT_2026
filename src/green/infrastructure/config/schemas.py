@@ -321,6 +321,7 @@ class ProfileModel(_Strict):
     max_rejections: int = Field(default=REJECTIONS_DEFAULT, ge=0, le=REJECTIONS_CEILING)
     require_soil: bool = True
     open_ground: bool = True
+    osm_schools: bool = True
     require_work_boundary: bool = True
     planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м
     shrub_planting_radius_m: float = Field(default=0.5, ge=0, le=10)

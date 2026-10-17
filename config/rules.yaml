@@ -21,6 +21,29 @@ distance_rules:
         - {act_id: PP743, clause: "п. 3.6.3, табл. 3.6.1"}
         - {act_id: PP623, clause: "п. 4.2.4 (табл. 7.6 МГСН 1.01-99)"}
         - {act_id: SP42_13330_2026, clause: "п. 6.4.8, табл. 6.3: наружная стена здания и сооружения - 5,0 / 1,5 м, как в ред. 2016"}
+  # Здание школы или детского сада: здание чертежа, совпавшее с контуром OpenStreetMap
+  # (application/schools.py, config/gis/osm_schools_moscow.geojson). Назначения здания в
+  # топоплане нет (docs/notes/21-slopes-and-schools.md).
+  - rule_id: R-SCHOOL-TREE-001
+    object_class: school
+    planting_type: tree
+    min_distance_m: 10.0
+    measure_to: edge
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.3, табл. 3.6.1: наружная стена школьного здания или здания детского сада (назначение здания - по OpenStreetMap)"
+      quote: "Наружная стена школьного здания или здания детского сада 10,0 1,5"
+      status: verified
+  - rule_id: R-SCHOOL-SHRUB-001
+    object_class: school
+    planting_type: shrub
+    min_distance_m: 1.5
+    measure_to: edge
+    citation:
+      act_id: PP743
+      clause: "п. 3.6.3, табл. 3.6.1: наружная стена школьного здания или здания детского сада (назначение здания - по OpenStreetMap)"
+      quote: "Наружная стена школьного здания или здания детского сада 10,0 1,5"
+      status: verified
   - rule_id: R-BLD-SHRUB-001
     object_class: building
     planting_type: shrub

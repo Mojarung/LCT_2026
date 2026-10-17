@@ -37,6 +37,9 @@ class ObjectClass(StrEnum):
     TRAM = "tram"
     RAILWAY = "railway"
     BUILDING = "building"
+    # Здание школы или детского сада (743-ПП, табл. 3.6.1, 10 м): здание чертежа, совпавшее с
+    # контуром OpenStreetMap; само здание остаётся и зданием (application/schools.py).
+    SCHOOL = "school"
     STRUCTURE = "structure"
     SLOPE = "slope"
     WORK_BOUNDARY = "work_boundary"

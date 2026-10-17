@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+import shapely
+
 from green.application.assortment import assign_species
 from green.application.barriers import mark_barrier_options
 from green.application.basemap import build_basemap
@@ -41,6 +43,7 @@ from green.application.project_stage import drop_edges_inside_lawn
 from green.application.quality import assess, site_of
 from green.application.refine import refine_weak
 from green.application.results import RunReport, StageTiming
+from green.application.schools import mark_schools
 from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
 from green.application.shrub_rows import fill_shrub_rows
@@ -78,9 +81,11 @@ if TYPE_CHECKING:
     )
     from green.application.results import IntegrityReport, PlanExportReport
     from green.application.validation import ValidationIssue
-    from green.domain.objects import Scene
+    from green.domain.objects import Feature, Scene
     from green.domain.planting import Placement, Plan
 
+# Контуры школ OSM берутся в этом поясе вокруг чертежа: дальше они в расчёт не входят.
+SCHOOL_REACH_M = 300.0
 RESULT_DXF = "result.dxf"
 PENDING_DXF = ".result.pending.dxf"
 MERGED_DXF = "merged_source.dxf"
@@ -158,8 +163,12 @@ class PlanSite:
         integrity: IntegrityChecker,
         merger: DrawingMerger | None = None,
         gis: GisLayerSource | None = None,
+        schools: Path | None = None,
     ) -> None:
         self._gis = gis
+        # Контуры школ и детсадов OpenStreetMap (config/gis/osm_schools_moscow.geojson).
+        self._schools = schools
+        self._school_outlines: tuple[Feature, ...] | None = None
         self._reader = reader
         self._converters = tuple(converters)
         self._rules = rules
@@ -257,6 +266,10 @@ class PlanSite:
             features, kerb_note = refine_kerbs(features)
             if kerb_note:
                 scene = replace(scene, warnings=(*scene.warnings, kerb_note))
+            if params.osm_schools:
+                features, school_note = mark_schools(features, self._outlines_near(features))
+                if school_note:
+                    scene = replace(scene, warnings=(*scene.warnings, school_note))
             # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
             semantics = classification_report(replace(scene, features=features), layer_map, params)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
@@ -519,6 +532,18 @@ class PlanSite:
             _surface_built=params.require_soil,
         )
         return replace(report, context=context)
+
+    def _outlines_near(self, features: Sequence[Feature]) -> tuple[Feature, ...]:
+        """Контуры школ OSM в системе координат чертежа рядом с ним (читаются один раз)."""
+        if self._schools is None or self._gis is None or not self._schools.exists():
+            return ()
+        if self._school_outlines is None:
+            self._school_outlines = self._gis.read([self._schools]).features
+        if not features or not self._school_outlines:
+            return ()
+        bounds = shapely.total_bounds([f.geometry for f in features])
+        area = shapely.box(*bounds).buffer(SCHOOL_REACH_M)
+        return tuple(f for f in self._school_outlines if f.geometry.intersects(area))
 
     def _with_gis_layers(
         self, scene: Scene, paths: tuple[Path, ...]

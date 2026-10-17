@@ -85,6 +85,7 @@ def build_container(settings: Settings | None = None) -> Container:
         integrity=integrity,
         merger=EzdxfDrawingMerger(documents=documents),
         gis=YamlGisLayerSource(settings.config_dir / "geo_layers.yaml"),
+        schools=settings.config_dir / "gis" / "osm_schools_moscow.geojson",
     )
     audit = AuditSite(
         reader=reader,
