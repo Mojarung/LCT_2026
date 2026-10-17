@@ -164,7 +164,8 @@ body.shell-map .topbar {
 .hud-right.collapsed {
   right: var(--inset);
 }
-.hud.collapsed > :not(.panel-toggle) {
+/* Свёрнутые карточки 3D-вида прячут содержимое; панели плана - гасят и уводят за край. */
+.page-scene .hud.collapsed > :not(.panel-toggle) {
   display: none;
 }
 .hud.collapsed .panel-toggle {
@@ -1754,5 +1755,84 @@ body.shell-map .topbar {
   /* Вкладки правой панели начинаются на 18px: кнопка - по их середине. */
   .hud-right > .panel-toggle {
     top: 21px;
+  }
+}
+
+/* --- плавное сворачивание панелей плана ---
+   Свёрнутая панель не превращается мгновенно в квадрат, а уезжает за край экрана; содержимое
+   гаснет и становится недоступным с клавиатуры, кнопка сворачивания остаётся у края карты
+   отдельной плашкой. Геометрия панели при этом прежняя, поэтому движется только transform. */
+@media (min-width: 1081px) {
+  .page-run > .hud-left,
+  .page-run > .hud-right {
+    transition:
+      transform var(--dur-3) var(--ease-out),
+      box-shadow var(--dur-3) var(--ease-out);
+  }
+  .page-run > .hud-left.collapsed,
+  .page-run > .hud-right.collapsed {
+    top: var(--inset);
+    bottom: var(--inset);
+    height: auto;
+    border-radius: var(--r-panel);
+    box-shadow: none;
+    animation: none;
+    /* Кнопка выходит за край уехавшей панели и не должна обрезаться. */
+    overflow: visible;
+  }
+  .page-run > .hud-left.collapsed {
+    left: var(--inset);
+    width: var(--hud-left-w);
+    transform: translateX(calc(-100% - var(--inset) - 8px));
+  }
+  .page-run > .hud-right.collapsed {
+    right: var(--inset);
+    width: var(--hud-right-w);
+    transform: translateX(calc(100% + var(--inset) + 8px));
+  }
+  /* Содержимое гаснет быстрее, чем уезжает панель; при разворачивании - проявляется. */
+  .page-run > .hud > :not(.panel-toggle) {
+    transition:
+      opacity var(--dur-2) var(--ease-out),
+      visibility 0s;
+  }
+  .page-run > .hud.collapsed > :not(.panel-toggle) {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--dur-1) var(--ease-in),
+      visibility 0s linear var(--dur-3);
+  }
+  /* Кнопка: 40 x 40 в углу панели; у свёрнутой - плашка у края карты. Сдвиг считается от
+     угла панели, которая уехала на свою ширину и отступ. */
+  .page-run > .hud > .panel-toggle {
+    top: 6px;
+    right: 6px;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-control);
+    transition:
+      transform var(--dur-3) var(--ease-out),
+      background-color var(--dur-1),
+      box-shadow var(--dur-3),
+      color var(--dur-1);
+  }
+  .page-run > .hud-right > .panel-toggle {
+    top: 17px;
+  }
+  .page-run > .hud.collapsed > .panel-toggle {
+    background: var(--panel);
+    color: var(--bone);
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .page-run > .hud-left.collapsed > .panel-toggle {
+    transform: translate(calc(var(--inset) + 54px), -6px);
+  }
+  .page-run > .hud-right.collapsed > .panel-toggle {
+    top: 6px;
+    transform: translate(calc(-1 * (var(--hud-right-w) + var(--inset) + 2px)), -6px);
   }
 }

@@ -127,7 +127,16 @@ export function MediaPanel({
           Снимки и фото <span className="media-count">{items.length}</span>
         </h2>
       </header>
+      {/* Порядок: готовые ракурсы, свой снимок, фото нейросетью - главная кнопка последней,
+          как «Править» в конце полосы карты. */}
       <div className="media-actions">
+        <BarButton
+          icon="shots"
+          label="Кадры"
+          keyHint="K"
+          title="Кадры улицы с автоматических ракурсов; K над растением - его кадры"
+          onClick={onShots}
+        />
         <BarButton
           icon="snapshot"
           label={shotScale > 1 ? 'Снимок ×2' : 'Снимок'}
@@ -149,13 +158,6 @@ export function MediaPanel({
               : `Фото недоступно: ${reason ?? 'не настроено'}`
           }
           onClick={onPhotoView}
-        />
-        <BarButton
-          icon="shots"
-          label="Кадры"
-          keyHint="K"
-          title="Кадры улицы с автоматических ракурсов; K над растением - его кадры"
-          onClick={onShots}
         />
       </div>
       <dl className="media-options">

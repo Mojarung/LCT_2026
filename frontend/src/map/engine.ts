@@ -591,7 +591,13 @@ export class PlanEngine {
     let bottom = rect.height;
     for (const panel of this.root.querySelectorAll<HTMLElement>('[data-map-obstacle="side"]')) {
       const box = panel.getBoundingClientRect();
-      if (box.width === 0 || getComputedStyle(panel).position !== 'absolute') continue;
+      // Свёрнутая панель уезжает за край с анимацией: место у плана она отдаёт сразу.
+      if (
+        box.width === 0 ||
+        panel.classList.contains('collapsed') ||
+        getComputedStyle(panel).position !== 'absolute'
+      )
+        continue;
       if (box.left - rect.left < rect.width / 2)
         left = Math.max(left, box.right - rect.left + PANEL_GAP);
       else right = Math.min(right, box.left - rect.left - PANEL_GAP);

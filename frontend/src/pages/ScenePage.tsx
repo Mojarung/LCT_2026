@@ -742,24 +742,7 @@ export function ScenePage() {
             onSpeed={(speed) => engine.current?.setSpeed(speed)}
           />
           <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
-            <div className="bar-group" role="group" aria-label="Режим камеры">
-              <BarButton
-                icon="fly"
-                label="Полёт"
-                keyHint="G"
-                pressed={cam.mode === 'fly'}
-                title="Свободный полёт"
-                onClick={() => engine.current?.setMode('fly')}
-              />
-              <BarButton
-                icon="walk"
-                label="Пешеход"
-                keyHint="G"
-                pressed={cam.mode === 'walk'}
-                title="Пешеход на высоте глаз 1,7 м"
-                onClick={() => engine.current?.setMode('walk')}
-              />
-            </div>
+            {/* Сначала готовые виды (общий, облёт), потом ручное управление. */}
             <div className="bar-group" role="group" aria-label="Куда смотреть">
               <BarButton
                 icon="overview"
@@ -780,6 +763,24 @@ export function ScenePage() {
                   if (cam.touring) e.stopTour();
                   else e.startTour();
                 }}
+              />
+            </div>
+            <div className="bar-group" role="group" aria-label="Режим камеры">
+              <BarButton
+                icon="fly"
+                label="Полёт"
+                keyHint="G"
+                pressed={cam.mode === 'fly'}
+                title="Свободный полёт"
+                onClick={() => engine.current?.setMode('fly')}
+              />
+              <BarButton
+                icon="walk"
+                label="Пешеход"
+                keyHint="G"
+                pressed={cam.mode === 'walk'}
+                title="Пешеход на высоте глаз 1,7 м"
+                onClick={() => engine.current?.setMode('walk')}
               />
             </div>
             <div className="bar-group" role="group" aria-label="Панели">

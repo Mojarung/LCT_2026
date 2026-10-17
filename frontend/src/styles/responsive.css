@@ -4,8 +4,8 @@
    иначе между панелями она не помещается. */
 @media (max-width: 1440px) and (min-width: 1081px) {
   :root {
-    --hud-left-w: 308px;
-    --hud-right-w: 340px;
+    --hud-left-w: 288px;
+    --hud-right-w: 316px;
   }
   .hud-scroll,
   .detail-scroll {

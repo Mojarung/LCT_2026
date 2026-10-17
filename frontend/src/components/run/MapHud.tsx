@@ -60,6 +60,17 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
       {/* Как показан план - в углу карты, отдельно от кнопок действия внизу: две пары
           вариантов в полосе не помещались между панелями на ноутбучной ширине. */}
       <div className="hud hud-view" role="group" aria-label="Вид карты" data-map-obstacle="top">
+        {/* Инженерный чертёж - знаки дендроплана, привычные проектировщику и проверяющему;
+            иллюстрация - кроны моделей видов, как на слайдах. */}
+        <Pair
+          label="Стиль карты"
+          value={mapStyle}
+          options={[
+            ['engineering', 'Чертёж', 'Условные знаки дендроплана, как в CAD', 'drawing'],
+            ['illustrated', 'Кроны', 'Иллюстрация: кроны моделей видов', 'trees'],
+          ]}
+          onChange={setMapStyle}
+        />
         <Pair
           label="Поворот плана"
           value={orientation}
@@ -73,17 +84,6 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
             current.toggleOrientation();
             setOrientation(current.orientation());
           }}
-        />
-        {/* Инженерный чертёж - знаки дендроплана, привычные проектировщику и проверяющему;
-            иллюстрация - кроны моделей видов, как на слайдах. */}
-        <Pair
-          label="Стиль карты"
-          value={mapStyle}
-          options={[
-            ['engineering', 'Чертёж', 'Условные знаки дендроплана, как в CAD', 'drawing'],
-            ['illustrated', 'Кроны', 'Иллюстрация: кроны моделей видов', 'trees'],
-          ]}
-          onChange={setMapStyle}
         />
       </div>
       <div className="hud hud-bottom" data-map-obstacle="bottom" role="toolbar" aria-label="Карта">
