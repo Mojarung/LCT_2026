@@ -439,6 +439,9 @@ export function RunPage() {
             {done && data ? (
               <RunMetrics
                 run={data}
+                onReview={() => {
+                  setReviewOpen(true);
+                }}
                 trees={
                   // Только когда план загружен целиком: число сверяется с числом прогона.
                   items

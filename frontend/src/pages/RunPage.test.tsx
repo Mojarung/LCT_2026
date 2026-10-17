@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BasemapJson, PlanJson, QualityJson, RulesJson } from '../api/artifacts';
 import type { ArtifactOut, PlanSummaryOut, RunOut } from '../api/types';
+import { REPORT, REVIEW } from '../lib/__fixtures__/review';
 import { toMapItems } from '../map/items';
 import type { EngineHooks } from '../map/types';
 import { useWorkspace } from '../state/workspace';
@@ -181,17 +182,45 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
     // План на предположении о грунте - эскиз, и это сказано у числа, а не в журнале.
-    const title = await within(left).findByText('Эскиз · проверить');
+    const title = await within(left).findByText('Эскиз · требуется проверка');
     expect(title).toBeVisible();
     const notice = title.closest('.notice');
     expect(notice).toHaveTextContent('Грунт под ямой не подтверждён40 из 40');
     expect(left).not.toHaveTextContent('все без ограничений');
     // Почему эскиз и что делать - под раскрытием в том же блоке.
-    await openFold(left, 'Почему эскиз и что сделать');
+    await openFold(left, 'Посадки не подтверждены — что проверить');
     expect(within(left).getByText(/Допустимость посадок не подтверждена/)).toBeVisible();
     expect(
       within(left).getByText(/грунт под всей посадочной ямой должен быть подтверждён/i),
     ).toBeVisible();
+  });
+
+  it('opens the floating review panel from the sketch warning without leaving the plan', async () => {
+    const user = userEvent.setup();
+    const record = done();
+    mockApi({
+      ...succeededRoutes({
+        ...record,
+        summary: { ...record.summary, semantic_assignments_complete: false },
+        artifacts: [
+          ...(record.artifacts ?? []),
+          artifact('semantic-review.geojson'),
+          artifact('classification.json'),
+        ],
+      }),
+      '/api/v1/runs/r1/artifacts/semantic-review.geojson': REVIEW,
+      '/api/v1/runs/r1/artifacts/classification.json': REPORT,
+    });
+    const { router } = renderApp('/runs/r1');
+    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    await within(left).findByText('Посадки не подтверждены — что проверить', {
+      selector: 'summary',
+    });
+    await openFold(left, 'Посадки не подтверждены — что проверить');
+    await user.click(within(left).getByRole('button', { name: 'Уточнить объекты на чертеже' }));
+    expect(await screen.findByRole('dialog', { name: 'Типы объектов чертежа' })).toBeVisible();
+    expect(router.state.location.pathname).toBe('/runs/r1');
+    expect(await screen.findByRole('button', { name: 'Показать слой 0, группа 1' })).toBeVisible();
   });
 
   it('leads with the number of placements and the integrity of the base drawing', async () => {

@@ -18,13 +18,21 @@ const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 /** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
  *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
  *  эскизом, и больше нигде. */
-function ReviewLinks({ run }: { run: RunOut }) {
+function ReviewLinks({ run, onReview }: { run: RunOut; onReview?: () => void }) {
   const names = new Set((run.artifacts ?? []).map((a) => a.name));
   return (
     <>
       {names.has('semantic-review.geojson') ? (
         <p className="hint">
-          <Link to={`/runs/${encodeURIComponent(run.id)}/review`}>Уточнить объекты на чертеже</Link>
+          {onReview ? (
+            <button type="button" className="review-download-link" onClick={onReview}>
+              Уточнить объекты на чертеже
+            </button>
+          ) : (
+            <Link to={`/runs/${encodeURIComponent(run.id)}/review`}>
+              Уточнить объекты на чертеже
+            </Link>
+          )}
         </p>
       ) : null}
       {names.has('classification.json') ? (
@@ -106,8 +114,10 @@ export function RunMetrics({
   trees,
   draft = false,
   conflicts = null,
+  onReview,
 }: {
   run: RunOut;
+  onReview?: () => void;
   /** Кнопка конфликтов подосновы (SourceConflictNotice): первая строка блока «Проверить». */
   conflicts?: ReactNode;
   /** Деревья среди посадок плана; null - план ещё не загружен. Число деревьев - первое, что
@@ -159,7 +169,7 @@ export function RunMetrics({
           и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
       {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
         <div className="notice check-block">
-          <p className="notice-title">{sketch ? 'Эскиз · проверить' : 'Проверить'}</p>
+          <p className="notice-title">{sketch ? 'Эскиз · требуется проверка' : 'Проверить'}</p>
           {conflicts}
           <dl className="run-facts">
             {approval > 0 ? (
@@ -194,12 +204,12 @@ export function RunMetrics({
           ))}
           {sketch ? (
             <details className="fold notice-details">
-              <summary>Почему эскиз и что сделать</summary>
+              <summary>Посадки не подтверждены — что проверить</summary>
               <p>
                 Допустимость посадок не подтверждена. Уточните объекты и границы покрытий: грунт под
                 всей посадочной ямой должен быть подтверждён замкнутыми контурами.
               </p>
-              <ReviewLinks run={run} />
+              <ReviewLinks run={run} onReview={onReview} />
             </details>
           ) : null}
         </div>
