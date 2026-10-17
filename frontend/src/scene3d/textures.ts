@@ -196,16 +196,39 @@ export function curbStone(): THREE.CanvasTexture {
   const noise = fbm(size, [8, 32, 128], 149);
   const random = rng(151);
   const stone = size / CURB_STONES_PER_TEXTURE;
-  const tints = [0, -9, 6, -4];
-  const c = fromNoise(size, noise, (n, x) => {
+  const tints = [0, -14, 9, -6];
+  const c = fromNoise(size, noise, (n, x, y) => {
     const tint = tints[Math.floor(x / stone)] ?? 0;
     const grain = random();
-    const speck = grain > 0.93 ? -55 : grain < 0.05 ? 35 : 0;
-    const joint = x % stone < 3 ? -70 : 0;
-    const v = 138 + n * 30 + speck + tint + joint;
-    return [v, v - 1, v - 3];
+    // Зерно гранита: тёмная слюда и светлый кварц, у каждого камня свой оттенок.
+    const speck = grain > 0.9 ? -60 : grain < 0.07 ? 40 : 0;
+    // Шов между камнями: тёмная щель в 4 px, по краям камень чуть выкрошен и светлее.
+    const inStone = x % stone;
+    const joint = inStone < 4 ? -85 : inStone < 7 || inStone > stone - 4 ? 12 : 0;
+    // Редкие тёмные пятна лишайника и грязи.
+    const stain = n > 0.78 && ((x * 7 + y * 13) % 97) / 97 > 0.6 ? -18 : 0;
+    const v = 140 + n * 34 + speck + tint + joint + stain;
+    return [v, v - 2, v - 5];
   });
   return texture(c, true);
+}
+
+/** Лоток у борта: альфа (зелёный канал, как читает alphaMap) от плотной у борта (v = 0) до
+ *  нуля на дальнем краю полосы. Холст непрозрачный: прозрачные пиксели теряют цвет при
+ *  загрузке в WebGL. */
+export function gutterShade(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(64);
+  const gradient = ctx.createLinearGradient(0, 64, 0, 0);
+  gradient.addColorStop(0, 'rgb(255,255,255)');
+  gradient.addColorStop(0.2, 'rgb(150,150,150)');
+  gradient.addColorStop(0.55, 'rgb(50,50,50)');
+  gradient.addColorStop(1, 'rgb(0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  const t = texture(c, false);
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
 }
 
 /** Решётка ограды: стойки через 12 см, две перекладины, прозрачность между прутьями. */

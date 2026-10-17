@@ -84,7 +84,9 @@ def test_project_stage_takes_the_new_material_and_never_soil_for_it(
 ) -> None:
     scene, _ = classify_scene(raw(layer), RULES, PlanParams())
     assert scene.features[0].object_class is expected
-    assert classification_report(scene, RULES, PlanParams()).ready
+    # «Не газон» не задаёт тип объекта: контур выбран только по геометрии
+    # и требует уточнения, как и остальные fallback-классификации.
+    assert classification_report(scene, RULES, PlanParams()).ready is (layer != "Не газон")
     assert not _soil_at_centre(scene)
 
 

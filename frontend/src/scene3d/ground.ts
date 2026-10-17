@@ -126,6 +126,117 @@ function tracePolygon(ctx: CanvasRenderingContext2D, rings: [number, number][][]
  *  линиями в координатах сцены, только отрезки, где edge подтверждает газон по одну сторону:
  *  шов между тротуаром и проездом бортом не обводится, линии бортов чертежа идут отдельно
  *  (world.curbs). */
+/** Контуры покрытий, сглаженные для 3D: срез углов в три прохода. Контур из растра и
+ *  упрощения - ломаная с изломами в 3-15° через метр-два и прямыми углами лесенки, на 3D
+ *  борт по ней шёл «кривой» (пользователь, 17.10.2026). Пологий излом срезается на четверть
+ *  соседних отрезков (не дальше SMOOTH_CUT_M), прямой угол - радиусным камнем не дальше
+ *  SMOOTH_CORNER_M, разворот круче SMOOTH_KEEP_DEG остаётся углом. Сглаживаются и грунт, и
+ *  покрытие: маска, борта и вырез земли берутся из одних контуров. */
+export function smoothSurfaceAreas(areas: SurfaceAreas): SurfaceAreas {
+  const rings = (polygons: AreaPolygon[]) =>
+    polygons.map((polygon) => polygon.map((ring) => smoothRing(ring)));
+  return {
+    ...areas,
+    soil: rings(areas.soil),
+    paved: rings(areas.paved),
+  };
+}
+
+const SMOOTH_PASSES = 3;
+const SMOOTH_MIN_DEG = 2;
+const SMOOTH_GENTLE_DEG = 30;
+const SMOOTH_KEEP_DEG = 100;
+const SMOOTH_CUT_M = 1.5;
+const SMOOTH_CORNER_M = 0.75;
+/** Лесенка растра: подряд не меньше трёх поворотов около прямого угла, знак чередуется,
+ *  ступени короче этого. Выемка (два поворота в одну сторону подряд) лесенкой не считается. */
+const STAIR_STEP_M = 2.5;
+const STAIR_MIN_DEG = 60;
+const STAIR_MAX_DEG = 120;
+
+/** Поворот в вершине v между p и q: градусы со знаком (плюс - налево в координатах чертежа). */
+function signedTurn(p: number[], v: number[], q: number[]): number {
+  const ax = (v[0] ?? 0) - (p[0] ?? 0);
+  const ay = (v[1] ?? 0) - (p[1] ?? 0);
+  const bx = (q[0] ?? 0) - (v[0] ?? 0);
+  const by = (q[1] ?? 0) - (v[1] ?? 0);
+  return (Math.atan2(ax * by - ay * bx, ax * bx + ay * by) * 180) / Math.PI;
+}
+
+/** Лесенка клеток растра (чередующиеся повороты около прямого угла с короткими ступенями)
+ *  заменяется хордой от первой её вершины до последней. */
+function withoutStairs(pts: number[][]): number[][] {
+  const n = pts.length;
+  if (n < 5) return pts;
+  const stair = pts.map((v, i) => {
+    const p = pts[(i - 1 + n) % n] ?? v;
+    const q = pts[(i + 1) % n] ?? v;
+    const turn = signedTurn(p, v, q);
+    const short = Math.hypot((q[0] ?? 0) - (v[0] ?? 0), (q[1] ?? 0) - (v[1] ?? 0)) < STAIR_STEP_M;
+    return Math.abs(turn) >= STAIR_MIN_DEG && Math.abs(turn) <= STAIR_MAX_DEG && short
+      ? Math.sign(turn)
+      : 0;
+  });
+  // Ряд лесенки: подряд идущие вершины с чередующимся знаком, не меньше трёх. Снимаются все
+  // его вершины, кроме первой: хорда идёт от неё до вершины за последней ступенью.
+  const drop = pts.map(() => false);
+  const runStart = (i: number) => {
+    const s = stair[i] ?? 0;
+    return s !== 0 && stair[(i - 1 + n) % n] !== -s;
+  };
+  for (let i = 0; i < n; i++) {
+    if (!runStart(i)) continue;
+    let length = 1;
+    while (length < n && stair[(i + length) % n] === -(stair[(i + length - 1) % n] ?? 0)) length++;
+    if (length < 3) continue;
+    for (let k = 1; k < length; k++) drop[(i + k) % n] = true;
+  }
+  const out = pts.filter((_, i) => !drop[i]);
+  return out.length < n ? out : pts;
+}
+
+function smoothRing(ring: number[][]): number[][] {
+  let pts = withoutStairs(ring.slice(0, -1).map(([x = 0, y = 0]) => [x, y]));
+  for (let pass = 0; pass < SMOOTH_PASSES && pts.length > 3; pass++) {
+    // Каждый следующий проход срезает вдвое короче: скругление остаётся у угла, а не
+    // расползается по прямой.
+    const shrink = 2 ** pass;
+    const out: number[][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [px = 0, py = 0] = pts[(i - 1 + pts.length) % pts.length] ?? [];
+      const [vx = 0, vy = 0] = pts[i] ?? [];
+      const [qx = 0, qy = 0] = pts[(i + 1) % pts.length] ?? [];
+      const ax = vx - px;
+      const ay = vy - py;
+      const bx = qx - vx;
+      const by = qy - vy;
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 1e-6 || lb < 1e-6) continue;
+      const turn =
+        (Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)))) * 180) / Math.PI;
+      if (turn < SMOOTH_MIN_DEG || turn > SMOOTH_KEEP_DEG) {
+        out.push([vx, vy]);
+        continue;
+      }
+      const cap = (turn > SMOOTH_GENTLE_DEG ? SMOOTH_CORNER_M : SMOOTH_CUT_M) / shrink;
+      const ca = Math.min(cap, la / 4);
+      const cb = Math.min(cap, lb / 4);
+      out.push(
+        [vx - (ax / la) * ca, vy - (ay / la) * ca],
+        [vx + (bx / lb) * cb, vy + (by / lb) * cb],
+      );
+    }
+    pts = out;
+  }
+  const first = pts[0];
+  return first ? [...pts, [...first]] : ring;
+}
+
+/** Бортовой камень по краям покрытия (пользователь, 17.10.2026): кольца контуров покрытия
+ *  линиями в координатах сцены, только отрезки, где edge подтверждает газон по одну сторону:
+ *  шов между тротуаром и проездом бортом не обводится, линии бортов чертежа идут отдельно
+ *  (world.curbs). */
 export function areaCurbs(
   areas: SurfaceAreas,
   origin: [number, number],
@@ -135,10 +246,12 @@ export function areaCurbs(
   const lines: Line[] = [];
   for (const rings of areas.paved) {
     for (const ring of rings) {
-      const pts = ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y }));
+      const pts = withoutHairpins(ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y })));
       const n = pts.length - 1; // кольцо замкнуто: последняя точка - первая
       if (n < 2) continue;
+      const lengths = Array.from({ length: n }, (_, i) => dist(pts[i] as Flat, pts[i + 1] as Flat));
       const keep = Array.from({ length: n }, (_, i) => edge(pts[i] as Flat, pts[i + 1] as Flat));
+      bridgeGaps(keep, lengths);
       if (keep.every(Boolean)) {
         lines.push({ points: pts });
         continue;
@@ -146,20 +259,124 @@ export function areaCurbs(
       // Обход с отрезка без борта: бортовые отрезки по обе стороны начала кольца - одна линия.
       const start = keep.indexOf(false);
       let run: Flat[] = [];
+      let runLength = 0;
+      const flush = () => {
+        if (run.length && runLength >= CURB_MIN_RUN_M) lines.push({ points: run });
+        run = [];
+        runLength = 0;
+      };
       for (let k = 1; k <= n; k++) {
         const i = (start + k) % n;
         if (keep[i]) {
           if (!run.length) run.push(pts[i] as Flat);
           run.push(pts[i + 1] as Flat);
-        } else if (run.length) {
-          lines.push({ points: run });
-          run = [];
-        }
+          runLength += lengths[i] ?? 0;
+        } else flush();
       }
-      if (run.length) lines.push({ points: run });
+      flush();
     }
   }
   return lines;
+}
+
+/** Пропуск в ряду бортов короче этого заделывается, ряд короче CURB_MIN_RUN_M не ставится:
+ *  иначе вблизи борт выходил обрывками с торцами. */
+const CURB_GAP_M = 1.5;
+const CURB_MIN_RUN_M = 1.0;
+/** Разворот контура круче этого (угол между отрезками, градусы) - шпилька, а не поворот. */
+const HAIRPIN_DEG = 150;
+
+function dist(a: Flat, b: Flat): number {
+  return Math.hypot(b.x - a.x, b.z - a.z);
+}
+
+/** Заделать короткие пропуски кольца между двумя бортовыми отрезками (по кругу). */
+function bridgeGaps(keep: boolean[], lengths: number[]): void {
+  const n = keep.length;
+  if (keep.every(Boolean) || !keep.some(Boolean)) return;
+  const start = keep.indexOf(true);
+  let k = 1;
+  while (k <= n) {
+    const i = (start + k) % n;
+    if (keep[i]) {
+      k++;
+      continue;
+    }
+    let total = 0;
+    let j = 0;
+    while (j < n && !keep[(i + j) % n]) {
+      total += lengths[(i + j) % n] ?? 0;
+      j++;
+    }
+    if (total < CURB_GAP_M) for (let m = 0; m < j; m++) keep[(i + m) % n] = true;
+    k += j;
+  }
+}
+
+/** Убрать вершины-шпильки (контур разворачивается назад): брус бортового камня на них
+ *  перекручивался. Кольцо остаётся замкнутым. */
+export function withoutHairpins(points: Flat[]): Flat[] {
+  let pts = points.slice(0, -1);
+  for (let pass = 0; pass < 3 && pts.length > 3; pass++) {
+    const kept = pts.filter((v, i) => {
+      const p = pts[(i - 1 + pts.length) % pts.length] as Flat;
+      const q = pts[(i + 1) % pts.length] as Flat;
+      const ax = v.x - p.x;
+      const az = v.z - p.z;
+      const bx = q.x - v.x;
+      const bz = q.z - v.z;
+      const la = Math.hypot(ax, az);
+      const lb = Math.hypot(bx, bz);
+      if (la < 0.05 || lb < 0.05) return false;
+      const turn =
+        (Math.acos(Math.max(-1, Math.min(1, (ax * bx + az * bz) / (la * lb)))) * 180) / Math.PI;
+      return turn < HAIRPIN_DEG;
+    });
+    if (kept.length === pts.length) break;
+    pts = kept;
+  }
+  const first = pts[0];
+  return first ? [...pts, first] : [];
+}
+
+/** Линии борта с покрытием (плитка или асфальт) слева от хода: по самому длинному пролёту
+ *  линии смотрится маска в 0,3 м по обе стороны, при покрытии справа линия разворачивается.
+ *  Брус борта (ribbonBox, 'left') затеняет правую, газонную грань: на свету она шла по
+ *  газону белой ниткой (пользователь, 17.10.2026). */
+export function pavedOnLeft(lines: readonly Line[], mask: MaskInfo): Line[] {
+  const [minX, minZ] = mask.rect;
+  const kindAt = (x: number, z: number): number => {
+    const col = Math.floor((x - minX) / mask.metresPerPx);
+    const row = Math.floor((z - minZ) / mask.metresPerPx);
+    if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return EMPTY;
+    return mask.kinds[row * mask.width + col] ?? EMPTY;
+  };
+  const paved = (k: number) => k === PAVERS || k === ASPHALT;
+  return lines.map((line) => {
+    let best = 0;
+    let at = -1;
+    for (let i = 0; i + 1 < line.points.length; i++) {
+      const d = dist(line.points[i] as Flat, line.points[i + 1] as Flat);
+      if (d > best) {
+        best = d;
+        at = i;
+      }
+    }
+    if (at < 0) return line;
+    const p = line.points[at] as Flat;
+    const q = line.points[at + 1] as Flat;
+    const nx = (-(q.z - p.z) / best) * 0.3;
+    const nz = ((q.x - p.x) / best) * 0.3;
+    const mx = (p.x + q.x) / 2;
+    const mz = (p.z + q.z) / 2;
+    const left = paved(kindAt(mx + nx, mz + nz));
+    const right = paved(kindAt(mx - nx, mz - nz));
+    if (left || !right) return line;
+    return {
+      points: [...line.points].reverse(),
+      ...(line.tops ? { tops: [...line.tops].reverse() } : {}),
+    };
+  });
 }
 
 /** Отрезок - граница двух покрытий: по одну его сторону покрытие вида a, по другую - вида b
@@ -240,7 +457,36 @@ export function roadGeometry(
   return geometry;
 }
 
+export function groundGeometry(
+  bounds: [number, number, number, number],
+  cuts: readonly { points: readonly Flat[]; island: boolean }[],
+): THREE.BufferGeometry {
+  const [minX, minZ, maxX, maxZ] = bounds;
+  const half = Math.max(maxX - minX, maxZ - minZ) / 2 + GROUND_PAD_M;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+  // Плоскость фигуры: x сцены и -z сцены (после поворота на -90° вокруг X).
+  const toVec = (ring: readonly Flat[]) => ring.map((p) => new THREE.Vector2(p.x, -p.z));
+  const outer = new THREE.Shape([
+    new THREE.Vector2(cx - half, -(cz + half)),
+    new THREE.Vector2(cx + half, -(cz + half)),
+    new THREE.Vector2(cx + half, -(cz - half)),
+    new THREE.Vector2(cx - half, -(cz - half)),
+  ]);
+  const shapes = [outer];
+  for (const cut of cuts) {
+    if (cut.points.length < 4) continue;
+    if (cut.island) shapes.push(new THREE.Shape(toVec(cut.points)));
+    else outer.holes.push(new THREE.Path(toVec(cut.points)));
+  }
+  const geometry = new THREE.ShapeGeometry(shapes);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
 export interface MaskInfo {
+  /** Полные контуры итоговой проезжей части до отсечения борта у рамки сцены. */
+  roadContours?: Line[];
   texture: THREE.DataTexture;
   /** minX, minZ и размер растра (w и h пикселей по metresPerPx) в координатах сцены. */
   rect: [number, number, number, number];
@@ -622,6 +868,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     kinds,
     known,
     edges,
+    roadContours: roadLoops,
     road,
     cut,
     width: w,
@@ -807,8 +1054,11 @@ export const GROUND_MAP = /* glsl */ `
   if (uCutRoad > 0.5 && outside > 0.5 && textureLod(uCut, clamp(muv, 0.0, 1.0), 0.0).r > 0.6) discard;
   // Граница газона, плитки и асфальта - порог маски без шума: шум делал край «обгрызенным»
   // (пользователь, 17.10.2026). Лесенку клеток растра снимает размытие маски (softenCells).
-  float lawn = smoothstep(0.45, 0.55, m.r);
-  float paver = smoothstep(0.45, 0.55, m.g) * (1.0 - lawn);
+  // Exclude the lowered road channel before normalising sidewalk/soil shares.
+  vec3 share = vec3(m.r, m.g, max(1.0 - m.r - m.g - m.b, 0.0));
+  share /= max(share.r + share.g + share.b, 1e-3);
+  float lawn = smoothstep(0.45, 0.55, share.r);
+  float paver = smoothstep(0.45, 0.55, share.g) * (1.0 - lawn);
   lawn = mix(1.0, lawn, outside);
   paver *= outside;
   if (uRoad > 0.5) {
@@ -867,10 +1117,10 @@ normal = normalize(mat3(viewMatrix) * vec3(scannedNormal.x, scannedNormal.z, sca
 /** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта - дорожный, у проезжей части. */
 export const CURB_W = 0.15;
 export const CURB_H = 0.15;
+/** Верх дорожного борта вровень с тротуаром. */
+export const CURB_ABOVE_WALK_M = 0;
 /** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665): 8 см шириной, над
  *  газоном выступает на несколько сантиметров. */
-/** Верх дорожного борта над тротуаром: борт обычно чуть выше плитки. */
-export const CURB_ABOVE_WALK_M = 0.02;
 export const GARDEN_CURB_W = 0.08;
 export const GARDEN_CURB_H = 0.06;
 
@@ -882,11 +1132,13 @@ export function ribbonBox(
   width: number,
   height: number,
   lift = 0,
-  chamfer = 0,
+  bevel = 0,
+  bevelSides: 'both' | 'left' = 'both',
 ): THREE.BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
   const uv: number[] = [];
+  const shade: number[] = [];
   const quad = (
     a: number[],
     b: number[],
@@ -895,31 +1147,50 @@ export function ribbonBox(
     n: number[],
     u0: number,
     u1: number,
+    dark = 0,
   ) => {
     pos.push(...a, ...b, ...c, ...a, ...c, ...d);
-    for (let i = 0; i < 6; i++) nor.push(...n);
+    for (let i = 0; i < 6; i++) {
+      nor.push(...n);
+      shade.push(dark);
+    }
     uv.push(u0, 0, u1, 0, u1, 1, u0, 0, u1, 1, u0, 1);
   };
   const hw = width / 2;
   const y0 = lift;
   const y1 = lift + height;
-  // Фаска по верхним рёбрам: грани до y1 - bevel, верх уже на 2 bevel, скосы под 45°.
-  const bevel = Math.min(Math.max(0, chamfer), hw * 0.8, height * 0.8);
-  const ys = y1 - bevel;
-  const inner = (hw - bevel) / hw;
-  const slope = Math.SQRT1_2;
+  // Фаска по верхним рёбрам: на ребре ловится блик, как у тёсаного камня, а не у бруса.
+  const b = Math.min(Math.max(bevel, 0), hw * 0.8, height * 0.8);
+  const inset = (hw - b) / hw;
+  // Фаска только слева (у дорожного борта - со стороны проезда): справа грань до верха и
+  // верх до самого ребра, иначе на газоне светилась тонкая полоска фаски.
+  const rightBevel = bevelSides === 'both';
+  const insetR = rightBevel ? inset : 1;
+  // Правая грань при фаске слева - газонная: затеняется (aShade), будто засыпана землёй.
+  const rightShade = rightBevel ? 0 : 1;
+  const sq = Math.SQRT1_2;
   for (const line of lines) {
     const pts: Flat[] = [];
-    for (const p of line.points) {
+    const tops: number[] = [];
+    line.points.forEach((p, k) => {
       const last = pts.at(-1);
-      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= 0.01) pts.push(p);
-    }
+      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= 0.01) {
+        pts.push(p);
+        tops.push(line.tops?.[k] ?? y1);
+      }
+    });
     const first = pts[0];
     const end = pts.at(-1);
     const closed =
       pts.length > 3 && !!first && !!end && Math.hypot(first.x - end.x, first.z - end.z) < 0.01;
-    if (closed) pts.pop();
+    if (closed) {
+      pts.pop();
+      tops.pop();
+    }
     const n = pts.length;
+    // Верх и начало фаски в точке: борт с понижением на съезде.
+    const topAt = (k: number) => tops[k % n] ?? y1;
+    const bevelAt = (k: number) => topAt(k) - b;
     const segments = closed ? n : n - 1;
     if (segments < 1) continue;
     // Нормаль каждого пролёта.
@@ -960,24 +1231,51 @@ export function ribbonBox(
       const r0 = [p.x - ox0, p.z - oz0];
       const l1 = [q.x + ox1, q.z + oz1];
       const r1 = [q.x - ox1, q.z - oz1];
-      const il0 = [p.x + ox0 * inner, p.z + oz0 * inner];
-      const ir0 = [p.x - ox0 * inner, p.z - oz0 * inner];
-      const il1 = [q.x + ox1 * inner, q.z + oz1 * inner];
-      const ir1 = [q.x - ox1 * inner, q.z - oz1 * inner];
-      // Верх, левая и правая грани.
+      const li0 = [p.x + ox0 * inset, p.z + oz0 * inset];
+      const ri0 = [p.x - ox0 * insetR, p.z - oz0 * insetR];
+      const li1 = [q.x + ox1 * inset, q.z + oz1 * inset];
+      const ri1 = [q.x - ox1 * insetR, q.z - oz1 * insetR];
+      const t0 = topAt(s);
+      const t1 = topAt(s + 1);
+      const b0 = bevelAt(s);
+      const b1 = bevelAt(s + 1);
+      const rb0 = rightBevel ? b0 : t0;
+      const rb1 = rightBevel ? b1 : t1;
+      // Верх, фаски, левая и правая грани.
       quad(
-        [il0[0] ?? 0, y1, il0[1] ?? 0],
-        [ir0[0] ?? 0, y1, ir0[1] ?? 0],
-        [ir1[0] ?? 0, y1, ir1[1] ?? 0],
-        [il1[0] ?? 0, y1, il1[1] ?? 0],
+        [li0[0] ?? 0, t0, li0[1] ?? 0],
+        [ri0[0] ?? 0, t0, ri0[1] ?? 0],
+        [ri1[0] ?? 0, t1, ri1[1] ?? 0],
+        [li1[0] ?? 0, t1, li1[1] ?? 0],
         [0, 1, 0],
         u0,
         u1,
       );
+      if (b > 0) {
+        quad(
+          [l0[0] ?? 0, b0, l0[1] ?? 0],
+          [li0[0] ?? 0, t0, li0[1] ?? 0],
+          [li1[0] ?? 0, t1, li1[1] ?? 0],
+          [l1[0] ?? 0, b1, l1[1] ?? 0],
+          [nx * sq, sq, nz * sq],
+          u0,
+          u1,
+        );
+        if (rightBevel)
+          quad(
+            [ri1[0] ?? 0, t1, ri1[1] ?? 0],
+            [ri0[0] ?? 0, t0, ri0[1] ?? 0],
+            [r0[0] ?? 0, b0, r0[1] ?? 0],
+            [r1[0] ?? 0, b1, r1[1] ?? 0],
+            [-nx * sq, sq, -nz * sq],
+            u1,
+            u0,
+          );
+      }
       quad(
         [l0[0] ?? 0, y0, l0[1] ?? 0],
-        [l0[0] ?? 0, ys, l0[1] ?? 0],
-        [l1[0] ?? 0, ys, l1[1] ?? 0],
+        [l0[0] ?? 0, b0, l0[1] ?? 0],
+        [l1[0] ?? 0, b1, l1[1] ?? 0],
         [l1[0] ?? 0, y0, l1[1] ?? 0],
         [nx, 0, nz],
         u0,
@@ -985,33 +1283,14 @@ export function ribbonBox(
       );
       quad(
         [r1[0] ?? 0, y0, r1[1] ?? 0],
-        [r1[0] ?? 0, ys, r1[1] ?? 0],
-        [r0[0] ?? 0, ys, r0[1] ?? 0],
+        [r1[0] ?? 0, rb1, r1[1] ?? 0],
+        [r0[0] ?? 0, rb0, r0[1] ?? 0],
         [r0[0] ?? 0, y0, r0[1] ?? 0],
         [-nx, 0, -nz],
         u1,
         u0,
+        rightShade,
       );
-      if (bevel > 0) {
-        quad(
-          [l0[0] ?? 0, ys, l0[1] ?? 0],
-          [il0[0] ?? 0, y1, il0[1] ?? 0],
-          [il1[0] ?? 0, y1, il1[1] ?? 0],
-          [l1[0] ?? 0, ys, l1[1] ?? 0],
-          [nx * slope, slope, nz * slope],
-          u0,
-          u1,
-        );
-        quad(
-          [r1[0] ?? 0, ys, r1[1] ?? 0],
-          [ir1[0] ?? 0, y1, ir1[1] ?? 0],
-          [ir0[0] ?? 0, y1, ir0[1] ?? 0],
-          [r0[0] ?? 0, ys, r0[1] ?? 0],
-          [-nx * slope, slope, -nz * slope],
-          u1,
-          u0,
-        );
-      }
     }
     if (closed) continue;
     // Торцы открытой ломаной.
@@ -1024,44 +1303,42 @@ export function ribbonBox(
       const [nx, nz] = normals[sign < 0 ? 0 : segments - 1] ?? [0, 0];
       const dir = [nz * sign, -nx * sign];
       const a = [p.x + ox, p.z + oz];
-      const b = [p.x - ox, p.z - oz];
-      const [first, second] = sign < 0 ? [a, b] : [b, a];
-      // Торец - по профилю бруса: до ys на полную ширину, выше - сужение фаски. Прямоугольный
-      // торец до самого верха торчал над фаской.
-      const lerp = (u: number[], v: number[], t: number) => [
-        (u[0] ?? 0) + ((v[0] ?? 0) - (u[0] ?? 0)) * t,
-        (u[1] ?? 0) + ((v[1] ?? 0) - (u[1] ?? 0)) * t,
-      ];
-      const cut = (1 - inner) / 2;
-      const f2 = lerp(first, second, cut);
-      const s2 = lerp(first, second, 1 - cut);
-      const capNormal = [dir[0] ?? 0, 0, dir[1] ?? 0];
+      const c = [p.x - ox, p.z - oz];
+      const ai = [p.x + ox * inset, p.z + oz * inset];
+      const ci = [p.x - ox * insetR, p.z - oz * insetR];
+      const [first, second, firstIn, secondIn] = sign < 0 ? [a, c, ai, ci] : [c, a, ci, ai];
+      const nrm = [dir[0] ?? 0, 0, dir[1] ?? 0];
+      const tk = topAt(k);
+      const bk = bevelAt(k);
+      // Угол без фаски (справа при bevelSides 'left') доходит до верха.
+      const rk = rightBevel ? bk : tk;
+      const [bFirst, bSecond] = sign < 0 ? [bk, rk] : [rk, bk];
       quad(
         [first[0] ?? 0, y0, first[1] ?? 0],
-        [first[0] ?? 0, ys, first[1] ?? 0],
-        [second[0] ?? 0, ys, second[1] ?? 0],
+        [first[0] ?? 0, bFirst, first[1] ?? 0],
+        [second[0] ?? 0, bSecond, second[1] ?? 0],
         [second[0] ?? 0, y0, second[1] ?? 0],
-        capNormal,
+        nrm,
         0,
         width,
       );
-      if (bevel > 0) {
+      if (b > 0)
         quad(
-          [first[0] ?? 0, ys, first[1] ?? 0],
-          [f2[0] ?? 0, y1, f2[1] ?? 0],
-          [s2[0] ?? 0, y1, s2[1] ?? 0],
-          [second[0] ?? 0, ys, second[1] ?? 0],
-          capNormal,
+          [first[0] ?? 0, bFirst, first[1] ?? 0],
+          [firstIn[0] ?? 0, tk, firstIn[1] ?? 0],
+          [secondIn[0] ?? 0, tk, secondIn[1] ?? 0],
+          [second[0] ?? 0, bSecond, second[1] ?? 0],
+          nrm,
           0,
           width,
         );
-      }
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aShade', new THREE.Float32BufferAttribute(shade, 1));
   g.computeBoundingSphere();
   return g;
 }

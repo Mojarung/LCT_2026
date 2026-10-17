@@ -20,6 +20,19 @@ import {
 } from './autoshots';
 import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
 import { carGroup } from './cars';
+import {
+  apronGeometry,
+  APRON_W_M,
+  curbProfile,
+  groundCutRings,
+  gutterGeometry,
+  GUTTER_W_M,
+  LOW_CURB_M,
+  roadEdgesFromMask,
+  type RoadEdge,
+  TRANSITION_M,
+} from './edges';
+
 import { ASPHALT, PAVERS } from './surfaceMask';
 import { benchSpots, type Ground, manholeSpots, treePits } from './streetDetails';
 import { streetDetails } from './streetDetailsMesh';
@@ -43,6 +56,8 @@ import {
   GARDEN_CURB_H,
   GARDEN_CURB_W,
   groundMesh,
+  groundGeometry,
+  pavedOnLeft,
   paintContextRoads,
   ribbonBox,
   type SurfaceImage,
@@ -52,7 +67,13 @@ import type { ScenePostprocessing } from './postprocessing';
 import { AdaptiveQuality } from './adaptive';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import { concrete, hedgeLeaves, noiseTexture } from './textures';
+import {
+  CURB_STONES_PER_TEXTURE,
+  curbStone,
+  gutterShade,
+  hedgeLeaves,
+  noiseTexture,
+} from './textures';
 import { loadGroundMaterials } from './materials';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
@@ -212,6 +233,8 @@ export function overviewPose(world: World): Pose {
 }
 
 export class SceneEngine {
+  private edges: RoadEdge[] = [];
+
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
@@ -341,10 +364,29 @@ export class SceneEngine {
     this.noise = noise;
     // Проезд ниже тротуара на высоту борта: своя плоскость асфальта под землёй, земля на
     // уровне тротуара вырезает её по маске (mask.cut), по краю выреза стоит бортовой камень.
-    const lowered = mask.edges.road.length > 0;
-    const ground = groundMesh(this.world, mask, tex, this.groundWeather, { cutRoad: lowered });
+    this.edges = roadEdgesFromMask(mask);
+    const lowered = this.edges.length > 0;
+    const ground = groundMesh(this.world, mask, tex, this.groundWeather, {
+      geometry: lowered
+        ? groundGeometry(this.world.bounds, groundCutRings(this.edges, APRON_W_M, TRANSITION_M))
+        : undefined,
+    });
     this.add(ground);
     if (lowered) this.add(groundMesh(this.world, mask, tex, this.groundWeather, { road: true }));
+    if (this.edges.some((edge) => edge.lowered.some(Boolean))) {
+      this.add(
+        groundMesh(this.world, mask, tex, this.groundWeather, {
+          geometry: apronGeometry(
+            this.edges,
+            APRON_W_M,
+            CURB_ABOVE_WALK_M,
+            LOW_CURB_M - ROAD_DROP_M,
+            TRANSITION_M,
+          ),
+          name: 'aprons',
+        }),
+      );
+    }
     this.addStreetFurniture(mask);
     this.addStreetDetails(mask);
     for (const overlay of [
@@ -455,50 +497,108 @@ export class SceneEngine {
 
   private addStreetFurniture(mask: MaskInfo): void {
     const world = this.world;
-    const curbTex = concrete();
-    curbTex.anisotropy = 4;
-    this.disposables.push(curbTex);
-    // Борт - отдельные камни по метру со швами и своим тоном, как гранитный бортовой камень
-    // ГП-1 на улицах Москвы; вдали швы гаснут, чтобы не рябить. Координата u ленты - метры
-    // вдоль борта (ribbonBox).
-    const granite = (color: number) => {
-      const material = new THREE.MeshStandardMaterial({ color, map: curbTex, roughness: 0.78 });
-      material.onBeforeCompile = (shader) => {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <map_fragment>',
-          `#include <map_fragment>
-          float stoneU = vMapUv.x;
-          float stoneFw = fwidth(stoneU);
-          float seam = smoothstep(0.0, max(0.008, stoneFw), fract(stoneU))
-            * smoothstep(0.0, max(0.008, stoneFw), 1.0 - fract(stoneU));
-          seam = mix(seam, 1.0, smoothstep(0.03, 0.12, stoneFw));
-          float stoneTone = 0.9 + 0.16 * fract(sin(floor(stoneU) * 12.9898) * 43758.5453);
-          diffuseColor.rgb *= stoneTone * mix(0.5, 1.0, seam);`,
-        );
+    const hasRoads = this.edges.length > 0;
+    const curbLines = hasRoads
+      ? this.edges.map((edge) =>
+          curbProfile(edge, CURB_ABOVE_WALK_M, LOW_CURB_M - ROAD_DROP_M, TRANSITION_M),
+        )
+      : world.curbs;
+    const gardenLines = pavedOnLeft(mask.edges.garden, mask);
+    if (curbLines.length || gardenLines.length) {
+      // Гранит: камни по метру со швами и зерном, рельеф из той же текстуры, фаска по рёбрам.
+      const stoneTex = curbStone();
+      stoneTex.anisotropy = 8;
+      stoneTex.repeat.set(1 / CURB_STONES_PER_TEXTURE, 0.05);
+      this.disposables.push(stoneTex);
+      // Дорожный борт с проезжей частью стоит от асфальта проезда, верх вровень с тротуаром.
+      const roadLift = hasRoads ? -ROAD_DROP_M : 0;
+      const roadHeight = hasRoads ? ROAD_DROP_M + CURB_ABOVE_WALK_M : CURB_H;
+      // Газонная грань (aShade из ribbonBox) затенена, будто засыпана землёй; у дорожного
+      // борта ещё подошва у асфальта грязная и мокрая: нижние 7 см темнее.
+      const stoneMaterial = (foot: number | null) => {
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          map: stoneTex,
+          bumpMap: stoneTex,
+          bumpScale: 1.5,
+          roughness: 0.92,
+          metalness: 0,
+        });
+        material.onBeforeCompile = (shader) => {
+          shader.vertexShader = shader.vertexShader
+            .replace(
+              '#include <common>',
+              '#include <common>\nattribute float aShade;\nvarying float vCurbY;\nvarying float vShade;',
+            )
+            .replace(
+              '#include <worldpos_vertex>',
+              '#include <worldpos_vertex>\nvCurbY = (modelMatrix * vec4(transformed, 1.0)).y;\nvShade = aShade;',
+            );
+          const footLine =
+            foot === null
+              ? ''
+              : `\ndiffuseColor.rgb *= mix(0.58, 1.0, smoothstep(${foot.toFixed(3)}, ${(foot + 0.07).toFixed(3)}, vCurbY));`;
+          shader.fragmentShader = shader.fragmentShader
+            .replace(
+              '#include <common>',
+              '#include <common>\nvarying float vCurbY;\nvarying float vShade;',
+            )
+            .replace(
+              '#include <map_fragment>',
+              `#include <map_fragment>${footLine}\ndiffuseColor.rgb *= mix(1.0, 0.45, vShade);`,
+            );
+        };
+        return material;
       };
-      return material;
-    };
-    const pieces: [THREE.BufferGeometry, string][] = [];
-    if (mask.edges.road.length) {
-      pieces.push([
-        ribbonBox(mask.edges.road, CURB_W, ROAD_DROP_M + CURB_ABOVE_WALK_M, -ROAD_DROP_M, 0.02),
-        'curbs',
-      ]);
-    } else if (world.curbs.length) {
-      pieces.push([ribbonBox(world.curbs, CURB_W, CURB_H), 'curbs']);
+      const roadStone = stoneMaterial(roadLift);
+      // Верх борта в плоскости земли: борт выигрывает глубину, иначе мерцание с газоном.
+      roadStone.polygonOffset = true;
+      roadStone.polygonOffsetFactor = -1;
+      roadStone.polygonOffsetUnits = -1;
+      for (const [lines, width, height, lift, bevel, name, material, sides] of [
+        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs', roadStone, 'left'],
+        [
+          gardenLines,
+          GARDEN_CURB_W,
+          GARDEN_CURB_H,
+          0,
+          0.01,
+          'garden-curbs',
+          stoneMaterial(null),
+          'left',
+        ],
+      ] as const) {
+        if (!lines.length) {
+          material.dispose();
+          continue;
+        }
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel, sides), material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.name = name;
+        this.add(mesh);
+      }
     }
-    if (mask.edges.garden.length) {
-      pieces.push([
-        ribbonBox(mask.edges.garden, GARDEN_CURB_W, GARDEN_CURB_H, 0, 0.012),
-        'garden-curbs',
-      ]);
-    }
-    for (const [geometry, name] of pieces) {
-      const mesh = new THREE.Mesh(geometry, granite(name === 'curbs' ? 0xdedcd6 : 0xd6d4ce));
-      mesh.castShadow = name === 'curbs';
-      mesh.receiveShadow = true;
-      mesh.name = name;
-      this.add(mesh);
+    if (hasRoads && this.edges.length) {
+      // Лоток: вдоль полного борта асфальт темнее от воды и грязи, к середине проезда светлеет.
+      const shade = gutterShade();
+      this.disposables.push(shade);
+      const gutter = new THREE.Mesh(
+        gutterGeometry(this.edges, GUTTER_W_M, 0.004 - ROAD_DROP_M),
+        new THREE.MeshBasicMaterial({
+          color: 0x0a0c0e,
+          transparent: true,
+          opacity: 0.4,
+          alphaMap: shade,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        }),
+      );
+      gutter.name = 'gutters';
+      gutter.renderOrder = 1;
+      this.add(gutter);
     }
     if (world.fences.length) {
       // Пунктир съёмки - сплошной оградой; столбы и перила объёмом видны на любой дальности,

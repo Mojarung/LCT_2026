@@ -892,7 +892,8 @@ def _paved_parts(
 def _smoothed(area: BaseGeometry) -> BaseGeometry:
     """Снять зубцы и закрыть выемки уже PAVED_SMOOTH_M x 2 (размыкание и замыкание с
     прямыми углами), выпрямить пилу с тем же допуском: лесенка разлива давала на краю проезда
-    рваный борт, углы остаются."""
+    рваный борт, углы остаются. Радиус больше полуметра нельзя: он стирает узкий тротуар;
+    сглаживание для 3D выполняется на стороне отображения."""
     r = PAVED_SMOOTH_M
     opened = area.buffer(-r, join_style="mitre").buffer(r, join_style="mitre")
     closed = opened.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
