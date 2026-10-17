@@ -161,6 +161,21 @@ describe('профиль борта', () => {
     expect(line.tops?.[pointAt(line.points, 10, 0)]).toBeCloseTo(0.02);
   });
 
+  it('линия борта идёт проездом слева: фаска бруса ложится на сторону проезда', () => {
+    const line = curbProfile(edge(), 0.02, -0.11, 1);
+    for (let i = 0; i + 1 < line.points.length; i += 7) {
+      const p = line.points[i] as Flat;
+      const q = line.points[i + 1] as Flat;
+      const len = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+      // Левая нормаль хода, как её считает ribbonBox.
+      const left = {
+        x: (p.x + q.x) / 2 - ((q.z - p.z) / len) * 0.4,
+        z: (p.z + q.z) / 2 + ((q.x - p.x) / len) * 0.4,
+      };
+      expect(kindAt(left), `пролёт ${i}`).toBe(ROAD);
+    }
+  });
+
   it('брус борта с профилем: верх идёт по заданным отметкам, низ - по подошве', () => {
     const line = curbProfile(edge(), 0.02, -0.11, 1);
     const g = ribbonBox([line], 0.15, 0.17, -0.15, 0.02);

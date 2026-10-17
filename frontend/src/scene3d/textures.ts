@@ -220,7 +220,8 @@ export function gutterShade(): THREE.CanvasTexture {
   const [c, ctx] = canvas(64);
   const gradient = ctx.createLinearGradient(0, 64, 0, 0);
   gradient.addColorStop(0, 'rgb(255,255,255)');
-  gradient.addColorStop(0.3, 'rgb(110,110,110)');
+  gradient.addColorStop(0.2, 'rgb(150,150,150)');
+  gradient.addColorStop(0.55, 'rgb(50,50,50)');
   gradient.addColorStop(1, 'rgb(0,0,0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 64, 64);

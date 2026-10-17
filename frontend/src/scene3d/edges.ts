@@ -30,7 +30,7 @@ export const LOW_CURB_M = 0.04;
 /** Переходный камень: понижение борта на метре до и после съезда. */
 export const TRANSITION_M = 1.0;
 /** Полоса лотка по асфальту вдоль полного борта. */
-export const GUTTER_W_M = 0.35;
+export const GUTTER_W_M = 0.45;
 
 /** Контур проезда режется на пролёты не длиннее метра. */
 const PIECE_M = 1.0;
@@ -372,7 +372,7 @@ export function apronGeometry(
   const nor: number[] = [];
   const uv: number[] = [];
   for (const edge of edges) {
-    const tops = curbProfile(edge, topFull, topLow, rampM).tops ?? [];
+    const tops = curbTops(edge, topFull, topLow, rampM).tops ?? [];
     for (const run of apronRuns(edge, rampM)) {
       const near = edge.points.slice(run.start, run.end + 1);
       const yNear = near.map((_, k) => (tops[run.start + k] ?? topFull) - CURB_ABOVE_WALK_M);
@@ -385,6 +385,15 @@ export function apronGeometry(
 /** Верх борта по точкам контура: topFull, на съезде topLow, за rampM до и после съезда -
  *  переходный камень с линейным понижением. */
 export function curbProfile(edge: RoadEdge, topFull: number, topLow: number, rampM: number): Line {
+  const profile = curbTops(edge, topFull, topLow, rampM);
+  // Линия идёт проездом слева от хода: фаска бруса (ribbonBox, 'left') ложится на сторону
+  // проезда, как у настоящего бортового камня, а на газоне ребро остаётся острым.
+  return edge.side === 1
+    ? { points: [...profile.points].reverse(), tops: [...(profile.tops ?? [])].reverse() }
+    : profile;
+}
+
+function curbTops(edge: RoadEdge, topFull: number, topLow: number, rampM: number): Line {
   const n = edge.points.length - 1;
   const s: number[] = [0];
   for (let i = 0; i < n; i++) {

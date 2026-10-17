@@ -114,7 +114,7 @@ float m = mm.r / max(mm.r + mm.g + max(1.0 - mm.r - mm.g - mm.b, 0.0), 1e-3);
 float edge = (texture2D(uNoise, world / 23.0).g - 0.5) * 0.5 + (texture2D(uNoise, world / 3.1).b - 0.5) * 0.35;
 float lawn = smoothstep(0.66, 0.78, m + edge * 0.4) * (1.0 - smoothstep(0.25, 0.4, mm.b)) * inside;
 float dist = length(local);
-float fade = 1.0 - smoothstep(uRadius * 0.6, uRadius, dist);
+float fade = 1.0 - smoothstep(uRadius * 0.45, uRadius, dist);
 float patchy = texture2D(uNoise, world / 7.0).r;
 float h = mix(0.045, 0.14, aBlade.x * aBlade.x) * (0.75 + 0.5 * patchy) * uGrow * lawn * fade;
 float c = cos(aBlade.y);
@@ -151,8 +151,8 @@ export function grassMaterial(uniforms: GrassUniforms): THREE.MeshStandardMateri
       )
       .replace(
         '#include <map_fragment>',
-        `vec3 grassBase = mix(vec3(0.045, 0.075, 0.02), vec3(0.07, 0.1, 0.03), vGrass.y);
-vec3 grassTip = mix(vec3(0.085, 0.15, 0.035), vec3(0.13, 0.18, 0.055), vGrass.z);
+        `vec3 grassBase = mix(vec3(0.07, 0.115, 0.03), vec3(0.095, 0.14, 0.04), vGrass.y);
+vec3 grassTip = mix(vec3(0.13, 0.21, 0.055), vec3(0.17, 0.25, 0.075), vGrass.z);
 diffuseColor.rgb *= mix(grassBase, grassTip, vGrass.x);`,
       );
   };

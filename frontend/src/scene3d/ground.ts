@@ -29,7 +29,7 @@ import type { Flat, Line, Ring, World } from './types';
 const MASK_M_PER_PX = 0.25;
 const MASK_MAX_PX = 4096;
 /** Размытие маски у контуров, пикселей (softenCells берёт 0,9 от него). */
-const CONTOUR_SOFTEN_PX = 1.6;
+const CONTOUR_SOFTEN_PX = 1.0;
 /** Земля продолжается за границу сцены, чтобы горизонт не обрывался краем плиты. */
 export const GROUND_PAD_M = 3000;
 
@@ -484,7 +484,7 @@ function surfaceToMask(
  *  пиксельная лесенка, а у размытой на клетку лесенки порог 0,5 идёт почти прямой. Полигоны
  *  подосновы рисуются после, чётко. */
 function softenCells(c: HTMLCanvasElement, ctx: CanvasRenderingContext2D, cellPx: number): void {
-  if (cellPx < 1.5) return;
+  if (cellPx < 0.9) return;
   const copy = document.createElement('canvas');
   copy.width = c.width;
   copy.height = c.height;
@@ -772,6 +772,7 @@ export function ribbonBox(
   height: number,
   lift = 0,
   bevel = 0,
+  bevelSides: 'both' | 'left' = 'both',
 ): THREE.BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
@@ -795,6 +796,10 @@ export function ribbonBox(
   // Фаска по верхним рёбрам: на ребре ловится блик, как у тёсаного камня, а не у бруса.
   const b = Math.min(Math.max(bevel, 0), hw * 0.8, height * 0.8);
   const inset = (hw - b) / hw;
+  // Фаска только слева (у дорожного борта - со стороны проезда): справа грань до верха и
+  // верх до самого ребра, иначе на газоне светилась тонкая полоска фаски.
+  const rightBevel = bevelSides === 'both';
+  const insetR = rightBevel ? inset : 1;
   const sq = Math.SQRT1_2;
   for (const line of lines) {
     const pts: Flat[] = [];
@@ -859,13 +864,15 @@ export function ribbonBox(
       const l1 = [q.x + ox1, q.z + oz1];
       const r1 = [q.x - ox1, q.z - oz1];
       const li0 = [p.x + ox0 * inset, p.z + oz0 * inset];
-      const ri0 = [p.x - ox0 * inset, p.z - oz0 * inset];
+      const ri0 = [p.x - ox0 * insetR, p.z - oz0 * insetR];
       const li1 = [q.x + ox1 * inset, q.z + oz1 * inset];
-      const ri1 = [q.x - ox1 * inset, q.z - oz1 * inset];
+      const ri1 = [q.x - ox1 * insetR, q.z - oz1 * insetR];
       const t0 = topAt(s);
       const t1 = topAt(s + 1);
       const b0 = bevelAt(s);
       const b1 = bevelAt(s + 1);
+      const rb0 = rightBevel ? b0 : t0;
+      const rb1 = rightBevel ? b1 : t1;
       // Верх, фаски, левая и правая грани.
       quad(
         [li0[0] ?? 0, t0, li0[1] ?? 0],
@@ -886,15 +893,16 @@ export function ribbonBox(
           u0,
           u1,
         );
-        quad(
-          [ri1[0] ?? 0, t1, ri1[1] ?? 0],
-          [ri0[0] ?? 0, t0, ri0[1] ?? 0],
-          [r0[0] ?? 0, b0, r0[1] ?? 0],
-          [r1[0] ?? 0, b1, r1[1] ?? 0],
-          [-nx * sq, sq, -nz * sq],
-          u1,
-          u0,
-        );
+        if (rightBevel)
+          quad(
+            [ri1[0] ?? 0, t1, ri1[1] ?? 0],
+            [ri0[0] ?? 0, t0, ri0[1] ?? 0],
+            [r0[0] ?? 0, b0, r0[1] ?? 0],
+            [r1[0] ?? 0, b1, r1[1] ?? 0],
+            [-nx * sq, sq, -nz * sq],
+            u1,
+            u0,
+          );
       }
       quad(
         [l0[0] ?? 0, y0, l0[1] ?? 0],
@@ -907,8 +915,8 @@ export function ribbonBox(
       );
       quad(
         [r1[0] ?? 0, y0, r1[1] ?? 0],
-        [r1[0] ?? 0, b1, r1[1] ?? 0],
-        [r0[0] ?? 0, b0, r0[1] ?? 0],
+        [r1[0] ?? 0, rb1, r1[1] ?? 0],
+        [r0[0] ?? 0, rb0, r0[1] ?? 0],
         [r0[0] ?? 0, y0, r0[1] ?? 0],
         [-nx, 0, -nz],
         u1,
@@ -928,15 +936,18 @@ export function ribbonBox(
       const a = [p.x + ox, p.z + oz];
       const c = [p.x - ox, p.z - oz];
       const ai = [p.x + ox * inset, p.z + oz * inset];
-      const ci = [p.x - ox * inset, p.z - oz * inset];
+      const ci = [p.x - ox * insetR, p.z - oz * insetR];
       const [first, second, firstIn, secondIn] = sign < 0 ? [a, c, ai, ci] : [c, a, ci, ai];
       const nrm = [dir[0] ?? 0, 0, dir[1] ?? 0];
       const tk = topAt(k);
       const bk = bevelAt(k);
+      // Угол без фаски (справа при bevelSides 'left') доходит до верха.
+      const rk = rightBevel ? bk : tk;
+      const [bFirst, bSecond] = sign < 0 ? [bk, rk] : [rk, bk];
       quad(
         [first[0] ?? 0, y0, first[1] ?? 0],
-        [first[0] ?? 0, bk, first[1] ?? 0],
-        [second[0] ?? 0, bk, second[1] ?? 0],
+        [first[0] ?? 0, bFirst, first[1] ?? 0],
+        [second[0] ?? 0, bSecond, second[1] ?? 0],
         [second[0] ?? 0, y0, second[1] ?? 0],
         nrm,
         0,
@@ -944,10 +955,10 @@ export function ribbonBox(
       );
       if (b > 0)
         quad(
-          [first[0] ?? 0, bk, first[1] ?? 0],
+          [first[0] ?? 0, bFirst, first[1] ?? 0],
           [firstIn[0] ?? 0, tk, firstIn[1] ?? 0],
           [secondIn[0] ?? 0, tk, secondIn[1] ?? 0],
-          [second[0] ?? 0, bk, second[1] ?? 0],
+          [second[0] ?? 0, bSecond, second[1] ?? 0],
           nrm,
           0,
           width,

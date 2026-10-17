@@ -392,16 +392,28 @@ export class SceneEngine {
     }
     const stripMarks = (this.world.treeStrips ?? []).flat();
     if (stripMarks.length) {
-      const geometry = new THREE.RingGeometry(0.18, 0.25, 12);
+      // Знак полосы деревьев - приствольный круг голой земли, а не зелёное кольцо: кольца на
+      // газоне читались как покрышки (17.10.2026). Стволов по знаку по-прежнему нет.
+      const geometry = new THREE.CircleGeometry(0.28, 18);
       geometry.rotateX(-Math.PI / 2);
       const marks = new THREE.InstancedMesh(
         geometry,
-        new THREE.MeshBasicMaterial({ color: 0x48633e, depthWrite: false }),
+        new THREE.MeshStandardMaterial({
+          color: 0x4f4530,
+          roughness: 1,
+          transparent: true,
+          opacity: 0.6,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        }),
         stripMarks.length,
       );
+      marks.receiveShadow = true;
       const matrix = new THREE.Matrix4();
       stripMarks.forEach((point, index) => {
-        marks.setMatrixAt(index, matrix.makeTranslation(point.x, 0.06, point.z));
+        marks.setMatrixAt(index, matrix.makeTranslation(point.x, 0.005, point.z));
       });
       marks.name = 'tree-strip-symbols';
       this.add(marks);
@@ -508,15 +520,24 @@ export class SceneEngine {
             `#include <map_fragment>\ndiffuseColor.rgb *= mix(0.58, 1.0, smoothstep(${roadLift.toFixed(3)}, ${(roadLift + 0.07).toFixed(3)}, vCurbY));`,
           );
       };
-      for (const [lines, width, height, lift, bevel, name, material] of [
-        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs', roadStone],
-        [gardenLines, GARDEN_CURB_W, GARDEN_CURB_H, 0, 0.01, 'garden-curbs', stoneMaterial()],
+      for (const [lines, width, height, lift, bevel, name, material, sides] of [
+        [curbLines, CURB_W, roadHeight, roadLift, 0.02, 'curbs', roadStone, 'left'],
+        [
+          gardenLines,
+          GARDEN_CURB_W,
+          GARDEN_CURB_H,
+          0,
+          0.01,
+          'garden-curbs',
+          stoneMaterial(),
+          'both',
+        ],
       ] as const) {
         if (!lines.length) {
           material.dispose();
           continue;
         }
-        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel), material);
+        const mesh = new THREE.Mesh(ribbonBox(lines, width, height, lift, bevel, sides), material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.name = name;
@@ -532,7 +553,7 @@ export class SceneEngine {
         new THREE.MeshBasicMaterial({
           color: 0x0a0c0e,
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.4,
           alphaMap: shade,
           depthWrite: false,
           polygonOffset: true,

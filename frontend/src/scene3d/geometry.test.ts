@@ -167,6 +167,38 @@ describe('борт, ограда и опоры', () => {
     expect(zsAt(0.13)).toEqual([-0.1, 0.1]); // начало фаски - полная ширина
   });
 
+  it('фаска только слева: правая грань доходит до верха, левая кончается ниже', () => {
+    const straight = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 4, z: 0 },
+      ],
+    };
+    const g = ribbonBox([straight], 0.2, 0.15, 0, 0.02, 'left');
+    const pos = g.getAttribute('position');
+    const nor = g.getAttribute('normal');
+    let rightTop = -1;
+    let leftTop = -1;
+    for (let i = 0; i < pos.count; i++) {
+      // Левая грань смотрит в +z (нормаль [0, 0, 1] при ходе вдоль +x), правая в -z.
+      if (Math.abs(nor.getY(i)) > 0.01) continue;
+      if (nor.getZ(i) < -0.9) rightTop = Math.max(rightTop, pos.getY(i));
+      if (nor.getZ(i) > 0.9) leftTop = Math.max(leftTop, pos.getY(i));
+    }
+    expect(rightTop).toBeCloseTo(0.15);
+    expect(leftTop).toBeCloseTo(0.13);
+    // Верх доходит до правого ребра (z = -0.1), слева кончается у фаски (z = 0.08).
+    let topMinZ = 1;
+    let topMaxZ = -1;
+    for (let i = 0; i < pos.count; i++) {
+      if (nor.getY(i) < 0.99) continue;
+      topMinZ = Math.min(topMinZ, pos.getZ(i));
+      topMaxZ = Math.max(topMaxZ, pos.getZ(i));
+    }
+    expect(topMinZ).toBeCloseTo(-0.1);
+    expect(topMaxZ).toBeCloseTo(0.08);
+  });
+
   it('замкнутое кольцо борта без торцов: начало и конец сходятся стыком', () => {
     const ring = {
       points: [
