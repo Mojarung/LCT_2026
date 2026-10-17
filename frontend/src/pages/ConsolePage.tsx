@@ -6,25 +6,21 @@ import { RecentRuns } from '../components/console/RecentRuns';
 import { RunForm } from '../components/console/RunForm';
 import { RECENT_LIMIT, RunsRegistry } from '../components/console/RunsRegistry';
 import { InfoTip } from '../components/InfoTip';
-import { UiIcon, type UiGlyph } from '../components/icons';
 import { plural } from '../lib/format';
 
 /** Шаги - действия человека и то, что в ответ делает сервис: по ним видно, зачем форма выше и
- *  что будет после кнопки. Значок вместо номера: порядок и так читается слева направо. */
-function steps(species: number | undefined): { icon: UiGlyph; title: string; text: ReactNode }[] {
+ *  что будет после кнопки. Порядок - настоящий список, без номеров и значков. */
+function steps(species: number | undefined): { title: string; text: ReactNode }[] {
   return [
     {
-      icon: 'upload',
       title: 'Выберите улицу',
       text: 'Улица пилотного проекта или свой чертёж DXF или DWG. Сети, опись деревьев и слои ГИС - по желанию.',
     },
     {
-      icon: 'check',
       title: 'Сервис проверит нормы',
       text: 'Каждое место посадки - на отступы от сетей, зданий, бортов и опор по СП 42.13330, 743-ПП и 623-ПП.',
     },
     {
-      icon: 'trees',
       title: 'Получите план',
       text: (
         <>
@@ -40,7 +36,6 @@ function steps(species: number | undefined): { icon: UiGlyph; title: string; tex
       ),
     },
     {
-      icon: 'scene',
       title: 'Проверьте и поправьте',
       text: 'На карте видно, почему дерево стоит здесь и почему не встало там. Посадку можно перенести, улицу - посмотреть в 3D.',
     },
@@ -67,33 +62,35 @@ export function ConsolePage() {
           <a className="home-more" href="#how">
             Как это работает
           </a>
-          {/* Результат сервиса - на первом экране: фото улицы после посадки и тот же план на
-              слоях чертежа поверх подосновы и сетей. */}
+          {/* Результат на первом экране: план прогона с выбранной посадкой и её отступами в
+              метрах - то, ради чего сервис, - и фото той же улицы врезкой. Кадр плана снят с
+              настоящего прогона (10004141, режим «Кроны»), фото - его же фото по 3D-кадру. */}
           <figure className="home-collage">
             <span className="collage-stage">
               <span className="collage-frame">
                 <img
-                  className="collage-photo"
-                  src="/landing/street.webp"
-                  width={1600}
-                  height={900}
-                  alt="Улица после посадки: аллея вдоль дорожки, прохожие, новые дома"
+                  className="collage-main"
+                  src="/landing/plan-callout.webp"
+                  width={1760}
+                  height={1100}
+                  alt="План посадок на подоснове: у выбранной посадки выноски «борт 2,00 ≥ 2,00» и «опора 7,33 ≥ 4,00»"
                   fetchPriority="high"
                 />
               </span>
-              <span className="collage-plan">
+              <span className="collage-inset">
                 <img
-                  src="/landing/plan.webp"
-                  width={900}
-                  height={428}
-                  alt="Фрагмент плана: посадки на слоях GREEN_* поверх подосновы и сетей"
+                  src="/landing/street-photo.webp"
+                  width={1280}
+                  height={720}
+                  alt="Фото той же улицы по кадру 3D-вида: газон с гранитным бортом, кустарник, деревья вдоль дороги"
+                  loading="lazy"
                 />
-                <span>План на слоях DXF</span>
+                <span>Фото по 3D-кадру</span>
               </span>
             </span>
             <figcaption>
-              Фото нарисовано нейросетью по кадру 3D-вида плана. Это иллюстрация: нормы проверяются
-              на чертеже.
+              Выноски - отступы выбранной посадки до борта и опоры в метрах против нормы. Фото
+              нарисовано нейросетью по 3D-виду этого плана, это иллюстрация.
             </figcaption>
           </figure>
         </div>
@@ -126,15 +123,28 @@ export function ConsolePage() {
         <h2 className="home-title" id="steps-title">
           Как это работает
         </h2>
-        <ol className="how">
-          {steps(meta.data?.species.length).map((step) => (
-            <li key={step.title}>
-              <UiIcon name={step.icon} size={22} />
-              <b>{step.title}</b>
-              <span>{step.text}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="how-body">
+          <ol className="how">
+            {steps(meta.data?.species.length).map((step) => (
+              <li key={step.title}>
+                <b>{step.title}</b>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
+          {/* Ответ на «почему дерево здесь» - настоящая карточка посадки, снятая с прогона:
+              замер, норма и пункт акта одним кликом по кроне. */}
+          <figure className="how-card">
+            <img
+              src="/landing/planting-card.webp"
+              width={678}
+              height={813}
+              alt="Карточка посадки № 151, сосна горная: допускается; ближе всего к норме - до силового кабеля 2,49 м при норме 2,00 м, СП 42.13330.2016, п. 9.6, табл. 9.1"
+              loading="lazy"
+            />
+            <figcaption>Клик по кроне на плане открывает такую карточку.</figcaption>
+          </figure>
+        </div>
       </section>
     </div>
   );

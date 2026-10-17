@@ -364,9 +364,9 @@ describe('RunPage: finished run', () => {
     expect(within(right).getByRole('heading', { name: '№ 1. Липа мелколистная' })).toBeVisible();
     expect(within(right).getByText('допускается')).toBeVisible();
     expect(within(right).getByText('Ближе всего к норме')).toBeVisible();
-    expect(right).toHaveTextContent(
-      'R-UTIL-WATER-001 · норма 2,00 м · СП 42.13330.2016, табл. 9.1',
-    );
+    // Норма и пункт - строкой карточки, код правила - в строке «Текст нормы» под ней.
+    expect(right).toHaveTextContent('норма 2,00 м · СП 42.13330.2016, табл. 9.1');
+    expect(within(right).getByText('R-UTIL-WATER-001')).toBeInTheDocument();
     // Норма - первой, выбор растения - под раскрытием.
     expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).not.toBeVisible();
     await openFold(right, 'О растении и его выборе');

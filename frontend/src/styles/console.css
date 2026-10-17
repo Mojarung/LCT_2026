@@ -30,7 +30,7 @@
 .stamp-title h1 {
   margin: 0 0 8px;
   font-size: clamp(28px, 1.2rem + 1.6vw, 44px);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
@@ -46,14 +46,14 @@
 .section-label {
   margin: 0 0 14px;
   font-size: var(--fs-strong);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--bone);
 }
 .section-label .count,
 .panel-title .count {
   margin-left: 8px;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--bone-3);
 }
@@ -61,7 +61,7 @@
 .start-title {
   margin: 0 0 8px;
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -160,7 +160,7 @@
   align-items: baseline;
   margin: 0 0 20px;
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--bone);
 }
@@ -178,7 +178,7 @@
 .empty-page h1 {
   margin: 0;
   font-size: clamp(28px, 1.2rem + 1.6vw, 44px);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
@@ -230,7 +230,7 @@
   display: inline-block;
   margin-top: 14px;
   font-size: var(--fs-body);
-  font-weight: 550;
+  font-weight: 600;
   color: var(--bone);
   animation: rise var(--dur-4) var(--ease-out) 120ms backwards;
 }
@@ -261,25 +261,21 @@
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
-.collage-photo {
+.collage-main {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   object-fit: cover;
-  animation: drift 24s var(--ease-out) both;
 }
-@keyframes drift {
-  from {
-    transform: scale(1.06);
-  }
-}
-.collage-plan {
+/* Фото врезкой в правый нижний угол плана: тот же участок, каким он будет. Приезжает
+   снизу с лёгким поворотом после плана. */
+.collage-inset {
   position: absolute;
-  left: clamp(12px, 2vw, 24px);
+  right: clamp(12px, 2vw, 24px);
   bottom: clamp(12px, 2vw, 24px);
   z-index: 2;
-  width: 46%;
+  width: 40%;
   padding: 6px;
   background: var(--panel);
   border-radius: var(--r-panel);
@@ -289,16 +285,18 @@
 @keyframes plan-in {
   from {
     opacity: 0;
-    transform: translateY(28px) rotate(-1.5deg);
+    transform: translateY(28px) rotate(1.5deg);
   }
 }
-.collage-plan img {
+.collage-inset img {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
   border-radius: calc(var(--r-panel) - 5px);
 }
-.collage-plan span {
+.collage-inset span {
   position: absolute;
   left: 14px;
   bottom: 14px;
@@ -336,7 +334,7 @@
 .recent-title {
   margin: 0 0 8px 4px;
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--bone);
 }
 .recent ul {
@@ -348,7 +346,7 @@
 }
 .recent a {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   column-gap: 12px;
   padding: 12px 16px;
@@ -378,18 +376,6 @@
   font-variant-numeric: tabular-nums;
   color: var(--bone-3);
 }
-.recent-go {
-  grid-row: 1 / span 2;
-  grid-column: 2;
-  color: var(--bone-3);
-  transition:
-    transform var(--dur-2) var(--ease-out),
-    color var(--dur-1);
-}
-.recent a:hover .recent-go {
-  color: var(--bone);
-  transform: translateX(3px);
-}
 
 .home-runs {
   scroll-margin-top: 24px;
@@ -413,46 +399,67 @@
 .home-title {
   margin: 0 0 20px;
   font-size: clamp(22px, 1rem + 1vw, 30px);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--bone);
 }
+/* Слева шаги крупным текстом, справа настоящая карточка посадки на тоне - разворот, а не
+   ряд одинаковых карточек. */
+.how-body {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(280px, 4fr);
+  gap: clamp(24px, 4vw, 72px);
+  align-items: center;
+  padding: clamp(24px, 3vw, 44px);
+  border-radius: var(--r-panel);
+  background: var(--panel-3);
+}
 .how {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(10px, 1.4vw, 16px);
+  gap: clamp(18px, 2vw, 28px);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .how li {
   display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 20px 22px 22px;
-  border-radius: var(--r-panel);
-  background: var(--panel);
-  box-shadow: 0 0 0 1px var(--hair);
-  transition: transform var(--dur-2) var(--ease-out);
-}
-.how li:hover {
-  transform: translateY(-2px);
-}
-.how .icon {
-  width: 22px;
-  height: 22px;
-  margin-bottom: 6px;
-  color: var(--bone);
+  gap: 4px;
+  max-width: 58ch;
 }
 .how b {
-  font-size: var(--fs-strong);
-  font-weight: 650;
+  font-size: clamp(18px, 1rem + 0.4vw, 22px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
   color: var(--bone);
 }
 .how span {
-  font-size: var(--fs-body);
+  font-size: var(--fs-strong);
   line-height: 1.5;
   color: var(--bone-2);
+}
+.how-card {
+  margin: 0;
+}
+.how-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
+  transform: rotate(1.2deg);
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.how-card:hover img {
+  transform: rotate(0deg) scale(1.01);
+}
+.how-card figcaption {
+  margin-top: 14px;
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+  text-align: center;
 }
 .how a {
   color: inherit;
@@ -470,7 +477,7 @@
   text-align: left;
   padding: 0 12px 10px 0;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone-3);
 }
 .registry td {
@@ -526,7 +533,7 @@
   color: var(--bone-2);
 }
 .registry a {
-  font-weight: 550;
+  font-weight: 600;
   text-decoration: none;
 }
 .registry tr:hover td {
@@ -667,7 +674,7 @@
 .models-back {
   margin: 0;
   font-size: var(--fs-body);
-  font-weight: 550;
+  font-weight: 600;
 }
 .models-body {
   display: grid;
@@ -827,8 +834,11 @@
   .home-side {
     position: static;
   }
-  .how {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .how-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .how-card {
+    max-width: 380px;
   }
 }
 @media (max-width: 900px) {
@@ -843,16 +853,17 @@
   }
 }
 @media (max-width: 560px) {
-  .how {
-    grid-template-columns: 1fr;
+  .collage-inset {
+    width: 42%;
+    right: 8px;
+    bottom: 8px;
+    padding: 4px;
   }
-  .collage-plan {
-    width: 58%;
-    left: 10px;
-    bottom: -18px;
+  .collage-inset span {
+    display: none;
   }
-  .home-collage figcaption {
-    margin-top: 28px;
+  .start-form > .primary {
+    font-size: var(--fs-body);
   }
   .home-collage figcaption {
     text-align: left;

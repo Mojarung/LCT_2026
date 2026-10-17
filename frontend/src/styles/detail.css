@@ -21,7 +21,7 @@
 .detail h2.detail-name {
   margin: 0 0 2px;
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.02em;
   animation: rise var(--dur-3) var(--ease-out);
@@ -35,7 +35,7 @@
 .detail-heading {
   margin: 24px 0 10px;
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--bone);
 }
 .detail-heading:first-child {
@@ -122,7 +122,7 @@
 }
 .detail-slack b {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone);
 }
 
@@ -238,7 +238,7 @@
   position: relative;
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone-2);
 }
 
@@ -274,7 +274,7 @@
 .check-dist {
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 }
 .check-clause {
@@ -286,6 +286,9 @@
 /* Номер правила не рвётся посередине: «R-» на одной строке и «MGSN-CATEGORY-001» на
    другой не читаются как одно имя. */
 .check-id {
+  margin-left: 8px;
+  font-size: var(--fs-micro);
+  color: var(--bone-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -318,7 +321,7 @@
 }
 .quote-rows b {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone);
   white-space: nowrap;
 }
@@ -334,7 +337,7 @@
 }
 .quote-cols b {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone);
 }
 .quote-note {
@@ -360,7 +363,7 @@
   background: none;
   color: var(--bone-2);
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: 600;
   transition:
     background-color var(--dur-1),
     color var(--dur-1);

@@ -180,7 +180,9 @@
   }
   /* Имя чертежа важнее профиля: втроём с ним колонки режут имя до «улица Берза...». */
   .registry th:nth-child(3),
-  .registry td:nth-child(3) {
+  .registry td:nth-child(3),
+  .registry th:nth-child(5),
+  .registry td:nth-child(5) {
     display: none;
   }
 }

@@ -2,7 +2,6 @@ import { Link } from 'react-router';
 
 import { useRuns } from '../../api/queries';
 import { drawingName, integer, plural, stamp } from '../../lib/format';
-import { UiIcon } from '../icons';
 import { RECENT_LIMIT } from './RunsRegistry';
 
 const SHOWN = 3;
@@ -31,7 +30,6 @@ export function RecentRuns() {
                     : ''}
                   {stamp(run.created_at)}
                 </span>
-                <UiIcon name="arrow" className="icon recent-go" />
               </Link>
             </li>
           );

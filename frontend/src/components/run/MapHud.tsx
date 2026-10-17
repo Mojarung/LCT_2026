@@ -58,7 +58,7 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
     <>
       {/* Как показан план - в углу карты, отдельно от кнопок действия внизу: две пары
           вариантов в полосе не помещались между панелями на ноутбучной ширине. */}
-      <div className="hud hud-view" role="group" aria-label="Вид карты">
+      <div className="hud hud-view" role="group" aria-label="Вид карты" data-map-obstacle="top">
         <Pair
           label="Поворот плана"
           value={orientation}

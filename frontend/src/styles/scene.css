@@ -432,7 +432,7 @@
 .gallery-label {
   margin: 6px 0 0;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone);
 }
 .gallery-species {
@@ -558,7 +558,7 @@
   border-radius: 8px;
   font-family: inherit;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 :is(.scene-bar, .media-actions) .bar-button .icon {
@@ -672,7 +672,7 @@
 .page-scene .panel-title {
   margin: 0;
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0;
   color: var(--bone);
 }
@@ -1261,14 +1261,26 @@
   padding-left: 0;
 }
 
-/* --- 3D-вид в общей оболочке: сцена во весь экран под шапкой, карточки плавают над ней ---
-   На плане панели прилегают к краям (workspace.css); над сценой они остаются карточками: кадр
-   нужен целиком, а карточку можно свернуть. */
+/* --- 3D-вид в общей оболочке: тот же язык, что у плана ---
+   Карточка улицы со снимками слева и пульт справа прилегают к краям экрана, как сводка и
+   состав плана; свёрнутая панель - одна кнопка у края сцены. Полоса камеры и подсказки
+   плавают над сценой. */
 .page-scene .hud {
   border-radius: var(--r-panel);
   box-shadow:
     var(--lift),
     0 0 0 1px var(--hair);
+}
+.page-scene .scene-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--hud-left-w);
+  gap: 0;
+}
+.page-scene .scene-left > .hud {
+  border-radius: 0;
+  box-shadow: 1px 0 0 var(--hair);
 }
 .page-scene .scene-left > .hud-left {
   position: relative;
@@ -1276,34 +1288,76 @@
   bottom: auto;
   left: auto;
   width: auto;
-  animation: rise var(--dur-3) var(--ease-out);
+  animation: slide-left var(--dur-3) var(--ease-out);
 }
-.page-scene .scene-left > .hud-left.collapsed {
+.page-scene .scene-left > .scene-media {
+  flex: 1 1 auto;
+  padding: 18px 22px;
+  box-shadow:
+    1px 0 0 var(--hair),
+    inset 0 1px 0 var(--hair);
+  animation: slide-left var(--dur-3) var(--ease-out) 60ms backwards;
+}
+/* Свёрнутая карточка - кнопка у края сцены, а не полоса во всю высоту. */
+.page-scene .scene-left > .hud.collapsed {
+  flex: none;
   width: 44px;
+  margin: var(--inset) 0 0 var(--inset);
+  padding: 0;
+  border-radius: var(--r-panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
+}
+.page-scene .scene-left:has(> .hud.collapsed + .hud.collapsed),
+.page-scene .scene-left:has(> .hud.collapsed:only-child) {
+  bottom: auto;
+}
+.page-scene .scene-panel:not([data-collapsed='true']) {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--hud-right-w);
+  max-height: none;
+  border-radius: 0;
+  box-shadow: -1px 0 0 var(--hair);
 }
 .scene-head-title {
   margin: 0;
-  padding: 18px 56px 0 22px;
+  padding: 20px 56px 0 22px;
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--bone);
 }
 .page-scene .scene-head .hud-scroll {
   padding-top: 14px;
 }
-.page-scene .scene-media {
-  animation: rise var(--dur-3) var(--ease-out) 80ms backwards;
-}
 .page-scene .scene-panel {
   animation: slide-right var(--dur-3) var(--ease-out);
 }
+/* Полоса камеры и подсказка - по центру сцены между панелями. */
+.workspace.page-scene {
+  --side-l: var(--hud-left-w);
+  --side-r: var(--hud-right-w);
+}
+.workspace.page-scene:has(.scene-left > .hud.collapsed + .hud.collapsed) {
+  --side-l: 0px;
+}
+.workspace.page-scene:has(.scene-panel[data-collapsed='true']),
+.workspace.page-scene:not(:has(.scene-panel)) {
+  --side-r: 0px;
+}
+.page-scene .scene-bar,
+.page-scene .scene-help {
+  left: calc(var(--side-l) + (100% - var(--side-l) - var(--side-r)) / 2);
+}
 .page-scene .scene-bar {
-  left: 50%;
   bottom: 16px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - var(--side-l) - var(--side-r) - 24px);
 }
 .page-scene .scene-help {
   bottom: 76px;
+  width: min(620px, calc(100% - var(--side-l) - var(--side-r) - 24px));
   border-radius: var(--r-panel);
   animation: rise var(--dur-3) var(--ease-out) 300ms backwards;
 }
@@ -1323,4 +1377,22 @@
 :is(.scene-bar, .media-actions) .bar-button[aria-pressed='true'] {
   background: var(--panel-3);
   box-shadow: none;
+}
+@media (max-width: 1080px) {
+  .page-scene .scene-left,
+  .page-scene .scene-panel:not([data-collapsed='true']) {
+    width: min(var(--hud-left-w), 46vw);
+  }
+}
+/* Между прилегающими панелями полоса камеры с метками клавиш не помещается до 1600 px:
+   клавиши остаются в подсказке над полосой и во всплывающей подсказке кнопки. */
+@media (max-width: 1600px) {
+  .page-scene .scene-bar .bar-key {
+    display: none;
+  }
+}
+@media (max-width: 1366px) {
+  .page-scene .scene-bar .bar-meta {
+    display: none;
+  }
 }

@@ -83,6 +83,6 @@ describe('photoProgress', () => {
 
   it('shows the failure reason', () => {
     const failed = photo({ state: 'failed', error: 'out of memory' });
-    expect(photoProgress(failed, [failed], now, 80).label).toBe('не удалось: out of memory');
+    expect(photoProgress(failed, [failed], now, 80).label).toBe('не получилось, можно повторить');
   });
 });
