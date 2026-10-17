@@ -32,13 +32,14 @@ import {
   edgeBetween,
   GARDEN_CURB_H,
   GARDEN_CURB_W,
+  groundGeometry,
   groundMesh,
   ribbonBox,
   ROAD_DROP_M,
   roadGeometry,
   type SurfaceImage,
 } from './ground';
-import { ASPHALT, GRASS, PAVERS, ROAD } from './surfaceMask';
+import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
 import { pick } from './pick';
 import type { ScenePostprocessing } from './postprocessing';
 import { Atmosphere } from './sky';
@@ -328,7 +329,15 @@ export class SceneEngine {
         }),
       );
     }
-    const ground = groundMesh(this.world, mask, tex, this.groundWeather, { cutRoad: !!roadGeo });
+    // Земля с вырезом проезда по контурам частей проезжей части: край выреза - ось борта.
+    const roadParts = (surface?.areas?.paved ?? []).filter(
+      (_, i) => surface?.areas?.paved_kind?.[i] === 'road',
+    );
+    const ground = groundMesh(this.world, mask, tex, this.groundWeather, {
+      geometry: roadGeo
+        ? groundGeometry(this.world.bounds, roadParts, this.world.origin)
+        : undefined,
+    });
     this.add(ground);
     this.addStreetFurniture(surface);
     if (this.world.shrubStrips?.length) {
@@ -412,14 +421,14 @@ export class SceneEngine {
     const curbLines =
       areas && mask
         ? hasRoads
-          ? areaCurbs(
-              areas,
+          ? // Дорожный борт - весь край выреза земли под проезд (groundGeometry): на каждом
+            // его отрезке перепад высоты, проверка соседа по маске оставляла ступень без борта.
+            areaCurbs(
+              {
+                ...areas,
+                paved: areas.paved.filter((_, i) => areas.paved_kind?.[i] === 'road'),
+              },
               world.origin,
-              edgeBetween(
-                mask,
-                (k) => k === ROAD,
-                (k) => k !== ROAD,
-              ),
             )
           : []
         : world.curbs;

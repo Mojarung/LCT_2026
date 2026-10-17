@@ -283,6 +283,48 @@ export function roadGeometry(
   return geometry;
 }
 
+/** Земля на уровне тротуара: квадрат bounds с полем вокруг и вырезом проезжей части по её
+ *  контуру (части покрытия вида road). Вырез по размытой маске скруглял углы проезда на
+ *  полметра: газон наползал на проезд мимо борта, борт висел в воздухе (пользователь,
+ *  17.10.2026). По контуру край земли совпадает с осью борта. Дыры внутри проезда (островки)
+ *  - снова земля. */
+export function groundGeometry(
+  bounds: [number, number, number, number],
+  roads: AreaPolygon[],
+  origin: [number, number],
+): THREE.BufferGeometry {
+  const [minX, minZ, maxX, maxZ] = bounds;
+  const [ox, oy] = origin;
+  const half = Math.max(maxX - minX, maxZ - minZ) / 2 + GROUND_PAD_M;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+  // Плоскость фигуры: x сцены и -z сцены (после поворота на -90° вокруг X). Кольца чистятся
+  // от шпилек так же, как линии бортов (areaCurbs): край выреза - ось борта.
+  const toVec = (ring: number[][]) =>
+    withoutHairpins(ring.map(([x = 0, y = 0]): Flat => ({ x: x - ox, z: oy - y }))).map(
+      (p) => new THREE.Vector2(p.x, -p.z),
+    );
+  const outer = new THREE.Shape([
+    new THREE.Vector2(cx - half, -(cz + half)),
+    new THREE.Vector2(cx + half, -(cz + half)),
+    new THREE.Vector2(cx + half, -(cz - half)),
+    new THREE.Vector2(cx - half, -(cz - half)),
+  ]);
+  const shapes = [outer];
+  for (const rings of roads) {
+    const ring = rings[0] ? toVec(rings[0]) : [];
+    if (ring.length < 4) continue;
+    outer.holes.push(new THREE.Path(ring));
+    for (const island of rings.slice(1)) {
+      const points = toVec(island);
+      if (points.length >= 4) shapes.push(new THREE.Shape(points));
+    }
+  }
+  const geometry = new THREE.ShapeGeometry(shapes);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
 export interface MaskInfo {
   texture: THREE.CanvasTexture;
   /** minX, minZ, sizeX, sizeZ в координатах сцены. */
@@ -445,7 +487,6 @@ export function groundMesh(
   weather: GroundWeather,
   options: {
     geometry?: THREE.BufferGeometry;
-    cutRoad?: boolean;
     roadTone?: boolean;
     name?: string;
   } = {},
@@ -485,8 +526,6 @@ export function groundMesh(
     uGrassArm: { value: tex.grassArmMap ?? tex.noise },
     uAsphaltArm: { value: tex.asphaltArmMap ?? tex.noise },
     uPaversArm: { value: tex.paversArmMap ?? tex.noise },
-    // Земля на уровне тротуара вырезает проезжую часть: там видна сетка проезда ниже.
-    uCutRoad: { value: options.cutRoad ? 1 : 0 },
     // Асфальт проезжей части темнее тротуарного: свежий и мокрее, перепад у борта читается.
     uRoadTone: { value: options.roadTone ? 1 : 0 },
     ...weather,
@@ -529,7 +568,6 @@ uniform sampler2D uAsphaltArm;
 uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
-uniform float uCutRoad;
 uniform float uRoadTone;
 vec3 groundWeights;
 float groundSnow;
@@ -554,14 +592,19 @@ export const GROUND_MAP = /* glsl */ `
   vec3 m = texture2D(uMask, clamp(muv, 0.0, 1.0)).rgb;
   // За границей сцены данных нет: газон квартала, край уходит в дымку.
   float outside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
-  // Порог выше середины: вырез чуть уже проезда, край земли уходит под борт, а не открывает
-  // щель между бортом и тротуаром.
-  if (uCutRoad > 0.5 && outside > 0.5 && m.b > 0.7) discard;
   vec4 nz = texture2D(uNoise, p / 23.0);
   // Граница газона, плитки и асфальта - порог маски без шума: шум делал край «обгрызенным»
   // (пользователь, 17.10.2026). Лесенку клеток растра снимает размытие маски (softenCells).
-  float lawn = smoothstep(0.45, 0.55, m.r);
-  float paver = smoothstep(0.45, 0.55, m.g) * (1.0 - lawn);
+  // Доли считаются без проезда: асфальт тротуара - пиксель без каналов (1 - r - g - b), а не
+  // переход газона к проезду. Иначе на размытом краю между газоном и бортом выходила светлая
+  // полоса асфальта, которой в чертеже нет.
+  vec3 share = vec3(m.r, m.g, max(1.0 - m.r - m.g - m.b, 0.0));
+  share /= max(share.r + share.g + share.b, 1e-3);
+  float lawn = smoothstep(0.45, 0.55, share.r);
+  float paver = smoothstep(0.45, 0.55, share.g) * (1.0 - lawn);
+  // Сетка проезда видна только в вырезе земли: там всегда асфальт проезжей части.
+  lawn *= 1.0 - uRoadTone;
+  paver *= 1.0 - uRoadTone;
   lawn = mix(1.0, lawn, outside);
   paver *= outside;
   float asph = clamp(1.0 - lawn - paver, 0.0, 1.0);

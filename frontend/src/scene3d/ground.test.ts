@@ -6,6 +6,7 @@ import {
   drawSurfaceAreas,
   edgeBetween,
   GROUND_MAP,
+  groundGeometry,
   ROAD_DROP_M,
   roadGeometry,
   type MaskInfo,
@@ -76,8 +77,16 @@ describe('край покрытия на 3D-виде', () => {
   it('граница газона и плитки - порог маски без шума: край прямой, а не «обгрызенный»', () => {
     const lawn = /float lawn = smoothstep\(([^;]+)\);/.exec(GROUND_MAP)?.[1] ?? '';
     const paver = /float paver = smoothstep\(([^)]+)\)/.exec(GROUND_MAP)?.[1] ?? '';
-    expect(lawn).toMatch(/^0\.4\d, 0\.5\d, m\.r$/);
-    expect(paver).toMatch(/^0\.4\d, 0\.5\d, m\.g$/);
+    expect(lawn).toMatch(/^0\.4\d, 0\.5\d, share\.r$/);
+    expect(paver).toMatch(/^0\.4\d, 0\.5\d, share\.g$/);
+  });
+
+  it('переход газона к проезду - газон до борта, без светлой полосы асфальта', () => {
+    // Доли газона, плитки и асфальта считаются без канала проезда (B).
+    expect(GROUND_MAP).toMatch(
+      /share = vec3\(m\.r, m\.g, max\(1\.0 - m\.r - m\.g - m\.b, 0\.0\)\)/,
+    );
+    expect(GROUND_MAP).toMatch(/share \/= max\(share\.r \+ share\.g \+ share\.b/);
   });
 });
 
@@ -142,6 +151,55 @@ describe('борт по маске: дорожный у асфальта, сад
   it('внутри одного покрытия борта нет', () => {
     expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
     expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
+  });
+});
+
+describe('земля с вырезом проезда по контуру', () => {
+  /** Покрыта ли точка (x, z) сцены треугольниками сетки земли. */
+  const covers = (g: ReturnType<typeof groundGeometry>, x: number, z: number): boolean => {
+    const pos = g.getAttribute('position');
+    const index = g.getIndex();
+    const n = index ? index.count : pos.count;
+    const at = (i: number) => (index ? index.getX(i) : i);
+    for (let t = 0; t < n; t += 3) {
+      const [a, b, c] = [at(t), at(t + 1), at(t + 2)].map((k) => [pos.getX(k), pos.getZ(k)]);
+      if (!a || !b || !c) continue;
+      const s = (p: number[], q: number[]) =>
+        ((q[0] ?? 0) - (p[0] ?? 0)) * (z - (p[1] ?? 0)) -
+        ((q[1] ?? 0) - (p[1] ?? 0)) * (x - (p[0] ?? 0));
+      const d1 = s(a, b);
+      const d2 = s(b, c);
+      const d3 = s(c, a);
+      if ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) return true;
+    }
+    return false;
+  };
+
+  it('край земли - контур проезда, а не размытый порог маски: у борта нет нахлёста и щели', () => {
+    // Проезд с прямоугольной выемкой 3 x 2 м (Камчатская, 17.10.2026): по маске угол
+    // выемки скруглялся, газон наползал на проезд мимо борта.
+    const road = [
+      [
+        [0, 0],
+        [20, 0],
+        [20, 6],
+        [12, 6],
+        [12, 4],
+        [9, 4],
+        [9, 6],
+        [0, 6],
+        [0, 0],
+      ],
+    ];
+    const g = groundGeometry([-50, -50, 50, 50], [road], [0, 0]);
+    // z сцены = -Y.
+    expect(covers(g, 5, -3)).toBe(false); // проезд
+    expect(covers(g, 9.1, -4.1)).toBe(true); // угол выемки - земля
+    expect(covers(g, 8.9, -3.9)).toBe(false); // рядом с углом - уже проезд
+    expect(covers(g, 5, -6.1)).toBe(true); // за краем проезда
+    expect(covers(g, 40, 40)).toBe(true); // поле вокруг
+    g.computeBoundingBox();
+    expect(g.boundingBox?.max.y).toBeCloseTo(0);
   });
 });
 

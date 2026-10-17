@@ -101,16 +101,18 @@ uniform float uWind;
 varying vec3 vGrass;
 `;
 
-/* Край газона - маска R плюс шум, как в шейдере земли, но порог выше и шум слабее: травинки
- * стоят внутри газона, а не торчат на плитке и бортовом камне у края (17.10.2026). */
+/* Край газона - доля газона без проезда плюс шум, как в шейдере земли, но порог выше и шум
+ * слабее, а у проезда (канал B) травы нет: травинки стоят внутри газона, а не торчат на
+ * плитке и бортовом камне у края (17.10.2026). */
 const GRASS_BEGIN = /* glsl */ `
 vec2 local = mod(aOffset - uCenter + uSize * 0.5, uSize) - uSize * 0.5;
 vec2 world = uCenter + local;
 vec2 muv = (world - uMaskRect.xy) / uMaskRect.zw;
 float inside = step(0.0, muv.x) * step(muv.x, 1.0) * step(0.0, muv.y) * step(muv.y, 1.0);
-float m = texture2D(uMask, clamp(muv, 0.0, 1.0)).r;
+vec3 mm = texture2D(uMask, clamp(muv, 0.0, 1.0)).rgb;
+float m = mm.r / max(mm.r + mm.g + max(1.0 - mm.r - mm.g - mm.b, 0.0), 1e-3);
 float edge = (texture2D(uNoise, world / 23.0).g - 0.5) * 0.5 + (texture2D(uNoise, world / 3.1).b - 0.5) * 0.35;
-float lawn = smoothstep(0.66, 0.78, m + edge * 0.4) * inside;
+float lawn = smoothstep(0.66, 0.78, m + edge * 0.4) * (1.0 - smoothstep(0.25, 0.4, mm.b)) * inside;
 float dist = length(local);
 float fade = 1.0 - smoothstep(uRadius * 0.6, uRadius, dist);
 float patchy = texture2D(uNoise, world / 7.0).r;
