@@ -122,8 +122,8 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  height: 36px;
-  padding: 0 10px 0 4px;
+  height: 44px;
+  padding: 0 8px 0 4px;
   margin-right: 6px;
   border-radius: var(--r-control);
   color: var(--bone);
@@ -138,17 +138,26 @@ a:hover {
 .brand:hover {
   background: var(--panel-2);
 }
-/* Знак - лист на чертёжной сетке. Тонкие линии сетки - тёмные: в тёмной теме знак стоит на
-   светлой плашке цвета бумаги, иначе от него остаётся один лист. */
+/* Логотип: лист и GREEN_. Светлая версия - тёмными буквами, тёмная - цвета кости; показывается
+   та, что подходит теме (переключатель ставит data-theme на <html>). */
 .brand img {
   display: block;
-  border-radius: 6px;
+  height: 40px;
+  width: auto;
   transition: transform var(--dur-3) var(--ease-spring);
 }
 .brand:hover img {
-  transform: scale(1.08);
+  transform: translateY(-1px);
 }
-:root[data-theme='dark'] .brand img,
+.theme-dark {
+  display: none !important;
+}
+:root[data-theme='dark'] .theme-dark {
+  display: block !important;
+}
+:root[data-theme='dark'] .theme-light {
+  display: none !important;
+}
 :root[data-theme='dark'] .scene-loader-mark {
   padding: 2px;
   background: #f1ede5;
@@ -738,11 +747,21 @@ fieldset.field > legend {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 24px;
-  padding: 18px var(--gutter);
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: 28px var(--gutter) 32px;
   color: var(--bone-3);
   font-size: var(--fs-small);
   flex-shrink: 0;
+}
+.footer-logo img {
+  height: 64px;
+  width: auto;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
 }
 .footer a {
   text-decoration: none;
