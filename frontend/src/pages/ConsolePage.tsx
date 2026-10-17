@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useMeta, useRuns, useStreets } from '../api/queries';
@@ -41,6 +41,28 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
   ];
 }
 
+/** Первый заход на главную за сессию браузера: вступление играет один раз, дальше страница
+ *  просто проявляется - смотреть одно и то же при каждом возврате из прогона утомляет. */
+const INTRO_KEY = 'green-home-intro';
+
+function useFirstVisit(): boolean {
+  const [first] = useState(() => {
+    try {
+      return !sessionStorage.getItem(INTRO_KEY);
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(INTRO_KEY, '1');
+    } catch {
+      /* без хранилища вступление просто сыграет снова */
+    }
+  }, []);
+  return first;
+}
+
 /** Главная - рабочий стол. Первый экран: что это за сервис, как выглядит его результат
  *  (фото улицы и план на слоях чертежа) и запуск. Ниже - реестр прогонов и как это работает. */
 export function ConsolePage() {
@@ -48,6 +70,7 @@ export function ConsolePage() {
   const streets = useStreets();
   const runs = useRuns(RECENT_LIMIT);
   const noCatalog = (streets.isSuccess && streets.data.length === 0) || streets.isError;
+  const intro = useFirstVisit();
 
   // Главная - один экран: подвал с логотипом уходил бы за сгиб и заставлял листать.
   useEffect(() => {
@@ -58,15 +81,23 @@ export function ConsolePage() {
   }, []);
 
   return (
-    <div className="home">
+    <div className="home" data-intro={intro ? 'play' : undefined}>
       {/* Один экран без прокрутки: слева что это и как выглядит результат, под ним - как это
           работает; справа запуск и реестр прогонов, реестр прокручивается внутри себя. */}
       <section className="home-hero" aria-labelledby="hero-title">
-        <h1 id="hero-title">
-          Озеленение
-          <br />
-          улиц по нормам
-        </h1>
+        {/* Лист со знака сервиса - слева от заголовка, высотой в обе строки. Строки заголовка -
+            в масках: на вступлении лист вырастает от черенка, затем строки выезжают снизу. */}
+        <div className="hero-title">
+          <img className="hero-leaf" src="/leaf.webp" width={156} height={280} alt="" />
+          <h1 id="hero-title">
+            <span className="h1-line">
+              <span>Озеленение</span>
+            </span>{' '}
+            <span className="h1-line">
+              <span>улиц по нормам</span>
+            </span>
+          </h1>
+        </div>
         <p className="lead">
           Подоснова DXF или DWG на входе. На выходе - деревья и кустарник на слоях GREEN_* того же
           чертежа, и у каждой посадки пункт нормы, по которому она здесь стоит.

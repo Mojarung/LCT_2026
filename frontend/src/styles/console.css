@@ -221,7 +221,6 @@ body.shell-home .footer {
   line-height: 0.98;
   letter-spacing: -0.045em;
   color: var(--bone);
-  animation: rise var(--dur-4) var(--ease-out) backwards;
 }
 .lead {
   max-width: 58ch;
@@ -229,7 +228,6 @@ body.shell-home .footer {
   font-size: clamp(15px, 0.85rem + 0.25vw, 17px);
   line-height: 1.5;
   color: var(--bone-2);
-  animation: rise var(--dur-4) var(--ease-out) 80ms backwards;
 }
 
 /* Кадр результата забирает всю свободную высоту колонки: план с выносками, фото врезкой. */
@@ -239,7 +237,6 @@ body.shell-home .footer {
   flex: 1 1 auto;
   min-height: 220px;
   margin: 18px 0 0;
-  animation: rise var(--dur-4) var(--ease-out) 160ms backwards;
 }
 .collage-stage {
   position: relative;
@@ -280,7 +277,6 @@ body.shell-home .footer {
   background: var(--panel);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
-  animation: plan-in var(--dur-4) var(--ease-out) 360ms backwards;
 }
 @keyframes plan-in {
   from {
@@ -318,7 +314,6 @@ body.shell-home .footer {
 /* Как это работает - полоса из четырёх шагов под кадром, текст по колонкам. */
 .home-how {
   margin-top: 14px;
-  animation: rise var(--dur-4) var(--ease-out) 240ms backwards;
 }
 .how {
   display: grid;
@@ -359,7 +354,6 @@ body.shell-home .footer {
 .home-start {
   flex: none;
   padding: 20px 22px;
-  animation: rise var(--dur-4) var(--ease-out) 200ms backwards;
 }
 .home-start .panel-title {
   margin-bottom: 14px;
@@ -370,7 +364,6 @@ body.shell-home .footer {
   flex: 1 1 auto;
   min-height: 200px;
   padding: 18px 16px 8px 22px;
-  animation: rise var(--dur-4) var(--ease-out) 280ms backwards;
 }
 .home-runs .registry-wrap {
   flex: 1 1 auto;
@@ -381,7 +374,7 @@ body.shell-home .footer {
 .runs-head {
   position: relative;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
   margin: 0 0 10px;
 }
@@ -822,4 +815,160 @@ body.shell-home .footer {
 }
 .home-start .field.sample {
   padding: 12px 14px;
+}
+
+/* Значок пояснения в заголовке реестра - по центру строки, а не по базовой линии: иначе он
+   висел выше слова. Число прогонов - по той же середине. */
+.runs-head .panel-title {
+  align-items: center;
+  line-height: 1.2;
+}
+.runs-head .panel-title .count {
+  margin-top: 2px;
+}
+.runs-head .tip-button {
+  margin: 0;
+}
+
+/* --- вступление главной: первый заход за сессию (data-intro) ---
+   Заголовок выезжает строками из-под маски, кадр плана раскрывается шторкой слева направо и
+   чуть отдаляется, следом проявляется фото, затем шаги; справа въезжают форма и реестр, строки
+   реестра встают лесенкой. Повторный заход - короткое проявление всей страницы. */
+.home {
+  animation: fade var(--dur-2) var(--ease-out);
+}
+.h1-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.06em;
+}
+.h1-line > span {
+  display: inline-block;
+}
+.home[data-intro] {
+  animation: none;
+}
+.home[data-intro] .h1-line > span {
+  animation: line-up 900ms var(--ease-out) backwards;
+}
+.home[data-intro] .h1-line + .h1-line > span {
+  animation-delay: 110ms;
+}
+@keyframes line-up {
+  from {
+    transform: translateY(110%);
+  }
+}
+.home[data-intro] .lead {
+  animation: rise 700ms var(--ease-out) 420ms backwards;
+}
+.home[data-intro] .collage-frame {
+  animation: wipe 1100ms cubic-bezier(0.65, 0, 0.35, 1) 380ms backwards;
+}
+@keyframes wipe {
+  from {
+    clip-path: inset(0 100% 0 0 round var(--r-panel));
+  }
+  to {
+    clip-path: inset(0 0 0 0 round var(--r-panel));
+  }
+}
+.home[data-intro] .collage-main {
+  animation: settle 1600ms var(--ease-out) 380ms backwards;
+}
+@keyframes settle {
+  from {
+    transform: scale(1.08);
+  }
+}
+.home[data-intro] .collage-inset {
+  animation: inset-in 700ms var(--ease-spring) 1250ms backwards;
+}
+@keyframes inset-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+  }
+}
+.home[data-intro] .home-collage figcaption {
+  animation: fade 500ms var(--ease-out) 1400ms backwards;
+}
+.home[data-intro] .how li {
+  animation: rise 600ms var(--ease-out) backwards;
+}
+.home[data-intro] .how li:nth-child(1) {
+  animation-delay: 1000ms;
+}
+.home[data-intro] .how li:nth-child(2) {
+  animation-delay: 1090ms;
+}
+.home[data-intro] .how li:nth-child(3) {
+  animation-delay: 1180ms;
+}
+.home[data-intro] .how li:nth-child(4) {
+  animation-delay: 1270ms;
+}
+.home[data-intro] .how {
+  animation: fade 500ms var(--ease-out) 900ms backwards;
+}
+.home[data-intro] .home-start {
+  animation: slide-in 800ms var(--ease-out) 250ms backwards;
+}
+.home[data-intro] .home-runs {
+  animation: slide-in 800ms var(--ease-out) 420ms backwards;
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+.home[data-intro] .registry tbody tr {
+  animation: rise 500ms var(--ease-out) backwards;
+}
+.home[data-intro] .registry tbody tr:nth-child(1) {
+  animation-delay: 750ms;
+}
+.home[data-intro] .registry tbody tr:nth-child(2) {
+  animation-delay: 800ms;
+}
+.home[data-intro] .registry tbody tr:nth-child(3) {
+  animation-delay: 850ms;
+}
+.home[data-intro] .registry tbody tr:nth-child(4) {
+  animation-delay: 900ms;
+}
+.home[data-intro] .registry tbody tr:nth-child(5) {
+  animation-delay: 950ms;
+}
+.home[data-intro] .registry tbody tr:nth-child(n + 6) {
+  animation-delay: 1000ms;
+}
+
+/* Лист слева от заголовка: высота - две строки заголовка, черенок у нижней кромки. */
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.2vw, 20px);
+}
+.hero-leaf {
+  flex: none;
+  width: auto;
+  height: clamp(74px, 7.4vw, 114px);
+  transform-origin: 50% 100%;
+}
+.home[data-intro] .hero-leaf {
+  animation: leaf-grow 900ms var(--ease-spring) backwards;
+}
+@keyframes leaf-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+}
+.home[data-intro] .h1-line > span {
+  animation-delay: 180ms;
+}
+.home[data-intro] .h1-line + .h1-line > span {
+  animation-delay: 290ms;
 }
