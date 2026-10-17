@@ -64,10 +64,14 @@ export function Composition({ placements }: { placements: readonly MapItem[] }) 
         </p>
       )}
       <ul className="composition">
-        {rows.map((row) => {
+        {rows.map((row, index) => {
           const off = speciesOff.has(row.code);
           return (
-            <li key={row.code} className={off ? 'off' : ''}>
+            <li
+              key={row.code}
+              className={off ? 'off' : ''}
+              style={{ ['--i' as string]: String(Math.min(index, 12)) }}
+            >
               <input
                 type="checkbox"
                 className="composition-see"

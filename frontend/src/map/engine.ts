@@ -711,7 +711,7 @@ export class PlanEngine {
     // масштаба, иначе на общем виде обводка вырождается в волос.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const area = this.clearArea();
-    const font = this.palette.get('--sans');
+    const font = this.palette.get('--map-font');
     drawSelection(ctx, this.view, this.marks, this.palette);
     drawSourceConflicts(
       ctx,

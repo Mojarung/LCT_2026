@@ -1,72 +1,42 @@
-/* --- адаптив: у рабочего места ограничитель высота, поэтому проверок две оси --- */
+/* --- адаптив: у рабочего места ограничитель и ширина, и высота, поэтому проверок две оси --- */
 
-/* Узкий экран: карточки разворачиваются в полосы. `display: contents` у левой панели
-   разбирает её на заголовок и содержимое - иначе план оказывается под всем пультом сразу,
-   и первым, что видит человек, оказываются галочки слоёв, а не участок. */
+/* Ноутбук 1280-1366: панели уже, полоса кнопок без ползунка и без подписи «Весь план» -
+   иначе между панелями она не помещается. */
+@media (max-width: 1440px) and (min-width: 1081px) {
+  :root {
+    --hud-left-w: 308px;
+    --hud-right-w: 340px;
+  }
+  .hud-scroll,
+  .detail-scroll {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .hud-foot {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+@media (max-width: 1366px) and (min-width: 1081px) {
+  #zoom-range,
+  .hud-fit .hud-text {
+    display: none;
+  }
+  .crumbs-meta {
+    display: none;
+  }
+}
+
+/* Узкий экран: рабочее место возвращается в поток страницы, план идёт первым, панели
+   разворачиваются в полосы под ним. `display: contents` у левой панели разбирает её на
+   сводку и выгрузку - иначе первым, что видит человек, оказывается вся панель, а не участок. */
 @media (max-width: 1080px) {
-  .sheet-body,
-  .stamp {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .sheet-cell + .sheet-cell {
-    border-left: 0;
-    border-top: 1px solid var(--hair-2);
-  }
-  .stamp-title {
-    border-bottom: 1px solid var(--hair-2);
-  }
-  .facts div:first-child {
-    border-left: 0;
-  }
-  /* Узкий экран: рабочее место возвращается в поток страницы, план едет первым, панели
-     разворачиваются в полосы под ним. */
   body.shell-map {
     height: auto;
     overflow: visible;
   }
-  /* Узкое рабочее место прокручивается как страница: шапка в потоке, на текст панелей под
-     картой она не ложится. */
   body.shell-map .topbar {
     position: relative;
-  }
-  /* В полосах сворачивать нечего: ширину у плана здесь никто не отнимает. */
-  .panel-toggle {
-    display: none;
-  }
-  /* На узком экране в полосе кнопок ползунку места нет: остаются «+» и «−». */
-  #zoom-range {
-    display: none;
-  }
-  /* На узком экране обозначения остаются плавающей карточкой поверх плана: в потоке
-     страницы они уехали бы под карту, где их никто не найдёт. */
-  .hud-legend {
-    width: min(var(--hud-left-w), calc(100% - var(--inset) * 2));
-    max-height: min(300px, 46%);
-  }
-  .hud.collapsed {
-    width: auto;
-    height: auto;
-  }
-  .hud.collapsed > :not(.panel-toggle) {
-    display: revert;
-  }
-  .hud-left .hud-head {
-    padding-right: var(--gutter);
-  }
-  .hud-left {
-    display: contents;
-  }
-  .hud-right {
-    position: static;
-    width: auto;
-    max-height: none;
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    border-top: 1px solid var(--hair);
-    box-shadow: none;
-    backdrop-filter: none;
-    order: 5;
   }
   .workspace {
     position: static;
@@ -75,10 +45,8 @@
     overflow: visible;
     height: auto;
     min-height: 0;
-  }
-  .hud-head {
-    order: 1;
-    padding: 16px var(--gutter);
+    --side-l: 0px;
+    --side-r: 0px;
   }
   .workspace .canvas-holder {
     order: 2;
@@ -86,24 +54,54 @@
     height: 62vh;
     min-height: 340px;
   }
+  /* В полосах сворачивать нечего: ширину у плана здесь никто не отнимает. */
+  .panel-toggle {
+    display: none;
+  }
+  .hud.collapsed {
+    width: auto;
+    height: auto;
+  }
+  .hud.collapsed > :not(.panel-toggle) {
+    display: revert;
+  }
+  .hud-left {
+    display: contents;
+  }
+  .hud-right {
+    position: static;
+    order: 5;
+    width: auto;
+    max-height: none;
+    box-shadow: 0 -1px 0 var(--hair);
+    animation: none;
+  }
   .hud-scroll {
     order: 3;
     flex: none;
     overflow-y: visible;
-    padding: 18px var(--gutter);
+    padding: 22px var(--gutter);
+    background: var(--panel);
     mask-image: none;
   }
   .hud-foot {
     order: 4;
-    padding: 18px var(--gutter);
+    max-height: none;
+    padding: 16px var(--gutter) 22px;
   }
   .detail-scroll {
     flex: none;
     overflow-y: visible;
-    padding: 18px var(--gutter);
+    padding: 22px var(--gutter);
   }
-  .hud-bottom {
-    position: absolute;
+  /* Ползунку в полосе места нет: остаются «+» и «−». */
+  #zoom-range {
+    display: none;
+  }
+  .hud-legend {
+    left: var(--inset);
+    width: min(300px, calc(100% - var(--inset) * 2));
+    max-height: min(320px, 60%);
   }
   /* Полоса хода встаёт под карту, а не поверх неё: внизу карты живут кнопки масштаба. */
   .hud-progress {
@@ -113,37 +111,69 @@
     width: auto;
     margin: 12px var(--gutter) 0;
   }
+  .crumbs-meta {
+    display: none;
+  }
 }
 
-@media (max-width: 620px) {
+/* Телефон и планшет в книжной: шапка в две строки - знак, путь и справка сверху, вкладки
+   во всю ширину под ними. */
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: 6px;
+    padding: 8px 8px 8px 12px;
+  }
+  .topbar-tabs {
+    order: 3;
+    flex: 1 1 100%;
+    margin: 0;
+  }
+  .topbar-tabs a {
+    flex: 1;
+    justify-content: center;
+  }
+  .topbar-end .topbar-link span,
+  .topbar-end a.topbar-link[href='/models'] {
+    display: none;
+  }
+  .crumbs > a,
+  .crumbs-sep {
+    display: none;
+  }
+  .brand {
+    margin-right: 0;
+  }
   .field-row {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* Полоса карты в 375 px: подписи кнопок не переносятся («весь / план»), ползунок уходит -
-     на телефоне масштаб жестом и кнопками, а шесть элементов в строку не помещаются. Поля
-     кнопок ужаты: с кнопкой стиля карты («чертёж») «обозначения» уходили за край на 375. */
+  /* Вид карты - одной строкой мелких плашек: в две строки он закрывал половину карты. */
+  .hud-view {
+    flex-wrap: nowrap;
+    gap: 6px;
+    right: var(--inset);
+  }
+  .hud-view .hud-pair {
+    padding: 2px;
+  }
+  .hud-view button {
+    height: 28px;
+    min-width: 0;
+    padding: 0 8px;
+    font-size: var(--fs-micro);
+  }
   .hud-bottom {
-    flex-wrap: wrap;
-    gap: 1px;
     max-width: calc(100% - 2 * var(--inset));
   }
   .hud-bottom button {
-    white-space: nowrap;
-    min-width: 28px;
-    padding: 6px 4px;
+    padding: 0 8px;
   }
-  .hud-bottom #zoom-range {
+  .hud-bottom .hud-text {
     display: none;
   }
-  /* Графы штампа - две в ряд: четыре в 375 px режут подписи. */
-  .facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .facts div:nth-child(odd) {
-    border-left: 0;
-  }
-  .facts div:nth-child(n + 3) {
-    border-top: 1px solid var(--hair-2);
+  .hud-bottom .hud-edit .hud-text {
+    display: inline;
   }
   .legend {
     grid-template-columns: 1fr;
@@ -155,65 +185,39 @@
   }
 }
 
-/* Низкое окно: 1366 x 768 - высота защиты с проектора, и условные обозначения там нужны
-   целиком, а не за прокруткой. Панель ужимается отбивками, а не кеглем: пол шкалы 12px
-   трогать нельзя, иначе с трёх метров не читается вообще ничего. */
+/* Низкое окно: 1366 x 768 - высота защиты с проектора. Панель ужимается отбивками, а не
+   кеглем: пол шкалы 12px трогать нельзя, иначе с трёх метров не читается ничего. */
 @media (max-height: 800px) and (min-width: 1081px) {
   :root {
-    --inset: 9px;
-    --bar: 42px;
-    --tools: 40px;
-  }
-  .hud-left {
-    width: 280px;
-  }
-  .hud-right {
-    width: 344px;
-  }
-  .hud-head {
-    padding: 10px 14px 11px;
-  }
-  .hud-head .back {
-    margin-bottom: 5px;
+    --bar: 48px;
+    --fs-metric: 38px;
   }
   .hud-scroll {
-    padding: 12px 14px 10px;
+    padding-top: 18px;
+    padding-bottom: 14px;
   }
-  .hud-scroll > .hud-block:not(:first-child) {
-    margin-top: 11px;
-    padding-top: 10px;
+  .run-breakdown {
+    margin-top: 14px;
   }
-  .hud-label {
-    margin-bottom: 7px;
+  .run-breakdown > div {
+    padding: 9px 12px;
   }
-  .legend {
-    gap: 2px 10px;
+  .run-checks {
+    margin-top: 12px;
   }
-  .layer-toggles .check {
-    line-height: 1.3;
-  }
-  .metric b {
-    font-size: 26px;
-  }
-  .metric span {
-    margin-top: 4px;
+  .notice {
+    margin-top: 12px;
+    padding: 11px 14px;
   }
   .hud-foot {
-    padding: 10px 14px 12px;
-  }
-  .downloads {
-    gap: 5px;
+    padding-top: 10px;
+    padding-bottom: 12px;
   }
   .dl {
-    padding: 7px 10px;
+    min-height: 42px;
   }
-  /* На высоте защиты с проектора обозначения уступают пульту: в них можно проскроллить,
-     а сводка прогона и предупреждения должны быть видны целиком. */
   .hud-legend {
-    max-height: 300px;
-  }
-  .legend-scroll {
-    padding: 8px 14px 12px;
+    max-height: calc(100% - 90px);
   }
 }
 

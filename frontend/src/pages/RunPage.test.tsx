@@ -209,7 +209,8 @@ describe('RunPage: finished run', () => {
     expect(left.querySelector('.metric-bad')).toBeNull();
     await openFold(left, 'Детали расчёта');
     expect(fact(left, 'Отклонено мест')).toHaveTextContent(/^161$/);
-    expect(fact(left, 'Подоснова')).toHaveTextContent(/^Без изменений$/);
+    // Целая подоснова - отметкой среди проверок результата, а не строкой деталей.
+    expect(within(left).getByText('Исходные слои чертежа целы')).toBeVisible();
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await userEvent.click(within(right).getByRole('button', { name: 'Эффект' }));
@@ -464,7 +465,7 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const toggle = await screen.findByRole('button', { name: 'легенда' });
+    const toggle = await screen.findByRole('button', { name: 'Легенда' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
 
@@ -484,7 +485,7 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    await userEvent.click(await screen.findByRole('button', { name: 'легенда' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Легенда' }));
     const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
     const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
     expect(weak).not.toBeChecked();

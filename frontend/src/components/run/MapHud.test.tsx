@@ -18,8 +18,8 @@ function hud() {
 describe('стиль карты', () => {
   it('по умолчанию чертёж; «кроны» переключают на иллюстрацию и запоминают выбор', async () => {
     hud();
-    const drawing = screen.getByRole('button', { name: 'чертёж' });
-    const crowns = screen.getByRole('button', { name: 'кроны' });
+    const drawing = screen.getByRole('button', { name: 'Чертёж' });
+    const crowns = screen.getByRole('button', { name: 'Кроны' });
     expect(drawing).toHaveAttribute('aria-pressed', 'true');
     expect(crowns).toHaveAttribute('aria-pressed', 'false');
 
@@ -66,14 +66,14 @@ describe('стиль карты', () => {
 
   it('кнопка «править» есть только у готового плана и включает режим правки', async () => {
     const { unmount } = hud();
-    expect(screen.queryByRole('button', { name: 'править' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Править' })).toBeNull();
     unmount();
     render(
       <EngineContext.Provider value={{ current: null }}>
         <MapHud editable />
       </EngineContext.Provider>,
     );
-    const edit = screen.getByRole('button', { name: 'править' });
+    const edit = screen.getByRole('button', { name: 'Править' });
     expect(edit).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(edit);
     expect(useWorkspace.getState().editing).toBe(true);

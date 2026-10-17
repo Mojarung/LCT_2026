@@ -2,13 +2,12 @@ import { Link } from 'react-router';
 
 export function NotFoundPage() {
   return (
-    <div className="launch">
-      <div className="panel" style={{ maxWidth: 560, margin: '0 auto' }}>
-        <h1 className="start-title">Такой страницы нет</h1>
-        <p className="hint">
-          <Link to="/">← все прогоны</Link>
-        </p>
-      </div>
+    <div className="empty-page">
+      <h1>Такой страницы нет</h1>
+      <p>Адрес мог устареть: прогон удалили или ссылку скопировали не целиком.</p>
+      <Link className="primary" to="/">
+        ← все прогоны
+      </Link>
     </div>
   );
 }

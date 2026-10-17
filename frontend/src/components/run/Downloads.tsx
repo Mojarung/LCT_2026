@@ -1,5 +1,6 @@
 import type { ArtifactOut } from '../../api/types';
 import { humanSize } from '../../lib/format';
+import { UiIcon } from '../icons';
 
 /** Файлы, ради которых прогон и запускали. Что внутри - в подсказке у кнопки: абзац под
  *  кнопками съедал строки списка видов на высоте проектора. */
@@ -45,7 +46,8 @@ export function Downloads({
     <div className="hud-foot downloads">
       {byName.has('result.dxf') ? (
         <a className="dl primary download-plan" href={byName.get('result.dxf')?.url} download>
-          <span>
+          <UiIcon name="download" />
+          <span className="dl-label">
             Скачать план <span className="download-format">DXF</span>
           </span>
           <span className="size">{size(byName.get('result.dxf'))}</span>

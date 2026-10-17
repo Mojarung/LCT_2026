@@ -23,7 +23,7 @@ import { BarButton } from '../components/scene/BarButton';
 import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
 import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
-import { RunHeader } from '../components/run/RunParts';
+import { RunTitle } from '../components/run/RunParts';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -631,16 +631,10 @@ export function ScenePage() {
                 icon="street"
                 onToggle={toggleHead}
               />
-              {data ? (
-                <RunHeader run={data} view="3d" />
-              ) : (
-                <div className="hud-head">
-                  <h1>{title}</h1>
-                </div>
-              )}
+              {data ? <RunTitle run={data} /> : <h1 className="visually-hidden">{title}</h1>}
+              <h2 className="hud-label scene-head-title">В сцене</h2>
               {counts && world ? (
                 <div className="hud-scroll scene-facts">
-                  <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
                   {/* Сводка - теми же строками «что - сколько», что на плане прогона. */}
                   <dl className="run-breakdown scene-breakdown">
                     <div>
@@ -670,6 +664,7 @@ export function ScenePage() {
                         : ''}
                     </p>
                   ) : null}
+                  <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
                   <details className="scene-more">
                     <summary>Что в сцене условно</summary>
                     <p className="hint">
@@ -754,7 +749,7 @@ export function ScenePage() {
               <div className="bar-group" role="group" aria-label="Режим камеры">
                 <BarButton
                   icon="fly"
-                  label="полёт"
+                  label="Полёт"
                   keyHint="G"
                   pressed={cam.mode === 'fly'}
                   title="Свободный полёт"
@@ -762,7 +757,7 @@ export function ScenePage() {
                 />
                 <BarButton
                   icon="walk"
-                  label="пешеход"
+                  label="Пешеход"
                   keyHint="G"
                   pressed={cam.mode === 'walk'}
                   title="Пешеход на высоте глаз 1,7 м"
@@ -772,14 +767,14 @@ export function ScenePage() {
               <div className="bar-group" role="group" aria-label="Куда смотреть">
                 <BarButton
                   icon="overview"
-                  label="общий вид"
+                  label="Общий вид"
                   keyHint="R"
                   title="Вернуться к общему виду"
                   onClick={() => engine.current?.resetView()}
                 />
                 <BarButton
                   icon="tour"
-                  label="облёт"
+                  label="Облёт"
                   keyHint="T"
                   pressed={cam.touring}
                   title="Облёт над улицей; мышь или WASD - взять управление"
@@ -794,7 +789,7 @@ export function ScenePage() {
               <div className="bar-group" role="group" aria-label="Панели">
                 <BarButton
                   icon="hide"
-                  label="без панелей"
+                  label="Без панелей"
                   keyHint="H"
                   title="Скрыть панели для чистого кадра"
                   onClick={() => {
@@ -839,7 +834,7 @@ export function ScenePage() {
             setHudHidden(false);
           }}
         >
-          панели · H
+          Панели · H
         </button>
       )}
       {gallery && readyToFly ? (

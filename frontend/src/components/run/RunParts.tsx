@@ -7,11 +7,9 @@ import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
 import { explainFailure } from '../../lib/failure';
 import { drawingName, integer, plural } from '../../lib/format';
-import { overrideLabel } from '../../lib/overrides';
-import { profileTitle } from '../../lib/profiles';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
-import { IconChevron } from '../icons';
+import { IconChevron, UiIcon } from '../icons';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
@@ -65,34 +63,24 @@ function breakable(name: string): ReactNode[] {
   return name.split(/(?<=[_\-.])/u).flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]));
 }
 
-/** Шапка прогона - одна на плане и в 3D-виде: откуда пришёл, что за чертёж, с какими
- *  параметрами, и переключатель «План / 3D-вид» на одном месте на обоих экранах. Раньше
- *  переход был текстовой ссылкой в разных углах двух страниц, и его искали глазами. */
-export function RunHeader({ run, view = 'plan' }: { run: RunOut; view?: 'plan' | '3d' }) {
-  const base = `/runs/${encodeURIComponent(run.id)}`;
+/** Заголовок страницы прогона. Видимое имя чертежа и переход «План / 3D и фото» - в шапке
+ *  (TopBar), здесь заголовок для читалки экрана и навигации по заголовкам. */
+export function RunTitle({ run }: { run: RunOut }) {
   return (
-    <div className="hud-head">
-      <Link className="back" to="/">
-        ← все прогоны
-      </Link>
-      <h1 title={run.source_name}>{breakable(drawingName(run.source_name))}</h1>
-      <p className="run-sub" title={`Прогон ${run.id}`}>
-        <span>{profileTitle(run.profile)}</span>
-        {Object.entries(run.overrides).map(([key, value]) => (
-          <span key={key}>{overrideLabel(key, value)}</span>
-        ))}
-      </p>
-      {run.state === 'succeeded' ? (
-        <nav className="view-switch" aria-label="Вид прогона">
-          <Link to={base} aria-current={view === 'plan' ? 'page' : undefined}>
-            План
-          </Link>
-          <Link to={`${base}/3d`} aria-current={view === '3d' ? 'page' : undefined}>
-            3D-вид и фото
-          </Link>
-        </nav>
-      ) : null}
-    </div>
+    <h1 className="visually-hidden" title={run.source_name}>
+      {breakable(drawingName(run.source_name))}
+    </h1>
+  );
+}
+
+/** Отметка проверки: что сервис сверил сам, без человека. Зелёная галочка и слово, а не один
+ *  цвет; провал - красным с тем же порядком строк. */
+function Verdict({ ok, yes, no }: { ok: boolean; yes: string; no: string }) {
+  return (
+    <li className="run-check" data-ok={ok ? '1' : '0'}>
+      <UiIcon name={ok ? 'check' : 'alert'} size={17} />
+      <span>{ok ? yes : no}</span>
+    </li>
   );
 }
 
@@ -154,7 +142,29 @@ export function RunMetrics({
           </div>
         </dl>
       ) : null}
-      {!integrity ? <p className="metric-bad">Целостность подосновы нарушена</p> : null}
+      {/* Что сервис сверил сам: независимая проверка плана по нормам, исходные слои и выгрузка.
+          Три строки отвечают на вопрос жюри «а можно этому верить» раньше, чем его зададут. */}
+      <ul className="run-checks" aria-label="Проверки результата">
+        {typeof summary.plan_valid === 'boolean' ? (
+          <Verdict
+            ok={summary.plan_valid}
+            yes="Отступы по нормам соблюдены"
+            no="План не прошёл проверку норм"
+          />
+        ) : null}
+        <Verdict
+          ok={integrity}
+          yes="Исходные слои чертежа целы"
+          no="Целостность подосновы нарушена"
+        />
+        {typeof summary.export_matches_plan === 'boolean' ? (
+          <Verdict
+            ok={summary.export_matches_plan}
+            yes="DXF совпадает с планом"
+            no="DXF расходится с планом"
+          />
+        ) : null}
+      </ul>
       {/* Всё, что человеку надо проверить, - одним блоком: раньше согласование, эскиз, конфликты
           и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
       {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
@@ -206,12 +216,6 @@ export function RunMetrics({
       ) : null}
       <details className="hud-block fold run-details">
         <summary>Детали расчёта</summary>
-        <dl className="run-facts">
-          <div>
-            <dt>Подоснова</dt>
-            <dd>{integrity ? 'Без изменений' : 'Нарушена'}</dd>
-          </div>
-        </dl>
         <LawnLine summary={summary} />
         {warnings.length ? (
           <details className="fold">

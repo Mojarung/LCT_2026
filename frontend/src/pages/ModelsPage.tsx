@@ -1,5 +1,3 @@
-import { Link } from 'react-router';
-
 import { useMeta } from '../api/queries';
 import { ModelSwatch } from '../components/run/ModelSwatch';
 import { ALL_MODELS, EXISTING_SHRUB, EXISTING_TREE, type Form } from '../map/models';
@@ -42,9 +40,6 @@ export function ModelsPage() {
               Чем каждый вид каталога нарисован на плане: форма кроны, листва, цветение и плоды.
             </p>
           </div>
-          <p className="models-back">
-            <Link to="/">← все прогоны</Link>
-          </p>
         </header>
         <div className="models-body">
           {GROUPS.map((group) => {
@@ -52,7 +47,8 @@ export function ModelsPage() {
             return (
               <section key={group.id} aria-labelledby={`models-${group.id}`}>
                 <h2 className="section-label" id={`models-${group.id}`}>
-                  {group.title}: {models.length}
+                  {group.title}
+                  <span className="count">{models.length}</span>
                 </h2>
                 <ul className="models-grid">
                   {models.map((model) => {

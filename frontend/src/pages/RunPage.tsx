@@ -22,7 +22,7 @@ import { MapHud } from '../components/run/MapHud';
 import { type Choice, PickChooser } from '../components/run/PickChooser';
 import { PlanMap } from '../components/run/PlanMap';
 import { ProgressHud } from '../components/run/ProgressHud';
-import { PanelToggle, RunHeader, RunMetrics, RunStatus } from '../components/run/RunParts';
+import { PanelToggle, RunMetrics, RunStatus, RunTitle } from '../components/run/RunParts';
 import { useOverflowMark } from '../hooks/useOverflowMark';
 import { describeItem } from '../lib/checks';
 import type { PlanEngine } from '../map/engine';
@@ -323,16 +323,12 @@ export function RunPage() {
   if (run.isError) {
     const missing = run.error instanceof ApiError && run.error.status === 404;
     return (
-      <div className="launch">
-        <div className="panel" style={{ maxWidth: 560, margin: '0 auto' }}>
-          <h1 className="start-title">{missing ? 'Такого прогона нет' : 'Прогон не загрузился'}</h1>
-          <p className="hint">
-            {missing ? `Прогона ${runId} нет в хранилище сервиса.` : run.error.message}
-          </p>
-          <p className="hint">
-            <Link to="/">← все прогоны</Link>
-          </p>
-        </div>
+      <div className="empty-page">
+        <h1>{missing ? 'Такого прогона нет' : 'Прогон не загрузился'}</h1>
+        <p>{missing ? `Прогона ${runId} нет в хранилище сервиса.` : run.error.message}</p>
+        <Link className="primary" to="/">
+          ← все прогоны
+        </Link>
       </div>
     );
   }
@@ -354,11 +350,7 @@ export function RunPage() {
 
   return (
     <EngineContext.Provider value={engine}>
-      <div
-        className={`workspace page-run${withMap && panels.legend ? ' legend-on' : ''}`}
-        data-state={state}
-        ref={root}
-      >
+      <div className="workspace page-run" data-state={state} ref={root}>
         {/* Живая область стоит в разметке с первой отрисовки: читалка экрана объявляет только
             изменения в уже существующем узле, а выбор идёт стрелками по холсту без видимого текста. */}
         <p id="selection-announce" className="visually-hidden" role="status">
@@ -395,12 +387,8 @@ export function RunPage() {
           aria-label="Прогон"
         >
           <PanelToggle panel="left" label="панель прогона" />
-          {data ? <RunHeader run={data} /> : null}
+          {data ? <RunTitle run={data} /> : null}
           <div className="hud-scroll" ref={leftScroll} hidden={broken}>
-            {/* Найденные конфликты - строка блока «Проверить» в сводке; пока сводки нет или
-                конфликтов нет, отчёт проверки стоит здесь сам по себе. */}
-            {done && data && conflictCount ? null : conflictNotice}
-
             {done && data ? (
               <RunMetrics
                 run={data}
@@ -424,18 +412,22 @@ export function RunPage() {
                 <span>посадок в плане</span>
               </p>
             )}
-            {/* Файлы - у названия прогона, а не на другом краю экрана: что скачать, решают,
-                глядя на сводку. */}
-            {done && data ? (
-              <Downloads
-                artifacts={data.artifacts ?? []}
-                notes={
-                  Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []
-                }
-              />
-            ) : null}
+            {/* Найденные конфликты - строка блока «Проверить» в сводке; пока сводки нет или
+                конфликтов нет, отчёт проверки стоит под сводкой сам по себе: это проверка
+                исходника, а не итог. */}
+            {done && data && conflictCount ? null : conflictNotice}
           </div>
           {done ? <EditBar editor={editor} onRebuilt={rebuilt} /> : null}
+          {/* Файлы - низ панели сводки, в прокрутку не попадают: что скачать, решают, глядя на
+              итог, и кнопка выгрузки видна на любой высоте окна. */}
+          {done && data ? (
+            <Downloads
+              artifacts={data.artifacts ?? []}
+              notes={
+                Array.isArray(data.summary?.load_notes) ? data.summary.load_notes.map(String) : []
+              }
+            />
+          ) : null}
         </aside>
 
         {done && data ? (

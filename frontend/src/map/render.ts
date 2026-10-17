@@ -304,7 +304,7 @@ function drawLabels(
 ): void {
   ctx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
   // 12 px - пол шкалы интерфейса: 11 px на канве жюри сочло мелким (итерация 9).
-  ctx.font = `600 12px ${palette.get('--sans')}`;
+  ctx.font = `600 12px ${palette.get('--map-font')}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';

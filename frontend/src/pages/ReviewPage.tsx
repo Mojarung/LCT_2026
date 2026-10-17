@@ -178,7 +178,9 @@ export function ReviewPage() {
             <p>{run.data?.source_name ?? runId}</p>
           </div>
           <p className="models-back">
-            <Link to={missing ? '/' : runLink}>{missing ? '← все прогоны' : '← к прогону'}</Link>
+            <Link className="ghost" to={missing ? '/' : runLink}>
+              {missing ? '← все прогоны' : '← к прогону'}
+            </Link>
           </p>
         </header>
         {nothing ? (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 
 import { EXISTING_SHRUB, EXISTING_TREE, MODELS, type PlantModel } from '../../map/models';
 import type { SwatchSign } from '../../map/signs';
@@ -109,37 +109,11 @@ export function Legend({
   const open = useWorkspace((s) => s.panels.legend);
   const setLegend = useWorkspace((s) => s.setLegend);
   const drawing = useWorkspace((s) => s.mapStyle) === 'engineering';
-  const box = useRef<HTMLElement>(null);
 
-  // Пульт слева уступает место панели обозначений ровно на её высоту: высота зависит от
-  // прогона и от окна, поэтому её меряет наблюдатель и кладёт в переменную рабочего места.
-  useEffect(() => {
-    const element = box.current;
-    const workspace = element?.closest<HTMLElement>('.workspace');
-    if (!element || !workspace) return;
-    const measure = () => {
-      workspace.style.setProperty(
-        '--legend-h',
-        `${String(Math.round(element.getBoundingClientRect().height))}px`,
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, [open]);
-
+  // Окошко над полосой кнопок, поверх карты: план под ним не перестраивается, когда легенду
+  // открывают и закрывают.
   return (
-    <aside
-      className="hud hud-legend"
-      id="legend"
-      aria-label="Условные обозначения"
-      data-map-obstacle="side"
-      hidden={!open}
-      ref={box}
-    >
+    <aside className="hud hud-legend" id="legend" aria-label="Условные обозначения" hidden={!open}>
       <div className="legend-head">
         <h2 className="hud-label">Условные обозначения</h2>
         <button

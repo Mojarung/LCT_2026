@@ -130,7 +130,7 @@ export function MediaPanel({
       <div className="media-actions">
         <BarButton
           icon="snapshot"
-          label={shotScale > 1 ? 'снимок ×2' : 'снимок'}
+          label={shotScale > 1 ? 'Снимок ×2' : 'Снимок'}
           keyHint="P"
           disabled={shooting}
           title={shotScale > 1 ? 'Снимок кадра в PNG, вдвое крупнее' : 'Снимок кадра в PNG'}
@@ -138,7 +138,7 @@ export function MediaPanel({
         />
         <BarButton
           icon={photoBusy ? 'spinner' : 'photo'}
-          label={photoBusy ? `фото ИИ · ${String(photoBusy)}` : 'фото ИИ'}
+          label={photoBusy ? `Фото ИИ · ${String(photoBusy)}` : 'Фото ИИ'}
           keyHint="F"
           accent
           spin={photoBusy > 0}
@@ -152,7 +152,7 @@ export function MediaPanel({
         />
         <BarButton
           icon="shots"
-          label="кадры"
+          label="Кадры"
           keyHint="K"
           title="Кадры улицы с автоматических ракурсов; K над растением - его кадры"
           onClick={onShots}
@@ -160,7 +160,7 @@ export function MediaPanel({
       </div>
       <dl className="media-options">
         <div className="media-option-row">
-          <dt>снимок</dt>
+          <dt>Снимок</dt>
           <dd>
             <Chip
               pressed={shotScale > 1}
@@ -176,7 +176,7 @@ export function MediaPanel({
         {available ? (
           <div>
             <dt>
-              фото ИИ
+              Фото ИИ
               <button
                 type="button"
                 className="chip chip-prompt"

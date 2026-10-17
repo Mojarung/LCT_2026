@@ -34,9 +34,9 @@
 
 .scene-panel {
   right: var(--inset);
-  top: calc(var(--inset) * 2 + var(--bar));
-  width: 292px;
-  max-height: calc(100% - var(--inset) * 3 - var(--bar));
+  top: var(--inset);
+  width: 300px;
+  max-height: calc(100% - var(--inset) * 3 - var(--tools));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -50,7 +50,7 @@
   gap: 8px;
 }
 .scene-value {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
   color: var(--bone);
 }
@@ -123,7 +123,7 @@
 .scene-shots a {
   display: block;
   color: var(--bone-3);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   text-decoration: none;
 }
@@ -146,7 +146,7 @@
 }
 .scene-speed {
   padding: 0 10px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   white-space: nowrap;
@@ -178,7 +178,7 @@
   min-width: 20px;
   padding: 0 5px;
   margin: 0 1px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   line-height: 18px;
   text-align: center;
@@ -206,7 +206,7 @@
 }
 /* Без захвата мыши подпись - того, что под курсором, и висит сверху, не заслоняя его. */
 .scene-hover[data-anchor='top'] {
-  top: calc(var(--inset) * 2 + var(--bar));
+  top: var(--inset);
 }
 .scene-hover strong {
   font-size: var(--fs-small);
@@ -232,7 +232,7 @@
   left: var(--inset);
   bottom: var(--inset);
   padding: 6px 12px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-2);
   opacity: 0.55;
@@ -347,7 +347,7 @@
 .scene-gallery {
   position: fixed;
   inset: 0;
-  margin: calc(var(--inset) * 2 + var(--bar)) auto var(--inset);
+  margin: calc(var(--inset) + var(--bar)) auto var(--inset);
   width: min(1120px, calc(100% - var(--inset) * 2));
   max-width: none;
   height: fit-content;
@@ -356,7 +356,8 @@
   padding: 16px 18px;
   color: var(--bone);
   background: var(--panel);
-  border: 1.5px solid var(--edge);
+  border: 0;
+  animation: pop-in var(--dur-3) var(--ease-out);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
 }
@@ -486,7 +487,7 @@
 }
 .gallery-photo figcaption {
   margin-top: 3px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
 }
@@ -602,7 +603,7 @@
   padding: 0 4px;
   border: 1px solid var(--hair-2);
   border-radius: 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   line-height: 16px;
   text-align: center;
@@ -611,7 +612,7 @@
 }
 .bar-meta {
   padding: 0 10px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   white-space: nowrap;
@@ -668,9 +669,11 @@
   padding: 10px 12px 8px 16px;
   border-bottom: 1px solid var(--hair);
 }
-.panel-title {
-  font-size: var(--fs-small);
-  font-weight: 700;
+.page-scene .panel-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 650;
+  letter-spacing: 0;
   color: var(--bone);
 }
 .scene-panel[data-collapsed='true'] {
@@ -724,7 +727,7 @@
 .section-summary {
   margin-left: auto;
   overflow: hidden;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   text-overflow: ellipsis;
@@ -820,7 +823,7 @@
 }
 .media-count {
   margin-left: 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
   color: var(--bone-3);
 }
@@ -939,7 +942,7 @@
 }
 .viewer-count {
   margin-left: auto;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-small);
   color: rgb(255 255 255 / 70%);
 }
@@ -1164,7 +1167,7 @@
   right: -5px;
   min-width: 16px;
   padding: 0 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   line-height: 16px;
   color: var(--inverse);
@@ -1256,4 +1259,68 @@
 .scene-breakdown div:nth-child(odd) {
   border-left: 0;
   padding-left: 0;
+}
+
+/* --- 3D-вид в общей оболочке: сцена во весь экран под шапкой, карточки плавают над ней ---
+   На плане панели прилегают к краям (workspace.css); над сценой они остаются карточками: кадр
+   нужен целиком, а карточку можно свернуть. */
+.page-scene .hud {
+  border-radius: var(--r-panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
+}
+.page-scene .scene-left > .hud-left {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  animation: rise var(--dur-3) var(--ease-out);
+}
+.page-scene .scene-left > .hud-left.collapsed {
+  width: 44px;
+}
+.scene-head-title {
+  margin: 0;
+  padding: 18px 56px 0 22px;
+  font-size: var(--fs-body);
+  font-weight: 650;
+  color: var(--bone);
+}
+.page-scene .scene-head .hud-scroll {
+  padding-top: 14px;
+}
+.page-scene .scene-media {
+  animation: rise var(--dur-3) var(--ease-out) 80ms backwards;
+}
+.page-scene .scene-panel {
+  animation: slide-right var(--dur-3) var(--ease-out);
+}
+.page-scene .scene-bar {
+  left: 50%;
+  bottom: 16px;
+  max-width: calc(100% - 24px);
+}
+.page-scene .scene-help {
+  bottom: 76px;
+  border-radius: var(--r-panel);
+  animation: rise var(--dur-3) var(--ease-out) 300ms backwards;
+}
+.page-scene .bar-group {
+  border-right-color: var(--hair);
+}
+:is(.scene-bar, .media-actions) .bar-button {
+  border-radius: var(--r-control);
+  transition:
+    background-color var(--dur-1),
+    transform var(--dur-2) var(--ease-spring);
+}
+:is(.scene-bar, .media-actions) .bar-button:active:not(:disabled) {
+  transform: scale(0.95);
+  transition-duration: 60ms;
+}
+:is(.scene-bar, .media-actions) .bar-button[aria-pressed='true'] {
+  background: var(--panel-3);
+  box-shadow: none;
 }

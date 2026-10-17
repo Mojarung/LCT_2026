@@ -1,68 +1,67 @@
-/* --- страница запуска: лист чертежа, а не лендинг --- */
+/* --- страницы в потоке: главная, база моделей, уточнение объектов --- */
 
+/* Обёртка страницы с прокруткой: та же ширина и поля, что у главной. */
 .launch {
-  padding: clamp(16px, 2.2vw, 24px) var(--inset) clamp(24px, 3vw, 40px);
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 44px) var(--gutter) clamp(32px, 4vw, 64px);
+  animation: rise var(--dur-3) var(--ease-out);
 }
 
-/* Лист: волосяная рамка без скругления и тени, графы разделены той же линией. Карточки
-   с тенью были языком любого SaaS; сервис выдаёт чертёж, и консоль говорит его языком. */
+/* Лист страницы - без рамки: заголовок и содержимое на фоне, разделы - ступенью тона. */
 .sheet {
   max-width: 1400px;
   margin: 0 auto;
-  background: var(--panel);
-  border: 1px solid var(--hair-2);
-}
-.sheet-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
-}
-.sheet-cell {
-  padding: clamp(18px, 2.2vw, 26px);
-  min-width: 0;
-}
-.sheet-cell + .sheet-cell {
-  border-left: 1px solid var(--hair-2);
 }
 
-/* Штамп: название сервиса слева, графы свода справа - подпись мелко, значение крупно. */
+/* Шапка страницы: заголовок и строка о том, что здесь, справа - дорога назад. */
 .stamp {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  border-bottom: 1px solid var(--hair-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 32px;
+  margin-bottom: clamp(20px, 2.4vw, 32px);
 }
 .stamp-title {
-  padding: 16px clamp(18px, 2.2vw, 26px);
   min-width: 0;
 }
 .stamp-title h1 {
-  margin: 0 0 4px;
-  font-size: var(--fs-title);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  margin: 0 0 8px;
+  font-size: clamp(28px, 1.2rem + 1.6vw, 44px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 .stamp-title p {
-  max-width: 60ch;
+  max-width: 62ch;
   margin: 0;
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
+  line-height: 1.55;
   color: var(--bone-2);
 }
 
-/* Подписи разделов строчными, как подписи полей: разрядка капсом - язык любого шаблона,
-   а на листе чертежа графы подписаны обычным шрифтом. */
+/* Подпись раздела страницы: строчными, крупнее подписей полей. */
 .section-label {
-  margin: 0 0 16px;
+  margin: 0 0 14px;
+  font-size: var(--fs-strong);
+  font-weight: 650;
+  color: var(--bone);
+}
+.section-label .count,
+.panel-title .count {
+  margin-left: 8px;
   font-size: var(--fs-small);
-  font-weight: 600;
-  color: var(--bone-2);
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--hair);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-3);
 }
 
 .start-title {
-  margin: 0 0 7px;
+  margin: 0 0 8px;
   font-size: var(--fs-title);
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -71,10 +70,18 @@
 }
 
 /* Встроенный участок стоит на месте каталога улиц: тот же вес строки, что у поля выбора. */
+.field.sample {
+  padding: 14px 16px;
+  border-radius: var(--r-control);
+  background: var(--panel-2);
+}
 .sample-title {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: 600;
+}
+.field.sample .hint {
+  margin-top: 2px;
 }
 
 /* Два источника прогона в одной форме: улица из каталога или свой чертёж. */
@@ -82,8 +89,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 20px;
-  font-size: var(--fs-micro);
+  margin: -4px 0 16px;
+  font-size: var(--fs-small);
   color: var(--bone-3);
 }
 .or::before,
@@ -102,88 +109,407 @@
 .form-error:empty {
   margin: 0;
 }
+.start-form > .primary {
+  width: 100%;
+  min-height: 48px;
+  font-size: var(--fs-strong);
+}
 
-.facts {
-  display: grid;
-  grid-template-columns: repeat(3, auto) minmax(0, 190px);
-  height: 100%;
-  margin: 0;
+/* Главное поле чертежа - зона: перетащить файл или выбрать. */
+.filefield.drop {
+  justify-content: center;
+  gap: 14px;
+  min-height: 116px;
+  padding: 20px;
+  border: 1.5px dashed var(--hair-2);
+  border-radius: var(--r-panel);
+  background: var(--panel-2);
+  transition:
+    border-color var(--dur-1),
+    background-color var(--dur-1),
+    transform var(--dur-2) var(--ease-spring);
 }
-.facts div {
+.filefield.drop:hover,
+.filefield.drop[data-over='true'] {
+  border-color: var(--bone-3);
+}
+.filefield.drop[data-over='true'] {
+  border-color: var(--bone);
+  background: color-mix(in srgb, var(--panel-2) 70%, var(--c-lawn));
+  transform: scale(1.01);
+}
+.filefield.drop .drop-hint {
+  font-size: var(--fs-body);
+  color: var(--bone-2);
+}
+.filefield.drop .chosen {
+  flex: 0 1 auto;
+}
+
+/* --- поверхности --- */
+
+.panel {
+  min-width: 0;
+  padding: clamp(20px, 2.2vw, 28px);
+  background: var(--panel);
+  border-radius: var(--r-panel);
+  box-shadow: 0 0 0 1px var(--hair);
+}
+.panel-title {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 12px 18px;
-  border-left: 1px solid var(--hair-2);
+  align-items: baseline;
+  margin: 0 0 20px;
+  font-size: var(--fs-title);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--bone);
 }
-.facts dt {
+
+/* Страница-сообщение: прогона нет, страницы нет. Одна мысль и одна дорога назад. */
+.empty-page {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  max-width: 560px;
+  margin: clamp(48px, 12vh, 140px) auto;
+  padding: 0 var(--gutter);
+  animation: rise var(--dur-3) var(--ease-out);
+}
+.empty-page h1 {
+  margin: 0;
+  font-size: clamp(28px, 1.2rem + 1.6vw, 44px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.empty-page p {
+  margin: 0 0 8px;
+  font-size: var(--fs-strong);
+  line-height: 1.5;
+  color: var(--bone-2);
+}
+
+/* --- главная --- */
+
+.home {
+  display: grid;
+  gap: clamp(32px, 4vw, 64px);
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 48px) var(--gutter) clamp(40px, 5vw, 80px);
+}
+
+/* Первый экран: слева что это и как выглядит результат, справа запуск. */
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
+  gap: clamp(24px, 3vw, 48px);
+  align-items: start;
+}
+.home-intro h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  color: var(--bone);
+  text-wrap: balance;
+  animation: rise var(--dur-4) var(--ease-out) backwards;
+}
+.lead {
+  max-width: 52ch;
+  margin: 22px 0 0;
+  font-size: clamp(15px, 0.85rem + 0.35vw, 18px);
+  line-height: 1.55;
+  color: var(--bone-2);
+  animation: rise var(--dur-4) var(--ease-out) 80ms backwards;
+}
+.home-more {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: var(--fs-body);
+  font-weight: 550;
+  color: var(--bone);
+  animation: rise var(--dur-4) var(--ease-out) 120ms backwards;
+}
+
+/* Коллаж результата: фото улицы и поверх него тот же план на слоях чертежа - один участок,
+   чертёж и то, как он будет выглядеть. Фото медленно приближается, план приезжает снизу. */
+.home-collage {
+  position: relative;
+  margin: clamp(24px, 3vw, 40px) 0 0;
+  animation: rise var(--dur-4) var(--ease-out) 160ms backwards;
+}
+.collage-stage {
+  position: relative;
+  display: block;
+}
+.collage-frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background: var(--panel-2);
+}
+.collage-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+}
+.collage-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  animation: drift 24s var(--ease-out) both;
+}
+@keyframes drift {
+  from {
+    transform: scale(1.06);
+  }
+}
+.collage-plan {
+  position: absolute;
+  left: clamp(12px, 2vw, 24px);
+  bottom: clamp(12px, 2vw, 24px);
+  z-index: 2;
+  width: 46%;
+  padding: 6px;
+  background: var(--panel);
+  border-radius: var(--r-panel);
+  box-shadow: var(--lift);
+  animation: plan-in var(--dur-4) var(--ease-spring) 520ms backwards;
+}
+@keyframes plan-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) rotate(-1.5deg);
+  }
+}
+.collage-plan img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: calc(var(--r-panel) - 5px);
+}
+.collage-plan span {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(28 26 22 / 86%);
+  color: #fbfaf7;
   font-size: var(--fs-micro);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.home-collage figcaption {
+  max-width: 62ch;
+  margin: 10px 0 0 auto;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  text-align: right;
   color: var(--bone-3);
+}
+
+/* Запуск и готовые планы - колонка справа, стоит на месте, пока слева листают. */
+.home-side {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  gap: 20px;
+}
+.home-start {
+  scroll-margin-top: 24px;
+  animation: rise var(--dur-4) var(--ease-out) 220ms backwards;
+}
+.recent {
+  animation: rise var(--dur-4) var(--ease-out) 320ms backwards;
+}
+.recent-title {
+  margin: 0 0 8px 4px;
+  font-size: var(--fs-body);
+  font-weight: 650;
+  color: var(--bone);
+}
+.recent ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.recent a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--hair);
+  text-decoration: none;
+  transition:
+    box-shadow var(--dur-1),
+    transform var(--dur-2) var(--ease-out);
+}
+.recent a:hover {
+  box-shadow:
+    0 0 0 1px var(--hair-2),
+    0 10px 24px -16px rgba(40, 32, 20, 0.45);
+  transform: translateY(-1px);
+}
+.recent-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.facts dd {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: var(--fs-metric);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-/* Перечень актов - не число: моноширинный и крупный делают его тяжелее самих значений. */
-.facts dd.acts {
-  font-family: var(--sans);
+.recent-meta {
+  grid-row: 2;
   font-size: var(--fs-small);
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-3);
+}
+.recent-go {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: var(--bone-3);
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    color var(--dur-1);
+}
+.recent a:hover .recent-go {
+  color: var(--bone);
+  transform: translateX(3px);
+}
+
+.home-runs {
+  scroll-margin-top: 24px;
+}
+/* Заголовок реестра со значком пояснения: значок у слова, а не у края панели. */
+.runs-head {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+.runs-head .panel-title {
+  margin: 0;
+}
+
+/* Как это работает: четыре шага в строку, значок вместо номера. */
+.home-how {
+  scroll-margin-top: 24px;
+}
+.home-title {
+  margin: 0 0 20px;
+  font-size: clamp(22px, 1rem + 1vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  color: var(--bone);
+}
+.how {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(10px, 1.4vw, 16px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.how li {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 20px 22px 22px;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--hair);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.how li:hover {
+  transform: translateY(-2px);
+}
+.how .icon {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 6px;
+  color: var(--bone);
+}
+.how b {
+  font-size: var(--fs-strong);
+  font-weight: 650;
+  color: var(--bone);
+}
+.how span {
+  font-size: var(--fs-body);
+  line-height: 1.5;
   color: var(--bone-2);
+}
+.how a {
+  color: inherit;
 }
 
 /* --- реестр прогонов --- */
 
 .registry {
   width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-small);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-body);
 }
 .registry th {
   text-align: left;
-  padding: 0 10px 7px 0;
-  border-bottom: 1px solid var(--hair);
-  font-size: var(--fs-micro);
+  padding: 0 12px 10px 0;
+  font-size: var(--fs-small);
   font-weight: 500;
   color: var(--bone-3);
 }
 .registry td {
-  padding: 9px 10px 9px 0;
-  border-bottom: 1px solid var(--hair);
+  padding: 11px 12px 11px 0;
+  border-top: 1px solid var(--hair);
   vertical-align: middle;
+  transition: background-color var(--dur-1);
 }
 /* Все прогоны в панели, длинный список прокручивается внутри неё; шапка таблицы остаётся. */
 .registry-wrap {
-  max-height: min(62vh, 560px);
+  max-height: min(64vh, 620px);
   overflow-y: auto;
   scrollbar-width: thin;
 }
 .registry-wrap thead th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: var(--panel);
+}
+.registry td:first-child {
+  border-radius: var(--r-control) 0 0 var(--r-control);
 }
 .registry td:last-child,
 .registry th:last-child {
-  padding-right: 0;
+  padding-right: 6px;
+}
+.registry td:last-child {
+  border-radius: 0 var(--r-control) var(--r-control) 0;
 }
 .registry .num {
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .registry .nowrap {
   white-space: nowrap;
 }
-/* Ширина 100% с max-width: 0 - стандартный приём для колонки-резинки в таблице:
-   без него длинное имя чертежа переносится и ломает ритм строк. */
+/* Ширина 100% с max-width: 0 - стандартный приём для колонки-резинки в таблице: без него
+   длинное имя чертежа переносится и ломает ритм строк. */
 .registry .name {
   width: 100%;
   max-width: 0;
@@ -195,43 +521,43 @@
   white-space: nowrap;
 }
 .registry td.mono {
-  font-family: var(--mono);
-  font-size: var(--fs-micro);
-  color: var(--bone-2);
   font-variant-numeric: tabular-nums;
+  font-size: var(--fs-small);
+  color: var(--bone-2);
 }
 .registry a {
-  font-weight: 500;
+  font-weight: 550;
   text-decoration: none;
-}
-.registry a:hover {
-  text-decoration: underline;
 }
 .registry tr:hover td {
   background: var(--panel-2);
 }
+.registry tr:hover + tr td {
+  border-top-color: transparent;
+}
 
-/* Состояние - отдельная узкая колонка с квадратом: приписанное к имени файла, оно
-   переносилось на вторую строку и выглядело случайным. */
+/* Состояние - узкая колонка с точкой: приписанное к имени файла, оно переносилось на вторую
+   строку и выглядело случайным. */
 .registry td.state {
-  width: 16px;
-  padding-right: 0;
+  width: 0;
+  padding: 0 0 0 30px;
   position: relative;
 }
 .registry td.state::before {
   content: '';
   position: absolute;
   top: 50%;
-  left: 0;
-  width: 7px;
-  height: 7px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   transform: translateY(-50%);
   background: currentColor;
 }
-/* Готовый прогон - нейтральный квадрат: цвет --ok носят кроны на карте, и в реестре он
-   читался как «посадки», а не как «готово». Цвет остаётся за тем, что требует внимания. */
+/* Готовый прогон - нейтральная точка: цвет --ok носят кроны на карте, и в реестре он читался
+   как «посадки», а не как «готово». Цвет остаётся за тем, что требует внимания. */
 .state-succeeded {
-  color: var(--bone-3);
+  color: var(--hair-2);
 }
 .state-failed {
   color: var(--bad);
@@ -240,49 +566,55 @@
 .state-queued {
   color: var(--warn);
 }
+.registry td.state-running::before,
+.registry td.state-queued::before {
+  animation: pulse 1.4s var(--ease-out) infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
 
 /* Удаление - тихая кнопка-корзина в хвосте строки: в реестре главное имя чертежа, а не
-   действие. Подтверждение - строкой-панелью под прогоном на всю ширину таблицы, вместе со
-   строкой на одном фоне; «Точно удалить?» в цвете ошибки, чтобы второй клик не был случайным. */
+   действие. Подтверждение - строкой-панелью под прогоном на всю ширину таблицы. */
 .registry td.act {
   width: 1%;
   padding-left: 4px;
   text-align: right;
   white-space: nowrap;
-  vertical-align: middle;
 }
 .row-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
-  min-height: 26px;
-  padding: 2px 8px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 2px 10px;
   background: transparent;
   color: var(--bone-3);
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--r-control);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   transition:
-    color 0.12s,
-    border-color 0.12s,
-    background-color 0.12s;
+    color var(--dur-1),
+    background-color var(--dur-1);
 }
 .registry td.act .row-action {
   padding: 2px;
 }
 .row-action:hover {
   color: var(--bone);
-  border-color: var(--hair-2);
+  background: var(--panel-3);
 }
 .row-action[aria-expanded='true'],
 .row-action.danger,
 .row-action.danger:hover {
   color: var(--bad);
-  border-color: var(--bad);
 }
-.row-action.danger:hover {
-  background: var(--panel);
+.row-action.danger {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  font-weight: 600;
 }
 .row-action[aria-busy='true'] {
   opacity: 0.5;
@@ -290,10 +622,10 @@
 }
 .registry tr.armed td {
   background: var(--panel-2);
-  border-bottom-color: transparent;
 }
 .registry .row-confirm td {
-  padding: 0 0 9px;
+  padding: 0 6px 10px 10px;
+  border-top: 0;
   background: var(--panel-2);
 }
 .confirm-panel {
@@ -302,9 +634,9 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px 8px;
-  padding: 0 4px;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   color: var(--bone-2);
+  animation: unfold var(--dur-2) var(--ease-out);
 }
 /* Две кнопки переносятся только вместе: «Отмена» одна на строке читалась оторванной. */
 .confirm-text {
@@ -317,14 +649,15 @@
 }
 .registry .row-note td {
   padding-top: 0;
+  border-top: 0;
   color: var(--bad);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
 }
 
 .empty {
   padding: 18px 0;
   color: var(--bone-3);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
 }
 .empty p {
   margin: 0 0 6px;
@@ -333,19 +666,17 @@
 /* --- база моделей растений (/models) --- */
 .models-back {
   margin: 0;
-  padding: 16px clamp(18px, 2.2vw, 26px);
-  font-size: var(--fs-small);
-  align-self: center;
+  font-size: var(--fs-body);
+  font-weight: 550;
 }
 .models-body {
   display: grid;
-  gap: 28px;
-  padding: clamp(18px, 2.2vw, 26px);
+  gap: clamp(28px, 3vw, 44px);
 }
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 0 20px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -353,9 +684,21 @@
 .models-grid li {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--hair);
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--hair);
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2);
+  animation: rise var(--dur-3) var(--ease-out) backwards;
+}
+.models-grid li:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px var(--hair-2),
+    0 10px 24px -16px rgba(40, 32, 20, 0.4);
 }
 .models-grid li > div {
   display: grid;
@@ -365,6 +708,7 @@
   line-height: 1.35;
 }
 .models-grid b {
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--bone);
 }
@@ -372,21 +716,27 @@
   color: var(--bone-2);
 }
 .models-grid span {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   color: var(--bone-3);
 }
 
 /* --- уточнение объектов чертежа (/runs/:id/review) --- */
+.review-sheet {
+  max-width: 1600px;
+}
 .review-body {
   display: grid;
   grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 16px;
 }
 /* Поля слева прокручиваются сами: карта справа остаётся на месте, пока человек идёт по
    группам сверху вниз. */
 .review-controls {
-  padding: clamp(18px, 2.2vw, 26px);
-  border-right: 1px solid var(--hair-2);
-  max-height: calc(100dvh - 190px);
+  padding: clamp(18px, 2.2vw, 24px);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--hair);
+  max-height: calc(100dvh - 210px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--hair-2) transparent;
@@ -396,8 +746,7 @@
 }
 .review-status {
   margin: 14px 0 20px;
-  padding: 10px 12px;
-  border: 1px solid var(--hair);
+  padding: 12px 14px;
   border-radius: var(--r-control);
   background: var(--panel-2);
   font-size: var(--fs-small);
@@ -408,7 +757,8 @@
   margin: 8px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: var(--fs-micro) / 1.5 var(--mono);
+  font-size: var(--fs-small);
+  line-height: 1.5;
   color: var(--bone-2);
 }
 .review-actions {
@@ -420,14 +770,13 @@
 .review-controls textarea {
   width: 100%;
   font-family: var(--mono);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
 }
 .review-map {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  padding: clamp(14px, 1.8vw, 20px);
 }
 .review-toolbar {
   display: flex;
@@ -438,9 +787,9 @@
   flex: 1;
   width: 100%;
   min-height: 520px;
-  background: var(--panel-2);
-  border: 1px solid var(--hair-2);
-  border-radius: var(--r-control);
+  background: var(--panel);
+  border-radius: var(--r-panel);
+  box-shadow: 0 0 0 1px var(--hair);
   touch-action: none;
 }
 .review-canvas:focus-visible {
@@ -452,19 +801,35 @@
   display: grid;
   place-items: center;
   min-height: 360px;
-  border: 1px dashed var(--hair-2);
-  border-radius: var(--r-control);
+  border: 1.5px dashed var(--hair-2);
+  border-radius: var(--r-panel);
 }
-/* Уточнять нечего: строка и дорога назад в поле листа, без формы (жюри, итерация 7). */
+/* Уточнять нечего: строка и дорога назад, без формы. */
 .review-none {
-  padding: clamp(18px, 2.2vw, 26px);
+  padding: clamp(20px, 2.4vw, 28px);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--hair);
 }
 .review-none p {
   max-width: 60ch;
   margin: 0;
+  font-size: var(--fs-strong);
 }
 .review-none .hint {
   margin-top: 8px;
+}
+
+@media (max-width: 1100px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-side {
+    position: static;
+  }
+  .how {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 900px) {
   .review-body {
@@ -472,356 +837,24 @@
   }
   .review-controls {
     max-height: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--hair-2);
   }
   .review-canvas {
     min-height: 60vh;
-  }
-}
-
-/* --- Главная: что делает сервис, запуск и реестр, как это работает --- */
-.landing {
-  display: grid;
-  gap: clamp(28px, 3.5vw, 48px);
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: clamp(24px, 3.5vw, 52px) var(--gutter) clamp(32px, 4vw, 64px);
-}
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: clamp(24px, 4vw, 64px);
-  align-items: center;
-}
-.hero h1 {
-  margin: 0;
-  font-size: clamp(32px, 1.4rem + 2.4vw, 58px);
-  font-weight: 650;
-  line-height: 1.04;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-  color: var(--bone);
-}
-.lead {
-  max-width: 50ch;
-  margin: 20px 0 0;
-  font-size: clamp(15px, 0.85rem + 0.35vw, 18px);
-  line-height: 1.55;
-  color: var(--bone-2);
-}
-.hero-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 22px;
-  margin: 32px 0 0;
-  font-size: var(--fs-body);
-}
-.hero-links .primary {
-  text-decoration: none;
-}
-.hero-links a:not(.primary) {
-  color: var(--bone-2);
-  text-decoration: underline;
-  text-decoration-color: var(--hair-2);
-  text-underline-offset: 4px;
-}
-.hero-links a:not(.primary):hover {
-  color: var(--bone);
-  text-decoration-color: var(--bone);
-}
-.hero-visual {
-  position: relative;
-  margin: 0;
-}
-.hero-photo {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border: 1px solid var(--hair-2);
-  border-radius: var(--r-panel);
-}
-/* План заходит на фото: это один и тот же участок - чертёж и то, как он будет выглядеть. */
-.hero-plan {
-  position: absolute;
-  left: clamp(-36px, -2vw, -12px);
-  bottom: 52px;
-  width: 44%;
-  padding: 6px;
-  background: var(--panel);
-  border: 1px solid var(--hair-2);
-  border-radius: var(--r-control);
-  box-shadow: 0 18px 44px rgb(43 38 32 / 24%);
-}
-.hero-plan img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: calc(var(--r-control) - 3px);
-}
-.hero-plan span {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgb(43 38 32 / 86%);
-  color: #fbf7ee;
-  font: 500 11px / 1.4 var(--mono);
-}
-.hero-visual figcaption {
-  max-width: 60ch;
-  margin: 10px 0 0 auto;
-  font-size: var(--fs-micro);
-  line-height: 1.45;
-  text-align: right;
-  color: var(--bone-3);
-}
-.workbench {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
-  gap: clamp(16px, 2vw, 24px);
-  align-items: start;
-}
-.panel {
-  min-width: 0;
-  padding: clamp(18px, 2.2vw, 28px);
-  background: var(--panel);
-  border: 1px solid var(--hair-2);
-  border-radius: var(--r-panel);
-}
-.panel-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 0 18px;
-  font-size: var(--fs-strong);
-  font-weight: 600;
-  color: var(--bone);
-}
-.panel-title .count {
-  font: 400 var(--fs-small) var(--mono);
-  color: var(--bone-3);
-}
-.launch-panel {
-  scroll-margin-top: 24px;
-}
-/* Заголовок раздела страницы: крупнее заголовков панелей, раздел стоит сам по себе. */
-.landing-title {
-  margin: 0 0 20px;
-  font-size: var(--fs-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--bone);
-}
-.steps-strip {
-  scroll-margin-top: 24px;
-}
-.how a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-color: var(--hair-2);
-  text-underline-offset: 3px;
-}
-.how a:hover {
-  text-decoration-color: var(--bone);
-}
-/* Заголовок реестра со значком пояснения: значок у слова, а не у края панели. */
-.runs-head {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  margin: 0 0 18px;
-}
-.runs-head .panel-title {
-  margin: 0;
-}
-.how {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(14px, 2vw, 28px);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: how;
-}
-.how li {
-  padding-top: 14px;
-  border-top: 2px solid var(--bone);
-  counter-increment: how;
-}
-.how li::before {
-  content: counter(how);
-  display: block;
-  margin-bottom: 10px;
-  font: 500 var(--fs-small) var(--mono);
-  color: var(--bone-3);
-}
-.how b {
-  display: block;
-  margin-bottom: 6px;
-  font-size: var(--fs-strong);
-  color: var(--bone);
-}
-.how span {
-  display: block;
-  font-size: var(--fs-body);
-  line-height: 1.5;
-  color: var(--bone-2);
-}
-/* Главное поле чертежа - зона: перетащить файл или выбрать. */
-.filefield.drop {
-  justify-content: center;
-  gap: 14px;
-  min-height: 108px;
-  padding: 18px;
-  border: 1.5px dashed var(--hair-2);
-  border-radius: var(--r-panel);
-  background: var(--panel-2);
-  transition:
-    border-color 0.15s,
-    background-color 0.15s;
-}
-.filefield.drop:hover,
-.filefield.drop[data-over='true'] {
-  border-color: var(--bone);
-}
-.filefield.drop[data-over='true'] {
-  background: color-mix(in srgb, var(--panel-2) 70%, var(--c-lawn));
-}
-.filefield.drop .drop-hint {
-  font-size: var(--fs-body);
-  color: var(--bone-2);
-}
-.filefield.drop .chosen {
-  flex: 0 1 auto;
-}
-@media (max-width: 1100px) {
-  .hero,
-  .workbench {
-    grid-template-columns: 1fr;
-  }
-  .hero-plan {
-    left: 12px;
-  }
-  .how {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 560px) {
   .how {
     grid-template-columns: 1fr;
   }
-  /* Номер шага - колонкой слева: отдельной строкой он растягивал четыре шага на экран. */
-  .how li {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
-    column-gap: 6px;
-    padding-top: 12px;
+  .collage-plan {
+    width: 58%;
+    left: 10px;
+    bottom: -18px;
   }
-  .how li::before {
-    grid-row: span 2;
-    margin: 1px 0 0;
+  .home-collage figcaption {
+    margin-top: 28px;
   }
-  .hero-plan {
-    display: none;
-  }
-}
-
-/* Главная - рабочий стол: короткая шапка, под ней запуск и реестр, ниже справка. */
-.console-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 16px 40px;
-}
-/* Продукт на первом экране: план на слоях и фото по 3D-кадру, небольшой полосой. */
-.console-shots {
-  display: flex;
-  gap: 10px;
-  margin: 0;
-}
-.console-shots img {
-  display: block;
-  height: 132px;
-  width: auto;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-panel);
-  background: var(--panel);
-}
-.console-shots figcaption {
-  align-self: flex-end;
-  max-width: 16ch;
-  font-size: var(--fs-micro);
-  color: var(--bone-3);
-}
-.console-head h1 {
-  margin: 0;
-  font-size: clamp(26px, 1.1rem + 1.4vw, 38px);
-  font-weight: 650;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-  color: var(--bone);
-}
-.console-head .lead {
-  margin-top: 10px;
-  max-width: 68ch;
-  font-size: var(--fs-body);
-}
-.console-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  font-size: var(--fs-small);
-  font-weight: 500;
-}
-.console-links a {
-  color: var(--bone-2);
-}
-.console-links a:hover {
-  color: var(--bone);
-}
-.how-section {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: clamp(20px, 3vw, 48px);
-  align-items: start;
-  padding-top: 8px;
-  border-top: 1px solid var(--hair);
-}
-.how-section .how {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.how-visual {
-  margin: 0;
-}
-.how-visual img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-panel);
-}
-.how-visual figcaption {
-  margin-top: 8px;
-  font-size: var(--fs-micro);
-  color: var(--bone-3);
-}
-@media (max-width: 900px) {
-  .console-head {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .console-shots img {
-    height: 96px;
-  }
-  .how-section {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .how-section .how {
-    grid-template-columns: minmax(0, 1fr);
+  .home-collage figcaption {
+    text-align: left;
   }
 }

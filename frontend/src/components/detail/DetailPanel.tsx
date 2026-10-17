@@ -86,7 +86,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
           rel="noopener"
           title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"
         >
-          кадры посадки в 3D ↗
+          Кадры посадки в 3D ↗
         </a>
       ) : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
