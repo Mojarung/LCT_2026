@@ -124,11 +124,13 @@ describe('вырез земли с пандусом', () => {
     expect(pts[0]).toEqual(pts.at(-1));
   });
 
-  it('пандус - лента от края проезда до линии выреза: у борта на 2 см ниже его верха', () => {
+  it('пандус - лента от края проезда до линии выреза: у борта ниже его верха на высоту над тротуаром', () => {
     const g = apronGeometry([edge()], 1.2, 0.02, -0.11, 1);
     g.computeBoundingBox();
     const box = g.boundingBox;
-    expect(box?.min.y).toBeCloseTo(-0.13);
+    // Отметки относительно верха полного борта: тротуар на topFull ниже него.
+    const atCurbLow = -0.11 - 0.02;
+    expect(box?.min.y).toBeCloseTo(atCurbLow);
     expect(box?.max.y).toBeCloseTo(0);
     expect(box?.min.x).toBeCloseTo(19);
     expect(box?.max.x).toBeCloseTo(25);
@@ -138,9 +140,9 @@ describe('вырез земли с пандусом', () => {
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const atCurb = Math.abs(pos.getZ(i) + 6) < 1e-6;
-      // Верх у линии выреза - уровень тротуара; у борта на съезде -0,13, над переходным
-      // камнем поднимается до тротуара: концы ленты без вертикальной щели.
-      const want = !atCurb ? 0 : x >= 20 && x <= 24 ? -0.13 : x === 19 || x === 25 ? 0 : NaN;
+      // Верх у линии выреза - уровень тротуара; у борта на съезде ниже верха пониженного
+      // борта, над переходным камнем поднимается до тротуара: концы ленты без щели.
+      const want = !atCurb ? 0 : x >= 20 && x <= 24 ? atCurbLow : x === 19 || x === 25 ? 0 : NaN;
       if (Number.isNaN(want)) throw new Error(`лишняя точка x=${x}`);
       expect(pos.getY(i), `x=${x}`).toBeCloseTo(want);
     }

@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 
-import { CURB_ABOVE_WALK_M, type MaskInfo, withoutHairpins, type SurfaceAreas } from './ground';
+import { type MaskInfo, withoutHairpins, type SurfaceAreas } from './ground';
 import { ASPHALT, EMPTY, PAVERS, ROAD } from './surfaceMask';
 import type { Flat, Line } from './types';
 
@@ -358,7 +358,7 @@ function geometryOf(pos: number[], nor: number[], uv: number[]): THREE.BufferGeo
 }
 
 /** Пандусы тротуара к пониженному борту: лента от края проезда до линии выреза земли
- *  (уровень тротуара, 0). У борта лента на CURB_ABOVE_WALK_M ниже его верха по профилю
+ *  (уровень тротуара, 0). У борта лента на topFull ниже верха борта по профилю
  *  curbProfile, то есть над переходными камнями поднимается до тротуара: концы ленты
  *  сходятся с землёй без вертикальной щели. */
 export function apronGeometry(
@@ -375,7 +375,7 @@ export function apronGeometry(
     const tops = curbTops(edge, topFull, topLow, rampM).tops ?? [];
     for (const run of apronRuns(edge, rampM)) {
       const near = edge.points.slice(run.start, run.end + 1);
-      const yNear = near.map((_, k) => (tops[run.start + k] ?? topFull) - CURB_ABOVE_WALK_M);
+      const yNear = near.map((_, k) => (tops[run.start + k] ?? topFull) - topFull);
       strip(near, apronLine(edge, run, apronW), yNear, 0, pos, nor, uv);
     }
   }
