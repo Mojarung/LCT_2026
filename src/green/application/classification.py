@@ -163,38 +163,59 @@ def classify_scene(  # noqa: C901 - ступени классификации п
     entries = _symbol_entries(scene.symbols, layer_map, infer=infer)
     instances = {str(symbol.ref): symbol for symbol in scene.symbols}
     cache: dict[tuple[str, str | None, str, bool], tuple[ObjectClass, ClassificationEvidence]] = {}
-    classified = []
-    for feature in scene.features:
+    assume = params is None or params.assume_unknown_geometry
+
+    def by_name(feature: Feature) -> tuple[ObjectClass, ClassificationEvidence]:
         decided = _stroke_decision(feature, instances, entries, active=bool(layer_map.symbols))
-        if decided is None:
-            key = (
-                feature.layer,
-                feature.block,
-                feature.geometry.geom_type,
-                feature.circle_radius_m is not None,
-            )
-            if key not in cache:
-                cache[key] = layer_map.decide(feature)
-                if infer and cache[key][0] is ObjectClass.UNKNOWN:
-                    cache[key] = _inferred(feature, layer_map.vocabulary, cache[key][1])
-                if (
-                    infer
-                    and cache[key][0] is ObjectClass.UNKNOWN
-                    and (params is None or params.name_model)
-                ):
-                    cache[key] = _modelled(feature, layer_map.names, cache[key][1])
-            decided = cache[key]
+        if decided is not None:
+            return decided
+        key = (
+            feature.layer,
+            feature.block,
+            feature.geometry.geom_type,
+            feature.circle_radius_m is not None,
+        )
+        if key not in cache:
+            cache[key] = layer_map.decide(feature)
+            if infer and cache[key][0] is ObjectClass.UNKNOWN:
+                cache[key] = _inferred(feature, layer_map.vocabulary, cache[key][1])
             if (
                 infer
-                and (params is None or params.assume_unknown_geometry)
-                and decided[0] is ObjectClass.UNKNOWN
+                and cache[key][0] is ObjectClass.UNKNOWN
+                and (params is None or params.name_model)
             ):
-                decided = _assumed(feature, decided[1])
-        kind, evidence = decided
+                cache[key] = _modelled(feature, layer_map.names, cache[key][1])
+        return cache[key]
+
+    decisions = [by_name(feature) for feature in scene.features]
+    # Оформление листа (легенда, штамп, текст штрихами) среди того, что имя не решило
+    # (application/sheet_furniture.py): раньше замены по одной геометрии.
+    furniture = (
+        sheet_furniture(
+            (
+                f
+                for f, d in zip(scene.features, decisions, strict=True)
+                if d[0] is ObjectClass.UNKNOWN
+            ),
+            scene.labels,
+            strokes=assume,
+        )
+        if infer
+        else {}
+    )
+    classified = []
+    for feature, named in zip(scene.features, decisions, strict=True):
+        kind, evidence = _unnamed(feature, named, furniture, assume=infer and assume)
         callout = callout_by_ref.get(str(feature.ref))
         if callout is not None:
-            method = "callout_annotation" if callout.certain else "callout_candidate"
-            if callout.certain:
+            method = (
+                "callout_annotation"
+                if callout.certain
+                else "callout_leader"
+                if callout.leader
+                else "callout_candidate"
+            )
+            if callout.certain or callout.leader:
                 kind = ObjectClass.IGNORE
             evidence = ClassificationEvidence(f"{method}:{callout.source_refs[0]}")
         explicit = overrides.decide(feature)

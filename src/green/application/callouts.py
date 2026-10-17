@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from shapely import STRtree
 from shapely.geometry import Point
+from shapely.ops import unary_union
 
 from green.domain.objects import Callout
 
@@ -23,6 +24,14 @@ _MAX_DEGREE = 12
 _LINE_VERTICES = 2
 _SHAFT_VERTICES = 5
 _FORWARD_COS = 0.5
+# Выноска без проверки (leader): стержень до 40 м, полка под подписью до 8 м, вдоль чужих
+# линий слоя (в 15 см) - не больше пятой части стержня.
+_MAX_LEADER_M = 40.0
+_MAX_SHELF_M = 8.0
+_OVERLAP_M = 0.15
+_MAX_OVERLAP = 0.2
+# Линия у острия ближе 35° к ходу стержня - продолжение, иначе острие лежит на трассе.
+_STRAIGHT_COS = math.cos(math.radians(35))
 
 
 def _context(item: Feature | TextLabel) -> tuple[str, str, str, str | None]:
@@ -78,6 +87,7 @@ def _recognise(  # noqa: C901 - bounded geometric motif with explicit rejection 
         endpoints.extend([Point(coords[0]), Point(coords[-1])])
         owners.extend([index, index])
     tree = STRtree(endpoints)
+    line_tree = STRtree([feature.geometry for feature in features])
     text_tree = STRtree([Point(label.x, label.y) for label in labels])
     found: dict[tuple[str, ...], Callout] = {}
     for index, shaft in enumerate(features):
@@ -119,7 +129,6 @@ def _recognise(  # noqa: C901 - bounded geometric motif with explicit rejection 
                 )
                 if not text_ids:
                     continue
-                refs = tuple(sorted(str(features[i].ref) for i in (index, left, right)))
                 label = labels[text_ids[0]]
                 is_well = re.sub(r"[^а-яa-z]", "", label.text.casefold()) in {
                     "кабкол",
@@ -127,17 +136,93 @@ def _recognise(  # noqa: C901 - bounded geometric motif with explicit rejection 
                 }
                 isolated = near == {left, right}
                 certain = len(text_ids) == 1 and isolated and is_well
+                shelf = _free_tail(features, index, tail, tree, endpoints, owners)
+                leader = (
+                    not certain
+                    and not _continues(features, near - {left, right}, tip, following)
+                    and shelf is not None
+                    and shaft.geometry.length <= _MAX_LEADER_M
+                    and _overlap(shaft, features, {index, left, right, *shelf}, line_tree)
+                    <= _MAX_OVERLAP
+                )
+                members = (index, left, right, *(shelf if leader and shelf else ()))
+                refs = tuple(sorted(str(features[i].ref) for i in members))
                 reason = (
                     "подпись кабельного колодца, полка и отдельный наконечник"
                     if certain
+                    else "выноска: стержень не продолжается за острием, хвост свободен"
+                    if leader
                     else "несколько подписей, продолжение линии или неоднозначный текст"
                 )
-                candidate = Callout(refs, str(label.ref), label.text, certain, reason)
+                candidate = Callout(refs, str(label.ref), label.text, certain, reason, leader)
                 previous = found.get(refs)
                 # Competing interpretations must never promote an uncertain motif.
                 if previous is None or not certain:
                     found[refs] = candidate
     return list(found.values())
+
+
+def _touching(point: tuple, tree: STRtree, endpoints: list[Point], owners: list[int]) -> set[int]:
+    probe = Point(point)
+    return {
+        owners[int(i)]
+        for i in tree.query(probe.buffer(_JOIN_M))
+        if endpoints[int(i)].distance(probe) <= _JOIN_M
+    }
+
+
+def _continues(features: list[Feature], others: set[int], tip: tuple, following: tuple) -> bool:
+    """Линия, отходящая от острия почти прямо по ходу стержня (ближе _STRAIGHT_DEG), -
+    продолжение сети через стрелку, а не трасса под выноской."""
+    incoming = _unit((tip[0] - following[0], tip[1] - following[1]))
+    for other in others:
+        coords = list(features[other].geometry.coords)
+        if math.dist(coords[0][:2], tip[:2]) > math.dist(coords[-1][:2], tip[:2]):
+            coords.reverse()
+        step = next((p for p in coords[1:] if math.dist(p[:2], tip[:2]) > _JOIN_M), None)
+        if step is None:
+            continue
+        if _dot(incoming, _unit((step[0] - tip[0], step[1] - tip[1]))) >= _STRAIGHT_COS:
+            return True
+    return False
+
+
+def _free_tail(  # noqa: PLR0913, PLR0917 - индексы концов те же, что у _touching
+    features: list[Feature],
+    shaft: int,
+    tail: tuple,
+    tree: STRtree,
+    endpoints: list[Point],
+    owners: list[int],
+) -> tuple[int, ...] | None:
+    """Хвост стержня свободен или кончается полкой: короткой линией, второй конец которой
+    ничего не касается. Вернуть полку (или пустой кортеж); None - хвост продолжает сеть."""
+    others = _touching(tail, tree, endpoints, owners) - {shaft}
+    shelves = []
+    for other in others:
+        geometry = features[other].geometry
+        if geometry.length > _MAX_SHELF_M:
+            return None
+        coords = list(geometry.coords)
+        far = max((coords[0], coords[-1]), key=lambda p: math.dist(p[:2], tail[:2]))
+        if _touching(far, tree, endpoints, owners) - {other}:
+            return None
+        shelves.append(other)
+    return tuple(shelves)
+
+
+def _overlap(shaft: Feature, features: list[Feature], own: set[int], line_tree: STRtree) -> float:
+    """Доля стержня, лежащая вдоль других линий того же слоя (стрелка течения на трубе)."""
+    zone = shaft.geometry.buffer(_OVERLAP_M)
+    others = [
+        features[int(i)].geometry
+        for i in line_tree.query(zone)
+        if int(i) not in own and features[int(i)].geometry.intersects(zone)
+    ]
+    if not others:
+        return 0.0
+    covered = shaft.geometry.intersection(unary_union(others).buffer(_OVERLAP_M))
+    return covered.length / shaft.geometry.length
 
 
 def _motif(

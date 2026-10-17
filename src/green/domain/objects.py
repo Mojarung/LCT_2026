@@ -252,6 +252,9 @@ class Callout:
     text: str
     certain: bool
     reason: str
+    # Выноска с однозначным рисунком (острие только на своих штрихах, хвост свободен, стержень
+    # не лежит на другой линии слоя): оформление без проверки человеком, application/callouts.py.
+    leader: bool = False
 
 
 @dataclass(frozen=True, slots=True)
