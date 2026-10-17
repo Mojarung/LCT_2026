@@ -20,8 +20,8 @@ export function TopBar() {
           карта. Ведёт к консоли запуска. */}
       <Link className="brand" to="/" aria-label="GREEN_, консоль запуска">
         {/* Знак с именем - картинкой логотипа, светлая и тёмная версии по теме. */}
-        <img className="theme-light" src="/brand.webp" width={122} height={40} alt="" />
-        <img className="theme-dark" src="/brand-dark.webp" width={122} height={40} alt="" />
+        <img className="theme-light" src="/brand.webp" width={125} height={40} alt="" />
+        <img className="theme-dark" src="/brand-dark.webp" width={125} height={40} alt="" />
       </Link>
       {runId ? <RunCrumbs runId={runId} /> : <MainNav />}
       <nav className="topbar-end" aria-label="Справка">
