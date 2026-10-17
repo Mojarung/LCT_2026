@@ -306,7 +306,7 @@ class ProfileModel(_Strict):
     spacing_group_max_m: float = Field(default=7.0, ge=0.3, le=50)
     lawn_spacing_m: float = Field(default=0.0, ge=0.0, le=50)
     curb_offsets_m: tuple[float, ...] = Field(default=(3.0, 2.5, 2.0), min_length=1, max_length=10)
-    require_utility_data: bool = True
+    require_utility_data: bool = False
     unknown_lines_as_utility: bool = True
     require_known_objects: bool = True
     infer_unknown: bool = True

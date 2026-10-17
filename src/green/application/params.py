@@ -114,7 +114,9 @@ class PlanParams:
     # реагентов; где полоса грунта уже, - 2,5 и 2 м (норма 743-ПП, табл. 3.6.1 - от 2 м).
     # Так делают проектировщики: изгородь вдоль проезжей части, за ней аллея (docs/notes/34).
     curb_offsets_m: tuple[float, ...] = (3.0, 2.5, 2.0)
-    require_utility_data: bool = True
+    # Чертёж совсем без подземных сетей: false - посадки с пометкой «требует согласования» и
+    # записью «Исправлено автоматически» (решение пользователя 17.10.2026), true - отказ.
+    require_utility_data: bool = False
     unknown_lines_as_utility: bool = True
     # Name matches are evidence, not proof. Unmatched/conflicting spatial objects
     # stop the run; exact per-input assignments resolve them without editing code.
