@@ -18,7 +18,7 @@ const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 /** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
  *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
  *  эскизом, и больше нигде. */
-function ReviewLinks({ run }: { run: RunOut }) {
+function ReviewLinks({ run, report = true }: { run: RunOut; report?: boolean }) {
   const names = new Set((run.artifacts ?? []).map((a) => a.name));
   return (
     <>
@@ -27,7 +27,7 @@ function ReviewLinks({ run }: { run: RunOut }) {
           <Link to={`/runs/${encodeURIComponent(run.id)}/review`}>Уточнить объекты на чертеже</Link>
         </p>
       ) : null}
-      {names.has('classification.json') ? (
+      {report && names.has('classification.json') ? (
         <p className="hint">
           <a href={artifactUrl(run.id, 'classification.json')} download>
             Отчёт распознавания
@@ -132,18 +132,7 @@ export function RunMetrics({
           {drafted ? ' · черновик правок' : null}
         </span>
       </p>
-      {trees != null && trees.planted === total ? (
-        <dl className="run-breakdown">
-          <div>
-            <dt>Деревья</dt>
-            <dd>{integer(trees.trees)}</dd>
-          </div>
-          <div>
-            <dt>Кустарники</dt>
-            <dd>{integer(total - trees.trees)}</dd>
-          </div>
-        </dl>
-      ) : null}
+      {/* Сколько деревьев и кустарников - группами в составе плана справа, здесь не дублируется. */}
       {/* Что сервис сверил сам: независимая проверка плана по нормам, исходные слои и выгрузка.
           Три строки отвечают на вопрос жюри «а можно этому верить» раньше, чем его зададут. */}
       <ul className="run-checks" aria-label="Проверки результата">
@@ -216,7 +205,9 @@ export function RunMetrics({
                 Уточните объекты и границы покрытий: грунт под всей посадочной ямой должен быть
                 подтверждён замкнутыми контурами.
               </p>
-              <ReviewLinks run={run} />
+              {/* Отчёт распознавания у готового прогона - в окне «Отчёты и файлы»: две ссылки
+                  со словом «отчёт» рядом путались. */}
+              <ReviewLinks run={run} report={false} />
             </details>
           ) : null}
         </div>

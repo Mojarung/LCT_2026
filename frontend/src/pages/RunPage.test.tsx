@@ -278,10 +278,9 @@ describe('RunPage: finished run', () => {
     await waitFor(() => {
       expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
     });
-    // Разбивка сходится с числом черновика и не пропадает.
-    const breakdown = left.querySelector('.run-breakdown');
-    expect(breakdown).toHaveTextContent('Деревья2');
-    expect(breakdown).toHaveTextContent('Кустарники0');
+    // Группы состава справа сходятся с числом черновика: деревьев два, кустарников нет.
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
+    expect(within(right).queryByRole('heading', { name: /^Кустарники/ })).toBeNull();
 
     // После пересборки число - итог прогона, метки черновика нет.
     await userEvent.click(within(left).getByRole('button', { name: 'Пересобрать DXF' }));
@@ -292,7 +291,7 @@ describe('RunPage: finished run', () => {
       { timeout: 6000 },
     );
     expect(within(right).getByRole('heading', { name: 'Состав плана: 2' })).toBeVisible();
-    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
   }, 10_000);
 
   it('leaves out of both counts a placement the edit moved into a rejection', async () => {
@@ -310,7 +309,7 @@ describe('RunPage: finished run', () => {
       },
     });
     renderApp('/runs/r1');
-    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    await screen.findByRole('complementary', { name: 'Прогон' });
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await within(right).findByRole('heading', { name: 'Состав плана: 3' });
 
@@ -325,7 +324,7 @@ describe('RunPage: finished run', () => {
     await waitFor(() => {
       expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
     });
-    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
   });
 
   it('shows what the plan is made of until a placement is picked', async () => {

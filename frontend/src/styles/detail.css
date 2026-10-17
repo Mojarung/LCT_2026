@@ -459,3 +459,24 @@
 .plan-sections button[aria-pressed='true'] .icon {
   color: var(--bone);
 }
+
+/* Группы состава: «Деревья 217», «Кустарники 798» - заголовок с числом над своими видами. */
+.composition-group + .composition-group {
+  margin-top: 18px;
+}
+.composition-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 0 10px;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--bone);
+}
+.composition-group-title .count {
+  margin-left: auto;
+  font-size: var(--fs-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

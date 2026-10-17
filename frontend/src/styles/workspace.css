@@ -1884,3 +1884,12 @@ body.shell-map .topbar {
 .run-facts .run-sub-fact dt {
   color: var(--bone-3);
 }
+
+/* Левая панель - по высоте содержимого: после переноса деревьев и кустарников в состав справа
+   она короче экрана, и план под ней виден ниже. Длинная сводка прокручивается в пределах окна. */
+@media (min-width: 1081px) {
+  .page-run > .hud-left:not(.collapsed) {
+    bottom: auto;
+    max-height: calc(100% - var(--inset) * 2);
+  }
+}
