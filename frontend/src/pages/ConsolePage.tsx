@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Link } from 'react-router';
 
 import { useMeta, useRuns, useStreets } from '../api/queries';
@@ -41,28 +41,6 @@ function steps(species: number | undefined): { title: string; text: ReactNode }[
   ];
 }
 
-/** Первый заход на главную за сессию браузера: вступление играет один раз, дальше страница
- *  просто проявляется - смотреть одно и то же при каждом возврате из прогона утомляет. */
-const INTRO_KEY = 'green-home-intro';
-
-function useFirstVisit(): boolean {
-  const [first] = useState(() => {
-    try {
-      return !sessionStorage.getItem(INTRO_KEY);
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(INTRO_KEY, '1');
-    } catch {
-      /* без хранилища вступление просто сыграет снова */
-    }
-  }, []);
-  return first;
-}
-
 /** Главная - рабочий стол. Первый экран: что это за сервис, как выглядит его результат
  *  (фото улицы и план на слоях чертежа) и запуск. Ниже - реестр прогонов и как это работает. */
 export function ConsolePage() {
@@ -70,7 +48,6 @@ export function ConsolePage() {
   const streets = useStreets();
   const runs = useRuns(RECENT_LIMIT);
   const noCatalog = (streets.isSuccess && streets.data.length === 0) || streets.isError;
-  const intro = useFirstVisit();
 
   // Главная - один экран: подвал с логотипом уходил бы за сгиб и заставлял листать.
   useEffect(() => {
@@ -81,7 +58,8 @@ export function ConsolePage() {
   }, []);
 
   return (
-    <div className="home" data-intro={intro ? 'play' : undefined}>
+    // Вступление играет при каждом заходе на главную: переход, обновление, возврат из прогона.
+    <div className="home" data-intro="play">
       {/* Один экран без прокрутки: слева что это и как выглядит результат, под ним - как это
           работает; справа запуск и реестр прогонов, реестр прокручивается внутри себя. */}
       <section className="home-hero" aria-labelledby="hero-title">
