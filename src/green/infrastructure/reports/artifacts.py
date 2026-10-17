@@ -32,6 +32,7 @@ from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from shapely.geometry.base import BaseGeometry
@@ -757,6 +758,15 @@ SURFACE_COLORS = {
     Material.BARRIER: (0, 0, 0, 0),
 }
 SURFACE_MAX_SIDE = 4096  # пикселей по длинной стороне: больше браузеру не нужно
+# Контуры грунта и покрытия для 3D: точные упрощаются до 5 см, выведенные растром - до полутора
+# клеток (лесенка клеток становится прямой). Щели по линиям бортов остаются: по ним 3D-вид
+# отличает тротуар от проезжей части (surfaceMask.ts) и потом сам их закрывает.
+SURFACE_AREA_TOLERANCE_M = 0.05
+SURFACE_RASTER_TOLERANCE_CELLS = 1.5
+# Повороты скругляются (пользователь, 17.10.2026: «где поворот - закругление»): излом в этих
+# пределах срезается, прямой угол остаётся.
+SURFACE_ROUND_TURN_DEG = (5.0, 75.0)
+SURFACE_ROUND_PASSES = 2
 
 
 def _surface(directory: Path, surface: SurfaceMap | None) -> dict[str, Path]:
@@ -779,8 +789,104 @@ def _surface(directory: Path, surface: SurfaceMap | None) -> dict[str, Path]:
         "row_order": "строка 0 - минимальный Y чертежа",
         "colors": {m.name.lower(): list(c) for m, c in SURFACE_COLORS.items()},
         "counts": {m.name.lower(): int((grid == m).sum()) for m in Material},
+        "areas": _surface_areas(surface, sampled, surface.cell * step),
     }
     return {"surface.png": image, "surface.json": _write_json(directory / "surface.json", meta)}
+
+
+def _surface_areas(
+    surface: SurfaceMap, grid: np.ndarray, cell: float
+) -> dict[str, list[list[list[list[float]]]]]:
+    """Контуры грунта и покрытия для 3D-вида: растр - клетки 0,5-1 м, его край на 3D выходил
+    лесенкой с выгрызами (пользователь, 17.10.2026). Где материал задан контуром (полигон
+    чертежа, замкнутая грань), берётся контур; где только растром (разлив от подписей,
+    запасной грунт) - растр в контурах, выпрямленный с допуском в полторы клетки. Полигон -
+    список колец: внешнее, затем дыры."""
+    uncertain = surface.uncertainty_area
+    exact_paved = _without(surface.paved_area, uncertain)
+    exact_soil = _without(surface.soil_area, shapely.union_all([exact_paved, uncertain]))
+    tolerance = cell * SURFACE_RASTER_TOLERANCE_CELLS
+    raster_paved = _cells(grid == int(Material.PAVED), surface.origin, cell)
+    raster_soil = _cells(grid == int(Material.SOIL), surface.origin, cell)
+    paved = shapely.union_all(
+        [
+            _without(_simplified(raster_paved, tolerance), exact_soil),
+            exact_paved,
+        ]
+    )
+    soil = _without(
+        shapely.union_all([_simplified(raster_soil, tolerance), exact_soil]),
+        shapely.union_all([paved, uncertain]),
+    )
+    return {"soil": _rings(soil), "paved": _rings(paved)}
+
+
+def _cells(mask: np.ndarray, origin: tuple[float, float], cell: float) -> BaseGeometry | None:
+    """Клетки маски одним контуром: полосы клеток по строкам, слитые вместе."""
+    boxes = []
+    ox, oy = origin
+    for row in np.flatnonzero(mask.any(axis=1)):
+        edges = np.diff(np.concatenate(([0], mask[row].astype(np.int8), [0])))
+        starts, ends = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
+        y = oy + row * cell
+        boxes.append(shapely.box(ox + starts * cell, y, ox + ends * cell, y + cell))
+    if not boxes:
+        return None
+    return shapely.union_all(np.concatenate(boxes), grid_size=cell / 100)
+
+
+def _simplified(area: BaseGeometry | None, tolerance: float) -> BaseGeometry | None:
+    if area is None or area.is_empty:
+        return None
+    return shapely.make_valid(shapely.simplify(area, tolerance, preserve_topology=True))
+
+
+def _without(area: BaseGeometry | None, cut: BaseGeometry | None) -> BaseGeometry | None:
+    if area is None or area.is_empty:
+        return None
+    return area if cut is None or cut.is_empty else area.difference(cut)
+
+
+def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Скруглить повороты замкнутого кольца срезом углов (Чайкин, два прохода): излом от 5 до
+    75° - поворот дороги или дуга, разбитая упрощением на отрезки, - срезается по четверти
+    соседних отрезков; прямой и острый угол (здание, площадка) остаётся углом."""
+    points = [(float(x), float(y)) for x, y in coords[:-1]]
+    for _ in range(SURFACE_ROUND_PASSES):
+        if len(points) < 3:  # noqa: PLR2004 - кольцо из трёх точек
+            break
+        out: list[tuple[float, float]] = []
+        for i, (vx, vy) in enumerate(points):
+            px, py = points[i - 1]
+            nx, ny = points[(i + 1) % len(points)]
+            ax, ay, bx, by = vx - px, vy - py, nx - vx, ny - vy
+            la, lb = math.hypot(ax, ay), math.hypot(bx, by)
+            turn = (
+                math.degrees(math.acos(max(-1.0, min(1.0, (ax * bx + ay * by) / (la * lb)))))
+                if la and lb
+                else 0.0
+            )
+            if SURFACE_ROUND_TURN_DEG[0] < turn < SURFACE_ROUND_TURN_DEG[1]:
+                out.append((vx - ax / 4, vy - ay / 4))
+                out.append((vx + bx / 4, vy + by / 4))
+            else:
+                out.append((vx, vy))
+        points = out
+    return [*points, points[0]] if points else []
+
+
+def _rings(area: BaseGeometry | None) -> list[list[list[list[float]]]]:
+    if area is None or area.is_empty:
+        return []
+    simple = shapely.simplify(area, SURFACE_AREA_TOLERANCE_M, preserve_topology=True)
+    return [
+        [
+            [[round(x, 2), round(y, 2)] for x, y in _round_turns(ring.coords)]
+            for ring in (polygon.exterior, *polygon.interiors)
+        ]
+        for polygon in shapely.get_parts(simple)
+        if polygon.geom_type == "Polygon" and not polygon.is_empty
+    ]
 
 
 def _zones(plan: Plan) -> dict[str, Any]:
