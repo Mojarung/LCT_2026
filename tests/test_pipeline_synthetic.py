@@ -299,8 +299,12 @@ def test_lawns_cover_free_soil_and_reach_the_dxf(run: dict[str, object]) -> None
     soil = report.surface.soil_area  # type: ignore[attr-defined]
     assert plan.lawns
     assert soil is not None
+    # Весь грунт улицы - контур слоя «Леса и газоны»: газон сохраняемый, на нём цветник у
+    # тротуара (tests/test_flowerbeds.py).
+    lawns = [g for g in plan.lawns if g.kind.value != "flowerbed"]
+    beds = [g for g in plan.lawns if g.kind.value == "flowerbed"]
+    assert {g.kind.value for g in lawns} == {"kept"}
     for lawn in plan.lawns:
-        assert lawn.kind.value == "kept"  # весь грунт улицы - контур слоя «Леса и газоны»
         assert box(0, 0, 120, 60).covers(lawn.geometry)
         assert lawn.geometry.difference(soil).area < 1e-6
         for p in plan.placements:
@@ -310,17 +314,21 @@ def test_lawns_cover_free_soil_and_reach_the_dxf(run: dict[str, object]) -> None
     texts = {e.subject_id: e for e in plan.explanations}
     for lawn in plan.lawns:
         assert texts[lawn.lawn_id].kind == "lawn"
-        assert "R-LAWN-KEPT-001" in texts[lawn.lawn_id].text
+        rule = "R-LAWN-FLOWER-001" if lawn in beds else "R-LAWN-KEPT-001"
+        assert rule in texts[lawn.lawn_id].text
     summary = report.summary()  # type: ignore[attr-defined]
-    assert summary["lawn_m2"] == pytest.approx(sum(g.area_m2 for g in plan.lawns), abs=0.1)
+    assert summary["lawn_m2"] == pytest.approx(sum(g.area_m2 for g in lawns), abs=0.1)
     assert summary["lawn_kept_m2"] == summary["lawn_m2"]
+    assert summary["flowerbed_m2"] == pytest.approx(sum(g.area_m2 for g in beds), abs=0.1)
 
     doc = ezdxf.readfile(report.output_dxf)  # type: ignore[attr-defined]
     assert "GREEN_LAWN" in doc.layers
     hatches = doc.modelspace().query("HATCH[layer=='GREEN_LAWN']")
-    assert len(hatches) == len(plan.lawns)
-    assert {h.get_xdata("LCT_GREEN")[0].value for h in hatches} == {g.lawn_id for g in plan.lawns}
+    assert len(hatches) == len(lawns)
+    assert {h.get_xdata("LCT_GREEN")[0].value for h in hatches} == {g.lawn_id for g in lawns}
     assert {h.dxf.pattern_name for h in hatches} == {"GRASS"}
+    flowers = doc.modelspace().query("HATCH[layer=='GREEN_FLOWERBED']")
+    assert {h.get_xdata("LCT_GREEN")[0].value for h in flowers} == {g.lawn_id for g in beds}
     assert report.integrity.ok  # type: ignore[attr-defined]
     exported = report.export_validation  # type: ignore[attr-defined]
     assert exported.ok
