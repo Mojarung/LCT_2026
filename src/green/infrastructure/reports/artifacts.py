@@ -828,6 +828,10 @@ ROAD_MIN_WIDTH_M = 3.5
 # у борта должна попадать на асфальт, а не в пустоту.
 ROAD_MESH_MARGIN_M = 0.5
 SURFACE_MIN_PART_M2 = 0.5
+# Грань линий чертежа отдаётся материалу растра, если его в грани не меньше этой доли.
+FACE_MAJORITY = 0.5
+FACE_MIN_M2 = 0.5
+_FACE_LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 PAVED_SMOOTH_M = 0.5
 # Подписи материала съёмки Мосгеотреста: «А» - асфальт, «Ц» - цементобетон, «ПЛ» - плитка,
 # «Б», «БР» - брусчатка.
@@ -877,6 +881,11 @@ def _surface_areas(
     tolerance = cell * SURFACE_RASTER_TOLERANCE_CELLS
     raster_paved = cells_area(grid == int(Material.PAVED), surface.origin, cell)
     raster_soil = cells_area(grid == int(Material.SOIL), surface.origin, cell)
+    # Растр разлива - капли с круглым краем, перелезающие через ограду и борт. Край
+    # материала берётся по линиям чертежа: грань, замкнутая оградой, бортом, краем покрытия
+    # и стеной, целиком того материала, которого в ней больше (пользователь, 18.10.2026:
+    # «плитка до забора, как у площадки»).
+    raster_paved, raster_soil = _snap_to_faces(raster_paved, raster_soil, basemap)
     paved = shapely.union_all(
         [
             _without(_simplified(raster_paved, tolerance), exact_soil),
@@ -898,6 +907,54 @@ def _surface_areas(
         "paved_kind": kinds,
         "road_mesh": _rings(mesh),
     }
+
+
+def _snap_to_faces(
+    paved: BaseGeometry | None, soil: BaseGeometry | None, basemap: Basemap | None
+) -> tuple[BaseGeometry | None, BaseGeometry | None]:
+    """Растровые покрытие и грунт по граням линий чертежа.
+
+    Грани - polygonize линий-разделителей подосновы (ограда, борт, край покрытия, стены,
+    контуры полигонов покрытий) вместе с рамкой подосновы. Грань, где одного материала растра
+    не меньше FACE_MAJORITY, отдаётся этому материалу целиком; где растр молчит или спорит,
+    остаётся растр. Здания не закрашиваются.
+    """
+    if basemap is None or (paved is None and soil is None):
+        return paved, soil
+    lines = [
+        f.geometry.boundary if f.geometry.geom_type in {"Polygon", "MultiPolygon"} else f.geometry
+        for f in basemap.features
+        if f.object_class.is_surface_barrier and f.object_class is not ObjectClass.WORK_BOUNDARY
+    ]
+    lines = [g for g in lines if not g.is_empty and g.geom_type in _FACE_LINE_TYPES]
+    if not lines:
+        return paved, soil
+    frame = shapely.box(*basemap.bbox).boundary
+    noded = shapely.union_all([*lines, frame])
+    faces = shapely.get_parts(shapely.polygonize(shapely.get_parts(noded)))
+    faces = faces[shapely.area(faces) >= FACE_MIN_M2]
+    if not len(faces):
+        return paved, soil
+    houses = _class_area(basemap.features, ObjectClass.BUILDING)
+    area = shapely.area(faces)
+    empty = shapely.Polygon()
+    share_p = shapely.area(shapely.intersection(faces, paved or empty)) / area
+    share_s = shapely.area(shapely.intersection(faces, soil or empty)) / area
+    inside_house = (
+        shapely.area(shapely.intersection(faces, houses)) / area > FACE_MAJORITY
+        if houses is not None
+        else np.zeros(len(faces), dtype=bool)
+    )
+    to_paved = (share_p >= FACE_MAJORITY) & (share_p >= share_s) & ~inside_house
+    to_soil = (share_s >= FACE_MAJORITY) & (share_s > share_p) & ~inside_house
+    decided = shapely.union_all(faces[to_paved | to_soil])
+    snapped_paved = shapely.union_all([_without(paved, decided), *faces[to_paved]])
+    snapped_soil = shapely.union_all([_without(soil, decided), *faces[to_soil]])
+    snapped_soil = _without(snapped_soil, snapped_paved)
+    return (
+        None if snapped_paved.is_empty else snapped_paved,
+        None if snapped_soil is None or snapped_soil.is_empty else snapped_soil,
+    )
 
 
 def _paved_parts(

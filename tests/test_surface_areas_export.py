@@ -214,3 +214,31 @@ def test_smoothing_survives_a_mitre_closing_that_crosses_itself() -> None:
     smooth = _smoothed(area)
     assert smooth.is_valid
     assert smooth.area > 0.9 * area.area
+
+
+def test_raster_material_stops_at_the_fence(tmp_path: Path) -> None:
+    """Харьковская у дома 1А (пользователь, 18.10.2026): плитка площадки из разлива подписи
+    перелезала за ограду каплей. Грань, замкнутая оградой, целиком того материала, которого
+    в ней больше; за оградой - газон."""
+    playground = box(20, 15, 40, 30)
+    spilled = box(18.5, 13.5, 41.5, 31.5)  # разлив вышел за ограду на 1,5 м
+    features = [
+        Feature(REF, "LAWN", SITE, object_class=ObjectClass.LAWN),
+        Feature(REF, "WALK", spilled, object_class=ObjectClass.SIDEWALK),
+    ]
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.FENCE, playground.exterior),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=SITE.bounds,
+    )
+    _surface(tmp_path, replace(surface, paved_area=None, soil_area=None), basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    paved, soil = _union(areas["paved"]), _union(areas["soil"])
+
+    assert paved.symmetric_difference(playground).area < 0.05 * playground.area
+    assert soil.intersection(playground).area < 1.0
+    assert soil.contains(Point(19.2, 22))  # полоса между оградой и краем разлива - газон

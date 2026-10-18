@@ -26,6 +26,7 @@ from green.application.editing import RunContext
 from green.application.effect import street_effect
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.fences import bridge_fence_gaps
 from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
 from green.application.insolation import ShadeMap, with_shade
@@ -304,6 +305,12 @@ class PlanSite:
                     scene = replace(scene, warnings=(*scene.warnings, school_note))
             # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
             semantics = classification_report(replace(scene, features=features), layer_map, params)
+            # Ограда штрихами: зазоры до метра закрываются перемычками, иначе материал от подписи
+            # протекает сквозь ограду, а в 3D ограда стоит с дырами (Харьковская, 18.10.2026).
+            features, bridged = bridge_fence_gaps(features)
+            if bridged:
+                note = f"Ограда: {bridged} зазоров до 1 м между штрихами закрыто перемычками."
+                scene = replace(scene, warnings=(*scene.warnings, note))
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
