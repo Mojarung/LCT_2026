@@ -113,6 +113,7 @@ dev = [
     "import-linter>=2.15",
     "markdown>=3.11",
     "matplotlib>=3.11.2",
+    "pypdf>=6.21.1",
     "pytest>=9.1.1",
     "ruff>=0.16.7",
     "ty>=0.0.81",

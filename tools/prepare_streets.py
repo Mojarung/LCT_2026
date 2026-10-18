@@ -17,6 +17,11 @@
 Выбор файлов - по именам, потому что ничего другого в архиве нет: у двадцати улиц
 двадцать разных способов назвать геоподоснову. Поэтому решение каждой улицы попадает в
 каталог вместе с оценкой, а `--list` показывает его до того, как начнётся конвертация.
+
+Улица без единого DWG (Фрунзенская набережная: только PDF-экспорты листов) собирается из
+векторного PDF генплана: tools/pdf_to_dxf.py переводит слои OCG в слои DXF при масштабе 1:500
+и совмещает листы по линиям совмещения «Лист N»; не совместились - улица пропускается с
+причиной, а не собирается вслепую.
 """
 
 from __future__ import annotations
@@ -66,6 +71,8 @@ UTILITY = re.compile(r"(?<![а-я])(tp|up|kl|pp)(?![a-z])|коммуникац|�
 #: Границы работ отдельным файлом (`output[1-3]_brd.dwg`, «01_Границы работ.dwg»). Без них
 #: алгоритму нечем ограничить участок, и он засаживает всю подоснову вместе с чужими дворами.
 BOUNDARY = re.compile(r"(?<![a-z])brd(?![a-z])|границ\w*\s*работ", re.I)
+#: Генплан листами в PDF - вход улицы, у которой нет DWG («06_ГенПлан.pdf»).
+PDF_PLAN = re.compile(r"ген\w*\s*план\.pdf$", re.I)
 #: Потолок на комплект: планшетов на улицу бывает до трёх, видов сетей четыре, плюс границы.
 MAX_FILES = 16
 # Единицы улицы, когда заголовок основы с геометрией спорит (решение 25.09.2026: заголовку
@@ -192,26 +199,78 @@ def pick_files(files: list[tuple[str, int]]) -> tuple[list[Candidate], str]:
 def survey() -> list[Street]:
     """Пройти оглавление архива и решить по каждой улице, что брать."""
     by_street: dict[str, list[tuple[str, int]]] = {}
+    pdfs: dict[str, list[tuple[str, int]]] = {}
     with zipfile.ZipFile(ZIP) as archive:
         for info in archive.infolist():
             if info.is_dir():
                 continue
             name = entry_name(info)
             parts = name.split("/")
-            if len(parts) < 4 or parts[0] != TOP or not name.lower().endswith(".dwg"):
+            if len(parts) < 4 or parts[0] != TOP or not SOURCE_DIR.search(parts[2]):  # noqa: PLR2004 - корень, улица, папка, файл
                 continue
-            if not SOURCE_DIR.search(parts[2]):
-                continue
-            by_street.setdefault(parts[1], []).append((name, info.file_size))
+            if PDF_PLAN.search(parts[-1]) and "PaxHeader" not in parts:
+                pdfs.setdefault(parts[1], []).append((name, info.file_size))
+            if name.lower().endswith(".dwg"):
+                by_street.setdefault(parts[1], []).append((name, info.file_size))
+    for title, files in pdfs.items():
+        if title not in by_street:
+            by_street[title] = []
+            PDF_ONLY[title] = max(files, key=lambda f: f[1])[0]
 
     streets: list[Street] = []
     for title, files in by_street.items():
         number = int(match.group(1)) if (match := re.match(r"(\d+)", title)) else 0
         picks, note = pick_files(files)
+        if title in PDF_ONLY:
+            note = f"DWG нет, генплан из PDF: {PurePosixPath(PDF_ONLY[title]).name}"
         streets.append(
             Street(number=number, title=title, slug=slugify(title), picks=picks, note=note)
         )
     return sorted(streets, key=lambda s: s.number)
+
+
+#: Улицы без DWG: название улицы -> PDF генплана в архиве.
+PDF_ONLY: dict[str, str] = {}
+
+
+def pdf_street(street: Street, out: Path) -> dict[str, object] | None:
+    """Улица из векторного PDF генплана: все листы в один DXF в координатах первого листа."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import pdf_to_dxf  # noqa: PLC0415 - нужен только улицам без DWG
+
+    member = PDF_ONLY[street.title]
+    folder = out / street.slug
+    folder.mkdir(parents=True, exist_ok=True)
+    main = f"{street.slug}-genplan.dxf"
+    with zipfile.ZipFile(ZIP) as archive, tempfile.TemporaryDirectory() as tmp:
+        info = next(i for i in archive.infolist() if entry_name(i) == member)
+        source = Path(tmp) / "genplan.pdf"
+        source.write_bytes(archive.read(info))
+        reader = pdf_to_dxf.PdfReader(source)
+        plates = [
+            pdf_to_dxf.plate(pdf_to_dxf.read_page(reader, n), scale=500)
+            for n in range(len(reader.pages))
+        ]
+        try:
+            world, shares = pdf_to_dxf.stitch(plates)
+        except ValueError as error:
+            print(f"    пропуск: {error}")
+            return None
+        counts = pdf_to_dxf.write_plates(plates, world, folder / main)
+    print(f"    листов {len(plates)}, совпадение {', '.join(f'{x:.1%}' for x in shares)}, {counts}")
+    return {
+        "slug": street.slug,
+        "number": street.number,
+        "title": re.sub(r"^\d+\.\s*", "", street.title).strip(),
+        "main": main,
+        "files": [main],
+        "sources": {main: "/".join(member.split("/")[2:])},
+        "roles": {main: "основной"},
+        "missing_xrefs": [],
+        "failed": {},
+        "drawing_unit": "m",
+        "drawing_unit_reason": "генплан из PDF при масштабе листов 1:500 (tools/pdf_to_dxf.py)",
+    }
 
 
 def oda_binary() -> str:
@@ -449,7 +508,7 @@ def main() -> None:
     for street in streets:
         head = f"{street.number:>2}. {street.title}"
         if not street.picks:
-            print(f"{head}\n    пропуск: {street.note}")
+            print(f"{head}\n    {'' if street.title in PDF_ONLY else 'пропуск: '}{street.note}")
             continue
         print(head)
         for pick in street.picks:
@@ -465,40 +524,42 @@ def main() -> None:
     for kit in kits:
         kit.add(kit.street.picks[0].path, kit.street.picks[0].role)
     owner = {member: kit for kit in kits for member in kit.members}
-    print(f"\nконвертирую в {out} ({build_converter(args.converter).name}), по ссылкам волнами")
-    picks_added = False
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        while True:
-            jobs = [
-                (
-                    member,
-                    kit.street.slug,
-                    kit.roles[member],
-                    args.converter,
-                    str(out),
-                    kit.files[member],
-                )
-                for kit in kits
-                for member in kit.queued
-            ]
-            for kit in kits:
-                kit.queued = []
-            if not jobs:
-                if picks_added:
-                    break
-                # Сначала основной чертёж и его ссылки, потом выгрузки из отбора, которых
-                # ссылки не покрыли: иначе одна сеть из двух копий архива попадёт дважды.
+    # Конвертер нужен только улицам с DWG: улица из PDF собирается без него.
+    if kits:
+        print(f"\nконвертирую в {out} ({build_converter(args.converter).name}), по ссылкам волнами")
+        picks_added = False
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            while True:
+                jobs = [
+                    (
+                        member,
+                        kit.street.slug,
+                        kit.roles[member],
+                        args.converter,
+                        str(out),
+                        kit.files[member],
+                    )
+                    for kit in kits
+                    for member in kit.queued
+                ]
                 for kit in kits:
-                    kit.add_uncovered_picks()
-                picks_added = True
-                continue
-            for member, name, status in pool.map(convert_one, jobs):
-                kit = owner[member]
-                print(f"  {kit.street.slug:<32} {name:<48} {status}")
-                if status.startswith("ошибка"):
-                    kit.failed[member] = status
+                    kit.queued = []
+                if not jobs:
+                    if picks_added:
+                        break
+                    # Сначала основной чертёж и его ссылки, потом выгрузки из отбора, которых
+                    # ссылки не покрыли: иначе одна сеть из двух копий архива попадёт дважды.
+                    for kit in kits:
+                        kit.add_uncovered_picks()
+                    picks_added = True
                     continue
-                kit.follow(member, out / kit.street.slug / name)
+                for member, name, status in pool.map(convert_one, jobs):
+                    kit = owner[member]
+                    print(f"  {kit.street.slug:<32} {name:<48} {status}")
+                    if status.startswith("ошибка"):
+                        kit.failed[member] = status
+                        continue
+                    kit.follow(member, out / kit.street.slug / name)
 
     catalog = []
     for kit in kits:
@@ -528,6 +589,19 @@ def main() -> None:
             f"по ссылкам {sum(1 for m in done if kit.roles[m] == 'ссылка')}, "
             f"ссылок без файла {len(kit.missing)}, ошибок конвертации {len(kit.failed)}"
         )
+    for street in streets:
+        if street.title in PDF_ONLY:
+            print(f"{street.number:>2}. {street.slug}: генплан из PDF")
+            entry = pdf_street(street, out)
+            if entry is not None:
+                catalog.append(entry)
+    # С --only каталог не теряет остальные улицы: прежние записи остаются, свежие их заменяют.
+    previous = out / "catalog.json"
+    if args.only and previous.exists():
+        fresh = {entry["slug"] for entry in catalog}
+        old_entries = json.loads(previous.read_text(encoding="utf-8"))
+        catalog += [entry for entry in old_entries if entry["slug"] not in fresh]
+    catalog.sort(key=lambda entry: entry["number"])
     out.mkdir(parents=True, exist_ok=True)
     (out / "catalog.json").write_text(
         json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8"

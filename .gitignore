@@ -88,6 +88,7 @@ tools/*.py
 !tools/extract_template_signs.py
 !tools/build_mos_assortment.py
 !tools/build_name_model.py
+!tools/pdf_to_dxf.py
 tools/presentation/deck/
 
 # Квадраты OpenStreetMap для 3D-вида без сети (tools/osm_moscow.py): 35 МБ, в образ - да, в git - нет.
