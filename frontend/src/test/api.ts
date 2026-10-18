@@ -69,6 +69,7 @@ export const strict: ProfileOut = {
   understory: true,
   shrub_fill: true,
   lawns: true,
+  flowerbeds: true,
 };
 
 export const shrubs: ProfileOut = {

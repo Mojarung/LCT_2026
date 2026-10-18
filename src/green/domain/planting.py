@@ -276,6 +276,9 @@ class Lawn:
     geometry: BaseGeometry
     rule_ids: tuple[str, ...]
     notes: tuple[str, ...] = field(default=())
+    # Цветник (kind flowerbed): смесь и штуки многолетников - (название, латынь, штук).
+    mix: str = ""
+    plants: tuple[tuple[str, str, int], ...] = field(default=())
 
     @property
     def planting_type(self) -> PlantingType:

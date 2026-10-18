@@ -20,6 +20,7 @@ from shapely.geometry import Polygon
 from green.application.barriers import BARRIER_NOTE
 from green.application.results import PlanExportReport
 from green.application.schedule import build_schedule
+from green.domain.norms import LawnKind
 from green.domain.planting import Verdict
 from green.infrastructure.cad.documents import APPID, entity_layer, load_document
 
@@ -40,6 +41,7 @@ _LAYERS = frozenset(
     }
 )
 _LAWN_LAYER = "GREEN_LAWN"
+_FLOWERBED_LAYER = "GREEN_FLOWERBED"
 _LABELS_LAYER = "GREEN_LABELS"
 # Подпись позиции ведомости - справа сверху от точки посадки, как пишет writer.POSITION_OFFSET_M
 # (импорт из writer замкнул бы круг writer -> integrity -> export_validation).
@@ -164,7 +166,12 @@ def _check_lawns(doc: Drawing, plan: Plan, unit: float) -> tuple[list[str], int]
     expected = {lawn.lawn_id: lawn for lawn in plan.lawns}
     areas: defaultdict[str, float] = defaultdict(float)
     issues = []
-    hatches = [e for e in doc.modelspace() if entity_layer(e) == _LAWN_LAYER]
+    hatches = [
+        e
+        for e in doc.modelspace()
+        if entity_layer(e) == _LAWN_LAYER
+        or (entity_layer(e) == _FLOWERBED_LAYER and e.dxftype() == "HATCH")
+    ]
     for entity in hatches:
         if not isinstance(entity, Hatch) or not entity.has_xdata(APPID):
             issues.append(
@@ -180,6 +187,8 @@ def _check_lawns(doc: Drawing, plan: Plan, unit: float) -> tuple[list[str], int]
             continue
         if len(strings) < _IDENTITY_FIELDS or strings[1] != lawn.kind.value:
             issues.append(f"{identity}: вид газона в XDATA не совпадает с планом")
+        if (entity_layer(entity) == _FLOWERBED_LAYER) != (lawn.kind is LawnKind.FLOWERBED):
+            issues.append(f"{identity}: газон и цветник записаны не на своих слоях")
         area = _hatch_area(entity)
         if area is None:
             issues.append(f"{identity}: граница газона - не замкнутая полилиния")

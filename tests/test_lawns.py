@@ -326,7 +326,7 @@ def test_assumed_open_ground_becomes_new_lawn() -> None:
         labels=[],
         surface=surface,
         rulebook=BOOK,
-        params=PlanParams(),
+        params=PlanParams(flowerbeds=False),  # цветники - tests/test_flowerbeds.py
     )
     assert plan.lawns
     assert {lawn.kind for lawn in plan.lawns} == {LawnKind.NEW}

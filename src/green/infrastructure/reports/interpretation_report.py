@@ -23,6 +23,7 @@ from green.application.explain import (
     crown_increment_m,
 )
 from green.application.places import PLACE_LABELS
+from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from green.application.results import RunReport
     from green.domain.effect import StreetEffect
     from green.domain.norms import AnyRule, RuleBook
-    from green.domain.planting import Placement, Plan, Rejection, RuleCheck
+    from green.domain.planting import Lawn, Placement, Plan, Rejection, RuleCheck
 
 PLANTINGS_COLUMNS = (
     "number",
@@ -165,7 +166,9 @@ def _acts(plan: Plan, rules: _Rules) -> list[tuple[str, str, str]]:
 def _header(report: RunReport) -> list[tuple[str, str]]:
     plan = report.plan
     allowed = sum(1 for p in plan.placements if p.verdict.value == "allowed")
-    lawn_m2 = sum(g.area_m2 for g in plan.lawns)
+    lawns = [g for g in plan.lawns if g.kind is not LawnKind.FLOWERBED]
+    beds = [g for g in plan.lawns if g.kind is LawnKind.FLOWERBED]
+    perennials = sum(count for g in beds for _, _, count in g.plants)
     return [
         ("Чертёж", report.source_name),
         ("Прогон", report.run_id),
@@ -179,7 +182,11 @@ def _header(report: RunReport) -> list[tuple[str, str]]:
             ),
         ),
         ("Отказов", str(len(plan.rejections))),
-        ("Газонов", f"{len(plan.lawns)}, {_m(lawn_m2)} м²"),
+        ("Газонов", f"{len(lawns)}, {_m(sum(g.area_m2 for g in lawns))} м²"),
+        (
+            "Цветников из многолетников",
+            f"{len(beds)}, {_m(sum(g.area_m2 for g in beds))} м², {perennials} шт.",
+        ),
         ("Исходные слои", "не изменены" if report.integrity.ok else "ИЗМЕНЕНЫ"),
         ("Исходный файл, SHA-256", report.source_sha256),
         ("Свод правил, отпечаток", report.rulebook.fingerprint[:16]),
@@ -247,16 +254,34 @@ def _rejection_row(r: Rejection, rules: _Rules) -> list[str]:
     ]
 
 
+def _basis(lawn: Lawn, rules: _Rules) -> str:
+    return "; ".join(
+        f"{rules.book.label_of(rule.citation.act_id)}, {rule.citation.clause}"
+        for rule_id in lawn.rule_ids
+        if (rule := rules.by_id.get(rule_id)) is not None
+    )
+
+
 def _lawn_rows(plan: Plan, rules: _Rules) -> list[list[str]]:
-    rows = []
-    for lawn in plan.lawns:
-        basis = "; ".join(
-            f"{rules.book.label_of(rule.citation.act_id)}, {rule.citation.clause}"
-            for rule_id in lawn.rule_ids
-            if (rule := rules.by_id.get(rule_id)) is not None
-        )
-        rows.append([str(lawn.number), LAWN_LABELS[lawn.kind], _m(lawn.area_m2), basis])
-    return rows
+    return [
+        [str(lawn.number), LAWN_LABELS[lawn.kind], _m(lawn.area_m2), _basis(lawn, rules)]
+        for lawn in plan.lawns
+        if lawn.kind is not LawnKind.FLOWERBED
+    ]
+
+
+def _flowerbed_rows(plan: Plan, rules: _Rules) -> list[list[str]]:
+    return [
+        [
+            f"Ц{lawn.number}",
+            lawn.mix,
+            _m(lawn.area_m2),
+            ", ".join(f"{name} ({latin}) {count} шт." for name, latin, count in lawn.plants),
+            _basis(lawn, rules),
+        ]
+        for lawn in plan.lawns
+        if lawn.kind is LawnKind.FLOWERBED
+    ]
 
 
 PLACEMENT_HEAD = (
@@ -274,6 +299,7 @@ PLACEMENT_HEAD = (
 )
 REJECTION_HEAD = ("№", "Тип", "X", "Y", "Решение", "Нарушено", "Основание")
 LAWN_HEAD = ("№", "Газон", "Площадь, м²", "Основание")
+FLOWERBED_HEAD = ("№", "Смесь", "Площадь, м²", "Многолетники", "Основание")
 EFFECT_HEAD = ("Показатель", "Было", "Стало", "Изменение", "Основание", "Пояснение")
 KIND_HEAD = ("Вид посадки", "Штук", "Пог. м", "Площадь, м²", "Место", "Основание термина")
 NOISE_HEAD = ("Ширина полосы, м", "Снижение по МГСН, дБА", "По СП 276, дБА", "Было, м", "Стало, м")
@@ -420,9 +446,12 @@ def write_markdown(path: Path, report: RunReport) -> Path:
     lines += _md_table(PLACEMENT_HEAD, (_placement_row(p, rules) for p in plan.placements))
     lines += ["", "## Отказы", ""]
     lines += _md_table(REJECTION_HEAD, (_rejection_row(r, rules) for r in plan.rejections))
-    if plan.lawns:
+    if lawns := _lawn_rows(plan, rules):
         lines += ["", "## Газоны", ""]
-        lines += _md_table(LAWN_HEAD, _lawn_rows(plan, rules))
+        lines += _md_table(LAWN_HEAD, lawns)
+    if beds := _flowerbed_rows(plan, rules):
+        lines += ["", "## Цветники из многолетников", ""]
+        lines += _md_table(FLOWERBED_HEAD, beds)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return path
 
@@ -522,8 +551,10 @@ def write_html(path: Path, report: RunReport) -> Path:
         "<h2>Отказы</h2>",
         _html_table(REJECTION_HEAD, (_rejection_row(r, rules) for r in plan.rejections)),
     ]
-    if plan.lawns:
-        body += ["<h2>Газоны</h2>", _html_table(LAWN_HEAD, _lawn_rows(plan, rules))]
+    if lawns := _lawn_rows(plan, rules):
+        body += ["<h2>Газоны</h2>", _html_table(LAWN_HEAD, lawns)]
+    if beds := _flowerbed_rows(plan, rules):
+        body += ["<h2>Цветники из многолетников</h2>", _html_table(FLOWERBED_HEAD, beds)]
     document = (
         '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
         f"<title>{html.escape(title)}</title><style>{_CSS}</style></head>"

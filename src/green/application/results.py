@@ -145,10 +145,14 @@ class RunReport:
             if self.basemap and self.basemap.source_conflicts is not None
             else None,
             # Газоны (п. 3 ТЗ): число участков и площади в м², всего и по видам.
-            "lawns": len(lawns),
-            "lawn_m2": lawn_m2(*LawnKind),
+            "lawns": sum(1 for g in lawns if g.kind is not LawnKind.FLOWERBED),
+            "lawn_m2": lawn_m2(LawnKind.KEPT, LawnKind.NEW),
             "lawn_kept_m2": lawn_m2(LawnKind.KEPT),
             "lawn_new_m2": lawn_m2(LawnKind.NEW),
+            # Цветники из многолетников (п. 3 ТЗ): число, площадь и штуки многолетников.
+            "flowerbeds": sum(1 for g in lawns if g.kind is LawnKind.FLOWERBED),
+            "flowerbed_m2": lawn_m2(LawnKind.FLOWERBED),
+            "perennials": sum(c for g in lawns for _, _, c in g.plants),
             "semantic_assignments_complete": self.classification.ready
             if self.classification
             else None,

@@ -67,6 +67,8 @@
   --c-plan-lawn: rgba(74, 128, 62, 0.24);
   --c-plan-lawn-new: rgba(182, 150, 58, 0.34);
   --c-plan-lawn-edge: #4a7a3c;
+  --c-plan-flowerbed: rgba(184, 84, 120, 0.3);
+  --c-plan-flowerbed-edge: #9c3f66;
   /* Зоны допустимости: холодный тон поверх травы - где дерево проходит все нормы; на
      согласовании - янтарь, как кольцо такой посадки. */
   --c-zone: rgba(46, 116, 168, 0.2);
@@ -197,6 +199,8 @@
   --c-plan-lawn: rgba(111, 174, 134, 0.2);
   --c-plan-lawn-new: rgba(207, 176, 90, 0.24);
   --c-plan-lawn-edge: #7fb48a;
+  --c-plan-flowerbed: rgba(214, 128, 164, 0.24);
+  --c-plan-flowerbed-edge: #d48aab;
   --c-zone: rgba(104, 170, 220, 0.2);
   --c-zone-edge: #79b4df;
   --c-zone-approval: rgba(230, 172, 76, 0.22);
@@ -246,6 +250,8 @@
   --c-plan-lawn: rgba(64, 200, 92, 0.32);
   --c-plan-lawn-new: rgba(226, 247, 219, 0.94);
   --c-plan-lawn-edge: #2f7d3f;
+  --c-plan-flowerbed: rgba(196, 70, 120, 0.34);
+  --c-plan-flowerbed-edge: #9a2f5e;
   --grid: rgba(60, 60, 60, 0.05);
 }
 
@@ -271,5 +277,7 @@
   --c-plan-lawn: rgba(90, 200, 110, 0.2);
   --c-plan-lawn-new: rgba(170, 210, 160, 0.16);
   --c-plan-lawn-edge: #6fbf7e;
+  --c-plan-flowerbed: rgba(226, 136, 176, 0.24);
+  --c-plan-flowerbed-edge: #e09abb;
   --grid: rgba(233, 230, 224, 0.045);
 }

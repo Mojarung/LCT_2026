@@ -56,6 +56,8 @@ LAYER_LABELS = f"{RESULT_PREFIX}LABELS"
 LAYER_ZONE_ALLOWED = f"{RESULT_PREFIX}ZONE_ALLOWED"
 LAYER_ZONE_APPROVAL = f"{RESULT_PREFIX}ZONE_APPROVAL"
 LAYER_LAWN = f"{RESULT_PREFIX}LAWN"
+# Цветники из многолетников - свой слой (ТЗ, п. 5: слои по типам посадок).
+LAYER_FLOWERBED = f"{RESULT_PREFIX}FLOWERBED"
 # Ведомость элементов озеленения (ГОСТ 21.508-2020, п. 10.8, форма 9) таблицей рядом с планом.
 LAYER_SCHEDULE = f"{RESULT_PREFIX}SCHEDULE"
 # Ручные правки плана (ТЗ, п. 6): метки удалений, переносов и добавлений.
@@ -76,6 +78,7 @@ LAYER_COLORS = {
     LAYER_ZONE_ALLOWED: 3,
     LAYER_ZONE_APPROVAL: 30,
     LAYER_LAWN: 82,
+    LAYER_FLOWERBED: 6,
     LAYER_SCHEDULE: 7,
     LAYER_EDITS: 6,
 }
@@ -86,7 +89,14 @@ ZONE_TRANSPARENCY = 0.7
 # чертежа даёт пучок травы 0,4 м через 2 м. Устраиваемый газон отличается цветом.
 LAWN_PATTERN = "GRASS"
 LAWN_PATTERN_SCALE_M = 0.08
-LAWN_COLORS = {LawnKind.KEPT: 82, LawnKind.NEW: 52}
+LAWN_COLORS = {LawnKind.KEPT: 82, LawnKind.NEW: 52, LawnKind.FLOWERBED: 6}
+LAWN_LAYERS = {
+    LawnKind.KEPT: LAYER_LAWN,
+    LawnKind.NEW: LAYER_LAWN,
+    LawnKind.FLOWERBED: LAYER_FLOWERBED,
+}
+# Цветник - узор звёздочками из acad.pat (цветы), не заливка: подоснова под ним видна.
+LAWN_PATTERNS = {LawnKind.FLOWERBED: ("STARS", 0.1)}
 XDATA_CHUNK = 240
 XDATA_REAL = 1040
 NPA_REFS = 2
@@ -295,12 +305,26 @@ class EzdxfPlanWriter:
     def _lawn(self, msp: Modelspace, lawn: Lawn, scale: float) -> None:
         """Участок газона: штриховка узором с отверстиями посадочных мест и XDATA решения."""
         color = LAWN_COLORS[lawn.kind]
+        layer = LAWN_LAYERS[lawn.kind]
+        pattern, pattern_scale = LAWN_PATTERNS.get(lawn.kind, (LAWN_PATTERN, LAWN_PATTERN_SCALE_M))
         rule_ids = ";".join(lawn.rule_ids)
+        if lawn.kind is LawnKind.FLOWERBED:
+            # Номер цветника на плане, состав - в легенде и в отчёте.
+            point = lawn.geometry.representative_point()
+            msp.add_text(
+                f"Ц{lawn.number}",
+                height=self._height * scale,
+                dxfattribs={
+                    "layer": layer,
+                    "style": self._style,
+                    "insert": (point.x * scale, point.y * scale),
+                },
+            )
         for polygon in shapely.get_parts(lawn.geometry):
             if polygon.geom_type != "Polygon" or polygon.is_empty:
                 continue
-            hatch = msp.add_hatch(color=color, dxfattribs={"layer": LAYER_LAWN})
-            hatch.set_pattern_fill(LAWN_PATTERN, color=color, scale=LAWN_PATTERN_SCALE_M * scale)
+            hatch = msp.add_hatch(color=color, dxfattribs={"layer": layer})
+            hatch.set_pattern_fill(pattern, color=color, scale=pattern_scale * scale)
             hatch.paths.add_polyline_path(
                 _ring(polygon.exterior.coords, scale),
                 is_closed=True,
@@ -392,8 +416,20 @@ class EzdxfPlanWriter:
             totals = {
                 kind: sum(g.area_m2 for g in plan.lawns if g.kind is kind) for kind in LawnKind
             }
-            areas = ", ".join(f"{LAWN_LABELS[k]} {_area(a)}" for k, a in totals.items() if a > 0)
-            lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
+            areas = ", ".join(
+                f"{LAWN_LABELS[k]} {_area(a)}"
+                for k, a in totals.items()
+                if a > 0 and k is not LawnKind.FLOWERBED
+            )
+            if areas:
+                lines.append(f"Газоны {LAYER_LAWN}, м²: {areas}.")
+            lines.extend(
+                f"Цветник Ц{g.number} ({LAYER_FLOWERBED}), {_area(g.area_m2)} м², {g.mix}: "
+                + ", ".join(f"{name} {count} шт." for name, _, count in g.plants)
+                + "."
+                for g in plan.lawns
+                if g.kind is LawnKind.FLOWERBED
+            )
         blocked = sorted(
             (
                 (float(v), k.removeprefix("blocked_").removesuffix("_m2"))

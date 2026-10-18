@@ -66,6 +66,13 @@ export const STYLES: Record<string, ClassStyle> = {
     width: 1.2,
     dash: [5, 3],
   },
+  // Цветник из многолетников (слой GREEN_FLOWERBED): тёплый тон, сплошной контур.
+  'plan_lawn.flowerbed': {
+    group: 'lawns',
+    fill: '--c-plan-flowerbed',
+    stroke: '--c-plan-flowerbed-edge',
+    width: 1.4,
+  },
   // Зоны допустимости (zones.ts): холодный тон, чтобы не спорить с травой и газонами плана.
   'zone.allowed': { group: 'zones', fill: '--c-zone', stroke: '--c-zone-edge', width: 0.8 },
   'zone.needs_approval': {

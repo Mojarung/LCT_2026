@@ -22,9 +22,11 @@ from green.domain.norms import (
     Act,
     Citation,
     DistanceRule,
+    FlowerbedMix,
     InvasiveGroupRule,
     InvasiveSpecies,
     LawnRule,
+    PerennialShare,
     Reference,
     RuleBook,
     SpeciesRestriction,
@@ -186,6 +188,17 @@ class YamlRuleBookSource:
             lawn_rules=tuple(
                 LawnRule(rule_id=r.rule_id, kind=r.kind, citation=_citation(r.citation))
                 for r in rules_file.lawn_rules
+            ),
+            flowerbed_mixes=tuple(
+                FlowerbedMix(
+                    mix_id=m.mix_id,
+                    name=m.name,
+                    light=m.light,
+                    density_per_m2=m.density_per_m2,
+                    plants=tuple(PerennialShare(p.name_ru, p.name_lat, p.share) for p in m.plants),
+                    source=m.source,
+                )
+                for m in rules_file.flowerbed_mixes
             ),
         )
         ids = [rule.rule_id for rule in rulebook.all_rules]

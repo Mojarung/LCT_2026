@@ -31,6 +31,7 @@ class LawnKind(StrEnum):
 
     KEPT = "kept"  # газон есть по чертежу: сохраняется или восстанавливается после посадки
     NEW = "new"  # грунт без газона по чертежу: газон устраивается
+    FLOWERBED = "flowerbed"  # цветник из многолетников, устраиваемый на месте газона
 
 
 class Severity(StrEnum):
@@ -228,6 +229,31 @@ class LawnRule:
         return self.kind is None or self.kind is kind
 
 
+@dataclass(frozen=True, slots=True)
+class PerennialShare:
+    """Многолетник в смеси цветника: доля в штуках смеси."""
+
+    name_ru: str
+    name_lat: str
+    share: float
+
+
+@dataclass(frozen=True, slots=True)
+class FlowerbedMix:
+    """Смесь цветника из многолетников (п. 3 ТЗ: травянистые покрытия, элементы скверов).
+
+    Состав и плотность - из принятого проекта пилота (source), а не норма: light выбирает смесь
+    по месту - sun на открытом месте, shade под кронами.
+    """
+
+    mix_id: str
+    name: str
+    light: str  # sun | shade
+    density_per_m2: float
+    plants: tuple[PerennialShare, ...]
+    source: str
+
+
 type AnyRule = DistanceRule | InvasiveSpecies | InvasiveGroupRule | SpeciesRestriction | LawnRule
 
 
@@ -242,6 +268,8 @@ class RuleBook:
     invasive_groups: tuple[InvasiveGroupRule, ...] = ()
     species_restrictions: tuple[SpeciesRestriction, ...] = ()
     lawn_rules: tuple[LawnRule, ...] = ()
+    # Смеси цветников (не правила: состав из проектов пилота, основание - lawn_rules).
+    flowerbed_mixes: tuple[FlowerbedMix, ...] = ()
 
     def for_sp42_edition(self, edition: str) -> RuleBook:
         """Свод для прогона в выбранной редакции СП 42.13330: правила другой редакции уходят."""

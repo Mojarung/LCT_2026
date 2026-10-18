@@ -101,10 +101,13 @@ export interface LawnJson {
   id: string;
   number: number;
   planting_type: string;
-  kind: string; // kept - сохраняемый или восстанавливаемый | new - устраиваемый
+  kind: string; // kept - сохраняемый или восстанавливаемый | new - устраиваемый | flowerbed
   area_m2: number;
   rule_ids: string[];
   notes: string[];
+  /** Цветник: смесь и штуки многолетников; у газона пусто, у старых прогонов нет. */
+  mix?: string;
+  plants?: { name_ru: string; name_lat: string; count: number }[];
   explanation: string;
   geometry: Geometry;
 }

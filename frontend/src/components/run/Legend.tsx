@@ -180,6 +180,10 @@ export function Legend({
                 <i className="swatch swatch-plan-lawn-new" />
                 <b>{drawing ? 'газон устраиваемый' : 'устраиваемый'}</b>
               </span>
+              <span>
+                <i className="swatch swatch-plan-flowerbed" />
+                <b>цветник из многолетников</b>
+              </span>
             </div>
             {/* Зоны допустимости - клетки, где дерево проходит все нормы (слои GREEN_ZONE_*):
                 так видно, почему посадки стоят именно здесь, а не на соседнем газоне. */}

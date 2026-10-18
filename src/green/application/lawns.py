@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -29,6 +29,7 @@ from shapely.geometry import Point
 
 from green.application.approximation import inner_area, reserved_buffer
 from green.application.constraints import work_boundary
+from green.application.flowerbeds import place_flowerbeds, plants
 from green.application.surfaces import Material, label_material
 from green.domain.norms import LawnKind, PlantingType
 from green.domain.objects import ObjectClass
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
     from green.application.params import PlanParams
     from green.application.surfaces import SurfaceMap
-    from green.domain.norms import RuleBook
+    from green.domain.norms import FlowerbedMix, RuleBook
     from green.domain.objects import Feature, TextLabel
     from green.domain.planting import Placement, Plan
 
@@ -59,12 +60,17 @@ _GROUND_WORD = "ГРУНТ"  # любая другая подпись грунт
 _MARKER = "SYMBOL_MARKER"
 # Посадочное место касается участка по границе разности; касание ищется с запасом округления.
 _TOUCH_M = 0.01
-_ORDER = {LawnKind.KEPT: 0, LawnKind.NEW: 1}
+_ORDER = {LawnKind.KEPT: 0, LawnKind.NEW: 1, LawnKind.FLOWERBED: 2}
 _KIND_NOTES = {
     LawnKind.KEPT: "газон по чертежу (контур слоя газона, знак или подпись «ГАЗОН»)",
     LawnKind.NEW: "грунт без газона и цветника по чертежу",
+    LawnKind.FLOWERBED: "цветник из многолетников на газоне плана у покрытия",
 }
-_KIND_NAMES = {LawnKind.KEPT: "сохраняемого газона", LawnKind.NEW: "устраиваемого газона"}
+_KIND_NAMES = {
+    LawnKind.KEPT: "сохраняемого газона",
+    LawnKind.NEW: "устраиваемого газона",
+    LawnKind.FLOWERBED: "цветника из многолетников",
+}
 # Подпись грани разлива ищется не дальше разлива и ещё двух клеток растра (выпрямление).
 _SPREAD_REACH_CELLS = 2.0
 _MOSTLY = 0.5
@@ -115,7 +121,7 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
     }
 
     notes: list[str] = []
-    chosen: list[tuple[LawnKind, BaseGeometry, tuple[str, ...]]] = []
+    chosen: list[_Part] = []
     small: list[float] = []
     for kind, area in areas.items():
         polygons = _polygons(area)
@@ -128,10 +134,19 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
                 f"в своде норм нет правила {_KIND_NAMES[kind]}, {total} м² газоном не выделены."
             )
             continue
-        chosen.extend((kind, polygon, rule_ids) for polygon in big)
-    chosen.sort(key=lambda item: (_ORDER[item[0]], -item[1].area, item[1].bounds))
+        chosen.extend(_Part(kind, polygon, rule_ids) for polygon in big)
+    chosen, on_kept = _with_flowerbeds(
+        chosen,
+        plan=plan,
+        features=features,
+        surface=surface,
+        rulebook=rulebook,
+        params=params,
+        notes=notes,
+    )
+    chosen.sort(key=lambda item: (_ORDER[item.kind], -item.geometry.area, item.geometry.bounds))
 
-    geometries = np.array([g for _, g, _ in chosen], dtype=object)
+    geometries = np.array([part.geometry for part in chosen], dtype=object)
     touched = _touching_pits(geometries, pits, is_tree)
     approximate = _mostly_in(geometries, spread)
     border = _SPREAD_NOTE.format(_metres(surface.max_distance_m))
@@ -139,15 +154,18 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         Lawn(
             lawn_id=f"{LAWN_PREFIX}{number:05d}",
             number=number,
-            kind=kind,
-            geometry=geometry,
-            rule_ids=rule_ids,
+            kind=part.kind,
+            geometry=part.geometry,
+            rule_ids=part.rule_ids,
             notes=(
-                *_notes(kind, touched[number - 1], params),
+                *_notes(part.kind, touched[number - 1], params),
+                *part.notes,
                 *((border,) if approximate[number - 1] else ()),
             ),
+            mix=part.mix.name if part.mix else "",
+            plants=plants(part.mix, part.geometry.area) if part.mix else (),
         )
-        for number, (kind, geometry, rule_ids) in enumerate(chosen, 1)
+        for number, part in enumerate(chosen, 1)
     )
     # Что грунт по близости подписи в газон не входит, говорит заметка карты покрытий: вторая
     # строка о том же повторяла её (жюри по дизайну, итерация 8).
@@ -155,13 +173,86 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         notes.append(
             f"цветники по чертежу, {_m2(flowerbeds.area)} м², сохраняются и в газон не входят."
         )
+    beds = [g for g in lawns if g.kind is LawnKind.FLOWERBED]
     stats = {
         **plan.stats,
         "lawn_small_parts": len(small),
         "lawn_small_m2": round(sum(small), 1),
         "lawn_label_m2": round(float(shapely.area(geometries[approximate]).sum()), 1),
+        "flowerbeds": len(beds),
+        "flowerbed_m2": round(sum(g.area_m2 for g in beds), 1),
+        "perennials": sum(count for g in beds for _, _, count in g.plants),
+        "flowerbed_on_kept_m2": round(on_kept, 1),
     }
     return _warn(replace(plan, lawns=lawns, stats=stats), notes)
+
+
+@dataclass(frozen=True, slots=True)
+class _Part:
+    kind: LawnKind
+    geometry: BaseGeometry
+    rule_ids: tuple[str, ...]
+    notes: tuple[str, ...] = ()
+    mix: FlowerbedMix | None = None
+
+
+def _with_flowerbeds(  # noqa: PLR0913 - этап газонов передаёт свои входы как есть
+    parts: list[_Part],
+    *,
+    plan: Plan,
+    features: Sequence[Feature],
+    surface: SurfaceMap,
+    rulebook: RuleBook,
+    params: PlanParams,
+    notes: list[str],
+) -> tuple[list[_Part], float]:
+    """Цветники вырезаются из газонов плана; обрезок газона меньше порога площади уходит.
+
+    Второе значение - площадь цветников на газоне по чертежу, м².
+    """
+    if not params.flowerbeds or not rulebook.flowerbed_mixes or not parts:
+        return parts, 0.0
+    rule_ids = _rule_ids(rulebook, LawnKind.FLOWERBED, params)
+    if not rule_ids:
+        notes.append(f"в своде норм нет правила {_KIND_NAMES[LawnKind.FLOWERBED]}, цветников нет.")
+        return parts, 0.0
+    beds = place_flowerbeds(
+        [(part.kind, part.geometry) for part in parts],
+        placements=plan.placements,
+        features=features,
+        surface=surface,
+        mixes=rulebook.flowerbed_mixes,
+        params=params,
+    )
+    if not beds:
+        return parts, 0.0
+    cut = shapely.union_all([bed for bed, _, _ in beds])
+    shapely.prepare(cut)
+    # Сколько цветника легло на газон по чертежу: в балансе «было - стало» это газон «было».
+    drawn = shapely.union_all([p.geometry for p in parts if p.kind is LawnKind.KEPT])
+    on_kept = float(cut.intersection(drawn).area) if not drawn.is_empty else 0.0
+    kept: list[_Part] = []
+    for part in parts:
+        if not shapely.intersects(cut, part.geometry):
+            kept.append(part)
+            continue
+        kept.extend(
+            replace(part, geometry=piece)
+            for piece in _polygons(part.geometry.difference(cut))
+            if piece.area >= params.lawn_min_area_m2
+        )
+    for bed, mix, shade in beds:
+        light = f"под кронами {shade:.0%} площади" if shade else "открытое место, крон над ним нет"
+        kept.append(
+            _Part(
+                LawnKind.FLOWERBED,
+                bed,
+                rule_ids,
+                notes=(f"смесь: {mix.name} ({light})", f"состав и плотность: {mix.source}"),
+                mix=mix,
+            )
+        )
+    return kept, on_kept
 
 
 def _all_soil(surface: SurfaceMap | None, spread: BaseGeometry | None) -> BaseGeometry | None:

@@ -14,6 +14,7 @@ const strict: ProfileParams = {
   understory: true,
   shrub_fill: true,
   lawns: true,
+  flowerbeds: true,
 };
 const shrubs: ProfileParams = {
   ...strict,

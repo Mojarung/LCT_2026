@@ -45,6 +45,7 @@ def profile(name: str, container: ContainerDep) -> ProfileOut:
         understory=params.understory,
         shrub_fill=params.shrub_fill,
         lawns=params.lawns,
+        flowerbeds=params.flowerbeds,
     )
 
 

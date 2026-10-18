@@ -22,6 +22,7 @@ from green.application.explain import LAWN_LABELS
 from green.application.name_model import name_key
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material, cells_area
+from green.domain.norms import LawnKind
 from green.domain.objects import ObjectClass
 from green.domain.planting import Placement, Rejection
 from green.infrastructure.cad.writer import RESULT_LAYERS_SUFFIX, save_result_layers
@@ -291,7 +292,9 @@ def _lawn_rows(
         "y": round(point.y, 3),
         "verdict": "",
         "outcome": lawn.kind.value,
-        "reason": f"{LAWN_LABELS[lawn.kind]} газон",
+        "reason": LAWN_LABELS[lawn.kind]
+        if lawn.kind is LawnKind.FLOWERBED
+        else f"{LAWN_LABELS[lawn.kind]} газон",
         "explanation": explanation.text if explanation else "",
         "area_m2": round(lawn.area_m2, 2),
     }
@@ -670,6 +673,11 @@ def plan_payload(plan: Plan) -> dict[str, Any]:
                 "area_m2": round(lawn.area_m2, 2),
                 "rule_ids": list(lawn.rule_ids),
                 "notes": list(lawn.notes),
+                "mix": lawn.mix,
+                "plants": [
+                    {"name_ru": name, "name_lat": latin, "count": count}
+                    for name, latin, count in lawn.plants
+                ],
                 "explanation": texts.get(lawn.lawn_id, ""),
                 "geometry": _geojson(lawn.geometry),
             }
@@ -1174,6 +1182,16 @@ def write_workbook(path: Path, plan: Plan, rulebook: RuleBook) -> Path:
                     "; ".join(row.conditions),
                 ]
             )
+    beds = [g for g in plan.lawns if g.kind is LawnKind.FLOWERBED]
+    if beds:
+        # Ведомость цветников: строка на многолетник, площадь и смесь цветника - в каждой.
+        flowers = book.create_sheet("Цветники")
+        flowers.append(["Цветник", "Смесь", "Площадь, м²", "Многолетник", "Латинское", "Шт."])
+        for bed in beds:
+            for name, latin, count in bed.plants:
+                flowers.append(
+                    [f"Ц{bed.number}", bed.mix, round(bed.area_m2, 1), name, latin, count]
+                )
     checks = book.create_sheet("Проверки")
     checks.append(list(CSV_COLUMNS))
     for record in build_rows(plan, rulebook):

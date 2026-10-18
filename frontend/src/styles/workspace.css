@@ -1339,6 +1339,10 @@ body.shell-map .topbar {
   background: var(--c-plan-lawn-new);
   border-style: dashed;
 }
+.legend i.swatch-plan-flowerbed {
+  background: var(--c-plan-flowerbed);
+  border: 1.4px solid var(--c-plan-flowerbed-edge);
+}
 .legend i.swatch-zone {
   background: var(--c-zone);
   border: 1.2px solid var(--c-zone-edge);

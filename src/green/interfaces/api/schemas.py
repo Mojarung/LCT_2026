@@ -75,6 +75,7 @@ class ProfileOut(BaseModel):
     understory: bool
     shrub_fill: bool = Field(description="Группы кустарника на свободном газоне")
     lawns: bool = Field(description="Газоны на грунте, который посадки оставили свободным")
+    flowerbeds: bool = Field(description="Цветники из многолетников на газоне у тротуара")
 
 
 class ArtifactOut(BaseModel):

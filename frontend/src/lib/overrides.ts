@@ -14,7 +14,8 @@ export type Switch =
   | 'curb_hedges'
   | 'understory'
   | 'shrub_fill'
-  | 'lawns';
+  | 'lawns'
+  | 'flowerbeds';
 
 export const SWITCHES: readonly Switch[] = [
   'shrub_groups',
@@ -23,6 +24,7 @@ export const SWITCHES: readonly Switch[] = [
   'understory',
   'shrub_fill',
   'lawns',
+  'flowerbeds',
   'root_barriers',
 ];
 
@@ -47,6 +49,7 @@ export function formDefaults(profile: ProfileParams): RunFormValues {
       understory: profile.understory,
       shrub_fill: profile.shrub_fill,
       lawns: profile.lawns,
+      flowerbeds: profile.flowerbeds,
     },
   };
 }
@@ -96,6 +99,7 @@ const PARAM_RU: Record<string, string> = {
   understory: 'подлесок',
   shrub_fill: 'кустарник на газоне',
   lawns: 'газоны',
+  flowerbeds: 'цветники',
   species_code: 'вид',
   planting_type: 'тип посадки',
 };

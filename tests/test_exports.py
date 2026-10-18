@@ -7,18 +7,25 @@ DXF только со слоями результата в координата�
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import ezdxf
 import openpyxl
+from shapely.geometry import box
 from test_writer_layout import BOOK, _mixed_plan, _write
 
+from green.domain.norms import LawnKind
+from green.domain.planting import Lawn
+from green.infrastructure.cad.export_validation import check_written_plan
 from green.infrastructure.reports.artifacts import write_result_layers, write_workbook
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
+
+    from green.domain.planting import Plan
 
 
 def test_workbook_has_the_schedule_and_every_check_with_numbers(tmp_path: Path) -> None:
@@ -97,3 +104,46 @@ def test_rebuild_replaces_the_stale_result_layers_file(tmp_path: Path) -> None:
     write_result_layers(result, stale)
     assert stale.read_text(encoding="utf-8") == "new"
     assert not fresh.exists()
+
+
+def _with_flowerbed() -> Plan:
+    bed = Lawn(
+        "L00001",
+        1,
+        LawnKind.FLOWERBED,
+        box(0, 0, 10, 6),
+        ("R-LAWN-FLOWER-001", "R-LAWN-DRAW-001"),
+        mix="солнечный цветник: злаки и многолетники",
+        plants=(("Котовник Фассена", "Nepeta x faassenii", 135), ("Очиток видный", "x", 108)),
+    )
+    return replace(_mixed_plan(), lawns=(bed,))
+
+
+def test_workbook_lists_flowerbed_perennials_by_bed(tmp_path: Path) -> None:
+    path = write_workbook(tmp_path / "plan.xlsx", _with_flowerbed(), BOOK)
+    book = openpyxl.load_workbook(path)
+
+    assert book.sheetnames == ["Ведомость", "Цветники", "Проверки"]
+    rows = list(book["Цветники"].iter_rows(values_only=True))
+    assert rows[1] == (
+        "Ц1",
+        "солнечный цветник: злаки и многолетники",
+        60,
+        "Котовник Фассена",
+        "Nepeta x faassenii",
+        135,
+    )
+    assert sum(row[5] for row in rows[1:]) == 243
+
+
+def test_flowerbed_goes_to_its_own_layer_and_passes_the_export_check(tmp_path: Path) -> None:
+    plan = _with_flowerbed()
+    result = _write(tmp_path, plan)
+    doc = ezdxf.readfile(result)
+
+    hatches = [e for e in doc.modelspace().query("HATCH") if e.dxf.layer == "GREEN_FLOWERBED"]
+    assert len(hatches) == 1
+    assert not [e for e in doc.modelspace().query("HATCH") if e.dxf.layer == "GREEN_LAWN"]
+    texts = [e.dxf.text for e in doc.modelspace().query("TEXT") if e.dxf.layer == "GREEN_FLOWERBED"]
+    assert texts == ["Ц1"]
+    assert check_written_plan(result, plan, unit_m=1.0).ok

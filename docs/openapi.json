@@ -868,6 +868,11 @@
             "title": "Curb Hedges",
             "type": "boolean"
           },
+          "flowerbeds": {
+            "description": "Цветники из многолетников на газоне у тротуара",
+            "title": "Flowerbeds",
+            "type": "boolean"
+          },
           "lawns": {
             "description": "Газоны на грунте, который посадки оставили свободным",
             "title": "Lawns",
@@ -928,7 +933,8 @@
           "curb_hedges",
           "understory",
           "shrub_fill",
-          "lawns"
+          "lawns",
+          "flowerbeds"
         ],
         "title": "ProfileOut",
         "type": "object"

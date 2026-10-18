@@ -50,9 +50,17 @@ const feature = (klass: string, geometry: BasemapFeature['geometry']): BasemapFe
 
 describe('газоны плана на карте', () => {
   it('каждый вид газона - свой класс со стилем слоя lawns', () => {
-    const features = lawnFeatures([lawn('L1', 'kept', 0), lawn('L2', 'new', 20)]);
+    const features = lawnFeatures([
+      lawn('L1', 'kept', 0),
+      lawn('L2', 'new', 20),
+      lawn('L3', 'flowerbed', 40),
+    ]);
 
-    expect(features.map((f) => f.properties.class)).toEqual(['plan_lawn.kept', 'plan_lawn.new']);
+    expect(features.map((f) => f.properties.class)).toEqual([
+      'plan_lawn.kept',
+      'plan_lawn.new',
+      'plan_lawn.flowerbed',
+    ]);
     for (const klass of Object.values(LAWN_CLASSES)) {
       expect(STYLES[klass]?.group).toBe('lawns');
       expect(STYLES[klass]?.fill).toBeTruthy();

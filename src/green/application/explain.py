@@ -76,6 +76,7 @@ VERDICT_LABELS: dict[Verdict, str] = {
 LAWN_LABELS: dict[LawnKind, str] = {
     LawnKind.KEPT: "сохраняемый или восстанавливаемый",
     LawnKind.NEW: "устраиваемый",
+    LawnKind.FLOWERBED: "цветник из многолетников, устраиваемый",
 }
 
 
@@ -316,9 +317,12 @@ def _lawn(lawn: Lawn, rulebook: RuleBook) -> Explanation:
         )
     how = "".join(f"; {note}" for note in lawn.notes)
     area = f"{lawn.area_m2:,.1f}".replace(",", " ").replace(".", ",")
+    title = "Цветник" if lawn.kind is LawnKind.FLOWERBED else "Газон"
+    plants = ", ".join(f"{name} ({latin}) {count} шт." for name, latin, count in lawn.plants)
     text = (
-        f"Газон №{lawn.number}: {LAWN_LABELS[lawn.kind]}, {area} м²{how}. "
-        f"Основания: {'; '.join(grounds)}."
+        f"{title} №{lawn.number}: {LAWN_LABELS[lawn.kind]}, {area} м²{how}. "
+        + (f"Многолетники: {plants}. " if plants else "")
+        + f"Основания: {'; '.join(grounds)}."
     )
     return Explanation(lawn.lawn_id, lawn.number, "lawn", text)
 

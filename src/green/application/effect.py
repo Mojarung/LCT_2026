@@ -103,6 +103,7 @@ _KINDS = (
 )
 _BY_LABEL = {MODE_LABELS[key]: key for key, *_ in _KINDS}
 _LAWN_BASIS = "743-ПП, п. 2.1.13; 770-ПП, прил. 3"
+_FLOWERBED_BASIS = "ТЗ, п. 3; проект Куликовской улицы (29-2025/ОД-П)"
 
 # МГСН 1.02-02, табл. В.5: ширина полосы, м -> снижение шума, дБА.
 _BANDS = (
@@ -147,6 +148,9 @@ def street_effect(  # noqa: PLR0913 - план, участок, параметр
     noise = _noise(base, layout)
     kept = sum(g.area_m2 for g in plan.lawns if g.kind is LawnKind.KEPT)
     new = sum(g.area_m2 for g in plan.lawns if g.kind is LawnKind.NEW)
+    beds = [g for g in plan.lawns if g.kind is LawnKind.FLOWERBED]
+    # Цветник на газоне по чертежу: газон там был, в «было» он входит.
+    under_beds = float(plan.stats.get("flowerbed_on_kept_m2", 0.0))
     new_species = {p.species.code for p in plan.placements}
     measures = [
         EffectMeasure(
@@ -215,11 +219,24 @@ def street_effect(  # noqa: PLR0913 - план, участок, параметр
             "lawn_m2",
             "Газон",
             "м²",
-            round(kept, 1),
+            round(kept + under_beds, 1),
             round(kept + new, 1),
             _LAWN_BASIS,
             COUNT,
-            "было - газон по чертежу вне посадочных мест плана; стало - с устраиваемым газоном",
+            "было - газон по чертежу вне посадочных мест плана; стало - с устраиваемым газоном, "
+            "без цветников",
+        ),
+        EffectMeasure(
+            "flowerbed_m2",
+            "Цветники из многолетников",
+            "м²",
+            None,
+            round(sum(g.area_m2 for g in beds), 1),
+            _FLOWERBED_BASIS,
+            COUNT,
+            f"{len(beds)} шт., многолетников "
+            f"{sum(count for g in beds for _, _, count in g.plants)} шт.; "
+            "цветники чертежа «было» не считаются",
         ),
         EffectMeasure(
             "noise_curb_m",
@@ -695,6 +712,7 @@ def _kinds(plan: Plan) -> tuple[PlantingKind, ...]:
     for kind, key, title in (
         (LawnKind.KEPT, "lawn_kept", "Газон сохраняемый и восстанавливаемый"),
         (LawnKind.NEW, "lawn_new", "Газон устраиваемый"),
+        (LawnKind.FLOWERBED, "flowerbeds", "Цветники из многолетников"),
     ):
         lawns = [g for g in plan.lawns if g.kind is kind]
         if lawns:

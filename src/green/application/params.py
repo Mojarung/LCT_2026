@@ -306,6 +306,15 @@ class PlanParams:
     # параметр проекта, акты его не задают.
     lawns: bool = True
     lawn_min_area_m2: float = 5.0
+    # Цветники из многолетников на газоне плана (п. 3 ТЗ: травянистые покрытия и элементы
+    # скверов; application/flowerbeds.py, правило R-LAWN-FLOWER-001). Площадь, шаг и ширина -
+    # параметры проекта: у Куликовской цветники 217 и 699 м², у 2-й Прядильной 798 м² на улицу.
+    flowerbeds: bool = True
+    flowerbed_area_m2: float = 60.0
+    flowerbed_spacing_m: float = 150.0
+    flowerbed_min_width_m: float = 3.0
+    flowerbed_walk_m: float = 3.0
+    flowerbed_shade_share: float = 0.5
     # Вид участка изгороди - самый редкий из допустимых (иначе - лучший, соседний участок другим
     # видом): держит квоты разнообразия кустарников, когда участков много.
     hedge_species_balance: bool = True

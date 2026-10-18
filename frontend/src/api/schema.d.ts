@@ -788,6 +788,11 @@ export interface components {
             /** Curb Hedges */
             curb_hedges: boolean;
             /**
+             * Flowerbeds
+             * @description Цветники из многолетников на газоне у тротуара
+             */
+            flowerbeds: boolean;
+            /**
              * Lawns
              * @description Газоны на грунте, который посадки оставили свободным
              */

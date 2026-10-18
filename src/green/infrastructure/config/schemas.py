@@ -77,6 +77,7 @@ class DistanceRuleModel(_Strict):
 
 _RULE_ID = r"^R-[A-Z0-9]+-[A-Z]+-\d{3}$"
 _INVASIVE_GROUPS = 4  # 369-ПП, приложение 2: четыре группы
+_SHARE_TOLERANCE = 0.01  # доли смеси цветника округлены до сотых
 
 
 class InvasiveSpeciesModel(_Strict):
@@ -112,6 +113,29 @@ class LawnRuleModel(_Strict):
     citation: CitationModel
 
 
+class PerennialShareModel(_Strict):
+    name_ru: str = Field(min_length=1)
+    name_lat: str = Field(min_length=1)
+    share: float = Field(gt=0, le=1)
+
+
+class FlowerbedMixModel(_Strict):
+    mix_id: str = Field(pattern=r"^[a-z_]+$")
+    name: str = Field(min_length=1)
+    light: Literal["sun", "shade"]
+    density_per_m2: float = Field(gt=0, le=50)
+    source: str = Field(min_length=1)
+    plants: list[PerennialShareModel] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _shares_make_the_whole_mix(self) -> FlowerbedMixModel:
+        total = sum(p.share for p in self.plants)
+        if abs(total - 1.0) > _SHARE_TOLERANCE:
+            msg = f"{self.mix_id}: доли смеси дают {total:.3f}, а не 1"
+            raise ValueError(msg)
+        return self
+
+
 class RulesFile(_Strict):
     version: int = 1
     distance_rules: list[DistanceRuleModel]
@@ -119,6 +143,7 @@ class RulesFile(_Strict):
     invasive_groups: list[InvasiveGroupModel] = Field(default_factory=list)
     species_restrictions: list[SpeciesRestrictionModel] = Field(default_factory=list)
     lawn_rules: list[LawnRuleModel] = Field(default_factory=list)
+    flowerbed_mixes: list[FlowerbedMixModel] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _every_listed_group_has_a_rule(self) -> RulesFile:
@@ -396,6 +421,12 @@ class ProfileModel(_Strict):
     shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
     lawns: bool = True
     lawn_min_area_m2: float = Field(default=5.0, ge=0, le=10_000)
+    flowerbeds: bool = True
+    flowerbed_area_m2: float = Field(default=60.0, ge=5, le=5_000)
+    flowerbed_spacing_m: float = Field(default=150.0, ge=10, le=5_000)
+    flowerbed_min_width_m: float = Field(default=3.0, ge=1, le=50)
+    flowerbed_walk_m: float = Field(default=3.0, ge=0, le=100)
+    flowerbed_shade_share: float = Field(default=0.5, ge=0, le=1)
     # Практика проектов пилота (docs/notes/34): главный вид кустарника 27-61%, медиана 35-40%.
     shrub_quota_species: float = Field(default=0.40, gt=0, le=1)
     shrub_quota_genus: float = Field(default=0.50, gt=0, le=1)
