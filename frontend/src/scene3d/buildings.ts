@@ -405,11 +405,11 @@ const FACADE_MAP = /* glsl */ `
     wall = mix(wall, frameColor, clamp(frame - glass + mullion, 0.0, 1.0));
     glass *= 1.0 - mullion;
   }
-  // Горит примерно каждое третье окно, у каждого своя яркость и оттенок лампы; витрина
+  // Горит примерно каждое второе окно, у каждого своя яркость и оттенок лампы; витрина
   // первого этажа ночью не светится сплошь - магазины к ночи закрыты.
   float roll = hash12(vec2(cell, level) + tint * 17.0);
   float shop = style == 2 && level < 1.0 ? 0.35 : 1.0;
-  float lit = step(0.68, roll) * glass * uNight * shop * (0.35 + 0.65 * hash12(vec2(level, cell) * 1.3));
+  float lit = step(0.5, roll) * glass * uNight * shop * (0.35 + 0.65 * hash12(vec2(level, cell) * 1.3));
   vec3 glassColor = mix(vec3(0.09, 0.11, 0.13), vec3(0.22, 0.25, 0.29), hash12(vec2(cell * 1.7, level)));
   // Recess shadows and varied blinds stay attached to each window, at every angle.
   float blind = step(0.7, roll) * smoothstep(0.57, 0.59, lv) * (1.0 - uNight);

@@ -103,6 +103,8 @@ const WINTER_COVER = 0.85;
 
 export interface ViewSettings {
   hour: number;
+  /** Поворот солнца по азимуту, градусы (-180..180): тени в другую сторону при том же часе. */
+  sunTurn: number;
   season: Season;
   age: number;
   clouds: number;
@@ -132,6 +134,7 @@ const HOUR_SNAP = 0.01;
 
 export const DEFAULT_SETTINGS: ViewSettings = {
   hour: 11,
+  sunTurn: 0,
   season: 'summer',
   age: 10,
   clouds: 0.3,
@@ -835,6 +838,11 @@ export class SceneEngine {
     // доезжает до нового часа в кадрах (stepHour). Остальные настройки ставят час сразу.
     const keys = Object.keys(settings);
     if (keys.length === 1 && keys[0] === 'hour') return;
+    // Поворот солнца - тоже только свет, без пересборки сцены.
+    if (keys.length === 1 && keys[0] === 'sunTurn') {
+      this.lightAt(this.hourShown);
+      return;
+    }
     this.hourShown = s.hour;
     if (settings.quality) this.adaptive.reset();
     const shrubBands = this.scene.getObjectByName('shrub-strip-bands');
@@ -879,6 +887,7 @@ export class SceneEngine {
     this.atmosphere.apply({
       hour,
       season: s.season,
+      turn: s.sunTurn,
       clouds: weather.clouds,
       shadowSize: q.shadowSize,
       shadowExtent: q.shadowExtent,

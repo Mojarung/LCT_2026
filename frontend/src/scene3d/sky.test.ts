@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { moonState, sceneTime } from './celestial';
+import { turned } from './sky';
 import { clearance, clusters, pointAt, route, spine, tourPose, tourRoute } from './tour';
 import type { Flat } from './types';
 
@@ -92,5 +93,14 @@ describe('высота облёта', () => {
     // Подъём начинается до дома, а не у стены.
     expect(at(260)).toBeGreaterThan(40);
     expect(tourPose(r, 300, heights).y).toBeGreaterThan(62);
+  });
+});
+
+describe('поворот солнца', () => {
+  it('крутит азимут по кругу и не трогает высоту', () => {
+    const sun = { azimuth: 350, elevation: 30 };
+    expect(turned(sun, 20)).toEqual({ azimuth: 10, elevation: 30 });
+    expect(turned(sun, -360)).toEqual({ azimuth: 350, elevation: 30 });
+    expect(turned(sun, 0)).toBe(sun);
   });
 });

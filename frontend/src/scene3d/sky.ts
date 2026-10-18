@@ -18,6 +18,8 @@ import { SEASON_DAY, type Season, sunDirection, sunPosition } from './solar';
 export interface SkySettings {
   hour: number;
   season: Season;
+  /** Поворот солнца и луны по азимуту, градусы: тени поворачиваются, высота светила та же. */
+  turn: number;
   clouds: number;
   shadowSize: number;
   shadowExtent: number;
@@ -32,6 +34,14 @@ export interface SunState {
   color: THREE.Color;
   intensity: number;
   night: number;
+}
+
+/** Подсветка городского неба ночью: доля к рассеянному свету. */
+const NIGHT_FILL = 0.12;
+
+/** Светило, повёрнутое по азимуту на turn градусов: высота та же, тени поворачиваются. */
+export function turned<T extends { azimuth: number }>(body: T, turn: number): T {
+  return turn ? { ...body, azimuth: (((body.azimuth + turn) % 360) + 360) % 360 } : body;
 }
 
 /** Цвет солнца по высоте: у горизонта свет проходит толщу воздуха и краснеет. */
@@ -61,6 +71,7 @@ export class Atmosphere {
   private settings: SkySettings = {
     hour: 11,
     season: 'summer',
+    turn: 0,
     clouds: 0.35,
     shadowSize: 4096,
     shadowExtent: 150,
@@ -115,7 +126,7 @@ export class Atmosphere {
 
   private updateSun(): void {
     const s = this.settings;
-    const pos = sunPosition(SEASON_DAY[s.season], s.hour);
+    const pos = turned(sunPosition(SEASON_DAY[s.season], s.hour), s.turn);
     const [x, y, z] = sunDirection(pos);
     const dir = new THREE.Vector3(x, y, z).normalize();
     const u = this.sky.material.uniforms;
@@ -127,7 +138,7 @@ export class Atmosphere {
     const lowSun = day * (1 - THREE.MathUtils.smoothstep(elevation, 12, 32));
     // Ночь - по гражданским сумеркам: солнце ниже 6 градусов под горизонтом.
     this.state.night = 1 - THREE.MathUtils.smoothstep(elevation, -8, 2);
-    const moon = moonState(sceneTime(SEASON_DAY[s.season], s.hour));
+    const moon = turned(moonState(sceneTime(SEASON_DAY[s.season], s.hour)), s.turn);
     const [mx, my, mz] = sunDirection(moon);
     const moonDir = new THREE.Vector3(mx, my, mz).normalize();
     const cloudDim = 1 - s.clouds * 0.55;
@@ -158,7 +169,8 @@ export class Atmosphere {
     // Selected ACES look: stronger direct light and a quieter diffuse fill.
     this.sun.intensity = this.state.intensity * (1 - 0.15 * day) * (1 + 0.08 * day);
     // The sky still fills shaded streets in late daylight; without this they turn black.
-    this.hemi.intensity = 0.14 - 0.02 * day + 0.3 * lowSun;
+    // Ночью улицу видно и без луны: городское небо подсвечено фонарями и окнами.
+    this.hemi.intensity = 0.14 - 0.02 * day + 0.3 * lowSun + NIGHT_FILL * this.state.night;
     this.hemi.color.set(day > 0.5 ? 0xc8dcff : 0x6f7fa8);
     const haze = new THREE.Color(0.74, 0.8, 0.87).lerp(
       new THREE.Color(0.95, 0.72, 0.52),

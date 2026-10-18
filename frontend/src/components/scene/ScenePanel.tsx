@@ -1,7 +1,7 @@
 /* Пульт 3D-вида: время суток, сезон, возраст посадок, облачность, качество и снимки. Всё, что
  * меняет картинку, а не план: план правится на рабочем месте прогона. */
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { Quality, ViewSettings } from '../../scene3d/engine';
 import { FLY_SPEED_MAX, FLY_SPEED_MIN } from '../../scene3d/freecam';
@@ -164,8 +164,44 @@ function Section({
 
 const pct = (v: number) => `${String(Math.round(v * 100))}%`;
 
+/** Прокрутка суток: шаг часа и период, сутки - за 24 с. */
+const SPIN_STEP_H = 0.1;
+const SPIN_TICK_MS = 100;
+
+/** Сутки идут сами, пока включена прокрутка: час сдвигается по таймеру, свет догоняет его. */
+function useDaySpin(hour: number, onHour: (hour: number) => void): [boolean, () => void] {
+  const [spinning, setSpinning] = useState(false);
+  const current = useRef(hour);
+  const push = useRef(onHour);
+  useEffect(() => {
+    current.current = hour;
+    push.current = onHour;
+  });
+  useEffect(() => {
+    if (!spinning) return undefined;
+    const timer = window.setInterval(() => {
+      push.current(Math.round(((current.current + SPIN_STEP_H) % 24) * 100) / 100);
+    }, SPIN_TICK_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [spinning]);
+  return [
+    spinning,
+    () => {
+      setSpinning((on) => !on);
+    },
+  ];
+}
+
+const turnLabel = (turn: number) =>
+  turn === 0 ? 'как над Москвой' : `${turn > 0 ? '+' : ''}${String(turn)}°`;
+
 export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelProps) {
   const [collapsed, toggle] = useSideCollapsed('green-scene-right');
+  const [spinning, toggleSpin] = useDaySpin(settings.hour, (hour) => {
+    onChange({ hour });
+  });
   const season = SEASONS.find((o) => o.value === settings.season)?.label ?? '';
   const age = AGES.find((o) => o.value === settings.age)?.label ?? '';
   const quality = QUALITIES.find((o) => o.value === settings.quality)?.label ?? '';
@@ -242,6 +278,30 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 value={settings.hour}
                 onChange={(e) => {
                   onChange({ hour: Number(e.target.value) });
+                }}
+              />
+            </div>
+            <button
+              className="ghost small scene-day-spin"
+              type="button"
+              aria-pressed={spinning}
+              onClick={toggleSpin}
+            >
+              {spinning ? 'Остановить сутки' : 'Прокрутить сутки'}
+            </button>
+            <div className="scene-field">
+              <label className="hud-label" htmlFor="scene-sun-turn">
+                Поворот солнца <span className="scene-value">{turnLabel(settings.sunTurn)}</span>
+              </label>
+              <input
+                id="scene-sun-turn"
+                type="range"
+                min={-180}
+                max={180}
+                step={5}
+                value={settings.sunTurn}
+                onChange={(e) => {
+                  onChange({ sunTurn: Number(e.target.value) });
                 }}
               />
             </div>
