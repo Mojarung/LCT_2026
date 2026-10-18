@@ -36,6 +36,9 @@ NOT_OBSTACLES = frozenset(
         ObjectClass.TERRITORY_YARD,
         ObjectClass.TERRITORY_SQUARE,
         ObjectClass.TERRITORY_PARK,
+        # Тип территории по 369-ПП (ООЗТ, ООПТ, природный комплекс) - признак для подбора вида.
+        ObjectClass.TERRITORY_PROTECTED,
+        ObjectClass.TERRITORY_NATURAL,
     }
 )
 # СП 42.13330.2016, табл. 9.1: у кустарника прочерк - расстояние до подземной линейной сети

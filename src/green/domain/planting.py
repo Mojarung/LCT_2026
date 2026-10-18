@@ -220,6 +220,8 @@ class Placement:
     # Место посадки (application/places): roadside, street, yard, square, park, unknown;
     # пусто - ещё не определялось.
     place: str = ""
+    # Тип территории по 369-ПП из слоя ГИС (protected_green, natural); пусто - тип профиля.
+    territory: str = ""
     # Доля светлых часов сезона вегетации в тени зданий (application/insolation); None - не
     # считалась (нет объёмов зданий или посадка добавлена правкой).
     shade: float | None = None

@@ -243,14 +243,17 @@ def validate_plan(  # noqa: PLR0913 - certificate has explicit input provenance
                     "В чертеже не распознано данных о подземных сетях",
                 )
             )
-        by_category: dict[str, list[Placement]] = {}
+        # Категория места и тип территории (слой ООПТ или природного комплекса - свой тип,
+        # иначе тип профиля) задают нормы вида у каждой посадки.
+        by_site: dict[tuple[str, str], list[Placement]] = {}
         for p in placements:
-            by_category.setdefault(category_of(p.place, params.planting_category), []).append(p)
-        for category, members in by_category.items():
+            key = (category_of(p.place, params.planting_category), p.territory or params.territory)
+            by_site.setdefault(key, []).append(p)
+        for (category, territory), members in by_site.items():
             norms = species_norms(
                 species,
                 rulebook,
-                params.territory,
+                territory,
                 category,
                 allergen_act_priority=params.allergen_act_priority,
             )

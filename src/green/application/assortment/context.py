@@ -36,6 +36,8 @@ class SiteContext:
     category: str | None = None
     # Доля светлых часов в тени зданий (application/insolation); None - не считалась.
     shade: float | None = None
+    # Тип территории по 369-ПП из слоя ГИС; None - тип профиля.
+    territory: str | None = None
 
 
 def site_context(
@@ -65,6 +67,7 @@ def site_context(
         structure_kind=structure_kind,
         category=category_of(placement.place, "") or None,
         shade=placement.shade,
+        territory=placement.territory or None,
     )
 
 

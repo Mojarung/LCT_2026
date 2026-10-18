@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import shapely
 
+from green.domain.norms import Territory
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
@@ -100,10 +101,19 @@ def category_of(place: str, default: str) -> str:
         return default
 
 
+# Тип территории по 369-ПП из слоёв ГИС; особо охраняемая важнее природной.
+_TERRITORIES = (
+    (ObjectClass.TERRITORY_PROTECTED, Territory.PROTECTED_GREEN),
+    (ObjectClass.TERRITORY_NATURAL, Territory.NATURAL),
+)
+
+
 @dataclass(frozen=True, slots=True)
 class PlaceMap:
     source: str  # zoning | road | road-partial | none
     zones: tuple[tuple[Place, BaseGeometry], ...] = ()
+    # Слои ООПТ и природного комплекса: тип территории точки по 369-ПП вместо типа профиля.
+    territories: tuple[tuple[Territory, BaseGeometry], ...] = ()
     road: BaseGeometry | None = None
     buildings: BaseGeometry | None = None
     # Полигоны проезжей части закрывают её целиком: без этого «двор» и «улица» не выводятся.
@@ -125,6 +135,18 @@ class PlaceMap:
             "посадки у проезжей части; двор и улица не определены, категория насаждений - из "
             "профиля."
         )
+
+    def territory_of(self, xy: NDArray[np.float64]) -> list[str]:
+        """Тип территории каждой точки по слоям ГИС; пусто - слоя нет, тип из профиля."""
+        result = [""] * len(xy)
+        if not len(xy) or not self.territories:
+            return result
+        points = shapely.points(np.asarray(xy, dtype=np.float64).reshape(-1, 2))
+        for territory, geometry in self.territories:
+            for i in np.flatnonzero(shapely.covers(geometry, points)).tolist():
+                if not result[i]:
+                    result[i] = territory.value
+        return result
 
     def of(self, xy: NDArray[np.float64]) -> list[Place]:
         result = [Place.UNKNOWN] * len(xy)
@@ -208,9 +230,17 @@ def _build(features: Sequence[Feature]) -> PlaceMap:
     source = (
         "zoning" if zones else "none" if road is None else "road" if complete else "road-partial"
     )
+    territories = tuple(
+        (territory, shapely.union_all(areas))
+        for cls, territory in _TERRITORIES
+        if (
+            areas := [f.geometry for f in features if f.object_class is cls and f.geometry.area > 0]
+        )
+    )
     return PlaceMap(
         source=source,
         zones=zones,
+        territories=territories,
         road=road,
         buildings=buildings,
         complete=complete,
@@ -246,9 +276,10 @@ def with_places(plan: Plan, places: PlaceMap) -> Plan:
         return plan
     xy = np.array([(plan.placements[i].x, plan.placements[i].y) for i in open_])
     found = places.of(xy)
+    territories = places.territory_of(xy)
     placements = list(plan.placements)
-    for i, place in zip(open_, found, strict=True):
-        placements[i] = replace(placements[i], place=place.value)
+    for i, place, territory in zip(open_, found, territories, strict=True):
+        placements[i] = replace(placements[i], place=place.value, territory=territory)
     return replace(plan, placements=tuple(placements))
 
 

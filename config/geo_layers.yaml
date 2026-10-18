@@ -22,6 +22,12 @@ rules:
   # Охранные зоны по имени файла.
   - {file: "(?i)(охран|zone).*(лэп|вл\\b|электр|power)", object_class: zone.power_line}
   - {file: "(?i)(охран|zone).*(газ|gas)", object_class: zone.gas}
+  # Тип территории по 369-ПП, приложение 2, п. 5.2: на особо охраняемых зелёных и природных
+  # территориях виды группы III не высаживаются. Слой ООЗТ - особо охраняемая зелёная
+  # территория; ООПТ и природный комплекс - природная территория.
+  - {file: "(?i)(оозт|особо.?охраняем\\w*.?зел)", object_class: territory.protected_green}
+  - {file: "(?i)(оопт|особо.?охраняем\\w*.?природ|природн\\w*.?(комплекс|террит)|protected.?area|natural)",
+     object_class: territory.natural}
   # Элементы городской среды data.mos.ru.
   - {file: "(?i)(здани|строени|building)", object_class: building}
   - {file: "(?i)(дерев|tree)", object_class: existing_tree}

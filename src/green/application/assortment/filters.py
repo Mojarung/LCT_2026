@@ -157,7 +157,7 @@ def _species_norms(
     verdict = species_norms(
         species,
         rulebook,
-        params.territory,
+        ctx.territory or params.territory,
         ctx.category or params.planting_category,
         allergen_act_priority=params.allergen_act_priority,
     )

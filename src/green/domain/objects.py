@@ -60,6 +60,9 @@ class ObjectClass(StrEnum):
     TERRITORY_YARD = "territory.yard"
     TERRITORY_SQUARE = "territory.square"
     TERRITORY_PARK = "territory.park"
+    # Тип территории по 369-ПП из слоёв ГИС: ООПТ и природный комплекс (прил. 2, п. 5.2).
+    TERRITORY_PROTECTED = "territory.protected_green"
+    TERRITORY_NATURAL = "territory.natural"
     LAWN = "lawn"
     # Линия или контур без известного смысла на незнакомом чертеже (задача 14): разделяет
     # покрытия, как граница, но отступа не даёт - материал внутри решают подписи.
