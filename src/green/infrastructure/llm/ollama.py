@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import http.client
 import json
+import time
 import urllib.request
 from typing import TYPE_CHECKING
 
@@ -136,14 +138,26 @@ class OllamaNameHinter:
         return self._model
 
     def suggest(self, names: Sequence[str]) -> list[tuple[str | None, float]]:
+        """timeout_s - на все партии разом: прогон ждёт подсказок не дольше него. Что не успели
+        спросить, остаётся без подсказки; сбой первой же партии - исключение."""
+        deadline = time.monotonic() + self._timeout
         out: list[tuple[str | None, float]] = []
         for i in range(0, len(names), self._batch):
             batch = list(names[i : i + self._batch])
-            rows = parse_rows(self._ask(batch))
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                reply = self._ask(batch, remaining)
+            except TimeoutError:
+                if not out:
+                    raise
+                break
+            rows = parse_rows(reply)
             out.extend(rows.get(j, (None, 0.0)) for j in range(len(batch)))
-        return out
+        return out + [(None, 0.0)] * (len(names) - len(out))
 
-    def _ask(self, batch: list[str]) -> str:
+    def _ask(self, batch: list[str], timeout: float) -> str:
         classes = "\n".join(f"  {c} - {t}" for c, t in CLASS_TEXT.items())
         listing = "\n".join(f"{j}. {name}" for j, name in enumerate(batch))
         prompt = (
@@ -165,5 +179,11 @@ class OllamaNameHinter:
             json.dumps(payload).encode("utf-8"),
             {"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(request, timeout=self._timeout) as response:  # noqa: S310
-            return json.loads(response.read().decode("utf-8"))["message"]["content"]
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+                return json.loads(response.read().decode("utf-8"))["message"]["content"]
+        except (http.client.HTTPException, ValueError, KeyError, TypeError) as error:
+            # Ломаный ответ (не-HTTP сервис на адресе, обрыв, чужой JSON) - тот же сбой
+            # модели, что и отказ соединения: прогон пишет его в журнал и идёт дальше.
+            message = f"Ollama {self._url}: {type(error).__name__}: {error}"
+            raise OSError(message) from error

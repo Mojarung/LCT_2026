@@ -35,6 +35,8 @@ STAGES: tuple[Stage, ...] = (
     Stage("read", "Чтение чертежа", 0.29),
     Stage("classify", "Разбор подосновы", 0.06),
     Stage("basemap", "Подоснова для карты", 0.03),
+    # Только при заданной модели (GREEN_LLM_URL); на процессоре - минуты, вес как у размещения.
+    Stage("llm_hints", "Подсказки локальной модели по именам слоёв", 0.1),
     Stage("place", "Размещение посадок", 0.14),
     Stage("assort", "Подбор ассортимента", 0.03),
     Stage("shrub_groups", "Группы кустарников", 0.04),
@@ -57,7 +59,7 @@ BY_ID = {stage.id: stage for stage in STAGES}
 # Вес этапа, которого нет в таблице: новый этап сценария не ломает оценку хода.
 _UNKNOWN_WEIGHT = 0.01
 # Этапы, которые есть не у каждого прогона.
-OPTIONAL = frozenset({"convert", "merge"})
+OPTIONAL = frozenset({"convert", "merge", "llm_hints"})
 
 SECONDS_PER_MB = 2.4
 MIN_PRIOR_S = 6.0
@@ -70,9 +72,11 @@ _MB = 1024 * 1024
 StepState = Literal["done", "active", "pending"]
 
 
-def plan_stages(*, convert: bool, merge: bool) -> tuple[str, ...]:
-    """Этапы конкретного прогона: конвертация только у DWG, склейка только у комплекта."""
-    wanted = {name for name, present in (("convert", convert), ("merge", merge)) if present}
+def plan_stages(*, convert: bool, merge: bool, hints: bool = False) -> tuple[str, ...]:
+    """Этапы конкретного прогона: конвертация только у DWG, склейка только у комплекта,
+    подсказки модели - только когда она задана."""
+    present = (("convert", convert), ("merge", merge), ("llm_hints", hints))
+    wanted = {name for name, on in present if on}
     return tuple(s.id for s in STAGES if s.id not in OPTIONAL or s.id in wanted)
 
 

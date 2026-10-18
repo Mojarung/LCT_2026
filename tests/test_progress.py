@@ -38,12 +38,12 @@ def _progress(stages: tuple[str, ...], *, size_mb: float = 40.0) -> RunProgress:
 
 def test_dxf_run_has_no_conversion_and_a_kit_gets_a_merge() -> None:
     plain = plan_stages(convert=False, merge=False)
-    kit = plan_stages(convert=True, merge=True)
+    kit = plan_stages(convert=True, merge=True, hints=True)
 
     assert "convert" not in plain
     assert "merge" not in plain
     assert kit[:2] == ("convert", "merge")
-    assert plain == tuple(s for s in kit if s not in {"convert", "merge"})
+    assert plain == tuple(s for s in kit if s not in {"convert", "merge", "llm_hints"})
     assert set(kit) == {s.id for s in STAGES}
 
 
@@ -217,3 +217,11 @@ def test_demo_run_through_the_api(client: TestClient) -> None:
     body = client.get(f"/api/v1/runs/{run_id}").json()
     assert body["state"] == "succeeded", body.get("error")
     assert body["summary"]["placements"] > 0
+
+
+def test_llm_hints_stage_is_shown_after_the_basemap_only_when_a_model_is_set() -> None:
+    """Подсказки модели на процессоре идут минуты: полоса хода называет этот этап, а не
+    стоит на подоснове (ревью 18.10.2026)."""
+    with_hints = plan_stages(convert=False, merge=False, hints=True)
+    assert "llm_hints" not in plan_stages(convert=False, merge=False)
+    assert with_hints[with_hints.index("basemap") + 1] == "llm_hints"

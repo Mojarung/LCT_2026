@@ -185,6 +185,11 @@ class PlanSite:
         self._integrity = integrity
         self._merger = merger
 
+    @property
+    def asks_hints(self) -> bool:
+        """Задана ли модель подсказок: этап llm_hints в полосе хода прогона."""
+        return self._hinter is not None
+
     def _name_hints(self, semantics: ClassificationReport) -> tuple[tuple[NameHint, ...], str]:
         """Подсказки LLM и строка для журнала. Недоступная модель - запись в журнале, а не
         остановка прогона: подсказка план не меняет."""
@@ -298,12 +303,6 @@ class PlanSite:
                     scene = replace(scene, warnings=(*scene.warnings, school_note))
             # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
             semantics = classification_report(replace(scene, features=features), layer_map, params)
-        hints: tuple[NameHint, ...] = ()
-        if self._hinter is not None and params.llm_hints:
-            with watch.stage("llm_hints"):
-                hints, hint_note = self._name_hints(semantics)
-                if hint_note:
-                    scene = replace(scene, warnings=(*scene.warnings, hint_note))
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
@@ -314,6 +313,13 @@ class PlanSite:
             # Отдельного этапа у них нет: на встроенном фрагменте Берзарина это 0,07 с, на
             # сцене из 560 тыс. объектов (49 копий фрагмента) - 2,8 с.
             volumes = build_volumes(features, scene.labels)
+        # Подсказки LLM - после подосновы: карта не ждёт модель (на процессоре - минуты).
+        hints: tuple[NameHint, ...] = ()
+        if self._hinter is not None and params.llm_hints:
+            with watch.stage("llm_hints"):
+                hints, hint_note = self._name_hints(semantics)
+                if hint_note:
+                    scene = replace(scene, warnings=(*scene.warnings, hint_note))
         # Карта покрытий на прогон одна: её читают ряд кустарника у борта, подлесок, группы на
         # газоне, сдвиг слабых мест, индекс качества и карта в браузере - «как сервис понял,
         # где грунт». Параметры те же, что у размещения, поэтому и грунт тот же.

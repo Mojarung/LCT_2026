@@ -143,6 +143,7 @@ class RunService:
                 stages=plan_stages(
                     convert=any(p.suffix.lower() == DWG for p in (source, *extra_sources)),
                     merge=bool(extra_sources),
+                    hints=self._use_case.asks_hints,
                 ),
                 started_at=now,
                 stage_started_at=now,
