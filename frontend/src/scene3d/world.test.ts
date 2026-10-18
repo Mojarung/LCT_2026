@@ -290,7 +290,7 @@ it('точная копия объекта подосновы в 3D не зад�
   expect(world.plants.filter((p) => p.existing)).toHaveLength(1);
 });
 
-it('shrub strips become continuous axes, without invented individual plants', () => {
+it('shrub strips become continuous axes planted with a row of bushes', () => {
   const world = buildWorld({
     scene: null,
     plan: null,
@@ -313,7 +313,14 @@ it('shrub strips become continuous axes, without invented individual plants', ()
       ],
     },
   });
-  expect(world.plants).toHaveLength(0);
+  // Кустарниковая полоса - ряд кустов по оси с шагом STRIP_SHRUB_STEP_M (пользователь,
+  // 19.10.2026: брус с фактурой листвы читался плоским), а не плоский брус.
+  expect(world.plants.length).toBeGreaterThanOrEqual(10);
+  expect(world.plants.every((p) => p.type === 'existing_shrub' && p.strip)).toBe(true);
+  const onAxis = (p: { x: number; z: number }) =>
+    (Math.abs(p.z - 8) < 1e-6 && p.x >= -9 && p.x <= -5) ||
+    (p.x >= -5 && p.x <= -2 && Math.abs(p.z - (8 - (p.x + 5) / 3)) < 1e-6);
+  expect(world.plants.every(onAxis)).toBe(true);
   expect(world.treeStrips).toHaveLength(0);
   expect(world.shrubStrips).toEqual([
     {
@@ -349,4 +356,9 @@ it('does not drop a shrub axis crossing the scene with both ends outside', () =>
     },
   });
   expect(world.shrubStrips).toHaveLength(1);
+  const shrubs = world.plants.filter((p) => p.strip);
+  expect(shrubs.length).toBeGreaterThan(5);
+  // Кусты - только в пределах сцены, хотя ось уходит на 20 м за край.
+  const [minX, , maxX] = world.bounds;
+  expect(shrubs.every((p) => p.x >= minX && p.x <= maxX)).toBe(true);
 });

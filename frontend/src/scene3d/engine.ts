@@ -5,7 +5,6 @@
  * от WebGL, живёт здесь; чистая логика - в соседних модулях с тестами. */
 
 import * as THREE from 'three';
-import { SHRUB_STRIP_HEIGHT_M, SHRUB_STRIP_WIDTH_M } from '../map/existing';
 
 import {
   type AutoShot,
@@ -68,13 +67,7 @@ import type { ScenePostprocessing } from './postprocessing';
 import { AdaptiveQuality } from './adaptive';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import {
-  CURB_STONES_PER_TEXTURE,
-  curbStone,
-  gutterShade,
-  hedgeLeaves,
-  noiseTexture,
-} from './textures';
+import { CURB_STONES_PER_TEXTURE, curbStone, gutterShade, noiseTexture } from './textures';
 import { loadGroundMaterials } from './materials';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
@@ -404,22 +397,6 @@ export class SceneEngine {
           disposeGroup(overlay);
         },
       });
-    }
-    if (this.world.shrubStrips?.length) {
-      const leaves = hedgeLeaves();
-      this.disposables.push(leaves);
-      const hedge = new THREE.Mesh(
-        ribbonBox(this.world.shrubStrips, SHRUB_STRIP_WIDTH_M, SHRUB_STRIP_HEIGHT_M),
-        new THREE.MeshStandardMaterial({
-          map: leaves,
-          bumpMap: leaves,
-          bumpScale: 0.035,
-          roughness: 1,
-        }),
-      );
-      hedge.name = 'shrub-strip-bands';
-      hedge.receiveShadow = true;
-      this.add(hedge);
     }
     this.addCars(mask);
     this.people = new People(placePeople({ ...mask }, PEOPLE_MAX));

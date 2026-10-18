@@ -312,6 +312,52 @@ function stripCrowns(strips: readonly Flat[][]): Plant[] {
   return out;
 }
 
+/** Шаг кустов в ряду кустарниковой полосы, м: кроны около 0,9 м смыкаются в живую изгородь. */
+export const STRIP_SHRUB_STEP_M = 0.7;
+
+/** Кустарниковая полоса съёмки - ряд кустов по её оси. Брусом с фактурой листвы она читалась
+ *  плоской стенкой (пользователь, 19.10.2026: «кусты еще 2д»). Кусты - условные, в счёт
+ *  насаждений не идут (strip), как кроны полосы деревьев. */
+function stripShrubs(
+  strips: readonly Line[],
+  bounds: readonly [number, number, number, number],
+): Plant[] {
+  const [minX, minZ, maxX, maxZ] = bounds;
+  const out: Plant[] = [];
+  for (const strip of strips) {
+    let carry = 0;
+    for (let i = 0; i + 1 < strip.points.length; i++) {
+      const a = strip.points[i] as Flat;
+      const b = strip.points[i + 1] as Flat;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-9) continue;
+      let u = carry;
+      for (; u <= len; u += STRIP_SHRUB_STEP_M) {
+        const x = a.x + ((b.x - a.x) * u) / len;
+        const z = a.z + ((b.z - a.z) * u) / len;
+        if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+        const seed = hashOf(`hedge:${x.toFixed(2)}:${z.toFixed(2)}`);
+        const radius = 0.42 + ((seed % 1000) / 1000) * 0.12;
+        out.push({
+          id: `hedge-${String(out.length)}`,
+          x,
+          z,
+          type: 'existing_shrub',
+          code: 'existing_shrub',
+          name: 'Кустарниковая полоса (знак съёмки)',
+          species: speciesFallback('existing_shrub', 'shrub_tall', '', radius * 2),
+          existing: true,
+          existingRadius: radius,
+          strip: true,
+          seed,
+        });
+      }
+      carry = u - len;
+    }
+  }
+  return out;
+}
+
 function existingPlants(features: readonly BasemapFeature[], box: Box, frame: Frame): Plant[] {
   const marks: ExistingPlant[] = [];
   for (const feature of features) {
@@ -497,6 +543,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   for (const b of buildings) if (b.kind === 'building') floorsBy[b.source] += 1;
   const a = frame.toFlat(box[0], box[3]);
   const b = frame.toFlat(box[2], box[1]);
+  plants.push(...stripShrubs(linework.shrubStrips, [a.x, a.z, b.x, b.z]));
   return {
     origin,
     bounds: [a.x, a.z, b.x, b.z],
