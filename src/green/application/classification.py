@@ -640,6 +640,11 @@ _RECOGNITION_KINDS = {
     "inferred_weak": "by_weak_hint",
     "model": "by_name_model",
     "assumed_geometry": "by_geometry_only",
+    # Оформление листа и составные выноски - свои строки, а не «прочее» (ревью 18.10.2026).
+    "sheet_furniture": "sheet_furniture",
+    "callout_leader": "callouts",
+    "callout_annotation": "callouts",
+    "callout_candidate": "callouts",
 }
 GUESSED_TOP = 20
 
@@ -657,6 +662,8 @@ def recognition_summary(report: ClassificationReport) -> dict[str, object]:
             "by_name_model",
             "by_weak_hint",
             "by_geometry_only",
+            "sheet_furniture",
+            "callouts",
             "other",
         ),
         0,

@@ -59,3 +59,26 @@ def test_guessed_names_are_listed_largest_first() -> None:
         ("Непонятное", 2),
     ]
     assert guessed[0]["method"] == "assumed_geometry:contour"
+
+
+def test_sheet_furniture_and_callouts_have_their_own_lines() -> None:
+    """Ревью 18.10.2026: оформление листа и выноски (десятки тысяч объектов на улицу) уходили
+    в «прочее», и жюри видело растущий непонятный остаток."""
+    report = ClassificationReport(
+        source_sha256="x",
+        layer_map_fingerprint="y",
+        features=17,
+        unresolved_features=0,
+        groups=(
+            _g("!ВН_ССЫЛ_ИТП", C.IGNORE, "sheet_furniture:text_strokes", 9),
+            _g("Кабель связи", C.IGNORE, "callout_leader:12345678:00000000:s", 5),
+            _g("Кабель связи", C.IGNORE, "callout_annotation:12345678:00000000:s", 2),
+            _g("Кабель связи", C.UTILITY_TELECOM, "callout_candidate:12345678:00000000:s", 1),
+        ),
+        rules=(),
+        unused_overrides=(),
+    )
+    summary = recognition_summary(report)
+    assert summary["sheet_furniture"] == 9
+    assert summary["callouts"] == 8
+    assert summary["other"] == 0

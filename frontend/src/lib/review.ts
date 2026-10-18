@@ -128,6 +128,7 @@ const EVIDENCE_NAMES: Record<string, string> = {
   symbol_assumed: 'незнакомый условный знак принят за препятствие',
   callout_annotation: 'составная выноска, оформление',
   callout_candidate: 'возможная составная выноска: требуется уточнение',
+  callout_leader: 'выноска к сети, оформление',
 };
 
 const ASSUMED: Record<string, string> = {
@@ -149,6 +150,10 @@ export function evidenceName(method: string | undefined | null): string {
   if (head.startsWith('inferred_') && tail) return `выведено по слову «${tail}» в имени`;
   if (head === 'assumed_geometry') return `замена по геометрии: ${ASSUMED[tail] ?? tail}`;
   if (head === 'symbol_stroke') return `штрих условного знака ${tail}`;
+  if (head === 'sheet_furniture')
+    return tail === 'text_strokes'
+      ? 'оформление листа: текст, разобранный на штрихи'
+      : `оформление листа рядом с «${tail}»`;
   if (head === 'symbol_geometry') return `условный знак ${tail}`;
   if (head === 'symbol_unknown') return `незнакомый условный знак ${tail}`;
   return method;

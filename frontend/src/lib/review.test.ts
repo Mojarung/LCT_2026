@@ -97,6 +97,15 @@ describe('уточнение объектов: разбор', () => {
     expect(evidenceName('inferred_surface:газон')).toBe('выведено по слову «газон» в имени');
     expect(evidenceName('assumed_geometry:sheet_frame')).toBe('замена по геометрии: рамка листа');
     expect(evidenceName('symbol_geometry:KOLOD')).toBe('условный знак KOLOD');
+    expect(evidenceName('callout_leader:12345678:00000000:pipe_a')).toBe(
+      'выноска к сети, оформление',
+    );
+    expect(evidenceName('sheet_furniture:Условные обозначения')).toBe(
+      'оформление листа рядом с «Условные обозначения»',
+    );
+    expect(evidenceName('sheet_furniture:text_strokes')).toBe(
+      'оформление листа: текст, разобранный на штрихи',
+    );
     expect(evidenceName('something_new')).toBe('something_new');
     expect(evidenceName(undefined)).toBe('не уточнено');
   });
