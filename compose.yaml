@@ -21,6 +21,8 @@ services:
       # GREEN_LLM_URL=http://host.docker.internal:11434 (в .env рядом с compose.yaml).
       GREEN_LLM_URL: ${GREEN_LLM_URL:-}
       GREEN_LLM_MODEL: ${GREEN_LLM_MODEL:-gemma4:e4b-it-qat}
+      # Предел на все подсказки прогона, секунды: что не успели спросить - без подсказки.
+      GREEN_LLM_TIMEOUT_S: ${GREEN_LLM_TIMEOUT_S:-180}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -29,8 +31,8 @@ services:
     restart: unless-stopped
 
   # Локальная LLM для подсказок (профиль llm, по умолчанию не поднимается). Образ 3,8 ГБ и модель
-  # 6,1 ГБ на диске, 3,3 ГБ памяти; без видеокарты NVIDIA считает процессор - подсказки для
-  # десятков имён занимают минуты, прогон их не ждёт дольше GREEN_LLM_TIMEOUT_S.
+  # 6,1 ГБ на диске, 3,3 ГБ памяти. Считает процессор (подсказки для десятков имён - минуты,
+  # прогон ждёт их не дольше GREEN_LLM_TIMEOUT_S); видеокарта NVIDIA - с compose.gpu.yaml.
   ollama:
     image: ollama/ollama:0.40.5
     profiles: [llm]

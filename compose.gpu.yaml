@@ -1,0 +1,12 @@
+# Ollama на видеокарте NVIDIA (нужен NVIDIA Container Toolkit, на Windows - Docker Desktop с WSL 2):
+#   docker compose -f compose.yaml -f compose.gpu.yaml --profile llm up -d
+# Без этого файла Ollama в контейнере всегда считает на процессоре.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
