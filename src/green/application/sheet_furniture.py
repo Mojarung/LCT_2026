@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
@@ -35,6 +36,8 @@ LINK_M = 4.5
 STROKE_M = 0.6
 STROKE_SHARE = 0.7
 STROKE_MIN_COUNT = 20
+# Штрихи букв идут во все стороны; поперечные штрихи откоса или лестницы - в одну.
+STROKE_ONE_DIRECTION = 0.6
 TEXT_STROKES = "text_strokes"
 
 _ANCHOR = re.compile(
@@ -54,6 +57,11 @@ def is_anchor(text: str) -> bool:
 
 
 def _context(item: Feature | TextLabel) -> tuple[str, str, str, str | None]:
+    # Анонимный блок (*U, *X) - кусок одного листа: слова легенды 2-й Прядильной лежат
+    # каждое в своём *U. Такие блоки считаются одним контекстом со своим слоем.
+    # Хеш цепочки вставок у каждого *U свой, поэтому для них контекст - файл и слой.
+    if item.block is not None and item.block.startswith("*"):
+        return item.ref.file_sha8, "", item.layer, None
     return item.ref.file_sha8, item.ref.xref_hash8, item.layer, item.block
 
 
@@ -107,5 +115,18 @@ def _strokes(members: list[Feature], indices: list[int]) -> bool:
     ]
     if len(lines) < STROKE_MIN_COUNT:
         return False
-    short = sum(1 for line in lines if line.length < STROKE_M)
-    return short >= STROKE_SHARE * len(lines)
+
+    short = [line for line in lines if line.length < STROKE_M]
+    if len(short) < STROKE_SHARE * len(lines):
+        return False
+    return _one_direction(short) < STROKE_ONE_DIRECTION
+
+
+def _one_direction(lines: list) -> float:
+    """Доля штрихов самого частого направления (по 15°, без учёта знака)."""
+    bins: dict[int, int] = defaultdict(int)
+    for line in lines:
+        coords = list(line.coords) if line.geom_type == "LineString" else list(line.geoms[0].coords)
+        (x0, y0), (x1, y1) = coords[0][:2], coords[-1][:2]
+        bins[int(math.degrees(math.atan2(y1 - y0, x1 - x0)) % 180 // 15)] += 1
+    return max(bins.values()) / len(lines)

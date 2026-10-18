@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from shapely.geometry import LineString
@@ -30,6 +31,12 @@ def _line(handle: str, coords: list[tuple[float, float]], layer: str = LAYER) ->
 
 def _label(handle: str, x: float, y: float, text: str) -> TextLabel:
     return TextLabel(SourceRef("f", "x", handle), LAYER, x, y, text, block=BLOCK)
+
+
+def _letter_stroke(x: float, y: float, i: int) -> list[tuple[float, float]]:
+    """Штрих буквы: вертикаль, горизонталь или диагональ по очереди, 0,2-0,3 м."""
+    dx, dy = [(0.0, 0.3), (0.2, 0.0), (0.2, 0.25), (-0.2, 0.25)][i % 4]
+    return [(x, y), (x + dx, y + dy)]
 
 
 def _legend() -> tuple[list[Feature], list[TextLabel]]:
@@ -72,18 +79,14 @@ def test_title_block_grid_is_sheet_furniture() -> None:
 
 def test_exploded_text_strokes_are_sheet_furniture() -> None:
     """Подпись, разобранная на штрихи по 0,1-0,3 м, без слов-якорей рядом."""
-    strokes = [
-        _line(f"k{i}", [(500 + 0.35 * i, 50), (500 + 0.35 * i + 0.2, 50.25)]) for i in range(40)
-    ]
+    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.35 * i, 50, i)) for i in range(40)]
     result = _classified(strokes, [])
     assert all(result[f.ref.handle].object_class is ObjectClass.IGNORE for f in strokes)
     assert result["k0"].classification.method == "sheet_furniture:text_strokes"
 
 
 def test_strokes_stay_unknown_without_geometry_assumptions() -> None:
-    strokes = [
-        _line(f"k{i}", [(500 + 0.35 * i, 50), (500 + 0.35 * i + 0.2, 50.25)]) for i in range(40)
-    ]
+    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.35 * i, 50, i)) for i in range(40)]
     result = _classified(strokes, [], assume_unknown_geometry=False)
     assert result["k0"].object_class is ObjectClass.UNKNOWN
 
@@ -107,3 +110,27 @@ def test_review_profile_leaves_the_legend_for_the_reviewer() -> None:
     features, labels = _legend()
     result = _classified(features, labels, infer_unknown=False)
     assert result["s0"].object_class is ObjectClass.UNKNOWN
+
+
+def test_words_in_separate_anonymous_blocks_form_one_text_group() -> None:
+    """2-я Прядильная: каждое слово легенды - свой анонимный блок *U по 6-10 штрихов."""
+    strokes = []
+    for word in range(8):
+        for i in range(6):
+            x = 600 + 4 * word + 0.35 * i
+            stroke = _line(f"w{word}-{i}", _letter_stroke(x, 50, i))
+            # Цепочка вставок у каждого анонимного блока своя - и хеш цепочки в ссылке тоже.
+            ref = replace(stroke.ref, xref_hash8=f"u{word}")
+            strokes.append(replace(stroke, ref=ref, block=f"*U{3000 + word}"))
+    result = _classified(strokes, [])
+    assert all(result[f.ref.handle].object_class is ObjectClass.IGNORE for f in strokes)
+
+
+def test_long_line_with_ticks_is_not_text() -> None:
+    """Харьковская: двойная линия 18 м с поперечными штрихами (обозначение откоса или
+    лестницы) внутри границы работ - не текст, хоть коротких штрихов и большинство."""
+    rails = [_line("r1", [(0, 0), (0, 18)]), _line("r2", [(0.5, 0), (0.5, 18)])]
+    ticks = [_line(f"t{i}", [(0, 0.8 * i), (0.25, 0.8 * i)]) for i in range(22)]
+    result = _classified([*rails, *ticks], [])
+    assert result["r1"].object_class is ObjectClass.CONTOUR
+    assert result["t3"].object_class is ObjectClass.CONTOUR

@@ -273,6 +273,9 @@ def test_larch_is_not_a_sheet(name: str, expected: ObjectClass) -> None:
         "17.Наташинский_ГЕО_ЦВЕТ$0$цвет_output[3]_edge003",
         "цвет_output[1-7]_3ДЖКХ-25-00694kl",
         "output[1-4]_edge001",
+        # Блоки легенды внутри листа (2-я Прядильная, 20 тыс. объектов на слое 0, 18.10.2026).
+        "output[1-4]_edge001$0$LEG21",
+        "output[5-7]_edge005$0$LEG21_3",
     ],
 )
 def test_colour_sheet_regulation_lines_are_annotation(block: str) -> None:
