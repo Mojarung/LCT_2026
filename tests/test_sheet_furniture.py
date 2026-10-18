@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -34,9 +35,11 @@ def _label(handle: str, x: float, y: float, text: str) -> TextLabel:
 
 
 def _letter_stroke(x: float, y: float, i: int) -> list[tuple[float, float]]:
-    """Штрих буквы: вертикаль, горизонталь или диагональ по очереди, 0,2-0,3 м."""
-    dx, dy = [(0.0, 0.3), (0.2, 0.0), (0.2, 0.25), (-0.2, 0.25)][i % 4]
-    return [(x, y), (x + dx, y + dy)]
+    """Штрих i буквы с началом в x: буква из четырёх штрихов по 0,2-0,36 м, штрихи одной
+    буквы сходятся концами, как в настоящем разобранном тексте (перепись: 93-100% штрихов
+    касаются соседа)."""
+    corners = [(x, y), (x, y + 0.3), (x + 0.2, y + 0.3), (x, y), (x + 0.2, y)]
+    return [corners[i % 4], corners[i % 4 + 1]]
 
 
 def _legend() -> tuple[list[Feature], list[TextLabel]]:
@@ -79,14 +82,14 @@ def test_title_block_grid_is_sheet_furniture() -> None:
 
 def test_exploded_text_strokes_are_sheet_furniture() -> None:
     """Подпись, разобранная на штрихи по 0,1-0,3 м, без слов-якорей рядом."""
-    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.35 * i, 50, i)) for i in range(40)]
+    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.5 * (i // 4), 50, i)) for i in range(40)]
     result = _classified(strokes, [])
     assert all(result[f.ref.handle].object_class is ObjectClass.IGNORE for f in strokes)
     assert result["k0"].classification.method == "sheet_furniture:text_strokes"
 
 
 def test_strokes_stay_unknown_without_geometry_assumptions() -> None:
-    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.35 * i, 50, i)) for i in range(40)]
+    strokes = [_line(f"k{i}", _letter_stroke(500 + 0.5 * (i // 4), 50, i)) for i in range(40)]
     result = _classified(strokes, [], assume_unknown_geometry=False)
     assert result["k0"].object_class is ObjectClass.UNKNOWN
 
@@ -117,7 +120,7 @@ def test_words_in_separate_anonymous_blocks_form_one_text_group() -> None:
     strokes = []
     for word in range(8):
         for i in range(6):
-            x = 600 + 4 * word + 0.35 * i
+            x = 600 + 4 * word + 0.5 * (i // 4)
             stroke = _line(f"w{word}-{i}", _letter_stroke(x, 50, i))
             # Цепочка вставок у каждого анонимного блока своя - и хеш цепочки в ссылке тоже.
             ref = replace(stroke.ref, xref_hash8=f"u{word}")
@@ -134,3 +137,28 @@ def test_long_line_with_ticks_is_not_text() -> None:
     result = _classified([*rails, *ticks], [])
     assert result["r1"].object_class is ObjectClass.CONTOUR
     assert result["t3"].object_class is ObjectClass.CONTOUR
+
+
+def test_dashed_line_along_a_curve_is_not_text() -> None:
+    """Ревью 18.10.2026: штриховая линия (сеть или ограждение типом линии), расчленённая при
+    конвертации, по дуге - штрихи разных направлений, но друг друга не касаются."""
+    radius, step = 20.0, 0.7
+    dashes = []
+    for i in range(44):
+        a0, a1 = i * step / radius, (i * step + 0.4) / radius
+        points = [(radius * math.cos(a), radius * math.sin(a)) for a in (a0, a1)]
+        dashes.append(_line(f"d{i}", points))
+    rest = [_line(f"L{i}", [(20 + 3 * i, 0), (22.5 + 3 * i, 0)]) for i in range(8)]
+    result = _classified([*dashes, *rest], [])
+    assert result["d5"].classification.method.startswith("assumed_geometry")
+    assert result["L0"].classification.method.startswith("assumed_geometry")
+
+
+def test_sheet_words_never_hide_objects_inside_the_work_boundary() -> None:
+    """Ревью 18.10.2026: цепочка мелких объектов через 1 м от подписи штампа уходила целиком в
+    оформление, вместе с тумбами внутри участка. Оформление листа лежит вне границы работ."""
+    boundary = _line("b", [(-10, -10), (420, -10), (420, 10), (-10, 10), (-10, -10)], "BOUND")
+    posts = [_line(f"c{i}", [(4.0 * i, 0), (4.0 * i + 3, 0)]) for i in range(100)]
+    result = _classified([boundary, *posts], [_label("m", -3, 0, "Масштаб 1:500")])
+    assert result["b"].object_class is ObjectClass.WORK_BOUNDARY
+    assert result["c50"].classification.method.startswith("assumed_geometry")

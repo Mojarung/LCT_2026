@@ -199,6 +199,11 @@ def classify_scene(  # noqa: C901 - ступени классификации п
             ),
             scene.labels,
             strokes=assume,
+            boundaries=[
+                f.geometry
+                for f, d in zip(scene.features, decisions, strict=True)
+                if d[0] is ObjectClass.WORK_BOUNDARY
+            ],
         )
         if infer
         else {}
