@@ -104,7 +104,7 @@ def test_consequence_of_a_bad_item_is_not_reported_as_a_second_error() -> None:
     text = _refusal({"modes": ["x"]})
 
     assert text == PREFIX + (
-        'modes[0]: допустимые значения existing_row, alley, lawn, fill (получено "x")'
+        'modes[0]: допустимые значения existing_row, alley, lawn, groups, fill (получено "x")'
     )
 
 

@@ -530,6 +530,8 @@
           "territory.yard",
           "territory.square",
           "territory.park",
+          "territory.protected_green",
+          "territory.natural",
           "lawn",
           "contour",
           "ignore",
