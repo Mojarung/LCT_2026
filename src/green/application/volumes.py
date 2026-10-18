@@ -500,6 +500,16 @@ def _geometries(features: Iterable[Feature]) -> NDArray[np.object_]:
     return geometries
 
 
+def _noded(edges: NDArray[np.object_]) -> NDArray[np.object_]:
+    """Рёбра, разбитые в пересечениях. node бывает не сходится на тысячах почти совпадающих
+    отрезков (Фрунзенская из PDF, 18.10.2026: «Iterated noding failed to converge»): тогда
+    объединение с привязкой к сетке GAP_M - медленнее, но устойчиво, грани те же."""
+    try:
+        return shapely.get_parts(shapely.node(shapely.multilinestrings(edges)))
+    except shapely.errors.GEOSException:
+        return shapely.get_parts(shapely.line_merge(shapely.union_all(edges, grid_size=GAP_M)))
+
+
 def _linework(features: Sequence[Feature]) -> _Linework:
     """Грани из линий и контуров полигонов набора: сшивка концов, разбиение, polygonize."""
     lines, holes, loose = _lines(features)
@@ -514,11 +524,7 @@ def _linework(features: Sequence[Feature]) -> _Linework:
     edges = np.concatenate([stitched, closers]) if len(closers) else stitched
     # Разбиение, а не объединение: node в разы быстрее union_all на улице из нескольких
     # планшетов и так же сводит в одно ребро стену, нарисованную на обоих планшетах.
-    noded = (
-        shapely.get_parts(shapely.node(shapely.multilinestrings(edges)))
-        if len(edges)
-        else _NO_GEOMETRY
-    )
+    noded = _noded(edges) if len(edges) else _NO_GEOMETRY
     faces = shapely.get_parts(shapely.polygonize(noded)) if len(noded) else _NO_GEOMETRY
     big = shapely.area(faces) >= MIN_FACE_M2
     return _Linework(

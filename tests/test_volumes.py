@@ -10,8 +10,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+import shapely
 from shapely.geometry import LineString, Point, Polygon, box
 
+import green.application.volumes as volumes_module
 from green.application.volumes import (
     CONTAINER_M,
     PORCH_M,
@@ -364,3 +366,22 @@ def test_dashes_of_building_parts_are_not_closed_into_canopies() -> None:
 
     assert volumes.buildings == ()
     assert volumes.closed_cuts == 0
+
+
+def test_noding_failure_falls_back_to_a_snapped_overlay(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Фрунзенская из PDF, 18.10.2026: GEOS node на линиях сооружений не сошёлся
+    («Iterated noding failed to converge») и уронил прогон на этапе объёмов. Разбиение с
+    привязкой к сетке (union_all с grid_size) устойчиво: грани те же."""
+
+    def broken(*_args: object, **_kwargs: object) -> object:
+        message = "TopologyException: Iterated noding failed to converge"
+        raise shapely.errors.GEOSException(message)
+
+    monkeypatch.setattr(volumes_module.shapely, "node", broken)
+    first = LineString([(0, 0), (10, 0), (10, 10)])
+    second = LineString([(10, 10), (0, 10), (0, 0)])
+
+    volumes = _balanced(build_volumes([_feature(first), _feature(second)], [_label(5, 5, "3")]))
+
+    (house,) = volumes.buildings
+    assert house.footprint.area == pytest.approx(100, abs=0.5)
