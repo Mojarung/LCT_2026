@@ -41,7 +41,7 @@ function colors(element: Element) {
     object: read('--review-object', '#c41c2e'),
     label: read('--review-label', '#3a4a40'),
     labelActive: read('--review-label-active', '#1f45c8'),
-    font: read('--sans', 'sans-serif'),
+    font: read('--map-font', 'sans-serif'),
   };
 }
 

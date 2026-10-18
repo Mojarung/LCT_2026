@@ -32,7 +32,9 @@ export const DEFAULT_LAYERS: Layers = {
   placements: true,
   rejections: false,
   weak: false,
-  barrier: true,
+  // Места под прикорневой барьер - разбор, а не обзор: кольцами по всей улице они забивали
+  // план на первом виде (жюри дизайна, итерации 10 и 11). Включаются в легенде.
+  barrier: false,
   surfacemap: true,
   labels: true,
   lawns: true,

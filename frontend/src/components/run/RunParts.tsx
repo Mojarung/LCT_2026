@@ -1,24 +1,32 @@
 /* Части левой панели прогона и подложки карты: шапка, сводка, предупреждения, статус. */
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 
 import { artifactUrl } from '../../api/client';
 import type { RunOut } from '../../api/types';
 import { explainFailure } from '../../lib/failure';
 import { drawingName, integer, plural } from '../../lib/format';
-import { overrideLabel } from '../../lib/overrides';
-import { profileTitle } from '../../lib/profiles';
 import { keyNotices } from '../../lib/warnings';
 import { useWorkspace } from '../../state/workspace';
-import { IconChevron } from '../icons';
+import { IconChevron, UiIcon } from '../icons';
+import { Modal, SheetButton } from '../ui/Modal';
+import { SquareLoader } from '../ui/SquareLoader';
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
 /** Вход на уточнение объектов и отчёт распознавания - когда сервис их сохранил. Как у тиммейта
  *  в _run_status.html: ссылка появляется там, где прогон упёрся в неизвестное или посчитан
  *  эскизом, и больше нигде. */
-function ReviewLinks({ run, onReview }: { run: RunOut; onReview?: () => void }) {
+function ReviewLinks({
+  run,
+  onReview,
+  report = true,
+}: {
+  run: RunOut;
+  onReview?: () => void;
+  report?: boolean;
+}) {
   const names = new Set((run.artifacts ?? []).map((a) => a.name));
   return (
     <>
@@ -35,7 +43,7 @@ function ReviewLinks({ run, onReview }: { run: RunOut; onReview?: () => void }) 
           )}
         </p>
       ) : null}
-      {names.has('classification.json') ? (
+      {report && names.has('classification.json') ? (
         <p className="hint">
           <a href={artifactUrl(run.id, 'classification.json')} download>
             Отчёт распознавания
@@ -73,34 +81,24 @@ function breakable(name: string): ReactNode[] {
   return name.split(/(?<=[_\-.])/u).flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]));
 }
 
-/** Шапка прогона - одна на плане и в 3D-виде: откуда пришёл, что за чертёж, с какими
- *  параметрами, и переключатель «План / 3D-вид» на одном месте на обоих экранах. Раньше
- *  переход был текстовой ссылкой в разных углах двух страниц, и его искали глазами. */
-export function RunHeader({ run, view = 'plan' }: { run: RunOut; view?: 'plan' | '3d' }) {
-  const base = `/runs/${encodeURIComponent(run.id)}`;
+/** Заголовок страницы прогона. Видимое имя чертежа и переход «План / 3D и фото» - в шапке
+ *  (TopBar), здесь заголовок для читалки экрана и навигации по заголовкам. */
+export function RunTitle({ run }: { run: RunOut }) {
   return (
-    <div className="hud-head">
-      <Link className="back" to="/">
-        ← все прогоны
-      </Link>
-      <h1 title={run.source_name}>{breakable(drawingName(run.source_name))}</h1>
-      <p className="run-sub" title={`Прогон ${run.id}`}>
-        <span>{profileTitle(run.profile)}</span>
-        {Object.entries(run.overrides).map(([key, value]) => (
-          <span key={key}>{overrideLabel(key, value)}</span>
-        ))}
-      </p>
-      {run.state === 'succeeded' ? (
-        <nav className="view-switch" aria-label="Вид прогона">
-          <Link to={base} aria-current={view === 'plan' ? 'page' : undefined}>
-            План
-          </Link>
-          <Link to={`${base}/3d`} aria-current={view === '3d' ? 'page' : undefined}>
-            3D-вид и фото
-          </Link>
-        </nav>
-      ) : null}
-    </div>
+    <h1 className="visually-hidden" title={run.source_name}>
+      {breakable(drawingName(run.source_name))}
+    </h1>
+  );
+}
+
+/** Отметка проверки: что сервис сверил сам, без человека. Зелёная галочка и слово, а не один
+ *  цвет; провал - красным с тем же порядком строк. */
+function Verdict({ ok, yes, no }: { ok: boolean; yes: string; no: string }) {
+  return (
+    <li className="run-check" data-ok={ok ? '1' : '0'}>
+      <UiIcon name={ok ? 'check' : 'alert'} size={17} />
+      <span>{ok ? yes : no}</span>
+    </li>
   );
 }
 
@@ -152,49 +150,61 @@ export function RunMetrics({
           {drafted ? ' · черновик правок' : null}
         </span>
       </p>
-      {trees != null && trees.planted === total ? (
-        <dl className="run-breakdown">
-          <div>
-            <dt>Деревья</dt>
-            <dd>{integer(trees.trees)}</dd>
-          </div>
-          <div>
-            <dt>Кустарники</dt>
-            <dd>{integer(total - trees.trees)}</dd>
-          </div>
-        </dl>
-      ) : null}
-      {!integrity ? <p className="metric-bad">Целостность подосновы нарушена</p> : null}
+      {/* Сколько деревьев и кустарников - группами в составе плана справа, здесь не дублируется. */}
+      {/* Что сервис сверил сам: независимая проверка плана по нормам, исходные слои и выгрузка.
+          Три строки отвечают на вопрос жюри «а можно этому верить» раньше, чем его зададут. */}
+      <ul className="run-checks" aria-label="Проверки результата">
+        {typeof summary.plan_valid === 'boolean' ? (
+          <Verdict
+            ok={summary.plan_valid}
+            yes="Отступы по нормам соблюдены"
+            no="План не прошёл проверку норм"
+          />
+        ) : null}
+        <Verdict
+          ok={integrity}
+          yes="Исходные слои чертежа целы"
+          no="Целостность подосновы нарушена"
+        />
+        {typeof summary.export_matches_plan === 'boolean' ? (
+          <Verdict
+            ok={summary.export_matches_plan}
+            yes="DXF совпадает с планом"
+            no="DXF расходится с планом"
+          />
+        ) : null}
+      </ul>
       {/* Всё, что человеку надо проверить, - одним блоком: раньше согласование, эскиз, конфликты
           и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
       {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
         <div className="notice check-block">
-          <p className="notice-title">{sketch ? 'Эскиз · требуется проверка' : 'Проверить'}</p>
+          {/* Заголовок говорит, что это за план; строки - что именно смотреть, числом. */}
+          <p className="notice-title">{sketch ? 'План-эскиз: что проверить' : 'Что проверить'}</p>
           {conflicts}
           <dl className="run-facts">
             {approval > 0 ? (
               <div className="run-approval">
-                <dt>На согласование</dt>
+                <dt>Посадки на согласование</dt>
                 <dd>{integer(approval)}</dd>
               </div>
             ) : null}
             {sketch && unconfirmed > 0 ? (
               <div>
-                <dt>Грунт под ямой не подтверждён</dt>
+                <dt>Грунт под ямой - по подписям, а не по контуру</dt>
                 <dd>
-                  {integer(unconfirmed)} из {integer(total)}
+                  {unconfirmed === total ? 'все' : `${integer(unconfirmed)} из ${integer(total)}`}
                 </dd>
               </div>
             ) : null}
             {rejected > 0 ? (
               <div>
-                <dt>Отклонено мест</dt>
+                <dt>Места, отклонённые нормами</dt>
                 <dd>{integer(rejected)}</dd>
               </div>
             ) : null}
             {barrierPlaces > 0 ? (
-              <div>
-                <dt>Возможно с прикорневым барьером</dt>
+              <div className="run-sub-fact">
+                <dt>из них возможны с прикорневым барьером</dt>
                 <dd>{integer(barrierPlaces)}</dd>
               </div>
             ) : null}
@@ -204,36 +214,56 @@ export function RunMetrics({
           ))}
           {sketch ? (
             <details className="fold notice-details">
-              <summary>Посадки не подтверждены — что проверить</summary>
+              <summary>Почему эскиз и как это исправить</summary>
               <p>
-                Допустимость посадок не подтверждена. Уточните объекты и границы покрытий: грунт под
-                всей посадочной ямой должен быть подтверждён замкнутыми контурами.
+                Допустимость посадок не подтверждена:{' '}
+                {summary.semantic_assignments_complete === false
+                  ? 'часть объектов чертежа сервис не распознал. '
+                  : 'на чертеже нет замкнутых контуров газона под посадками, и грунт определён по ближайшим подписям. '}
+                Уточните объекты и границы покрытий: грунт под всей посадочной ямой должен быть
+                подтверждён замкнутыми контурами.
               </p>
-              <ReviewLinks run={run} onReview={onReview} />
+              {/* Отчёт распознавания у готового прогона - в окне «Отчёты и файлы»: две ссылки
+                  со словом «отчёт» рядом путались. */}
+              <ReviewLinks run={run} onReview={onReview} report={false} />
             </details>
           ) : null}
         </div>
       ) : null}
-      <details className="hud-block fold run-details">
-        <summary>Детали расчёта</summary>
-        <dl className="run-facts">
-          <div>
-            <dt>Подоснова</dt>
-            <dd>{integrity ? 'Без изменений' : 'Нарушена'}</dd>
-          </div>
-        </dl>
-        <LawnLine summary={summary} />
-        {warnings.length ? (
-          <details className="fold">
-            <summary>Как собран план · {warnings.length}</summary>
-            <ul className="warn-list">
-              {warnings.map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-      </details>
+      {/* Без обёртки «Детали расчёта»: внутри неё бывало одно-единственное раскрытие. Строка
+          газонов - обычным текстом, журнал сборки плана - своим раскрытием. */}
+      <LawnLine summary={summary} />
+      {warnings.length ? <PlanJournal warnings={warnings} /> : null}
+    </>
+  );
+}
+
+/** Журнал сборки плана - строкой в панели, сам список - в окне по центру экрана. */
+function PlanJournal({ warnings }: { warnings: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <SheetButton
+        icon="journal"
+        label="Как собран план"
+        count={warnings.length}
+        onClick={() => {
+          setOpen(true);
+        }}
+      />
+      <Modal
+        open={open}
+        title="Как собран план"
+        onClose={() => {
+          setOpen(false);
+        }}
+      >
+        <ul className="warn-list">
+          {warnings.map((text) => (
+            <li key={text}>{text}</li>
+          ))}
+        </ul>
+      </Modal>
     </>
   );
 }
@@ -262,8 +292,8 @@ export function RunStatus({ run }: { run: RunOut }) {
           ? run.progress.title
           : 'Читаем чертёж';
     return (
-      <div className="status" data-state={run.state}>
-        <span className="spinner" aria-hidden="true" />
+      <div className="status status-wait" data-state={run.state}>
+        <SquareLoader size={48} />
         <div>
           <p className="status-title">{title}</p>
           <p className="hint">Чертёж появится здесь после чтения. Ход расчёта - в полосе внизу.</p>
@@ -294,8 +324,8 @@ export function RunStatus({ run }: { run: RunOut }) {
     );
   }
   return (
-    <div className="status" data-state={run.state}>
-      <span className="spinner" aria-hidden="true" />
+    <div className="status status-wait" data-state={run.state}>
+      <SquareLoader size={48} />
       <span>Загружаем подоснову</span>
     </div>
   );

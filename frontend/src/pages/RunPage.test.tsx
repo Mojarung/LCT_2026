@@ -182,13 +182,14 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
     // План на предположении о грунте - эскиз, и это сказано у числа, а не в журнале.
-    const title = await within(left).findByText('Эскиз · требуется проверка');
+    const title = await within(left).findByText('План-эскиз: что проверить');
     expect(title).toBeVisible();
     const notice = title.closest('.notice');
-    expect(notice).toHaveTextContent('Грунт под ямой не подтверждён40 из 40');
+    // Когда не подтверждено у всех посадок, так и сказано, без «40 из 40».
+    expect(notice).toHaveTextContent('Грунт под ямой - по подписям, а не по контурувсе');
     expect(left).not.toHaveTextContent('все без ограничений');
     // Почему эскиз и что делать - под раскрытием в том же блоке.
-    await openFold(left, 'Посадки не подтверждены — что проверить');
+    await openFold(left, 'Почему эскиз и как это исправить');
     expect(within(left).getByText(/Допустимость посадок не подтверждена/)).toBeVisible();
     expect(
       within(left).getByText(/грунт под всей посадочной ямой должен быть подтверждён/i),
@@ -213,10 +214,10 @@ describe('RunPage: finished run', () => {
     });
     const { router } = renderApp('/runs/r1');
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
-    await within(left).findByText('Посадки не подтверждены — что проверить', {
+    await within(left).findByText('Почему эскиз и как это исправить', {
       selector: 'summary',
     });
-    await openFold(left, 'Посадки не подтверждены — что проверить');
+    await openFold(left, 'Почему эскиз и как это исправить');
     await user.click(within(left).getByRole('button', { name: 'Уточнить объекты на чертеже' }));
     expect(await screen.findByRole('dialog', { name: 'Типы объектов чертежа' })).toBeVisible();
     expect(router.state.location.pathname).toBe('/runs/r1');
@@ -236,9 +237,9 @@ describe('RunPage: finished run', () => {
     expect(left.querySelector('.metric')).toHaveTextContent(/^302посадки в плане$/);
     // Целая подоснова - не тревога: нарушение сказано у числа, иначе строка в деталях.
     expect(left.querySelector('.metric-bad')).toBeNull();
-    await openFold(left, 'Детали расчёта');
-    expect(fact(left, 'Отклонено мест')).toHaveTextContent(/^161$/);
-    expect(fact(left, 'Подоснова')).toHaveTextContent(/^Без изменений$/);
+    expect(fact(left, 'Места, отклонённые нормами')).toHaveTextContent(/^161$/);
+    // Целая подоснова - отметкой среди проверок результата, а не строкой деталей.
+    expect(within(left).getByText('Исходные слои чертежа целы')).toBeVisible();
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await userEvent.click(within(right).getByRole('button', { name: 'Эффект' }));
@@ -306,10 +307,9 @@ describe('RunPage: finished run', () => {
     await waitFor(() => {
       expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
     });
-    // Разбивка сходится с числом черновика и не пропадает.
-    const breakdown = left.querySelector('.run-breakdown');
-    expect(breakdown).toHaveTextContent('Деревья2');
-    expect(breakdown).toHaveTextContent('Кустарники0');
+    // Группы состава справа сходятся с числом черновика: деревьев два, кустарников нет.
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
+    expect(within(right).queryByRole('heading', { name: /^Кустарники/ })).toBeNull();
 
     // После пересборки число - итог прогона, метки черновика нет.
     await userEvent.click(within(left).getByRole('button', { name: 'Пересобрать DXF' }));
@@ -320,7 +320,7 @@ describe('RunPage: finished run', () => {
       { timeout: 6000 },
     );
     expect(within(right).getByRole('heading', { name: 'Состав плана: 2' })).toBeVisible();
-    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
   }, 10_000);
 
   it('leaves out of both counts a placement the edit moved into a rejection', async () => {
@@ -338,7 +338,7 @@ describe('RunPage: finished run', () => {
       },
     });
     renderApp('/runs/r1');
-    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    await screen.findByRole('complementary', { name: 'Прогон' });
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await within(right).findByRole('heading', { name: 'Состав плана: 3' });
 
@@ -353,7 +353,7 @@ describe('RunPage: finished run', () => {
     await waitFor(() => {
       expect(metric()).toHaveTextContent(/^2посадки в плане · черновик правок$/);
     });
-    expect(left.querySelector('.run-breakdown')).toHaveTextContent('Деревья2');
+    expect(within(right).getByRole('heading', { name: /^Деревья/ })).toHaveTextContent('Деревья2');
   });
 
   it('shows what the plan is made of until a placement is picked', async () => {
@@ -392,9 +392,9 @@ describe('RunPage: finished run', () => {
     expect(within(right).getByRole('heading', { name: '№ 1. Липа мелколистная' })).toBeVisible();
     expect(within(right).getByText('допускается')).toBeVisible();
     expect(within(right).getByText('Ближе всего к норме')).toBeVisible();
-    expect(right).toHaveTextContent(
-      'R-UTIL-WATER-001 · норма 2,00 м · СП 42.13330.2016, табл. 9.1',
-    );
+    // Норма и пункт - строкой карточки, код правила - в строке «Текст нормы» под ней.
+    expect(right).toHaveTextContent('норма 2,00 м · СП 42.13330.2016, табл. 9.1');
+    expect(within(right).getByText('R-UTIL-WATER-001')).toBeInTheDocument();
     // Норма - первой, выбор растения - под раскрытием.
     expect(within(right).getByRole('heading', { name: 'Почему этот вид' })).not.toBeVisible();
     await openFold(right, 'О растении и его выборе');
@@ -432,13 +432,15 @@ describe('RunPage: finished run', () => {
     expect(dxf).toHaveAttribute('download');
     expect(dxf).toHaveTextContent('1,5 МБ');
 
-    await openFold(right, 'Отчёты и другие файлы');
-    const csv = within(right).getByRole('link', { name: /Нормы · CSV/ });
+    // Отчёты и служебные файлы - в окне по центру экрана.
+    await userEvent.click(within(right).getByRole('button', { name: /Отчёты и другие файлы/ }));
+    const files = screen.getByRole('dialog', { name: 'Отчёты и файлы прогона' });
+    const csv = within(files).getByRole('link', { name: /Нормы · CSV/ });
     expect(csv).toBeVisible();
     expect(csv).toHaveAttribute('href', '/api/v1/runs/r1/artifacts/interpretations.csv');
     expect(csv).toHaveTextContent('30 КБ');
     // Служебные файлы - ещё глубже, числом: plan, rules, quality, basemap.
-    expect(within(right).getByText('Файлы расчёта · 4', { selector: 'summary' })).toBeVisible();
+    expect(within(files).getByText('Файлы расчёта · 4', { selector: 'summary' })).toBeVisible();
   });
 
   it('puts warnings that change the meaning of the plan next to the number', async () => {
@@ -462,15 +464,15 @@ describe('RunPage: finished run', () => {
     renderApp('/runs/r1');
 
     const left = await screen.findByRole('complementary', { name: 'Прогон' });
-    // Ключевое предупреждение стоит у числа и остаётся в полном списке под раскрытием.
-    const copies = await within(left).findAllByText(warnings[0] ?? '');
-    expect(copies.map((node) => Boolean(node.closest('.notice')))).toEqual([true, false]);
-    expect(copies[0]).toBeVisible();
-    expect(copies[1]).not.toBeVisible();
-    await openFold(left, 'Детали расчёта');
-    await openFold(left, 'Как собран план · 2');
-    expect(copies[1]).toBeVisible();
-    expect(within(left).getByText('Слой 0 пуст.')).toBeVisible();
+    // Ключевое предупреждение стоит у числа и остаётся в полном списке журнала.
+    const key = await within(left).findByText(warnings[0] ?? '');
+    expect(key.closest('.notice')).not.toBeNull();
+    expect(key).toBeVisible();
+    // Журнал сборки - строкой со счётчиком, список - в окне по центру экрана.
+    await userEvent.click(within(left).getByRole('button', { name: /Как собран план/ }));
+    const journal = screen.getByRole('dialog', { name: 'Как собран план' });
+    expect(within(journal).getByText(warnings[0] ?? '')).toBeVisible();
+    expect(within(journal).getByText('Слой 0 пуст.')).toBeVisible();
   });
 
   it('remembers a collapsed panel', async () => {
@@ -493,7 +495,9 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    const toggle = await screen.findByRole('button', { name: 'легенда' });
+    // Легенда готового прогона - вкладка правой панели.
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    const toggle = within(right).getByRole('button', { name: 'Легенда' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('complementary', { name: 'Условные обозначения' })).toBeNull();
 
@@ -513,7 +517,8 @@ describe('RunPage: finished run', () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
 
-    await userEvent.click(await screen.findByRole('button', { name: 'легенда' }));
+    const right = await screen.findByRole('complementary', { name: 'Состав плана' });
+    await userEvent.click(within(right).getByRole('button', { name: 'Легенда' }));
     const legend = screen.getByRole('complementary', { name: 'Условные обозначения' });
     const weak = within(legend).getByRole('checkbox', { name: /Слабые места/ });
     expect(weak).not.toBeChecked();

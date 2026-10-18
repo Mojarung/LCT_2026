@@ -12,8 +12,18 @@ interface RowProps {
   also?: readonly RuleCheck[];
 }
 
-/** Правило, норма и пункт акта одной строкой через «·». */
-function Clause({ check, rules }: { check: RuleCheck; rules: Record<string, Rule> }) {
+/** Норма и пункт акта одной строкой через «·». Код правила (R-…) нужен эксперту для сверки с
+ *  выгрузкой, а не для чтения карточки: он стоит в строке «Текст нормы», а без цитаты - мелко в
+ *  конце строки (жюри дизайна, итерация 11). */
+function Clause({
+  check,
+  rules,
+  withId,
+}: {
+  check: RuleCheck;
+  rules: Record<string, Rule>;
+  withId: boolean;
+}) {
   const rule = rules[check.rule_id];
   const threshold = check.threshold_m == null ? null : meters(check.threshold_m);
   const norm = threshold ? `норма ${threshold} м` : '';
@@ -24,9 +34,8 @@ function Clause({ check, rules }: { check: RuleCheck; rules: Record<string, Rule
     // Части через «·»: «норма 2,00 м. параметр проекта» читалось как предложение со строчной
     // буквы после точки (жюри по дизайну, итерация 8).
     <p className="check-clause">
-      <span className="check-id">{check.rule_id}</span>
-      {check.measured_m != null && norm ? ` · ${norm}` : ''}
-      {act ? ` · ${act}` : ''}
+      {[check.measured_m != null ? norm : '', act].filter(Boolean).join(' · ')}
+      {withId ? <span className="check-id">{check.rule_id}</span> : null}
     </p>
   );
 }
@@ -46,10 +55,12 @@ export function CheckRow({ check, rules, quote = false, also = [] }: RowProps) {
       </div>
       {[check, ...also].map((c) => (
         <div key={c.rule_id}>
-          <Clause check={c} rules={rules} />
+          <Clause check={c} rules={rules} withId={!(quote && rules[c.rule_id])} />
           {quote && rules[c.rule_id] ? (
             <details className="check-source">
-              <summary>Текст нормы</summary>
+              <summary>
+                Текст нормы <span className="check-id">{c.rule_id}</span>
+              </summary>
               <QuoteBlock rule={rules[c.rule_id]} />
             </details>
           ) : null}

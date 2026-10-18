@@ -13,7 +13,9 @@ body {
   font-family: var(--sans);
   font-size: var(--fs-body);
   line-height: 1.5;
+  font-feature-settings: 'calt';
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 main {
@@ -21,8 +23,10 @@ main {
   flex: 1 0 auto;
 }
 
-.mono {
-  font-family: var(--mono);
+/* Числа, которые сравнивают в столбик: цифры одной ширины того же шрифта. Моноширинный
+   шрифт остался только настоящему коду (запрос к модели фото). */
+.mono,
+.num {
   font-variant-numeric: tabular-nums;
 }
 
@@ -47,6 +51,7 @@ h3 {
 /* Флажки и ползунок - цветом интерфейса, а не браузерным синим: синий на этой карте значит
    водопровод. */
 input[type='checkbox'],
+input[type='radio'],
 input[type='range'] {
   accent-color: var(--bone);
 }
@@ -64,7 +69,9 @@ select {
 a {
   color: inherit;
   text-decoration-color: var(--hair-2);
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-1);
 }
 a:hover {
   text-decoration-color: currentColor;
@@ -75,6 +82,10 @@ a:hover {
   outline-offset: 2px;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--bone) 18%, transparent);
+}
+
 .skip {
   position: absolute;
   left: -9999px;
@@ -82,91 +93,205 @@ a:hover {
   padding: 8px 14px;
   background: var(--bone);
   color: var(--inverse);
+  border-radius: var(--r-control);
   z-index: 60;
 }
 .skip:focus {
   left: 8px;
 }
 
-/* --- шапка: две пилюли поверх содержимого, а не полоса во всю ширину --- */
+/* --- шапка --- */
 
-/* На прокручиваемых страницах (консоль, /models, /review) шапка стоит в потоке и уезжает
-   вместе с листом: прилипшая пилюля ложилась на текст (жюри, итерация 7). Поверх плана она
-   висит только на рабочем месте прогона (workspace.css, body.shell-map). */
+/* Полоса во всю ширину: знак, путь до прогона, вид прогона, справка. На прокручиваемых
+   страницах она в потоке, на рабочем месте прогона - прибита сверху (workspace.css). */
 .topbar {
   position: relative;
-  top: 0;
   z-index: 30;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: var(--inset) var(--inset) 0;
-  /* Между пилюлями шапка ничего не ловит: под ней лежит план, и его надо таскать мышью. */
-  pointer-events: none;
+  align-items: center;
+  gap: 6px;
+  height: var(--bar);
+  padding: 0 10px 0 14px;
+  background: var(--panel);
+  box-shadow: inset 0 -1px 0 var(--hair);
   flex-shrink: 0;
-}
-.topbar > * {
-  pointer-events: auto;
+  view-transition-name: topbar;
 }
 
-.topbar-nav {
-  margin-left: auto;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 8px 0 4px;
+  margin-right: 6px;
+  border-radius: var(--r-control);
+  color: var(--bone);
+  /* Имя сервиса - как на логотипе: GREEN_ прописными, плотно; подчёркивание - префикс слоёв
+     результата в DXF (GREEN_*). */
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: background-color var(--dur-1);
+}
+.brand:hover {
+  background: var(--panel-2);
+}
+/* Логотип: лист и GREEN_. Светлая версия - тёмными буквами, тёмная - цвета кости; показывается
+   та, что подходит теме (переключатель ставит data-theme на <html>). */
+.brand img {
+  display: block;
+  height: 40px;
+  width: auto;
+}
+.theme-dark {
+  display: none !important;
+}
+:root[data-theme='dark'] .theme-dark {
+  display: block !important;
+}
+:root[data-theme='dark'] .theme-light {
+  display: none !important;
+}
+:root[data-theme='dark'] .scene-loader-mark {
+  padding: 2px;
+  background: #f1ede5;
+}
+
+/* Путь «Прогоны / имя чертежа»: имя - главное в шапке, параметры прогона - строкой мельче. */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-body);
+}
+.crumbs > a {
+  flex-shrink: 0;
+  color: var(--bone-3);
+  text-decoration: none;
+  transition: color var(--dur-1);
+}
+.crumbs > a:hover {
+  color: var(--bone);
+}
+.crumbs-sep {
+  color: var(--bone-3);
+}
+.crumbs-here {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.crumbs-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--bone);
+}
+.crumbs-meta {
+  flex-shrink: 0;
+  color: var(--bone-3);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+/* Вкладки шапки: разделы на главной, «План / 3D и фото» на прогоне. Выбранная - подложкой
+   тона, которая переезжает к нажатой (подложка - ::before у текущей ссылки, её появление
+   анимировано). */
+.topbar-tabs {
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: var(--bar);
-  padding: 0 5px;
-  flex-shrink: 0;
-  background: var(--glass);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-panel);
-  box-shadow: var(--lift);
-  backdrop-filter: var(--glass-filter);
+  margin-left: 14px;
+  padding: 3px;
+  border-radius: calc(var(--r-control) + 3px);
+  background: var(--panel-2);
 }
-/* Значок без подписи обязан быть достаточно крупной целью: 34x34 при требовании 24x24
-   (WCAG 2.5.8). Что делает кнопка, говорят title и aria-label - иначе значок молчит. */
-.topbar-nav > * {
+.topbar-tabs a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: var(--r-control);
+  color: var(--bone-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    color var(--dur-1),
+    background-color var(--dur-1);
+}
+.topbar-tabs a:hover {
+  color: var(--bone);
+}
+.topbar-tabs a.active {
+  color: var(--bone);
+  background: var(--panel);
+  box-shadow:
+    0 1px 2px rgba(40, 32, 20, 0.1),
+    0 0 0 1px var(--hair);
+  animation: tab-in var(--dur-2) var(--ease-out);
+}
+.topbar-tabs .icon {
+  width: 17px;
+  height: 17px;
+}
+@keyframes tab-in {
+  from {
+    transform: scale(0.94);
+    opacity: 0.6;
+  }
+}
+
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.topbar-end > a,
+.topbar-end > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
+  gap: 6px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
   color: var(--bone-2);
   background: none;
   border: 0;
   border-radius: var(--r-control);
+  font-size: var(--fs-body);
+  font-weight: 600;
   text-decoration: none;
   transition:
-    background-color 0.12s,
-    color 0.12s;
+    background-color var(--dur-1),
+    color var(--dur-1);
 }
-/* Имя сервиса - единственный элемент пилюли с подписью, отделён тонкой чертой. */
-.topbar-nav > .brand {
-  width: auto;
-  gap: 7px;
-  padding: 0 10px 0 7px;
-  margin-right: 3px;
-  border-right: 1px solid var(--hair);
-  border-radius: var(--r-control) 0 0 var(--r-control);
-  font-family: var(--mono);
-  font-size: var(--fs-small);
-  font-weight: 500;
-  color: var(--bone);
+.topbar-end > button {
+  padding: 0;
 }
-.brand img {
-  display: block;
-  border-radius: 4px;
-}
-.topbar-nav > *:hover {
+.topbar-end > a:hover,
+.topbar-end > button:hover,
+.topbar-end > a.active {
   background: var(--panel-2);
   color: var(--bone);
-  text-decoration: none;
 }
 
 .icon {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
@@ -192,6 +317,12 @@ a:hover {
 :root[data-theme='light'] .icon-moon {
   display: inline-block;
 }
+.topbar-end > button .icon {
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.topbar-end > button:hover .icon {
+  transform: rotate(-24deg);
+}
 
 /* --- элементы управления --- */
 
@@ -200,84 +331,108 @@ button {
   cursor: pointer;
 }
 
+/* Главная кнопка - чернила, одна на экран. Нажатие отвечает сразу: сжатие на 3%, отпускание -
+   пружиной обратно. */
 .primary {
-  padding: 9px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
   background: var(--bone);
   color: var(--inverse);
-  border: 1px solid var(--bone);
+  border: 0;
   border-radius: var(--r-control);
-  font-size: var(--fs-small);
-  font-weight: 500;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
   transition:
-    background-color 0.12s,
-    border-color 0.12s,
-    transform 0.1s;
+    background-color var(--dur-1),
+    transform var(--dur-2) var(--ease-spring);
 }
 .primary:hover:not(:disabled) {
   background: var(--bone-hover);
-  border-color: var(--bone-hover);
 }
 .primary:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.97);
+  transition-duration: 60ms;
 }
 .primary:disabled {
   opacity: 0.4;
   cursor: progress;
 }
 .primary.small {
-  padding: 7px 12px;
-  font-size: var(--fs-micro);
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: var(--fs-small);
+}
+.primary .icon {
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.primary:hover:not(:disabled) .icon-go {
+  transform: translateX(3px);
 }
 
+/* Вторая кнопка - заливка тоном, без обводки. */
 .ghost {
-  padding: 9px 16px;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  background: var(--panel-2);
   color: var(--bone);
-  border: 1px solid var(--hair-2);
+  border: 0;
   border-radius: var(--r-control);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
   transition:
-    border-color 0.12s,
-    background-color 0.12s,
-    transform 0.1s;
+    background-color var(--dur-1),
+    transform var(--dur-2) var(--ease-spring);
 }
 .ghost:hover:not(:disabled) {
-  border-color: var(--bone);
-  background: var(--panel-2);
+  background: var(--panel-3);
 }
 .ghost:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.97);
+  transition-duration: 60ms;
 }
-/* Отключённая контурная кнопка выглядела активной: на /review три такие стояли рядом с
-   действующими (жюри, итерация 7). Та же приглушённость, что у залитой. */
+/* Отключённая кнопка не выглядит активной: на /review такие стоят рядом с действующими. */
 .ghost:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .ghost.small {
-  padding: 7px 12px;
-  font-size: var(--fs-micro);
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: var(--fs-small);
 }
-/* Нажатая кнопка-переключатель читается без слов: заливка вместо контура. */
+/* Нажатая кнопка-переключатель читается без слов: чернила вместо тона. */
 .ghost[aria-pressed='true'] {
   background: var(--bone);
   color: var(--inverse);
-  border-color: var(--bone);
 }
 
 input[type='text'],
 input[type='number'],
+input[type='search'],
 select,
 textarea {
   width: 100%;
-  padding: 9px 10px;
-  background: var(--panel-2);
+  min-height: 40px;
+  padding: 8px 12px;
+  background: var(--panel);
   color: var(--bone);
   border: 1px solid var(--hair-2);
   border-radius: var(--r-control);
   font: inherit;
   font-size: var(--fs-body);
-  transition: border-color 0.12s;
+  transition:
+    border-color var(--dur-1),
+    box-shadow var(--dur-1);
 }
 input:hover,
 select:hover,
@@ -287,49 +442,43 @@ textarea:hover {
 input:focus,
 select:focus,
 textarea:focus {
+  outline: none;
   border-color: var(--bone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bone) 12%, transparent);
 }
 textarea {
   font-family: var(--mono);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
+  line-height: 1.5;
   resize: vertical;
 }
 
 /* Системный select выпадает из набора: своя стрелка вместо платформенной. */
 select {
   appearance: none;
-  padding-right: 32px;
+  padding-right: 34px;
   background-image:
     linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-position:
-    calc(100% - 17px) calc(50% + 1px),
-    calc(100% - 12px) calc(50% + 1px);
+    calc(100% - 18px) calc(50% + 1px),
+    calc(100% - 13px) calc(50% + 1px);
   background-size:
     5px 5px,
     5px 5px;
   background-repeat: no-repeat;
 }
 
-/* Родной input[type=file] показывает системную надпись «Файл не выбран», которую нельзя
-   ни перевести, ни набрать своим шрифтом. Сам input остаётся в разметке и получает фокус,
-   видимой его частью работает подпись. */
-/* Поле файла - строка графы с волосяной линией снизу, а не пунктирная зона «перетащите
-   сюда»: на листе чертежа так заполняют графу. */
+/* Родной input[type=file] показывает системную надпись «Файл не выбран», которую нельзя ни
+   перевести, ни набрать своим шрифтом. Сам input растянут на всё поле и прозрачен: клик в
+   любую точку открывает выбор файла, видимой частью работает подпись. */
 .filefield {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 6px 0 10px;
-  border-bottom: 1px solid var(--hair-2);
 }
-.filefield:hover {
-  border-bottom-color: var(--bone-3);
-}
-/* Сам input растянут на всё поле и прозрачен: клик в любую точку открывает выбор файла,
-   а системная надпись рядом с кнопкой не показывается. */
 .filefield input[type='file'] {
   position: absolute;
   inset: 0;
@@ -343,14 +492,18 @@ select {
   outline-offset: 2px;
 }
 .filefield .pick {
-  padding: 7px 13px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
   background: var(--bone);
   color: var(--inverse);
   border-radius: var(--r-control);
-  font-size: var(--fs-micro);
-  font-weight: 500;
+  font-size: var(--fs-small);
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color var(--dur-1);
 }
 .filefield:hover .pick {
   background: var(--bone-hover);
@@ -359,30 +512,27 @@ select {
   flex: 1;
   min-width: 0;
   color: var(--bone-3);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .filefield .chosen[data-chosen='1'] {
   color: var(--bone);
-  font-family: var(--mono);
+  font-weight: 400;
 }
 
 .field {
   margin-bottom: 20px;
 }
-/* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field и без
-   исключения набирались бы капсом вместе с заголовками полей. */
-/* Подписи полей строчные: капс с разрядкой оставлен только разделам страницы, иначе он
-   перестаёт быть приёмом и становится единственным способом подписать что угодно. */
+/* :not(.check) обязателен: подписи галочек лежат прямыми детьми fieldset.field. */
 .field > label:not(.check),
 .field > legend,
 .field > .field-title {
   display: block;
   margin-bottom: 7px;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone-2);
 }
 fieldset.field {
@@ -391,6 +541,8 @@ fieldset.field {
   margin-inline: 0;
 }
 fieldset.field > legend {
+  position: relative;
+  padding: 0;
   margin-bottom: 10px;
 }
 
@@ -406,18 +558,14 @@ fieldset.field > legend {
 .field-head > label,
 .field-head > .field-title {
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone-2);
-}
-fieldset.field > legend {
-  position: relative;
-  padding: 0;
 }
 .params-lead {
   max-width: 60ch;
   margin: 0 0 18px;
   font-size: var(--fs-small);
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--bone-2);
 }
 .check-row {
@@ -448,13 +596,15 @@ fieldset.field > legend {
   border-radius: 50%;
   color: var(--bone-3);
   cursor: help;
-  touch-action: manipulation;
-  transition: color 0.12s;
+  transition:
+    color var(--dur-1),
+    background-color var(--dur-1);
 }
 .tip-button:hover,
 .tip-button:focus-visible,
 .tip:has(.tip-body:not([hidden])) .tip-button {
   color: var(--bone);
+  background: var(--panel-2);
 }
 .tip-button:focus-visible {
   outline: 2px solid var(--bone);
@@ -471,17 +621,20 @@ fieldset.field > legend {
   display: grid;
   gap: 8px;
   width: min(360px, calc(100vw - 48px));
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: var(--panel);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-control);
-  box-shadow: var(--lift);
+  border-radius: var(--r-panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
   font-size: var(--fs-small);
   font-weight: 400;
   line-height: 1.5;
   color: var(--bone);
   text-align: left;
   cursor: auto;
+  transform-origin: top left;
+  animation: pop-in var(--dur-2) var(--ease-out);
 }
 .tip-body[hidden] {
   display: none;
@@ -500,7 +653,7 @@ fieldset.field > legend {
   margin: 6px 0 0;
   color: var(--bone-3);
   font-size: var(--fs-small);
-  line-height: 1.45;
+  line-height: 1.5;
   max-width: 60ch;
 }
 
@@ -513,61 +666,413 @@ fieldset.field > legend {
 .check {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 10px;
   margin-bottom: 8px;
   font-size: var(--fs-small);
   color: var(--bone-2);
   cursor: pointer;
+  transition: color var(--dur-1);
 }
 .check:hover {
   color: var(--bone);
 }
 .check input {
-  margin-top: 3px;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
   flex-shrink: 0;
   accent-color: var(--bone);
 }
 
-.advanced {
-  margin-bottom: 20px;
-  border-top: 1px solid var(--hair);
-  padding-top: 13px;
-}
-.advanced > summary {
+/* Раскрытие: строка с шевроном, который поворачивается на открытии. «+» и «-» моноширинным
+   шрифтом читались как текст, а не как управление. */
+.advanced > summary,
+.fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone-2);
   user-select: none;
   list-style: none;
+  transition: color var(--dur-1);
 }
-.advanced > summary::-webkit-details-marker {
+.advanced > summary::-webkit-details-marker,
+.fold > summary::-webkit-details-marker {
   display: none;
 }
-.advanced > summary::before {
-  content: '+ ';
-  font-family: var(--mono);
+.advanced > summary::before,
+.fold > summary::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin: 0 3px 0 1px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-2) var(--ease-out);
 }
-.advanced[open] > summary::before {
-  content: '- ';
+.advanced[open] > summary::before,
+.fold[open] > summary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.advanced > summary:hover,
+.fold > summary:hover,
+.advanced[open] > summary,
+.fold[open] > summary {
+  color: var(--bone);
+}
+/* Содержимое раскрытия въезжает сверху: связь «нажал - появилось» видна, а не угадывается. */
+.advanced[open] > :not(summary),
+.fold[open] > :not(summary) {
+  animation: unfold var(--dur-2) var(--ease-out);
+}
+
+.advanced {
+  margin-bottom: 20px;
+  padding-top: 14px;
 }
 .advanced[open] > summary {
-  color: var(--bone);
   margin-bottom: 16px;
 }
 
 .footer {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 22px;
-  padding: 13px var(--gutter);
-  border-top: 1px solid var(--hair);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: 28px var(--gutter) 32px;
   color: var(--bone-3);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-small);
   flex-shrink: 0;
+}
+.footer-logo img {
+  height: 64px;
+  width: auto;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+}
+.footer a {
+  text-decoration: none;
+}
+.footer a:hover {
+  color: var(--bone);
 }
 
 /* Корень React не должен ломать колонку body: подвал прижат к низу, рабочее место на весь экран. */
 #root {
   display: contents;
+}
+
+/* --- общие движения --- */
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Смена страницы: содержимое растворяется и проявляется, шапка стоит на месте (у неё своё
+   имя перехода). Переход включают ссылки с viewTransition. */
+::view-transition-old(root) {
+  animation: fade var(--dur-1) var(--ease-in) reverse both;
+}
+::view-transition-new(root) {
+  animation: rise var(--dur-3) var(--ease-out) both;
+}
+
+/* Без движения: появления и сдвиги гасятся, остаётся смена состояния. Колёсики загрузки
+   крутятся медленнее (responsive.css) - это ход процесса, а не украшение. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.spinner):not(.spin),
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* --- лоадер «змейка» (components/ui/SquareLoader.tsx) ---
+   Сетка 3 x 3, повёрнутая на 45 градусов: семь квадратов по очереди переходят в пустую клетку
+   по кругу (0,0)-(1,0)-(2,0)-(2,1)-(1,1)-(1,2)-(0,2)-(0,1). Сдвиг - transform в долях клетки,
+   раскладка страницы не пересчитывается. */
+.square-loader {
+  --cell: calc(var(--loader-size) / 3);
+  position: relative;
+  display: inline-block;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  transform: rotate(45deg);
+}
+.square-loader i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--cell) - 4px);
+  height: calc(var(--cell) - 4px);
+  margin: 2px;
+  border-radius: 2px;
+  background: var(--brand);
+  animation: square-walk 10s ease-in-out infinite both;
+  animation-delay: calc(var(--i) * -1.4285714286s);
+}
+.square-loader i:nth-child(even) {
+  background: color-mix(in srgb, var(--brand) 62%, var(--panel));
+}
+@keyframes square-walk {
+  0%,
+  10.5% {
+    transform: translate(0, 0);
+  }
+  12.5%,
+  23% {
+    transform: translate(var(--cell), 0);
+  }
+  25%,
+  35.5% {
+    transform: translate(calc(var(--cell) * 2), 0);
+  }
+  37.5%,
+  48% {
+    transform: translate(calc(var(--cell) * 2), var(--cell));
+  }
+  50%,
+  60.5% {
+    transform: translate(var(--cell), var(--cell));
+  }
+  62.5%,
+  73% {
+    transform: translate(var(--cell), calc(var(--cell) * 2));
+  }
+  75%,
+  85.5% {
+    transform: translate(0, calc(var(--cell) * 2));
+  }
+  87.5%,
+  98% {
+    transform: translate(0, var(--cell));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+/* --- модальное окно (components/ui/Modal.tsx) ---
+   По центру экрана поверх затемнённого и чуть размытого фона: размытие говорит, что фон
+   сейчас не главный. Окно выплывает с лёгким увеличением, уходит быстрее, чем появилось. */
+.modal,
+.source-conflicts-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(78dvh, 720px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--bone);
+  box-shadow:
+    0 24px 64px -16px rgba(20, 16, 10, 0.45),
+    0 0 0 1px var(--hair);
+}
+.modal[open],
+.source-conflicts-dialog[open] {
+  animation: modal-in var(--dur-3) var(--ease-out);
+}
+.modal[data-closing] {
+  animation: modal-out 150ms var(--ease-in) forwards;
+}
+.modal::backdrop,
+.source-conflicts-dialog::backdrop {
+  background: rgba(20, 18, 14, 0.42);
+  backdrop-filter: blur(3px);
+  animation: fade var(--dur-2) var(--ease-out);
+}
+.modal[data-closing]::backdrop {
+  animation: fade 150ms var(--ease-in) reverse forwards;
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+@keyframes modal-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px 12px 24px;
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.modal-close {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--panel-2);
+  color: var(--bone-2);
+  transition:
+    background-color var(--dur-1),
+    color var(--dur-1);
+}
+.modal-close:hover {
+  background: var(--panel-3);
+  color: var(--bone);
+}
+.modal-content {
+  min-height: 0;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--bone-2);
+}
+.modal-content > p {
+  margin: 0 0 10px;
+}
+.modal-content .modal-lead {
+  color: var(--bone);
+  font-weight: 600;
+}
+.modal-content .fold {
+  margin-top: 14px;
+}
+.modal-content .warn-list {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+/* Строка панели, открывающая окно: значок, название, счётчик и стрелка «откроется». */
+.sheet-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--panel-2);
+  color: var(--bone);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: left;
+  transition:
+    background-color var(--dur-1),
+    color var(--dur-1);
+}
+.sheet-button:hover {
+  background: var(--panel-3);
+}
+.sheet-button + .sheet-button {
+  margin-top: 6px;
+}
+.sheet-button .icon {
+  color: var(--bone-3);
+}
+.sheet-label {
+  flex: 1;
+  min-width: 0;
+}
+.sheet-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--bone-2);
+}
+.sheet-go {
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-right: 1.6px solid currentColor;
+  border-top: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.6;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.sheet-button:hover .sheet-go {
+  transform: translateX(2px) rotate(45deg);
+}
+
+/* Прежнее окно конфликтов подосновы - внутренние поля под общий вид окна. */
+.source-conflicts-dialog {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+
+/* Широкое окно - каталог моделей растений поверх плана. */
+.modal.modal-wide {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(86dvh, 900px);
+}
+.modal-wide .models-grid li {
+  background: var(--panel-2);
+  box-shadow: none;
+}
+.modal-wide .square-loader {
+  display: block;
+  margin: 48px auto;
+}
+/* Кнопка «Модели растений» в шапке прогона - как ссылки рядом, с полями под подпись. */
+.topbar-end > button.topbar-link {
+  padding: 0 10px;
 }

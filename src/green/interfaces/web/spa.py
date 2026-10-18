@@ -75,7 +75,7 @@ def mount_spa(app: FastAPI, web_dir: Path) -> None:
             {
                 "swagger_js_url": f"/{SWAGGER.as_posix()}/swagger-ui-bundle.js",
                 "swagger_css_url": f"/{SWAGGER.as_posix()}/swagger-ui.css",
-                "swagger_favicon_url": "/mark.svg",
+                "swagger_favicon_url": "/favicon.png",
             }
             if local
             else {}

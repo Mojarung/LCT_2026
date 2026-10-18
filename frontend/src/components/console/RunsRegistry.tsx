@@ -70,7 +70,7 @@ function RunRow({ run }: { run: RunOut }) {
           <span className="visually-hidden">{STATE_RU[run.state]}</span>
         </td>
         <td className="name">
-          <Link to={`/runs/${run.id}`} title={run.source_name}>
+          <Link to={`/runs/${run.id}`} title={run.source_name} viewTransition>
             {name}
           </Link>
         </td>
@@ -168,13 +168,13 @@ export function RunsRegistry() {
             <th scope="col">
               <span className="visually-hidden">состояние</span>
             </th>
-            <th scope="col">чертёж</th>
-            <th scope="col">профиль</th>
+            <th scope="col">Чертёж</th>
+            <th scope="col">Профиль</th>
             <th scope="col" className="num">
-              посадок
+              Посадок
             </th>
             <th scope="col" className="num">
-              когда
+              Когда
             </th>
             <th scope="col">
               <span className="visually-hidden">действия</span>

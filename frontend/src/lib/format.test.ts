@@ -4,11 +4,13 @@ import {
   aboutText,
   clockText,
   decimal,
+  drawingName,
   humanSize,
   integer,
   meters,
   permille,
   plural,
+  repairCp1251,
   stamp,
 } from './format';
 
@@ -77,5 +79,17 @@ describe('числа для эксперта', () => {
     expect(permille(0.00019)).toEqual({ value: 0.19, text: '+0,19 ‰', zero: false });
     expect(permille(-0.00042)).toEqual({ value: -0.42, text: '−0,42 ‰', zero: false });
     expect(permille(0.000001).zero).toBe(true);
+  });
+});
+
+describe('имя чертежа', () => {
+  it('возвращает кириллицу имени в cp1251, прочитанного как latin-1', () => {
+    expect(drawingName('00.1_10004141_Òîïîãðàôèÿ.dxf')).toBe('00.1_10004141_Топография');
+    expect(repairCp1251('Åëêà')).toBe('Елка');
+  });
+
+  it('не трогает обычные имена и одиночные латинские буквы с диакритикой', () => {
+    expect(drawingName('улица Берзарина - фрагмент.dxf')).toBe('улица Берзарина - фрагмент');
+    expect(repairCp1251('café plan.dxf')).toBe('café plan.dxf');
   });
 });

@@ -74,7 +74,9 @@ export function photoProgress(
     };
   }
   if (photo.state === 'succeeded') return { share: 1, label: 'готово' };
-  return { share: 0, label: photo.error ? `не удалось: ${photo.error}` : 'не удалось' };
+  // Текст ошибки модели (stderr sd-cli с путями к библиотекам) - не для карточки: в ней
+  // короткий итог, сам текст - под «Подробностями» в галерее кадров.
+  return { share: 0, label: 'не получилось, можно повторить' };
 }
 
 /** Снимок любого размера -> PNG 1536 x 864 для модели: центр кадра без полей. */

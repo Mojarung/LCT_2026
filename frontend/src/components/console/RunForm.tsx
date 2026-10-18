@@ -215,12 +215,25 @@ export function RunForm({ demo = false }: { demo?: boolean }) {
         </>
       ) : demo ? (
         <>
-          <div className="field sample">
-            <p className="sample-title">Встроенный участок улицы Берзарина</p>
-            <p className="hint">
-              Фрагмент настоящей подосновы с сетями. Каталог улиц не подключён.
-            </p>
-          </div>
+          {/* Встроенный участок - выбираемый вариант, а не надпись: отмечен, пока свой чертёж не
+              выбран, и тогда кнопка внизу запускает его; щелчок по нему сбрасывает файл. */}
+          <button
+            type="button"
+            className="field sample"
+            aria-pressed={!files.length}
+            title="Каталог улиц пилота на этом стенде не подключён"
+            onClick={() => {
+              setFiles([]);
+            }}
+          >
+            <span className="sample-mark" aria-hidden="true" />
+            <span className="sample-text">
+              <span className="sample-title">Встроенный участок улицы Берзарина</span>
+              <span className="hint">
+                Фрагмент настоящей подосновы с сетями, можно запустить сразу.
+              </span>
+            </span>
+          </button>
           <p className="or">или</p>
         </>
       ) : null}

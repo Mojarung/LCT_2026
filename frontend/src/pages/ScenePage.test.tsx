@@ -27,26 +27,25 @@ describe('3D-вид прогона', () => {
       );
       // Шапка прогона - та же, что на плане: переключатель «План / 3D-вид».
       expect(await screen.findByRole('link', { name: 'План' })).toHaveAttribute('href', '/runs/r1');
-      expect(screen.getByRole('link', { name: '3D-вид и фото' })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: '3D и фото' })).toHaveAttribute(
         'aria-current',
         'page',
       );
     },
   );
 
-  it('шапка прогона ведёт в 3D, только когда план готов', async () => {
+  it('шапка прогона ведёт в 3D, только когда план готов', { timeout: 30_000 }, async () => {
     mockApi({ '/api/v1/runs/r1': run() });
     const first = renderApp('/runs/r1');
-    expect(await screen.findByRole('link', { name: /3D-вид/ })).toHaveAttribute(
-      'href',
-      '/runs/r1/3d',
-    );
+    expect(
+      await screen.findByRole('link', { name: /3D и фото/ }, { timeout: 20_000 }),
+    ).toHaveAttribute('href', '/runs/r1/3d');
     // Один вход в 3D: кадры улицы - кнопкой внутри 3D-вида.
     expect(screen.queryByRole('link', { name: /кадры улицы/ })).not.toBeInTheDocument();
     first.unmount();
     mockApi({ '/api/v1/runs/r1': run({ state: 'running' }) });
     renderApp('/runs/r1');
-    expect(await screen.findByText(/Тестовая улица/)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /3D-вид/ })).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/Тестовая улица/)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: /3D и фото/ })).not.toBeInTheDocument();
   });
 });

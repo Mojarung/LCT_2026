@@ -47,10 +47,24 @@ function PhotoStatus({ photo, label }: { photo: PhotoOut; label: string }) {
       </figure>
     );
   }
+  // Текст ошибки модели (stderr sd-cli с путями к библиотекам) - под «Подробностями»: строкой
+  // в карточке он читался как поломка самой страницы.
+  if (photo.state === 'failed') {
+    return (
+      <div className="notice" role="status">
+        <p>Фото не получилось: можно заказать ещё раз.</p>
+        {photo.error ? (
+          <details className="fold photo-error">
+            <summary>Подробности</summary>
+            <p className="status-raw">{photo.error}</p>
+          </details>
+        ) : null}
+      </div>
+    );
+  }
   return (
-    <p className={photo.state === 'failed' ? 'notice' : 'hint'} role="status">
+    <p className="hint" role="status">
       {STATE_RU[photo.state]}
-      {photo.error ? `: ${photo.error}` : ''}
     </p>
   );
 }

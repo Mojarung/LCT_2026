@@ -172,7 +172,8 @@ export function keysOf(down: ReadonlySet<string>): Keys {
 /** Скорость полёта, м/с: от пешего шага до облёта квартала. Колесо меняет её в WHEEL_STEP раз. */
 export const FLY_SPEED_MIN = 1;
 export const FLY_SPEED_MAX = 60;
-export const FLY_SPEED_DEFAULT = 8;
+/** 14 м/с: при 8 перелёт вдоль улицы в километр - больше двух минут, на показе это долго. */
+export const FLY_SPEED_DEFAULT = 14;
 const WHEEL_STEP = 1.25;
 const MOUSE_RAD_PER_PX = 0.0022;
 

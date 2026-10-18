@@ -98,11 +98,12 @@ describe('выбор отметки', () => {
     expect(pick({ x: 0, y: 0 }, [a], 10, DEFAULT_LAYERS, new Set(['tilia']))).toBeNull();
   });
 
-  it('отказ виден со слоем отказов или как место под барьер', () => {
+  it('отказ виден со слоем отказов или как место под барьер, когда этот слой включён', () => {
     const rejection = item({ kind: 'rejection', barrier_m: null });
     const barrier = item({ kind: 'rejection', barrier_m: 0.8 });
     expect(shown(rejection, DEFAULT_LAYERS, new Set())).toBe(false);
-    expect(shown(barrier, DEFAULT_LAYERS, new Set())).toBe(true);
+    expect(shown(barrier, DEFAULT_LAYERS, new Set())).toBe(false);
+    expect(shown(barrier, { ...DEFAULT_LAYERS, barrier: true }, new Set())).toBe(true);
     expect(shown(rejection, { ...DEFAULT_LAYERS, rejections: true }, new Set())).toBe(true);
   });
 

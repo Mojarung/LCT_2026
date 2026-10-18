@@ -3,6 +3,26 @@
 
 import {
   type Icon,
+  IconAlertTriangle,
+  IconArrowRight,
+  IconChartBar,
+  IconCircleCheck,
+  IconCompass,
+  IconDownload,
+  IconFileText,
+  IconFiles,
+  IconListDetails,
+  IconZoomCheck,
+  IconFocusCentered,
+  IconMap,
+  IconNavigationNorth,
+  IconRuler2,
+  IconMinus,
+  IconPlus,
+  IconStack2,
+  IconTrees,
+  IconUpload,
+  IconView360,
   IconBook as TablerBook,
   IconCamera,
   IconChevronLeft,
@@ -84,4 +104,42 @@ export function IconDelete({ className = 'icon' }: IconProps) {
 /** Пояснение термина в форме: значок рядом с подписью поля. */
 export function IconInfo({ className = 'icon' }: IconProps) {
   return <IconInfoCircle className={className} size={16} stroke={STROKE} aria-hidden="true" />;
+}
+
+/** Значки интерфейса прогона: полоса карты, сводка, выгрузка, шапка. */
+const UI_GLYPHS = {
+  fit: IconFocusCentered,
+  minus: IconMinus,
+  plus: IconPlus,
+  north: IconCompass,
+  layers: IconStack2,
+  edit: IconPencil,
+  download: IconDownload,
+  file: IconFileText,
+  check: IconCircleCheck,
+  alert: IconAlertTriangle,
+  arrow: IconArrowRight,
+  upload: IconUpload,
+  plan: IconMap,
+  road: IconRoad,
+  northUp: IconNavigationNorth,
+  drawing: IconRuler2,
+  scene: IconView360,
+  trees: IconTrees,
+  docs: TablerBook,
+  files: IconFiles,
+  journal: IconListDetails,
+  effect: IconChartBar,
+  inspect: IconZoomCheck,
+} satisfies Record<string, Icon>;
+
+export type UiGlyph = keyof typeof UI_GLYPHS;
+
+export function UiIcon({
+  name,
+  className = 'icon',
+  size = SIZE,
+}: IconProps & { name: UiGlyph; size?: number }) {
+  const Glyph = UI_GLYPHS[name];
+  return <Glyph className={className} size={size} stroke={STROKE} aria-hidden="true" />;
 }

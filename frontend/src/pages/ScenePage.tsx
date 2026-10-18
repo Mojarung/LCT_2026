@@ -23,7 +23,8 @@ import { BarButton } from '../components/scene/BarButton';
 import { MediaPanel } from '../components/scene/MediaPanel';
 import { MediaViewer } from '../components/scene/MediaViewer';
 import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
-import { RunHeader } from '../components/run/RunParts';
+import { RunTitle } from '../components/run/RunParts';
+import { SquareLoader } from '../components/ui/SquareLoader';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -615,7 +616,8 @@ export function ScenePage() {
       <div className="canvas-holder" ref={holder} />
       {flash ? <div key={flash} className="scene-flash" aria-hidden="true" /> : null}
       {cam.locked && readyToFly ? <div className="scene-crosshair" aria-hidden="true" /> : null}
-      {!hudHidden ? (
+      {data ? <RunTitle run={data} /> : <h1 className="visually-hidden">{title}</h1>}
+      {!hudHidden && readyToFly ? (
         <>
           <div className="scene-left">
             <aside
@@ -631,16 +633,9 @@ export function ScenePage() {
                 icon="street"
                 onToggle={toggleHead}
               />
-              {data ? (
-                <RunHeader run={data} view="3d" />
-              ) : (
-                <div className="hud-head">
-                  <h1>{title}</h1>
-                </div>
-              )}
+              <h2 className="hud-label scene-head-title">В сцене</h2>
               {counts && world ? (
                 <div className="hud-scroll scene-facts">
-                  <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
                   {/* Сводка - теми же строками «что - сколько», что на плане прогона. */}
                   <dl className="run-breakdown scene-breakdown">
                     <div>
@@ -648,7 +643,7 @@ export function ScenePage() {
                       <dd>{integer(counts.trees)}</dd>
                     </div>
                     <div>
-                      <dt>Кустарники плана</dt>
+                      <dt>Кустарник плана</dt>
                       <dd>{integer(counts.shrubs)}</dd>
                     </div>
                     <div>
@@ -670,7 +665,8 @@ export function ScenePage() {
                         : ''}
                     </p>
                   ) : null}
-                  <details className="scene-more">
+                  <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
+                  <details className="scene-more fold">
                     <summary>Что в сцене условно</summary>
                     <p className="hint">
                       {floorsLine(world.floorsBy)} Фасады условные: в съёмке их нет, серия дома
@@ -689,134 +685,129 @@ export function ScenePage() {
                 </div>
               ) : null}
             </aside>
-            {readyToFly ? (
-              <MediaPanel
-                items={media}
-                photos={photos.data?.photos ?? []}
-                available={photosAvailable}
-                reason={photos.data?.reason ?? null}
-                scenery={scenery}
-                onScenery={setScenery}
-                modern={modern}
-                onModern={setModern}
-                customPrompt={promptDraft !== null}
-                onPrompt={() => {
-                  setPromptOpen(true);
-                }}
-                collapsed={mediaCollapsed}
-                onToggle={toggleMedia}
-                shotScale={shotScale}
-                onShotScale={setShotScale}
-                shooting={shooting}
-                sending={sendingView}
-                onShot={() => {
-                  void shoot(shotScale);
-                }}
-                onPhotoView={() => {
-                  void photoFromView();
-                }}
-                photoBusy={photoBusy}
-                onShots={() => {
-                  void openGallery({ kind: 'street' }, 'Кадры улицы');
-                }}
-                onRemoveShot={(id) => {
-                  setShots((list) => {
-                    const gone = list.find((s) => s.id === id);
-                    if (gone) URL.revokeObjectURL(gone.url);
-                    return list.filter((s) => s.id !== id);
-                  });
-                }}
-                onDeletePhoto={(id) => {
-                  if (!window.confirm('Удалить фото с сервера? Вернуть его будет нельзя.')) return;
-                  deletePhoto.mutate(id, {
-                    onError: (error) => {
-                      toast(error.message);
-                    },
-                  });
-                }}
-                onPhoto={(shot) => {
-                  void photoFromSnapshot(shot);
-                }}
-                onOpen={setViewer}
-              />
-            ) : null}
-          </div>
-          {readyToFly ? (
-            <ScenePanel
-              settings={settings}
-              onChange={change}
-              speed={cam.speed}
-              onSpeed={(speed) => engine.current?.setSpeed(speed)}
+            <MediaPanel
+              items={media}
+              photos={photos.data?.photos ?? []}
+              available={photosAvailable}
+              reason={photos.data?.reason ?? null}
+              scenery={scenery}
+              onScenery={setScenery}
+              modern={modern}
+              onModern={setModern}
+              customPrompt={promptDraft !== null}
+              onPrompt={() => {
+                setPromptOpen(true);
+              }}
+              collapsed={mediaCollapsed}
+              onToggle={toggleMedia}
+              shotScale={shotScale}
+              onShotScale={setShotScale}
+              shooting={shooting}
+              sending={sendingView}
+              onShot={() => {
+                void shoot(shotScale);
+              }}
+              onPhotoView={() => {
+                void photoFromView();
+              }}
+              photoBusy={photoBusy}
+              onShots={() => {
+                void openGallery({ kind: 'street' }, 'Кадры улицы');
+              }}
+              onRemoveShot={(id) => {
+                setShots((list) => {
+                  const gone = list.find((s) => s.id === id);
+                  if (gone) URL.revokeObjectURL(gone.url);
+                  return list.filter((s) => s.id !== id);
+                });
+              }}
+              onDeletePhoto={(id) => {
+                if (!window.confirm('Удалить фото с сервера? Вернуть его будет нельзя.')) return;
+                deletePhoto.mutate(id, {
+                  onError: (error) => {
+                    toast(error.message);
+                  },
+                });
+              }}
+              onPhoto={(shot) => {
+                void photoFromSnapshot(shot);
+              }}
+              onOpen={setViewer}
             />
-          ) : null}
-          {readyToFly ? (
-            <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
-              <div className="bar-group" role="group" aria-label="Режим камеры">
-                <BarButton
-                  icon="fly"
-                  label="полёт"
-                  keyHint="G"
-                  pressed={cam.mode === 'fly'}
-                  title="Свободный полёт"
-                  onClick={() => engine.current?.setMode('fly')}
-                />
-                <BarButton
-                  icon="walk"
-                  label="пешеход"
-                  keyHint="G"
-                  pressed={cam.mode === 'walk'}
-                  title="Пешеход на высоте глаз 1,7 м"
-                  onClick={() => engine.current?.setMode('walk')}
-                />
-              </div>
-              <div className="bar-group" role="group" aria-label="Куда смотреть">
-                <BarButton
-                  icon="overview"
-                  label="общий вид"
-                  keyHint="R"
-                  title="Вернуться к общему виду"
-                  onClick={() => engine.current?.resetView()}
-                />
-                <BarButton
-                  icon="tour"
-                  label="облёт"
-                  keyHint="T"
-                  pressed={cam.touring}
-                  title="Облёт над улицей; мышь или WASD - взять управление"
-                  onClick={() => {
-                    const e = engine.current;
-                    if (!e) return;
-                    if (cam.touring) e.stopTour();
-                    else e.startTour();
-                  }}
-                />
-              </div>
-              <div className="bar-group" role="group" aria-label="Панели">
-                <BarButton
-                  icon="hide"
-                  label="без панелей"
-                  keyHint="H"
-                  title="Скрыть панели для чистого кадра"
-                  onClick={() => {
-                    setHudHidden(true);
-                  }}
-                />
-              </div>
-              <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
-                {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
-                {stats ? ` · ${String(stats.fps)} к/с` : ''}
-                {stats && stats.scale < 0.99
-                  ? ` · разрешение ${String(Math.round(stats.scale * 100))}%`
-                  : ''}
-              </span>
+          </div>
+          <ScenePanel
+            settings={settings}
+            onChange={change}
+            speed={cam.speed}
+            onSpeed={(speed) => engine.current?.setSpeed(speed)}
+          />
+          <div className="hud hud-bottom scene-bar" role="toolbar" aria-label="Камера и снимки">
+            {/* Сначала готовые виды (общий, облёт), потом ручное управление. */}
+            <div className="bar-group" role="group" aria-label="Куда смотреть">
+              <BarButton
+                icon="overview"
+                label="Общий вид"
+                keyHint="R"
+                title="Вернуться к общему виду"
+                onClick={() => engine.current?.resetView()}
+              />
+              <BarButton
+                icon="tour"
+                label="Облёт"
+                keyHint="T"
+                pressed={cam.touring}
+                title="Облёт над улицей; мышь или WASD - взять управление"
+                onClick={() => {
+                  const e = engine.current;
+                  if (!e) return;
+                  if (cam.touring) e.stopTour();
+                  else e.startTour();
+                }}
+              />
             </div>
-          ) : null}
-          {notice && readyToFly ? (
+            <div className="bar-group" role="group" aria-label="Режим камеры">
+              <BarButton
+                icon="fly"
+                label="Полёт"
+                keyHint="G"
+                pressed={cam.mode === 'fly'}
+                title="Свободный полёт"
+                onClick={() => engine.current?.setMode('fly')}
+              />
+              <BarButton
+                icon="walk"
+                label="Пешеход"
+                keyHint="G"
+                pressed={cam.mode === 'walk'}
+                title="Пешеход на высоте глаз 1,7 м"
+                onClick={() => engine.current?.setMode('walk')}
+              />
+            </div>
+            <div className="bar-group" role="group" aria-label="Панели">
+              <BarButton
+                icon="hide"
+                label="Без панелей"
+                keyHint="H"
+                title="Скрыть панели для чистого кадра"
+                onClick={() => {
+                  setHudHidden(true);
+                }}
+              />
+            </div>
+            <span className="bar-meta" title="Скорость полёта (колесо мыши) и кадров в секунду">
+              {cam.mode === 'fly' ? `${String(Math.round(cam.speed))} м/с` : 'шаг'}
+              {stats ? ` · ${String(stats.fps)} к/с` : ''}
+              {stats && stats.scale < 0.99
+                ? ` · разрешение ${String(Math.round(stats.scale * 100))}%`
+                : ''}
+            </span>
+          </div>
+          {notice ? (
             <div className="hud scene-toast" role="status">
               {notice}
             </div>
           ) : null}
-          {readyToFly && !cam.locked && !everLocked ? (
+          {!cam.locked && !everLocked ? (
             <div className="hud scene-help" role="note">
               <p>
                 <strong>Щёлкните по сцене</strong> и управляйте мышью, Esc - отпустить.
@@ -831,7 +822,7 @@ export function ScenePage() {
             </div>
           ) : null}
         </>
-      ) : (
+      ) : readyToFly ? (
         <button
           type="button"
           className="hud scene-unhide"
@@ -839,9 +830,9 @@ export function ScenePage() {
             setHudHidden(false);
           }}
         >
-          панели · H
+          Панели · H
         </button>
-      )}
+      ) : null}
       {gallery && readyToFly ? (
         <ShotGallery
           title={gallery.title}
@@ -923,38 +914,103 @@ export function ScenePage() {
         </div>
       ) : null}
       {!readyToFly ? (
-        <div className="scene-loading" role="status" aria-live="polite">
-          {!supported ? (
-            <p className="notice">В браузере нет WebGL 2, 3D-вид недоступен.</p>
-          ) : loadError ? (
-            <p className="notice">Не загрузился {loadError}, сцену не построить.</p>
-          ) : failure ? (
-            <p className="notice">3D-вид не собрался: {failure}</p>
-          ) : run.isError ? (
-            <p className="notice">Прогон не найден.</p>
-          ) : live ? (
-            <p>Прогон ещё считается: 3D-вид откроется, когда план будет готов.</p>
-          ) : data?.state === 'failed' ? (
-            <p className="notice">Прогон завершился ошибкой: строить нечего.</p>
-          ) : (
-            <>
-              <p>
-                {world ? STAGE_TITLES[progress.stage] : 'Загрузка плана и подосновы'}
-                {world && progress.stage === 'plants'
-                  ? ` · ${progress.done} из ${progress.total}`
-                  : ''}
-              </p>
-              <div className="scene-progress">
-                <span style={{ width: `${world ? stageShare(progress) * 100 : 4}%` }} />
-              </div>
-            </>
-          )}
-          <Link to={`/runs/${encodeURIComponent(runId)}`}>← к плану прогона</Link>
-        </div>
+        <SceneLoading
+          problem={
+            !supported
+              ? 'В браузере нет WebGL 2, 3D-вид недоступен.'
+              : loadError
+                ? `Не загрузился ${loadError}, сцену не построить.`
+                : failure
+                  ? `3D-вид не собрался: ${failure}`
+                  : run.isError
+                    ? 'Прогон не найден.'
+                    : data?.state === 'failed'
+                      ? 'Прогон завершился ошибкой: строить нечего.'
+                      : null
+          }
+          waiting={live}
+          stage={world ? progress.stage : null}
+          share={world ? stageShare(progress) : 0.04}
+          count={
+            world && progress.stage === 'plants' ? `${progress.done} из ${progress.total}` : ''
+          }
+          back={`/runs/${encodeURIComponent(runId)}`}
+        />
       ) : null}
       <span className="visually-hidden" aria-live="polite">
         {readyToFly ? `3D-вид готов, ${clock(settings.hour)}` : ''}
       </span>
+    </div>
+  );
+}
+
+const LOAD_STEPS: { stage: Stage; title: string }[] = [
+  { stage: 'textures', title: 'Фактуры покрытий' },
+  { stage: 'ground', title: 'Газоны, тротуары и борта' },
+  { stage: 'buildings', title: 'Здания' },
+  { stage: 'plants', title: 'Кроны деревьев и кустарников' },
+];
+
+/** Экран сборки сцены: знак сервиса, этап и полоса хода, этапы списком с отметкой пройденных.
+ *  Панели сцены до готовности не показываются: в них нечего читать, а пустая карточка на
+ *  тёмном поле выглядела поломкой. */
+function SceneLoading({
+  problem,
+  waiting,
+  stage,
+  share,
+  count,
+  back,
+}: {
+  problem: string | null;
+  waiting: boolean;
+  stage: Stage | null;
+  share: number;
+  count: string;
+  back: string;
+}) {
+  const at = stage ? LOAD_STEPS.findIndex((step) => step.stage === stage) : -1;
+  return (
+    <div className="scene-loading" role="status" aria-live="polite">
+      <div className="scene-loader" data-problem={problem ? '1' : undefined}>
+        {/* Пока сцена собирается - змейка из квадратов; при ошибке - неподвижный знак сервиса. */}
+        {problem ? (
+          <img className="scene-loader-mark" src="/logo.webp" width={64} height={64} alt="" />
+        ) : (
+          <SquareLoader size={66} />
+        )}
+        {problem ? (
+          <p className="scene-loader-title">{problem}</p>
+        ) : waiting ? (
+          <p className="scene-loader-title">
+            Прогон ещё считается: 3D-вид откроется, когда план будет готов.
+          </p>
+        ) : (
+          <>
+            <p className="scene-loader-title">Собираем 3D-вид улицы</p>
+            <p className="scene-loader-stage">
+              {stage ? STAGE_TITLES[stage] : 'Загрузка плана и подосновы'}
+              {count ? ` · ${count}` : ''}
+            </p>
+            <div className="scene-progress" aria-hidden="true">
+              <span style={{ transform: `scaleX(${String(Math.max(share, 0.02))})` }} />
+            </div>
+            <ol className="scene-steps">
+              {LOAD_STEPS.map((step, index) => (
+                <li
+                  key={step.stage}
+                  data-state={index < at ? 'done' : index === at ? 'active' : 'wait'}
+                >
+                  {step.title}
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <Link className="scene-loader-back" to={back}>
+          ← к плану прогона
+        </Link>
+      </div>
     </div>
   );
 }

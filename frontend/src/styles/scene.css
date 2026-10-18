@@ -34,9 +34,9 @@
 
 .scene-panel {
   right: var(--inset);
-  top: calc(var(--inset) * 2 + var(--bar));
-  width: 292px;
-  max-height: calc(100% - var(--inset) * 3 - var(--bar));
+  top: var(--inset);
+  width: 300px;
+  max-height: calc(100% - var(--inset) * 3 - var(--tools));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -50,7 +50,7 @@
   gap: 8px;
 }
 .scene-value {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
   color: var(--bone);
 }
@@ -59,20 +59,10 @@
   accent-color: var(--bone);
 }
 
+/* Предустановка света - действие, а не состояние: тихая кнопка под сезоном. */
 .scene-light-preset {
   width: 100%;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-control);
-  background: var(--panel-2);
-  color: var(--bone);
-  font-size: var(--fs-micro);
-  text-align: left;
-}
-.scene-light-preset:hover,
-.scene-light-preset:focus-visible {
-  border-color: var(--bone);
+  margin: 0 0 12px;
 }
 
 /* Переключатель из нескольких значений: одна полоса, выбранное залито. */
@@ -123,7 +113,7 @@
 .scene-shots a {
   display: block;
   color: var(--bone-3);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   text-decoration: none;
 }
@@ -146,7 +136,7 @@
 }
 .scene-speed {
   padding: 0 10px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   white-space: nowrap;
@@ -178,7 +168,7 @@
   min-width: 20px;
   padding: 0 5px;
   margin: 0 1px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   line-height: 18px;
   text-align: center;
@@ -206,7 +196,7 @@
 }
 /* Без захвата мыши подпись - того, что под курсором, и висит сверху, не заслоняя его. */
 .scene-hover[data-anchor='top'] {
-  top: calc(var(--inset) * 2 + var(--bar));
+  top: var(--inset);
 }
 .scene-hover strong {
   font-size: var(--fs-small);
@@ -232,7 +222,7 @@
   left: var(--inset);
   bottom: var(--inset);
   padding: 6px 12px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-2);
   opacity: 0.55;
@@ -265,37 +255,133 @@
   }
 }
 
+/* Сборка сцены - отдельный экран цвета страницы, а не текст на тёмном поле: знак сервиса
+   дышит, полоса хода едет масштабом (без пересчёта ширины), этапы отмечаются по мере сборки. */
 .scene-loading {
   position: absolute;
   z-index: 1;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: #e9e6e0;
-  font-size: var(--fs-body);
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: var(--ground);
+  color: var(--bone);
+  animation: fade var(--dur-2) var(--ease-out);
 }
-.scene-loading p {
+.scene-loader {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(380px, 100%);
+  text-align: center;
+}
+.scene-loader-mark {
+  display: block;
+  margin-bottom: 6px;
+  border-radius: 8px;
+}
+.scene-loader .square-loader {
+  margin: 8px 0 18px;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+}
+.scene-loader[data-problem] .scene-loader-mark {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.scene-loader-title {
   margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-wrap: balance;
 }
-.scene-loading a {
-  color: #a5a39d;
-  font-size: var(--fs-small);
+.scene-loader-stage {
+  margin: -6px 0 4px;
+  min-height: 1.5em;
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--bone-2);
 }
 .scene-progress {
-  width: min(360px, 70vw);
-  height: 4px;
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 2px;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-3);
   overflow: hidden;
 }
 .scene-progress span {
   display: block;
   height: 100%;
-  background: #e9e6e0;
-  transition: width 0.3s ease-out;
+  border-radius: inherit;
+  background: var(--bone);
+  transform-origin: left;
+  transition: transform var(--dur-3) var(--ease-out);
+}
+.scene-steps {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.scene-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+  transition: color var(--dur-2);
+}
+/* Отметка этапа: пустой кружок - впереди, пульсирующая точка - идёт, галочка - готово. */
+.scene-steps li::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--hair-2);
+}
+.scene-steps li[data-state='active'] {
+  color: var(--bone);
+  font-weight: 600;
+}
+.scene-steps li[data-state='active']::before {
+  background: radial-gradient(circle, var(--bone) 0 3px, transparent 3.5px);
+  box-shadow: inset 0 0 0 1.5px var(--bone);
+  animation: breathe 1.2s var(--ease-out) infinite;
+}
+.scene-steps li[data-state='done'] {
+  color: var(--bone-2);
+}
+/* Галочка - знаком шрифта на зелёном круге: без SVG и без адресов в стилях (бандл проверяется
+   на отсутствие ссылок в интернет, tests/test_spa.py). */
+.scene-steps li[data-state='done']::before {
+  content: '\2713';
+  display: grid;
+  place-items: center;
+  background: var(--ok);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: none;
+  animation: pop-in var(--dur-2) var(--ease-spring);
+}
+.scene-loader-back {
+  margin-top: 6px;
+  font-size: var(--fs-small);
+  color: var(--bone-3);
+}
+.scene-loader-back:hover {
+  color: var(--bone);
 }
 
 /* Узкий экран: рабочее место становится страницей, и шапка сцены ложится на фон страницы, а
@@ -347,7 +433,7 @@
 .scene-gallery {
   position: fixed;
   inset: 0;
-  margin: calc(var(--inset) * 2 + var(--bar)) auto var(--inset);
+  margin: calc(var(--inset) + var(--bar)) auto var(--inset);
   width: min(1120px, calc(100% - var(--inset) * 2));
   max-width: none;
   height: fit-content;
@@ -356,7 +442,8 @@
   padding: 16px 18px;
   color: var(--bone);
   background: var(--panel);
-  border: 1.5px solid var(--edge);
+  border: 0;
+  animation: pop-in var(--dur-3) var(--ease-out);
   border-radius: var(--r-panel);
   box-shadow: var(--lift);
 }
@@ -431,7 +518,7 @@
 .gallery-label {
   margin: 6px 0 0;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bone);
 }
 .gallery-species {
@@ -486,7 +573,7 @@
 }
 .gallery-photo figcaption {
   margin-top: 3px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
 }
@@ -557,7 +644,7 @@
   border-radius: 8px;
   font-family: inherit;
   font-size: var(--fs-small);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 :is(.scene-bar, .media-actions) .bar-button .icon {
@@ -602,7 +689,7 @@
   padding: 0 4px;
   border: 1px solid var(--hair-2);
   border-radius: 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   line-height: 16px;
   text-align: center;
@@ -611,7 +698,7 @@
 }
 .bar-meta {
   padding: 0 10px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   white-space: nowrap;
@@ -668,9 +755,11 @@
   padding: 10px 12px 8px 16px;
   border-bottom: 1px solid var(--hair);
 }
-.panel-title {
-  font-size: var(--fs-small);
+.page-scene .panel-title {
+  margin: 0;
+  font-size: var(--fs-body);
   font-weight: 700;
+  letter-spacing: 0;
   color: var(--bone);
 }
 .scene-panel[data-collapsed='true'] {
@@ -724,7 +813,7 @@
 .section-summary {
   margin-left: auto;
   overflow: hidden;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   color: var(--bone-3);
   text-overflow: ellipsis;
@@ -733,10 +822,8 @@
 .section-body {
   padding-bottom: 6px;
 }
-.scene-more summary {
-  font-size: var(--fs-micro);
-  color: var(--bone-2);
-  cursor: pointer;
+.scene-more {
+  margin-top: 12px;
 }
 .scene-more[open] summary {
   margin-bottom: 6px;
@@ -820,18 +907,22 @@
 }
 .media-count {
   margin-left: 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
   color: var(--bone-3);
 }
+/* Снимки прокручиваются внутри панели; растушёвка снизу говорит, что список продолжается, а не
+   обрезан краем (жюри дизайна, итерация 12). */
 .media-list {
   display: grid;
   gap: 14px;
   min-height: 0;
   margin: 10px -4px 0 0;
-  padding: 0 4px 0 0;
+  padding: 0 4px 20px 0;
   overflow-y: auto;
   list-style: none;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 .media-empty {
   margin-top: 10px;
@@ -939,7 +1030,7 @@
 }
 .viewer-count {
   margin-left: auto;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-small);
   color: rgb(255 255 255 / 70%);
 }
@@ -1164,7 +1255,7 @@
   right: -5px;
   min-width: 16px;
   padding: 0 4px;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10px;
   line-height: 16px;
   color: var(--inverse);
@@ -1249,11 +1340,206 @@
 }
 
 /* Сводка сцены - сеткой 2 x 2, как сводка прогона: разделитель только между колонками. */
+/* Сводка сцены - те же плитки, что на плане (.run-breakdown), в две строки. */
 .scene-breakdown {
-  margin: 4px 0 12px;
-  row-gap: 12px;
+  margin: 4px 0 14px;
+  gap: 8px;
 }
-.scene-breakdown div:nth-child(odd) {
-  border-left: 0;
-  padding-left: 0;
+.scene-breakdown > div {
+  padding: 11px 12px;
+}
+.scene-breakdown dt {
+  white-space: nowrap;
+}
+
+/* --- 3D-вид в общей оболочке: тот же язык, что у плана ---
+   Карточка улицы со снимками слева и пульт справа прилегают к краям экрана, как сводка и
+   состав плана; свёрнутая панель - одна кнопка у края сцены. Полоса камеры и подсказки
+   плавают над сценой. */
+.page-scene .hud {
+  border-radius: var(--r-panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
+}
+.page-scene .scene-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--hud-left-w);
+  gap: 0;
+}
+.page-scene .scene-left > .hud {
+  border-radius: 0;
+  box-shadow: 1px 0 0 var(--hair);
+}
+.page-scene .scene-left > .hud-left {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  animation: slide-left var(--dur-3) var(--ease-out);
+}
+.page-scene .scene-left > .scene-media {
+  flex: 1 1 auto;
+  padding: 18px 22px;
+  box-shadow:
+    1px 0 0 var(--hair),
+    inset 0 1px 0 var(--hair);
+  animation: slide-left var(--dur-3) var(--ease-out) 60ms backwards;
+}
+/* Свёрнутая карточка - кнопка у края сцены, а не полоса во всю высоту. */
+.page-scene .scene-left > .hud.collapsed {
+  flex: none;
+  width: 44px;
+  margin: var(--inset) 0 0 var(--inset);
+  padding: 0;
+  border-radius: var(--r-panel);
+  box-shadow:
+    var(--lift),
+    0 0 0 1px var(--hair);
+}
+.page-scene .scene-left:has(> .hud.collapsed + .hud.collapsed),
+.page-scene .scene-left:has(> .hud.collapsed:only-child) {
+  bottom: auto;
+}
+.page-scene .scene-panel:not([data-collapsed='true']) {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--hud-right-w);
+  max-height: none;
+  border-radius: 0;
+  box-shadow: -1px 0 0 var(--hair);
+}
+.scene-head-title {
+  margin: 0;
+  padding: 20px 56px 0 22px;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--bone);
+}
+.page-scene .scene-head .hud-scroll {
+  padding-top: 14px;
+}
+.page-scene .scene-panel {
+  animation: slide-right var(--dur-3) var(--ease-out);
+}
+/* Полоса камеры и подсказка - по центру сцены между панелями. */
+.workspace.page-scene {
+  --side-l: var(--hud-left-w);
+  --side-r: var(--hud-right-w);
+}
+.workspace.page-scene:has(.scene-left > .hud.collapsed + .hud.collapsed) {
+  --side-l: 0px;
+}
+.workspace.page-scene:has(.scene-panel[data-collapsed='true']),
+.workspace.page-scene:not(:has(.scene-panel)) {
+  --side-r: 0px;
+}
+.page-scene .scene-bar,
+.page-scene .scene-help {
+  left: calc(var(--side-l) + (100% - var(--side-l) - var(--side-r)) / 2);
+}
+.page-scene .scene-bar {
+  bottom: 16px;
+  max-width: calc(100% - var(--side-l) - var(--side-r) - 24px);
+}
+.page-scene .scene-help {
+  bottom: 76px;
+  width: min(620px, calc(100% - var(--side-l) - var(--side-r) - 24px));
+  border-radius: var(--r-panel);
+  animation: rise var(--dur-3) var(--ease-out) 300ms backwards;
+}
+.page-scene .bar-group {
+  border-right-color: var(--hair);
+}
+:is(.scene-bar, .media-actions) .bar-button {
+  border-radius: var(--r-control);
+  transition:
+    background-color var(--dur-1),
+    transform var(--dur-2) var(--ease-spring);
+}
+:is(.scene-bar, .media-actions) .bar-button:active:not(:disabled) {
+  transform: scale(0.95);
+  transition-duration: 60ms;
+}
+:is(.scene-bar, .media-actions) .bar-button[aria-pressed='true'] {
+  background: var(--panel-3);
+  box-shadow: none;
+}
+@media (max-width: 1080px) {
+  .page-scene .scene-left,
+  .page-scene .scene-panel:not([data-collapsed='true']) {
+    width: min(var(--hud-left-w), 46vw);
+  }
+}
+/* Между прилегающими панелями полоса камеры с метками клавиш не помещается до 1600 px:
+   клавиши остаются в подсказке над полосой и во всплывающей подсказке кнопки. */
+@media (max-width: 1600px) {
+  .page-scene .scene-bar .bar-key,
+  .page-scene .scene-bar .bar-meta {
+    display: none;
+  }
+}
+@media (max-width: 1366px) {
+  .page-scene .scene-bar .bar-meta {
+    display: none;
+  }
+}
+
+/* Карточки 3D-вида - так же, как на плане: с отступом от шапки и краёв, скруглённые. */
+@media (min-width: 1081px) {
+  .page-scene .scene-left {
+    left: var(--inset);
+    top: var(--inset);
+    bottom: var(--inset);
+    gap: 10px;
+  }
+  .page-scene .scene-left > .hud:not(.collapsed) {
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .page-scene .scene-left > .hud.collapsed {
+    margin: 0;
+  }
+  .page-scene .scene-panel:not([data-collapsed='true']) {
+    top: var(--inset);
+    right: var(--inset);
+    bottom: var(--inset);
+    border-radius: var(--r-panel);
+    box-shadow:
+      var(--lift),
+      0 0 0 1px var(--hair);
+  }
+  .workspace.page-scene {
+    --side-l: calc(var(--hud-left-w) + var(--inset));
+    --side-r: calc(var(--hud-right-w) + var(--inset));
+  }
+  /* Шапка пульта - строка 52px, кнопка сворачивания по её середине. */
+  .page-scene .scene-panel .panel-head {
+    min-height: 52px;
+    padding: 0 52px 0 18px;
+  }
+  .page-scene .scene-panel > .panel-toggle {
+    top: 10px;
+  }
+  .scene-head-title {
+    padding-top: 16px;
+  }
+}
+
+/* Полоса камеры - тоже по центру экрана: сворачивание пульта её не двигает. */
+@media (min-width: 1081px) {
+  .page-scene .scene-bar,
+  .page-scene .scene-help {
+    left: 50%;
+    transition: none;
+  }
+  .page-scene .scene-bar {
+    max-width: calc(100% - 2 * (var(--hud-right-w) + var(--inset) * 2));
+  }
 }

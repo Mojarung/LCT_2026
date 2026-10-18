@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
 import type { QualityJson, Rule } from '../../api/artifacts';
 import { useOverflowMark } from '../../hooks/useOverflowMark';
-import { KIND_RU, VERDICT_RU } from '../../lib/checks';
+import { VERDICT_RU } from '../../lib/checks';
 import { meters } from '../../lib/format';
 import type { MapItem } from '../../map/types';
 import { useEngine } from '../../state/engine';
@@ -13,12 +13,15 @@ import { Composition } from './Composition';
 import { EffectBlock } from './EffectBlock';
 import { QualityBlock } from './QualityBlock';
 import { SpeciesBlock } from './SpeciesBlock';
+import { UiIcon } from '../icons';
 import { BarrierBlock, ValueBlock } from './ValueBlock';
 
 interface DetailProps {
   placements: readonly MapItem[];
   rules: Record<string, Rule>;
   quality: QualityJson | undefined;
+  /** Условные обозначения - третья вкладка панели (Legend docked). */
+  legend?: ReactNode;
 }
 
 /** Перенос без перетаскивания (WCAG 2.2, 2.5.7): кнопка включает ожидание, следующий клик по
@@ -54,7 +57,6 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
   const select = useWorkspace((s) => s.select);
   const editing = useWorkspace((s) => s.editing);
   const { runId = '' } = useParams();
-  const kind = KIND_RU[item.planting_type] ?? '';
   const title =
     item.kind === 'placement'
       ? `№ ${String(item.number)}. ${item.species_ru || 'вид не назначен'}`
@@ -77,7 +79,6 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
       <span className={`verdict verdict-${item.verdict}`}>
         {VERDICT_RU[item.verdict] ?? item.verdict}
       </span>
-      {kind ? <p className="detail-note">{kind}</p> : null}
       {item.kind === 'placement' && runId ? (
         <a
           className="detail-3d"
@@ -86,7 +87,7 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
           rel="noopener"
           title="Кадры посадки со всех сторон в 3D и фото по ним, в новой вкладке"
         >
-          кадры посадки в 3D ↗
+          Кадры посадки в 3D ↗
         </a>
       ) : null}
       {editing && item.kind === 'placement' ? <MoveByClick item={item} /> : null}
@@ -114,9 +115,12 @@ function PlacementDetail({ item, rules }: { item: MapItem; rules: Record<string,
 
 /** Правая панель: без выбора - качество и состав плана (первый вопрос эксперта «что
  *  посажено»), с выбором - норма, по которой стоит посадка или отказ. */
-export function DetailPanel({ placements, rules, quality }: DetailProps) {
+export function DetailPanel({ placements, rules, quality, legend = null }: DetailProps) {
   const selected = useWorkspace((s) => s.selected);
   const [section, setSection] = useState<'plants' | 'effect'>('plants');
+  // Вкладка обозначений - состояние рабочего места: её же открывает кнопка «Легенда» у карты.
+  const legendOpen = useWorkspace((s) => s.panels.legend) && legend !== null;
+  const setLegend = useWorkspace((s) => s.setLegend);
   // Отметка изменяемая: после переноса у неё новый вердикт и проверки.
   useWorkspace((s) => s.revision);
   const scrollRef = useOverflowMark<HTMLDivElement>();
@@ -136,26 +140,43 @@ export function DetailPanel({ placements, rules, quality }: DetailProps) {
           <div className="plan-sections" role="group" aria-label="Раздел плана">
             <button
               type="button"
-              aria-pressed={section === 'plants'}
+              aria-pressed={!legendOpen && section === 'plants'}
               onClick={() => {
+                setLegend(false);
                 setSection('plants');
               }}
             >
+              <UiIcon name="trees" size={16} />
               Посадки
             </button>
             <button
               type="button"
-              aria-pressed={section === 'effect'}
+              aria-pressed={!legendOpen && section === 'effect'}
               onClick={() => {
+                setLegend(false);
                 setSection('effect');
               }}
             >
+              <UiIcon name="effect" size={16} />
               Эффект
             </button>
+            {legend ? (
+              <button
+                type="button"
+                aria-pressed={legendOpen}
+                onClick={() => {
+                  setLegend(true);
+                }}
+              >
+                <UiIcon name="layers" size={16} />
+                Легенда
+              </button>
+            ) : null}
           </div>
-          {section === 'plants' ? (
+          {legendOpen ? (
+            legend
+          ) : section === 'plants' ? (
             <>
-              <p className="composition-guide">Выберите вид, чтобы найти его на плане.</p>
               <Composition placements={placements} />
             </>
           ) : (
