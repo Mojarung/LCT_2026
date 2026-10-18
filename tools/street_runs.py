@@ -9,6 +9,13 @@
     uv run python tools/street_runs.py --only 6 --only 18      выбранные
     uv run python tools/street_runs.py --profile strict --catalog dataset/streets_oda
     uv run python tools/street_runs.py --workers 7 --ram-fill 0.93 --skip-done   параллельно
+    uv run python tools/street_runs.py --compare docs/data/street-golden.json    и сверка
+    uv run python tools/street_runs.py --compare-only docs/data/street-golden.json  без прогона
+
+Сверка с эталоном (задача 19 плана финала): число посадок, отказов, площадь газона и цветников
+не дальше 5 % (и не меньше 5 штук или м²) от эталона, целостность, проверка плана и сверка
+экспорта - точно. Расхождение печатается построчно, код выхода 1. Новый эталон после
+осознанной правки - --write-golden <путь>.
 
 Параллельный режим запускает следующую улицу, только если хватает памяти: оценка пика улицы -
 1 ГБ + 25 x размер комплекта (Олимпийская деревня, 337 МБ -> 8,2 ГБ по замеру 28.09), сумма
@@ -46,8 +53,55 @@ KEYS = (
     "plan_valid",
     "export_matches_plan",
     "semantic_assignments_complete",
+    "lawn_m2",
+    "flowerbeds",
+    "flowerbed_m2",
     "total_ms",
 )
+# Что сверяется с эталоном: числа - с допуском, признаки - точно.
+GOLDEN_NUMBERS = ("placements", "allowed", "rejections", "lawn_m2", "flowerbed_m2")
+GOLDEN_FLAGS = ("integrity_ok", "plan_valid", "export_matches_plan")
+DRIFT_SHARE = 0.05
+DRIFT_FLOOR = 5.0
+
+
+def golden_of(rows: list[dict]) -> dict[str, dict]:
+    """Эталон из итогов прогона: итог улицы и сверяемые поля, которые в нём есть."""
+    golden = {}
+    for row in rows:
+        summary = row.get("summary", {})
+        golden[row["slug"]] = {
+            "state": row["state"],
+            **{k: summary[k] for k in (*GOLDEN_NUMBERS, *GOLDEN_FLAGS) if k in summary},
+        }
+    return golden
+
+
+def drift(rows: list[dict], golden: dict[str, dict]) -> list[str]:
+    """Расхождения прогона с эталоном, строка на поле: «улица: поле было -> стало»."""
+    by_slug = {row["slug"]: row for row in rows}
+    issues = []
+    for slug, expected in golden.items():
+        row = by_slug.get(slug)
+        if row is None:
+            issues.append(f"{slug}: нет в прогоне")
+            continue
+        if row["state"] != expected["state"]:
+            issues.append(f"{slug}: state {expected['state']} -> {row['state']}")
+            continue
+        summary = row.get("summary", {})
+        for key, was in expected.items():
+            now = summary.get(key)
+            if key == "state" or now == was:
+                continue
+            if (
+                key in GOLDEN_NUMBERS
+                and isinstance(now, (int, float))
+                and abs(now - was) <= max(DRIFT_FLOOR, DRIFT_SHARE * abs(was))
+            ):
+                continue
+            issues.append(f"{slug}: {key} {was} -> {now}")
+    return issues
 
 
 def run(job: tuple[str, str, str]) -> dict:
@@ -119,7 +173,7 @@ def _memory_gb() -> tuple[float, float]:
     return total, int(info["MemAvailable"].split()[0]) / 2**20
 
 
-def main() -> None:
+def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=ROOT / "dataset" / "streets_oda")
     parser.add_argument("--only", action="append", type=int, help="номера улиц")
@@ -131,7 +185,17 @@ def main() -> None:
     parser.add_argument(
         "--ram-factor", type=float, default=25.0, help="пик памяти улицы / размер комплекта"
     )
-    args = parser.parse_args()
+    parser.add_argument("--compare", type=Path, help="эталон: сверить итог прогона с ним")
+    parser.add_argument("--compare-only", type=Path, help="эталон: сверить готовые итоги")
+    parser.add_argument("--write-golden", type=Path, help="записать эталон из итога прогона")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _args()
+    if args.compare_only:
+        rows = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(OUT.glob("*.json"))]
+        sys.exit(_report(rows, args.compare_only))
     streets = [
         s
         for s in JsonStreetCatalog(args.catalog).all()
@@ -189,6 +253,11 @@ def main() -> None:
                     f"{row.get('error') or ''}"[:400],
                     flush=True,
                 )
+    _finish(rows, args)
+
+
+def _finish(rows: list[dict], args: argparse.Namespace) -> None:
+    """Таблица итогов, эталон и сверка с ним."""
     lines = [
         "| № | Улица | Итог | Секунд | Посадок | Отказов | Целостность | План верен | Ошибка |",
         "|---" * 9 + "|",
@@ -203,6 +272,22 @@ def main() -> None:
             f"{(row.get('error') or '')[:120]} |"
         )
     (OUT / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if args.write_golden:
+        args.write_golden.write_text(
+            json.dumps(golden_of(rows), ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    if args.compare:
+        sys.exit(_report(rows, args.compare))
+
+
+def _report(rows: list[dict], golden_path: Path) -> int:
+    golden = json.loads(golden_path.read_text(encoding="utf-8"))
+    issues = drift(rows, golden)
+    for issue in issues:
+        print(f"ДРЕЙФ {issue}", flush=True)
+    print(f"сверка с эталоном: улиц {len(golden)}, расхождений {len(issues)}", flush=True)
+    return 1 if issues else 0
 
 
 if __name__ == "__main__":
