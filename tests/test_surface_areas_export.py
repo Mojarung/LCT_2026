@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import shapely
 from shapely.geometry import Point, Polygon, box
@@ -18,9 +18,6 @@ from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.surfaces import build_surface_map
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.infrastructure.reports.artifacts import _round_turns, _smoothed, _surface
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 REF = SourceRef("f", "x", "1")
 SITE = box(0, 0, 60, 40)
@@ -207,3 +204,13 @@ def test_smoothing_does_not_glue_parts_across_a_curb_seam(tmp_path: Path) -> Non
     assert kinds["pavers"].intersection(tiles).area > 0.8 * tiles.area
     assert kinds["road"].intersection(tiles).area < 0.01
     assert kinds["road"].intersection(road).area > 0.9 * road.area
+
+
+def test_smoothing_survives_a_mitre_closing_that_crosses_itself() -> None:
+    """Олимпийская деревня, 18.10.2026: замыкание выемок с прямыми углами дало у кромки
+    тротуара самопересечение, и пересечение GEOS роняло весь прогон (TopologyException)."""
+    data = Path(__file__).parent / "data" / "paved_mitre_self_intersection.wkt"
+    area = shapely.from_wkt(data.read_text(encoding="utf-8"))
+    smooth = _smoothed(area)
+    assert smooth.is_valid
+    assert smooth.area > 0.9 * area.area

@@ -937,8 +937,18 @@ def _smoothed(area: BaseGeometry) -> BaseGeometry:
     notches = area.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
     # Пила из зубцов в полметра (стенка выемки, Камчатская) переживает срез и заливку с
     # прямыми углами: она выпрямляется упрощением с тем же допуском, дуги потом скругляет
-    # _round_turns.
-    return _simplified(closed.intersection(notches), r) or shapely.Polygon()
+    # _round_turns. Буфер с прямыми углами бывает самопересекающимся (Олимпийская деревня): GEOS
+    # тогда роняет пересечение, поэтому оба контура сперва чинятся до площадных частей.
+    return _simplified(_areal(closed).intersection(_areal(notches)), r) or shapely.Polygon()
+
+
+def _areal(geometry: BaseGeometry) -> BaseGeometry:
+    """Площадные части исправленной геометрии: make_valid даёт и линии, и точки."""
+    if geometry.is_valid:
+        return geometry
+    fixed = shapely.make_valid(geometry)
+    parts = [p for p in shapely.get_parts(fixed) if p.geom_type in {"Polygon", "MultiPolygon"}]
+    return shapely.union_all(parts) if parts else shapely.Polygon()
 
 
 def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry | None) -> str:
