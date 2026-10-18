@@ -132,6 +132,40 @@ class SurfaceMap:
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
     # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
     _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
+    # Грунт разлива контуром: нужен газонам плана, считается один раз (растр в контур - секунды).
+    _label_soil: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
+
+    def label_soil_area(self) -> BaseGeometry | None:
+        """Грунт, разлитый от подписей (совмещённый режим), контуром, а не растром.
+
+        Только клетки разлива: точные контуры грунта, покрытия, неясного материала и
+        функциональных площадок из него вычтены, лесенка клеток выпрямлена на клетку. Граница
+        приблизительная: она не дальше max_distance_m от подписи и не переходит линий покрытий.
+        """
+        if not self.fallback_soil_m2 or self.inferred_grid is None:
+            return None
+        cached = self._label_soil
+        if cached is not None:
+            return None if cached.is_empty else cached
+        raw = cells_area(self.inferred_grid == Material.SOIL, self.origin, self.cell)
+        area = shapely.Polygon()
+        if raw is not None:
+            area = shapely.make_valid(shapely.simplify(raw, self.cell, preserve_topology=True))
+            cut = [
+                a
+                for a in (
+                    self.soil_area,
+                    self.paved_area,
+                    self.uncertainty_area,
+                    self.functional_area,
+                )
+                if a is not None and not a.is_empty
+            ]
+            if cut:
+                area = area.difference(shapely.union_all(cut))
+            area = _soil_polygons(area) or shapely.Polygon()
+        object.__setattr__(self, "_label_soil", area)
+        return None if area.is_empty else area
 
     def material(self, points: NDArray[np.object_]) -> NDArray[np.int8]:
         """Материал под каждой точкой; вне растра UNKNOWN."""
@@ -764,6 +798,22 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
         soil_m2=float((grid == Material.SOIL).sum()) * area,
         paved_m2=float((grid == Material.PAVED).sum()) * area,
     )
+
+
+def cells_area(
+    mask: NDArray[np.bool_], origin: tuple[float, float], cell: float
+) -> BaseGeometry | None:
+    """Клетки маски одним контуром: полосы клеток по строкам, слитые вместе."""
+    boxes = []
+    ox, oy = origin
+    for row in np.flatnonzero(mask.any(axis=1)):
+        edges = np.diff(np.concatenate(([0], mask[row].astype(np.int8), [0])))
+        starts, ends = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
+        y = oy + row * cell
+        boxes.append(shapely.box(ox + starts * cell, y, ox + ends * cell, y + cell))
+    if not boxes:
+        return None
+    return shapely.union_all(np.concatenate(boxes), grid_size=cell / 100)
 
 
 def _soil_polygons(area: BaseGeometry | None) -> BaseGeometry | None:

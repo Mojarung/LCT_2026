@@ -21,7 +21,7 @@ from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
 from green.application.name_model import name_key
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
-from green.application.surfaces import Material
+from green.application.surfaces import Material, cells_area
 from green.domain.objects import ObjectClass
 from green.domain.planting import Placement, Rejection
 from green.infrastructure.cad.writer import RESULT_LAYERS_SUFFIX, save_result_layers
@@ -865,8 +865,8 @@ def _surface_areas(
     exact_paved = _without(surface.paved_area, uncertain)
     exact_soil = _without(surface.soil_area, shapely.union_all([exact_paved, uncertain]))
     tolerance = cell * SURFACE_RASTER_TOLERANCE_CELLS
-    raster_paved = _cells(grid == int(Material.PAVED), surface.origin, cell)
-    raster_soil = _cells(grid == int(Material.SOIL), surface.origin, cell)
+    raster_paved = cells_area(grid == int(Material.PAVED), surface.origin, cell)
+    raster_soil = cells_area(grid == int(Material.SOIL), surface.origin, cell)
     paved = shapely.union_all(
         [
             _without(_simplified(raster_paved, tolerance), exact_soil),
@@ -998,20 +998,6 @@ def _polygon_rings(polygon: BaseGeometry) -> list[list[list[float]]]:
         [[round(x, 2), round(y, 2)] for x, y in _round_turns(ring.coords)]
         for ring in (polygon.exterior, *polygon.interiors)
     ]
-
-
-def _cells(mask: np.ndarray, origin: tuple[float, float], cell: float) -> BaseGeometry | None:
-    """Клетки маски одним контуром: полосы клеток по строкам, слитые вместе."""
-    boxes = []
-    ox, oy = origin
-    for row in np.flatnonzero(mask.any(axis=1)):
-        edges = np.diff(np.concatenate(([0], mask[row].astype(np.int8), [0])))
-        starts, ends = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
-        y = oy + row * cell
-        boxes.append(shapely.box(ox + starts * cell, y, ox + ends * cell, y + cell))
-    if not boxes:
-        return None
-    return shapely.union_all(np.concatenate(boxes), grid_size=cell / 100)
 
 
 def _simplified(area: BaseGeometry | None, tolerance: float) -> BaseGeometry | None:

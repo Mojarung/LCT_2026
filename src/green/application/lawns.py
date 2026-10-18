@@ -9,8 +9,10 @@
 становится. Каждый участок объясняется только правилами `lawn_rules` свода норм: для вида
 газона без своего правила участки не выделяются.
 
-Грунт, выведенный по близости подписи (совмещённый режим карты покрытий), есть только в растре:
-газоном он не становится, пока контур не замкнут, и предупреждение называет его площадь.
+Грунт, выведенный по близости подписи (совмещённый режим карты покрытий), тоже даёт газон: на
+7 из 19 улиц пилота другого грунта нет (замер 18.10.2026), а деревья на нём сажаются. Растр
+разлива переводится в контур (`SurfaceMap.label_soil_area`), участок получает заметку, что
+граница приблизительная и уточняется по месту.
 Сохраняется газон или восстанавливается после посадки, сервис не различает: объём работ на
 участке определяет проектировщик.
 """
@@ -49,9 +51,11 @@ LAWN_PREFIX = "L"
 # прошлого расчёта снимаются по этому началу, а не копятся.
 WARNING_PREFIX = "Газоны: "
 _AREA_TYPES = frozenset({"Polygon", "MultiPolygon"})
-_LINE_TYPES = frozenset({"LineString", "LinearRing"})
+# LineString и LinearRing (shapely.GeometryType).
+_LINE_TYPE_IDS = (1, 2)
 _LAWN_WORD = "ГАЗОН"
 _FLOWERBED_WORD = "ЦВЕТНИК"
+_GROUND_WORD = "ГРУНТ"  # любая другая подпись грунта
 _MARKER = "SYMBOL_MARKER"
 # Посадочное место касается участка по границе разности; касание ищется с запасом округления.
 _TOUCH_M = 0.01
@@ -61,6 +65,12 @@ _KIND_NOTES = {
     LawnKind.NEW: "грунт без газона и цветника по чертежу",
 }
 _KIND_NAMES = {LawnKind.KEPT: "сохраняемого газона", LawnKind.NEW: "устраиваемого газона"}
+# Подпись грани разлива ищется не дальше разлива и ещё двух клеток растра (выпрямление).
+_SPREAD_REACH_CELLS = 2.0
+_MOSTLY = 0.5
+_SPREAD_NOTE = (
+    "граница по близости подписи (не дальше {} м), в чертеже контур не замкнут: уточнить по месту"
+)
 
 
 def plan_lawns(  # noqa: PLR0913 - этап читает план, подоснову, карту покрытий, нормы и профиль
@@ -77,25 +87,28 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
     plan = replace(plan, lawns=(), warnings=warnings)
     if not params.lawns:
         return plan
-    soil = surface.soil_area if surface is not None else None
-    if surface is not None and surface.open_ground_area is not None:
-        # Чертёж без признаков грунта: свободная земля в границе работ - устраиваемый газон.
-        soil = shapely.union_all([soil, surface.open_ground_area])
+    spread = surface.label_soil_area() if surface is not None else None
+    soil = _all_soil(surface, spread)
     if surface is None or soil is None or soil.is_empty:
         return _warn(plan, ["не выделены, в карте покрытий нет грунта замкнутых контуров."])
     boundary = work_boundary(features)
     if boundary is None and params.require_work_boundary:
         return _warn(plan, ["не выделены, в чертеже нет границы работ."])
     if boundary is not None:
-        soil = soil.intersection(boundary)
+        # Грунт, касающийся границы ребром, даёт в пересечении линию: у коллекции с линией нет
+        # границы, и грани грунта не строились (Куликовская, 18.10.2026). Только площади.
+        soil = _areal(soil.intersection(boundary))
     # Explicit soil contours can overlap uncertain material (e.g. an open
     # HATCH). Trees use SurfaceMap.material/fits_soil; lawns must honour the
     # same exclusion instead of treating the raw soil polygon as proof.
     if surface.uncertainty_area is not None or surface.woodland_area is not None:
-        soil = soil.difference(shapely.union_all([surface.uncertainty_area, surface.woodland_area]))
+        soil = _areal(
+            soil.difference(shapely.union_all([surface.uncertainty_area, surface.woodland_area]))
+        )
     pits, is_tree = _pits(plan.placements, params)
     free = soil.difference(shapely.union_all(pits)) if len(pits) else soil
-    drawn, flowerbeds = _drawn(features, labels, soil)
+    reach = surface.max_distance_m + surface.cell * _SPREAD_REACH_CELLS
+    drawn, flowerbeds = _drawn(features, labels, soil, spread, reach)
     areas = {
         LawnKind.KEPT: free.intersection(drawn),
         LawnKind.NEW: free.difference(shapely.union_all([drawn, flowerbeds])),
@@ -118,7 +131,10 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         chosen.extend((kind, polygon, rule_ids) for polygon in big)
     chosen.sort(key=lambda item: (_ORDER[item[0]], -item[1].area, item[1].bounds))
 
-    touched = _touching_pits(np.array([g for _, g, _ in chosen], dtype=object), pits, is_tree)
+    geometries = np.array([g for _, g, _ in chosen], dtype=object)
+    touched = _touching_pits(geometries, pits, is_tree)
+    approximate = _mostly_in(geometries, spread)
+    border = _SPREAD_NOTE.format(_metres(surface.max_distance_m))
     lawns = tuple(
         Lawn(
             lawn_id=f"{LAWN_PREFIX}{number:05d}",
@@ -126,7 +142,10 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
             kind=kind,
             geometry=geometry,
             rule_ids=rule_ids,
-            notes=_notes(kind, touched[number - 1], params),
+            notes=(
+                *_notes(kind, touched[number - 1], params),
+                *((border,) if approximate[number - 1] else ()),
+            ),
         )
         for number, (kind, geometry, rule_ids) in enumerate(chosen, 1)
     )
@@ -140,8 +159,18 @@ def plan_lawns(  # noqa: PLR0913 - этап читает план, подосн�
         **plan.stats,
         "lawn_small_parts": len(small),
         "lawn_small_m2": round(sum(small), 1),
+        "lawn_label_m2": round(float(shapely.area(geometries[approximate]).sum()), 1),
     }
     return _warn(replace(plan, lawns=lawns, stats=stats), notes)
+
+
+def _all_soil(surface: SurfaceMap | None, spread: BaseGeometry | None) -> BaseGeometry | None:
+    """Грунт контурами, запасной грунт чертежа без признаков грунта и разлив подписей."""
+    if surface is None:
+        return None
+    # Чертёж без признаков грунта: свободная земля в границе работ - устраиваемый газон.
+    parts = [a for a in (surface.soil_area, surface.open_ground_area, spread) if a is not None]
+    return shapely.union_all(parts) if parts else None
 
 
 def _warn(plan: Plan, notes: Sequence[str]) -> Plan:
@@ -175,13 +204,19 @@ def _pits(
 
 
 def _drawn(
-    features: Sequence[Feature], labels: Sequence[TextLabel], soil: BaseGeometry
+    features: Sequence[Feature],
+    labels: Sequence[TextLabel],
+    soil: BaseGeometry,
+    spread: BaseGeometry | None,
+    reach: float,
 ) -> tuple[BaseGeometry, BaseGeometry]:
     """Газон и цветники по чертежу внутри грунта.
 
     Контур слоя газона - газон. Грань грунта со знаком газона или подписью «ГАЗОН» - газон, с
     подписью «ЦВЕТНИК» и без признака газона - цветник, и цветник газоном не бывает, даже внутри
-    контура слоя газона.
+    контура слоя газона. Грань разлива подписи без своей подписи (подпись у самого края за
+    выпрямленной лесенкой клеток или в соседней грани за незамкнутой линией) берёт вид от
+    ближайшей подписи грунта не дальше reach: разлив и шёл от неё.
     """
     contours = [
         inner_area(f)
@@ -193,16 +228,29 @@ def _drawn(
         for f in features
         if f.object_class is ObjectClass.LAWN and f.source_entity_type == _MARKER
     ]
-    flower_marks = []
+    flower_marks, ground_marks = [], []
     for label in labels:
         word = _material_word(label)
         if word == _LAWN_WORD:
             lawn_marks.append(Point(label.x, label.y))
         elif word == _FLOWERBED_WORD:
             flower_marks.append(Point(label.x, label.y))
+        elif word == _GROUND_WORD:
+            ground_marks.append(Point(label.x, label.y))
     faces = _faces(features, soil)
     lawn_faces = _marked(faces, lawn_marks)
-    flowerbeds = shapely.union_all(faces[_marked(faces, flower_marks) & ~lawn_faces])
+    flower_faces = _marked(faces, flower_marks)
+    orphan = _mostly_in(faces, spread) & ~(lawn_faces | flower_faces | _marked(faces, ground_marks))
+    marks = [*lawn_marks, *flower_marks, *ground_marks]
+    if orphan.any() and marks:
+        rows = np.flatnonzero(orphan)
+        pairs = STRtree(np.array(marks, dtype=object)).query_nearest(
+            faces[rows], max_distance=reach
+        )
+        lawn_faces[rows[pairs[0][pairs[1] < len(lawn_marks)]]] = True
+        flower = (pairs[1] >= len(lawn_marks)) & (pairs[1] < len(lawn_marks) + len(flower_marks))
+        flower_faces[rows[pairs[0][flower]]] = True
+    flowerbeds = shapely.union_all(faces[flower_faces & ~lawn_faces])
     drawn = shapely.union_all([*contours, *faces[lawn_faces]]).difference(flowerbeds)
     return drawn, flowerbeds
 
@@ -214,18 +262,19 @@ def _faces(features: Sequence[Feature], soil: BaseGeometry) -> NDArray[np.object
     материала относятся к своей грани: цветник за садовым бортом не забирает соседний газон.
     """
     polygons = np.array(_polygons(soil), dtype=object)
-    lines = np.array(
-        [
-            part
-            for f in features
-            if f.object_class.is_surface_barrier and f.object_class is not ObjectClass.WORK_BOUNDARY
-            for part in shapely.get_parts(
+    # Части всех линий одним вызовом: по одному get_parts на объект - 5 с на Понтрягина.
+    parts = shapely.get_parts(
+        np.array(
+            [
                 f.geometry.boundary if f.geometry.geom_type in _AREA_TYPES else f.geometry
-            )
-            if part.geom_type in _LINE_TYPES
-        ],
-        dtype=object,
+                for f in features
+                if f.object_class.is_surface_barrier
+                and f.object_class is not ObjectClass.WORK_BOUNDARY
+            ],
+            dtype=object,
+        )
     )
+    lines = parts[np.isin(shapely.get_type_id(parts), _LINE_TYPE_IDS)]
     if not len(polygons) or not len(lines):
         return polygons
     inside = STRtree(lines).query(soil, predicate="intersects")
@@ -248,7 +297,7 @@ def _material_word(label: TextLabel) -> str | None:
         return _LAWN_WORD
     if _FLOWERBED_WORD in text:
         return _FLOWERBED_WORD
-    return None
+    return _GROUND_WORD
 
 
 def _marked(parts: NDArray[np.object_], marks: Sequence[BaseGeometry]) -> NDArray[np.bool_]:
@@ -257,6 +306,15 @@ def _marked(parts: NDArray[np.object_], marks: Sequence[BaseGeometry]) -> NDArra
         pairs = STRtree(parts).query(np.array(marks, dtype=object), predicate="within")
         hit[pairs[1]] = True
     return hit
+
+
+def _mostly_in(parts: NDArray[np.object_], area: BaseGeometry | None) -> NDArray[np.bool_]:
+    """Части, больше половины площади которых лежит в area."""
+    if area is None or not len(parts):
+        return np.zeros(len(parts), dtype=bool)
+    shapely.prepare(area)
+    inside = shapely.area(shapely.intersection(parts, area))
+    return inside > _MOSTLY * shapely.area(parts)
 
 
 def _touching_pits(
@@ -296,6 +354,11 @@ def _polygons(geometry: BaseGeometry | None) -> list[BaseGeometry]:
         elif part.geom_type in {"MultiPolygon", "GeometryCollection"}:
             result.extend(_polygons(part))
     return result
+
+
+def _areal(geometry: BaseGeometry) -> BaseGeometry:
+    polygons = _polygons(geometry)
+    return shapely.union_all(polygons) if polygons else shapely.Polygon()
 
 
 def _m2(value: float) -> str:
