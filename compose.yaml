@@ -16,8 +16,9 @@ services:
       # прогоном самые старые законченные удаляются, пока том прогонов больше предела.
       GREEN_RUNS_MAX_GB: "8"
       # Подсказки локальной LLM по именам слоёв на странице уточнения (только совет, план от
-      # них не зависит). Пусто - выключено. Ollama на этой машине: GREEN_LLM_URL=
-      # http://host.docker.internal:11434 в .env рядом с compose.yaml.
+      # них не зависит). Пусто - выключено. Своя Ollama в compose: GREEN_LLM_URL=
+      # http://ollama:11434 и `docker compose --profile llm up -d`; Ollama на этой машине:
+      # GREEN_LLM_URL=http://host.docker.internal:11434 (в .env рядом с compose.yaml).
       GREEN_LLM_URL: ${GREEN_LLM_URL:-}
       GREEN_LLM_MODEL: ${GREEN_LLM_MODEL:-gemma4:e4b-it-qat}
     extra_hosts:
@@ -27,5 +28,33 @@ services:
       - ./dataset:/dataset:ro
     restart: unless-stopped
 
+  # Локальная LLM для подсказок (профиль llm, по умолчанию не поднимается). Образ 3,8 ГБ и модель
+  # 6,1 ГБ на диске, 3,3 ГБ памяти; без видеокарты NVIDIA считает процессор - подсказки для
+  # десятков имён занимают минуты, прогон их не ждёт дольше GREEN_LLM_TIMEOUT_S.
+  ollama:
+    image: ollama/ollama:0.40.5
+    profiles: [llm]
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # Однократная загрузка модели в том ollama: интернет нужен только при первом запуске.
+  ollama-pull:
+    image: ollama/ollama:0.40.5
+    profiles: [llm]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${GREEN_LLM_MODEL:-gemma4:e4b-it-qat}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   runs:
+  ollama:
