@@ -51,7 +51,8 @@ Kubernetes по желанию: `kubectl apply -k deploy/k8s`.
 4. Скачать `result.dxf` (план на слоях `GREEN_*`, исходные слои не тронуты) и открыть в
    nanoCAD или LibreCAD; `result_layers.dxf` - только слои результата для наложения на свою
    подоснову. Объяснения: `interpretations.md` / `report.html` (посадка -> норма -> пункт),
-   `workbook.xlsx` (ведомость и все проверки числами).
+   `workbook.xlsx` (ведомость, цветники и все проверки числами), `note.docx` (пояснительная
+   записка с нормативной базой, решениями и ведомостью по форме 9).
 
 Без Docker (Python 3.14, [uv](https://docs.astral.sh/uv/)):
 

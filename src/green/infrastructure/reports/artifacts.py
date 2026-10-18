@@ -31,6 +31,7 @@ from green.infrastructure.reports.interpretation_report import (
     write_markdown,
     write_plantings_csv,
 )
+from green.infrastructure.reports.note_docx import write_note
 from green.infrastructure.reports.png import encode_rgba
 from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
@@ -109,6 +110,7 @@ class FileArtifactSink:
             "workbook.xlsx": write_workbook(
                 directory / "workbook.xlsx", report.plan, report.rulebook
             ),
+            "note.docx": write_note(directory / "note.docx", report),
             "result_layers.dxf": write_result_layers(
                 report.output_dxf, directory / "result_layers.dxf"
             ),

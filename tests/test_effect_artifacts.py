@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import docx
 import ezdxf
 import orjson
 import pytest
@@ -65,3 +66,20 @@ def test_readable_report_has_the_balance_and_kinds(run: dict[str, object]) -> No
         assert "Виды посадок" in text
         assert "Деревья" in text
     assert md.index("## Баланс озеленения") < md.index("## Нормативная база")
+
+
+def test_explanatory_note_docx_has_sections_and_the_schedule(run: dict[str, object]) -> None:
+    """Пояснительная записка (задача 12 плана финала): разделы как у записок пилота и ведомость
+    по форме 9 с теми же штуками, что в DXF и workbook.xlsx."""
+    document = docx.Document(str(_read(run, "note.docx")))
+    headings = [p.text for p in document.paragraphs if p.style.name.startswith("Heading")]
+    assert headings[:3] == ["1. Общие сведения", "2. Нормативная база", "3. Принятые решения"]
+    assert "5. Ведомость элементов озеленения" in headings
+    report = run["report"]
+    schedule = next(t for t in document.tables if t.rows[0].cells[0].text == "Поз.")
+    counts = [
+        int(row.cells[3].text.removesuffix(" шт."))
+        for row in schedule.rows[1:]
+        if row.cells[0].text.isdigit()
+    ]
+    assert sum(counts) == len(report.plan.placements)  # type: ignore[attr-defined]

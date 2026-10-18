@@ -26,6 +26,11 @@ const HEADLINE: { name: string; label: string; what: string; open?: boolean }[] 
     open: true,
   },
   {
+    name: 'note.docx',
+    label: 'Пояснительная записка · DOCX',
+    what: 'Участок, нормативная база, решения, баланс «было - стало» и ведомость по форме 9',
+  },
+  {
     name: 'classification.json',
     label: 'Распознавание объектов · JSON',
     what: 'Как сервис отнёс объекты чертежа к классам: распознано, выведено по имени, не опознано',

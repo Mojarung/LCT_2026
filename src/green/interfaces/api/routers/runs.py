@@ -36,6 +36,7 @@ MEDIA_TYPES = {
     ".md": "text/markdown; charset=utf-8",
     ".html": "text/html; charset=utf-8",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
 

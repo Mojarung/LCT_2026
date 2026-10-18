@@ -23,6 +23,7 @@ from green.application.explain import (
     crown_increment_m,
 )
 from green.application.places import PLACE_LABELS
+from green.application.schedule import SECTIONS, build_schedule
 from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome
 
@@ -596,3 +597,150 @@ def write_plantings_csv(path: Path, report: RunReport) -> Path:
                 ]
             )
     return path
+
+
+@dataclass(frozen=True, slots=True)
+class NoteSection:
+    """Раздел пояснительной записки: текст, пункты списка и таблица (что есть)."""
+
+    title: str
+    text: tuple[str, ...] = ()
+    items: tuple[str, ...] = ()
+    head: tuple[str, ...] = ()
+    rows: tuple[tuple[str, ...], ...] = ()
+
+
+SCHEDULE_HEAD = (
+    "Поз.",
+    "Наименование",
+    "Латинское название",
+    "Кол-во",
+    "Стандарт",
+    "Ком, м",
+    "Примечание",
+)
+_NOTE_PURPOSE = (
+    "План посадок деревьев, кустарников, газонов и цветников подготовлен сервисом green по "
+    "чертежу участка. Результат записан в DXF на отдельных слоях GREEN_*, исходные слои "
+    "чертежа не изменены. Каждая посадка и каждый отказ объяснены пунктами нормативных актов: "
+    "по посадке - в отчёте report.html и в таблице interpretations.csv, сводно - в этой записке."
+)
+_NOTE_DECISIONS = (
+    "Места посадок проверены по отступам от сетей, зданий, бортов и существующих насаждений "
+    "(СП 42.13330, табл. 9.1; 743-ПП; МГСН 1.02-02). Вид дерева и кустарника подобран по "
+    "условиям места: категория территории, свет, засоление, сети рядом. Газон выделен на "
+    "грунте, который посадки оставили свободным, цветники - на газоне у покрытия."
+)
+_NOTE_SCHEDULE = (
+    "Ведомость элементов озеленения по ГОСТ 21.508-2020, п. 10.8, форма 9: позиция, вид, "
+    "количество, стандарт посадочного материала. Размер ямы под ком - 743-ПП, табл. 3.3.1."
+)
+_NOTE_FILES = (
+    "result.dxf - план на слоях GREEN_*; result_layers.dxf - только слои результата",
+    "report.html, interpretations.csv - объяснение каждой посадки и отказа",
+    "workbook.xlsx - ведомость, цветники и все проверки числами",
+    "verify.json - сверка исходных слоёв до и после записи",
+)
+
+
+def note_sections(report: RunReport) -> list[NoteSection]:
+    """Разделы пояснительной записки из тех же данных, что отчёт интерпретаций."""
+    rules = _Rules(report.rulebook)
+    plan = report.plan
+    sections = [
+        NoteSection(
+            "1. Общие сведения",
+            text=(_NOTE_PURPOSE,),
+            items=tuple(f"{name}: {value}" for name, value in _header(report)),
+        ),
+        NoteSection(
+            "2. Нормативная база",
+            head=("Акт", "Редакция и сверка", "Текст"),
+            rows=tuple(tuple(row) for row in _acts(plan, rules)),
+        ),
+    ]
+    if plan.effect is not None:
+        sections += [
+            NoteSection(
+                "3. Принятые решения",
+                text=(_NOTE_DECISIONS,),
+                head=KIND_HEAD,
+                rows=tuple(tuple(row) for row in _kind_rows(plan.effect)),
+            ),
+            NoteSection(
+                "4. Баланс озеленения «было - стало»",
+                text=(_EFFECT_HOW,),
+                head=EFFECT_HEAD,
+                rows=tuple(tuple(row) for row in _effect_rows(plan.effect)),
+            ),
+        ]
+    sections.append(
+        NoteSection(
+            "5. Ведомость элементов озеленения",
+            text=(_NOTE_SCHEDULE,),
+            head=SCHEDULE_HEAD,
+            rows=tuple(_schedule_rows(plan)),
+        )
+    )
+    if blocked := blocked_rows(plan, report.rulebook):
+        sections.append(
+            NoteSection(
+                "6. Почему часть грунта осталась без посадок",
+                text=(_BLOCKED_HOW,),
+                head=BLOCKED_HEAD,
+                rows=tuple(tuple(row) for row in blocked),
+            )
+        )
+    sections += [
+        NoteSection(
+            "7. Допущения и что проверить по месту",
+            items=tuple(plan.warnings) or ("Замечаний прогона нет.",),
+        ),
+        NoteSection("8. Состав выдачи", items=_NOTE_FILES),
+    ]
+    return sections
+
+
+def _schedule_rows(plan: Plan) -> list[tuple[str, ...]]:
+    rows: list[tuple[str, ...]] = []
+    schedule = build_schedule(plan.placements)
+    for section in SECTIONS:
+        members = [row for row in schedule if row.section == section]
+        if members:
+            rows.append(("", section, "", "", "", "", ""))
+        rows.extend(
+            (
+                str(row.number),
+                row.name_ru,
+                row.name_lat,
+                f"{row.count} шт.",
+                row.stock.group,
+                row.stock.ball,
+                "; ".join(row.conditions),
+            )
+            for row in members
+        )
+    lawns = [g for g in plan.lawns if g.kind is not LawnKind.FLOWERBED]
+    if lawns:
+        rows.append(("", "Газоны", "", "", "", "", ""))
+        for kind in (LawnKind.KEPT, LawnKind.NEW):
+            area = sum(g.area_m2 for g in lawns if g.kind is kind)
+            if area:
+                rows.append(("", f"Газон {LAWN_LABELS[kind]}", "", f"{_num(area)} м²", "", "", ""))
+    beds = [g for g in plan.lawns if g.kind is LawnKind.FLOWERBED]
+    if beds:
+        rows.append(("", "Цветники из многолетников", "", "", "", "", ""))
+        for bed in beds:
+            rows.extend(
+                (
+                    f"Ц{bed.number}",
+                    name,
+                    latin,
+                    f"{count} шт.",
+                    "рассада в контейнере С1-С2",
+                    "",
+                    f"{bed.mix}, {_num(bed.area_m2)} м²",
+                )
+                for name, latin, count in bed.plants
+            )
+    return rows
