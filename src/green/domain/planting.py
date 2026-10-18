@@ -220,6 +220,9 @@ class Placement:
     # Место посадки (application/places): roadside, street, yard, square, park, unknown;
     # пусто - ещё не определялось.
     place: str = ""
+    # Доля светлых часов сезона вегетации в тени зданий (application/insolation); None - не
+    # считалась (нет объёмов зданий или посадка добавлена правкой).
+    shade: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

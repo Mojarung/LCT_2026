@@ -421,6 +421,7 @@ class ProfileModel(_Strict):
     shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
     lawns: bool = True
     lawn_min_area_m2: float = Field(default=5.0, ge=0, le=10_000)
+    shade_sun_max: float = Field(default=0.5, gt=0, le=1)
     tree_group_side_m: float = Field(default=6.0, ge=3, le=15)
     tree_group_step_m: float = Field(default=18.0, ge=8, le=100)
     flowerbeds: bool = True

@@ -72,6 +72,7 @@ def species_verdict(
         _distances,
         _overhead,
         _hardiness,
+        _light,
         _salt,
     ):
         blocking = check(species, ctx, rulebook, params, reasons)
@@ -242,6 +243,24 @@ def _hardiness(
         f"зона морозостойкости вида {species.hardiness_zone} выше региональной "
         f"{params.region_hardiness_zone}",
         source=species.sources.get("hardiness_zone", "справочник"),
+    )
+
+
+def _light(
+    species: Species,
+    ctx: SiteContext,
+    _rulebook: RuleBook,
+    params: PlanParams,
+    _reasons: list[Reason],
+) -> Reason | None:
+    """Светолюбивый вид (light: sun) не ставится туда, где тень зданий большую часть дня."""
+    if ctx.shade is None or species.light != "sun" or ctx.shade < params.shade_sun_max:
+        return None
+    return Reason(
+        REFERENCE,
+        f"место в тени зданий {ctx.shade:.0%} светлых часов сезона вегетации, а вид "
+        f"светолюбив (предел - {params.shade_sun_max:.0%}, параметр проекта)",
+        source=species.sources.get("light", "справочник"),
     )
 
 

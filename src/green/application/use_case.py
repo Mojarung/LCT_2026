@@ -28,6 +28,7 @@ from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
+from green.application.insolation import ShadeMap, with_shade
 from green.application.kerbs import refine_kerbs
 from green.application.lawns import plan_lawns
 from green.application.name_hints import NameHint, name_hints
@@ -313,6 +314,8 @@ class PlanSite:
             # Отдельного этапа у них нет: на встроенном фрагменте Берзарина это 0,07 с, на
             # сцене из 560 тыс. объектов (49 копий фрагмента) - 2,8 с.
             volumes = build_volumes(features, scene.labels)
+            # Тень зданий над местами посадок: подбор не ставит светолюбивый вид в тень.
+            shade = ShadeMap(volumes.buildings)
         # Подсказки LLM - после подосновы: карта не ждёт модель (на процессоре - минуты).
         hints: tuple[NameHint, ...] = ()
         if self._hinter is not None and params.llm_hints:
@@ -350,7 +353,7 @@ class PlanSite:
                     features, scene.labels, rulebook, species, params, surface=surface
                 )
                 # Место посадки до подбора вида: категория В.6 у двора и улицы своя.
-                plan = with_places(plan, places)
+                plan = with_shade(with_places(plan, places), shade)
                 if places.note:
                     plan = replace(plan, warnings=(*plan.warnings, places.note))
             with watch.stage("assort"):
@@ -422,7 +425,7 @@ class PlanSite:
                     )
                     warnings = (*plan.warnings, *(note for note in removed if note))
                     plan = replace(plan, placements=renumbered, warnings=warnings)
-            plan = with_places(plan, places)
+            plan = with_shade(with_places(plan, places), shade)
             with watch.stage("validate_plan"):
                 validation = validate_plan(
                     plan,

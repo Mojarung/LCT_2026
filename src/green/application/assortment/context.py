@@ -34,6 +34,8 @@ class SiteContext:
     # Категория В.6 места посадки (application/places); None - место не определено,
     # берётся категория профиля.
     category: str | None = None
+    # Доля светлых часов в тени зданий (application/insolation); None - не считалась.
+    shade: float | None = None
 
 
 def site_context(
@@ -62,6 +64,7 @@ def site_context(
         structure_id=structure_id,
         structure_kind=structure_kind,
         category=category_of(placement.place, "") or None,
+        shade=placement.shade,
     )
 
 
