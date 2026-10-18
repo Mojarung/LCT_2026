@@ -285,3 +285,40 @@ def test_colour_sheet_regulation_lines_are_annotation(block: str) -> None:
     found, evidence = LAYER_MAP.decide(_feature("17.Наташинский_ГЕО_ЦВЕТ$0$_Внешние ссылки", block))
     assert evidence.method == "name_rule"
     assert found is ObjectClass.IGNORE
+
+
+@pytest.mark.parametrize(
+    "layer", ["Доп подземка$0$Level 3", "Доп подземка$0$Level 17", "Доп подземка$0$Level 51"]
+)
+def test_levels_of_an_underground_survey_xref_are_networks(layer: str) -> None:
+    """Харьковская, 18.10.2026: внешняя ссылка «Доп подземка» из MicroStation - слои Level N
+    без смысла, а сами линии - подземные сети. По геометрии они были «контуром» без отступов;
+    вид сети неизвестен, поэтому - сеть неизвестного вида с её отступами."""
+    found, evidence = LAYER_MAP.decide(_feature(layer, "Доп подземка"))
+    assert found is ObjectClass.UTILITY_UNKNOWN
+    assert evidence.method == "name_rule"
+
+
+def test_levels_of_a_topographic_xref_stay_unresolved() -> None:
+    found, _ = LAYER_MAP.decide(_feature("Доп топо$0$Level 41", "Доп топо"))
+    assert found is not ObjectClass.UTILITY_UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("layer", "block"),
+    [
+        ("xref196484$0$!Project_traffic line 1.14.1", "*U658"),  # «зебра», Песчаный
+        ("ПЕШ.переход Сущ", "*U438"),  # Наташинский
+        ("ПЕШ.переход", None),
+    ],
+)
+def test_pedestrian_crossing_marking_is_annotation(layer: str, block: str | None) -> None:
+    """Разметка пешеходного перехода лежит на проезжей части: ограничение даёт покрытие."""
+    found, evidence = LAYER_MAP.decide(_feature(layer, block))
+    assert found is ObjectClass.IGNORE
+    assert evidence.method == "name_rule"
+
+
+def test_underground_crossing_is_still_a_structure() -> None:
+    found, _ = LAYER_MAP.decide(_feature("Подземный переход", None))
+    assert found is ObjectClass.STRUCTURE
