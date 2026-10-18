@@ -147,3 +147,19 @@ def test_flowerbed_goes_to_its_own_layer_and_passes_the_export_check(tmp_path: P
     texts = [e.dxf.text for e in doc.modelspace().query("TEXT") if e.dxf.layer == "GREEN_FLOWERBED"]
     assert texts == ["Ц1"]
     assert check_written_plan(result, plan, unit_m=1.0).ok
+
+
+# Узоры штриховок LibreCAD 2.2 (/usr/share/librecad/patterns в образе docker/cadcheck):
+# штриховку с узором не из списка LibreCAD выбрасывает при открытии («Invalid objects
+# removed: 1» - цветник с узором STARS, 18.10.2026).
+LIBRECAD_PATTERNS = {"ANSI31", "BRICK", "DOLMIT", "EARTH", "ESCHER", "GRASS", "HEX", "SAND"}
+
+
+def test_result_hatches_use_patterns_librecad_knows(tmp_path: Path) -> None:
+    doc = ezdxf.readfile(_write(tmp_path, _with_flowerbed()))
+
+    patterns = {
+        h.dxf.pattern_name.upper() for h in doc.modelspace().query("HATCH") if not h.dxf.solid_fill
+    }
+    assert patterns
+    assert patterns <= LIBRECAD_PATTERNS

@@ -95,8 +95,9 @@ LAWN_LAYERS = {
     LawnKind.NEW: LAYER_LAWN,
     LawnKind.FLOWERBED: LAYER_FLOWERBED,
 }
-# Цветник - узор звёздочками из acad.pat (цветы), не заливка: подоснова под ним видна.
-LAWN_PATTERNS = {LawnKind.FLOWERBED: ("STARS", 0.1)}
+# Цветник - узор ESCHER: он есть и в acad.pat (AutoCAD, nanoCAD), и в узорах LibreCAD (STARS
+# LibreCAD выбрасывал при открытии); не заливка - подоснова под ним видна.
+LAWN_PATTERNS = {LawnKind.FLOWERBED: ("ESCHER", 0.05)}
 XDATA_CHUNK = 240
 XDATA_REAL = 1040
 NPA_REFS = 2
