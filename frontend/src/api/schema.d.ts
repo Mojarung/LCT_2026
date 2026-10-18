@@ -184,6 +184,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Город вокруг участка для 3D-вида
+         * @description Дома, деревья и дороги OpenStreetMap в кольце 450 м вокруг съёмки, в метрах чертежа.
+         *
+         *     Внутри съёмки решает чертёж: дома карты, пересекающие дома чертежа, и деревья внутри
+         *     прямоугольника съёмки отброшены. Первый запрос идёт в Overpass (нужна сеть), ответ
+         *     хранится в каталоге прогона. Нет сети - 503, 3D-вид остаётся без окружения.
+         */
+        get: operations["get_context_api_v1_runs__run_id__context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/draft": {
         parameters: {
             query?: never;
@@ -335,6 +359,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Применить уточнения новым прогоном */
+        post: operations["apply_review_api_v1_runs__run_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/streets": {
         parameters: {
             query?: never;
@@ -376,6 +417,12 @@ export interface components {
         };
         /** Body_create_photo_api_v1_runs__run_id__photos_post */
         Body_create_photo_api_v1_runs__run_id__photos_post: {
+            /**
+             * Buildings
+             * @description Есть ли в кадре здания; без них промпт не говорит о фасадах
+             * @default true
+             */
+            buildings: boolean;
             /**
              * Hour
              * @default 11
@@ -437,7 +484,7 @@ export interface components {
         Body_create_run_api_v1_runs_post: {
             /**
              * Extra
-             * @description Остальные чертежи комплекта (DXF или DWG): склеиваются с основным
+             * @description Внешние ссылки (XREF) и остальные чертежи комплекта (DXF или DWG). Исходные имена файлов сохраняются: по ним находятся ссылки основного; остальные склеиваются с ним
              */
             extra?: string[] | null;
             /**
@@ -591,6 +638,12 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * ObjectClass
+         * @description Класс объекта подосновы, от которого считаются нормативные отступы.
+         * @enum {string}
+         */
+        ObjectClass: "utility.water" | "utility.sewer" | "utility.storm" | "utility.drain" | "utility.heat" | "utility.gas" | "utility.power_cable" | "utility.telecom" | "utility.unknown" | "utility.access" | "power_line_overhead" | "pole" | "curb" | "pavement_edge" | "fence" | "road" | "sidewalk" | "tram" | "railway" | "building" | "school" | "structure" | "slope" | "work_boundary" | "existing_tree" | "existing_shrub" | "existing_woodland" | "obstacle" | "zone.power_line" | "zone.gas" | "territory.street" | "territory.yard" | "territory.square" | "territory.park" | "lawn" | "contour" | "ignore" | "unknown";
         /** PhotoListOut */
         PhotoListOut: {
             /** Available */
@@ -900,6 +953,19 @@ export interface components {
         RunState: "queued" | "running" | "succeeded" | "failed";
         /** @enum {string} */
         Season: "spring" | "summer" | "autumn" | "winter";
+        /** SemanticReviewIn */
+        SemanticReviewIn: {
+            /** Feature Classes */
+            feature_classes?: {
+                [key: string]: components["schemas"]["ObjectClass"];
+            };
+            /** Label Roles */
+            label_roles?: {
+                [key: string]: "soil" | "paved" | "ignore";
+            };
+            /** Source Sha256 */
+            source_sha256: string;
+        };
         /** SpeciesOut */
         SpeciesOut: {
             /** Code */
@@ -1464,6 +1530,64 @@ export interface operations {
             };
         };
     };
+    get_context_api_v1_runs__run_id__context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Не найдено */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     draft_api_v1_runs__run_id__draft_get: {
         parameters: {
             query?: never;
@@ -1750,6 +1874,7 @@ export interface operations {
                 viewpoint?: "aerial" | "ground";
                 species?: string;
                 shrubs?: string;
+                buildings?: boolean;
             };
             header?: never;
             path: {
@@ -2050,6 +2175,68 @@ export interface operations {
             };
             /** @description Состояние прогона изменилось */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Файл слишком большой */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Данные не приняты */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Внутренняя ошибка сервиса */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    apply_review_api_v1_runs__run_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Не найдено */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
