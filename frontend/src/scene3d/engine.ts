@@ -43,6 +43,7 @@ import { type ContextJson, contextScene } from './context';
 import { disposeGroup, facadeModules, moduleMaterial, parapetGeometry } from './facadeModules';
 import { parkingSpots } from './parking';
 import { Walls } from './collide';
+import { nearPlane } from './depth';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
   buildMask,
@@ -987,7 +988,16 @@ export class SceneEngine {
     const p = this.freecam.pose;
     this.camera.position.set(p.x, p.y, p.z);
     this.camera.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
+    this.fitDepth();
     this.camera.updateMatrixWorld();
+  }
+
+  /** Ближняя плоскость по высоте камеры: издалека земля не мерцает (depth.ts). */
+  private fitDepth(): void {
+    const near = nearPlane(this.camera.position.y);
+    if (Math.abs(near - this.camera.near) <= this.camera.near * 0.05) return;
+    this.camera.near = near;
+    this.camera.updateProjectionMatrix();
   }
 
   private render(): void {
@@ -1254,6 +1264,7 @@ export class SceneEngine {
       for (const pose of poses) {
         this.camera.position.set(pose.x, pose.y, pose.z);
         this.camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        this.fitDepth();
         this.camera.updateMatrixWorld();
         this.prepare(t);
         this.render();
