@@ -828,11 +828,17 @@ PAVED_SPECIAL = "special"
 ROAD_MIN_WIDTH_M = 3.5
 # Тротуар - покрытие уже этого в среднем; асфальт ближе CURB_REACH_M к проезду - за бортом.
 WALK_MAX_WIDTH_M = 4.6
+# Дорожка уже 2 x SPECIAL_PATH_M, вошедшая в площадку, - не резина, м.
+SPECIAL_PATH_M = 1.5
+# Тело площадки, отделённое от сети, - не больше этой доли части; больше - решают голоса.
+SPECIAL_BODY_SHARE = 0.8
 CURB_REACH_M = 1.0
 # Сетка проезжей части шире её контура: край маски на 3D не точнее пикселя, дыра в земле
 # у борта должна попадать на асфальт, а не в пустоту.
 ROAD_MESH_MARGIN_M = 0.5
 SURFACE_MIN_PART_M2 = 0.5
+# Допуск снятия пилы и щепок с края газона, м: меньше ширины узкой полосы газона у борта.
+SOIL_TIDY_M = 0.25
 # Грань линий чертежа отдаётся материалу растра, если его в грани не меньше этой доли.
 FACE_MAJORITY = 0.5
 FACE_MIN_M2 = 0.5
@@ -899,9 +905,11 @@ def _surface_areas(
             exact_paved,
         ]
     )
-    soil = _without(
-        shapely.union_all([_simplified(raster_soil, tolerance), exact_soil]),
-        shapely.union_all([paved, uncertain]),
+    soil = _tidy(
+        _without(
+            shapely.union_all([_simplified(raster_soil, tolerance), exact_soil]),
+            shapely.union_all([paved, uncertain]),
+        )
     )
     parts, kinds = _paved_parts(paved, basemap)
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
@@ -914,6 +922,18 @@ def _surface_areas(
         "paved_kind": kinds,
         "road_mesh": _rings(mesh),
     }
+
+
+def _tidy(area: BaseGeometry | None) -> BaseGeometry | None:
+    """Снять пилу и щепки края газона: вычитание покрытия из газона, у которых края чертежа
+    разошлись на сантиметры, давало зубцы через каждые полметра, и в 3D край газона шёл
+    волной (пользователь, 19.10.2026: «меня бесит волнистость»). Размыкание на SOIL_TIDY_M
+    убирает щепки, упрощение с тем же допуском - пилу."""
+    if area is None or area.is_empty:
+        return area
+    r = SOIL_TIDY_M
+    opened = _areal(area.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+    return _simplified(opened.intersection(_areal(area)), r)
 
 
 def _snap_to_faces(
@@ -996,7 +1016,49 @@ def _paved_parts(
                     continue
                 parts.append(part)
                 kinds.append(fixed or _paved_kind(part, labels, drawn_walks))
+    parts, kinds = _special_bodies(parts, kinds, labels)
     return parts, _walks(parts, kinds)
+
+
+def _special_bodies(
+    parts: list[BaseGeometry], kinds: list[str], labels: Sequence[Any]
+) -> tuple[list[BaseGeometry], list[str]]:
+    """Резина - тело площадки, а не дорожки, вошедшие в неё через калитку, и не сеть
+    тротуаров, с которой она соединена: часть покрытия одна, но размыкание на SPECIAL_PATH_M
+    отделяет дорожки уже 2 x SPECIAL_PATH_M. Тело с подписью площадки - спецпокрытие,
+    остальное - по подписям без подписей площадки."""
+    r = SPECIAL_PATH_M
+    plain = [lb for lb in labels if not SPECIAL_PHRASE.search(lb.text.strip().upper().rstrip("."))]
+    special = [lb for lb in labels if SPECIAL_PHRASE.search(lb.text.strip().upper().rstrip("."))]
+    out_parts: list[BaseGeometry] = []
+    out_kinds: list[str] = []
+    for part, kind in zip(parts, kinds, strict=True):
+        inside = [lb for lb in special if shapely.contains_xy(part, lb.x, lb.y)]
+        if not inside:
+            out_parts.append(part)
+            out_kinds.append(kind)
+            continue
+        opened = _areal(part.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+        bodies = [
+            body
+            for body in shapely.get_parts(_areal(opened.intersection(part)))
+            if body.geom_type == "Polygon"
+            and any(shapely.contains_xy(body, lb.x, lb.y) for lb in inside)
+        ]
+        body = shapely.union_all(bodies) if bodies else None
+        # Площадка в большой сети тротуаров голосованием проигрывает «А» дорожек; её тело с
+        # подписью площадки - резина. Не отделилось (тело - почти вся часть) - решили голоса.
+        if body is None or (kind != PAVED_SPECIAL and body.area > SPECIAL_BODY_SHARE * part.area):
+            out_parts.append(part)
+            out_kinds.append(kind)
+            continue
+        out_parts.extend(bodies)
+        out_kinds.extend([PAVED_SPECIAL] * len(bodies))
+        for rest in shapely.get_parts(_areal(part.difference(body))):
+            if rest.geom_type == "Polygon" and rest.area >= SURFACE_MIN_PART_M2:
+                out_parts.append(rest)
+                out_kinds.append(_label_material(rest, plain) or PAVED_UNKNOWN)
+    return out_parts, out_kinds
 
 
 def _walks(parts: list[BaseGeometry], kinds: list[str]) -> list[str]:
@@ -1067,7 +1129,9 @@ def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry |
 
 def _label_material(part: BaseGeometry, labels: Sequence[Any]) -> str | None:
     """Материал части по подписям съёмки внутри неё: большинство решает."""
-    votes = {PAVED_ASPHALT: 0, PAVED_PAVERS: 0, PAVED_SPECIAL: 0}
+    # Порядок - приоритет при равенстве голосов: подпись площадки говорит о самой части,
+    # а «А» в ней часто от соседних дорожек (площадка у дома 1А на Харьковской: 2 на 2).
+    votes = {PAVED_SPECIAL: 0, PAVED_PAVERS: 0, PAVED_ASPHALT: 0}
     if not labels:
         return None
     shapely.prepare(part)

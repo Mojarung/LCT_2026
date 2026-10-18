@@ -8,6 +8,8 @@ import {
   GROUND_MAP,
   ROAD_DROP_M,
   roadGeometry,
+  CONTEXT_CLEAR_M,
+  contextPaintable,
   SPECIAL_LIFT_M,
   specialGeometry,
   type MaskInfo,
@@ -147,6 +149,23 @@ describe('борт по маске: дорожный у асфальта, сад
   it('внутри одного покрытия борта нет', () => {
     expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
     expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
+  });
+});
+
+describe('дороги карты города на земле сцены', () => {
+  it('не рисуются в пределах съёмки и рядом с ней, только на дальнем поле', () => {
+    // 0,25 м на пиксель: съёмка знает полосу 10 м у левого края, дальше 60 м пусто.
+    const mpp = 0.25;
+    const w = 280;
+    const h = 4;
+    const known = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < 40; x++) known[y * w + x] = 1;
+    const paintable = contextPaintable(known, w, h, mpp);
+    const at = (m: number) => paintable[2 * w + Math.round(m / mpp)];
+    expect(at(5)).toBe(0);
+    // Газон по умолчанию рядом со съёмкой: тропа OpenStreetMap туда не ложится.
+    expect(at(10 + CONTEXT_CLEAR_M - 2)).toBe(0);
+    expect(at(10 + CONTEXT_CLEAR_M + 2)).toBe(1);
   });
 });
 

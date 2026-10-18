@@ -51,6 +51,7 @@ import {
   CURB_H,
   ROAD_DROP_M,
   CURB_W,
+  contextPaintable,
   fenceBarSpots,
   fenceFrame,
   GARDEN_CURB_H,
@@ -652,6 +653,9 @@ export class SceneEngine {
     if (!this.running || this.cityAdded || !this.noise || !mask) return 0;
     this.cityAdded = true;
     const [minX, minZ] = mask.rect;
+    // Дороги, стоянки и машины карты - только на дальнем поле, не ближе CONTEXT_CLEAR_M к
+    // тому, что знает съёмка: пустое внутри съёмки - газон, а не место для тропы карты.
+    const free = contextPaintable(mask.known, mask.width, mask.height, mask.metresPerPx);
     const surveyed = (p: { x: number; z: number }) => {
       const px = Math.floor((p.x - minX) / mask.metresPerPx);
       const py = Math.floor((p.z - minZ) / mask.metresPerPx);
@@ -659,7 +663,7 @@ export class SceneEngine {
       const i = py * mask.width + px;
       // Снято - и то, что знает карта покрытий, и проезд с тротуаром из полигонов подосновы:
       // дорога карты над опущенным проездом висела бы в воздухе.
-      return mask.known[i] === 1 || mask.road[i] === 1 || mask.kinds[i] === PAVERS;
+      return free[i] === 0 || mask.road[i] === 1 || mask.kinds[i] === PAVERS;
     };
     const city = contextScene(json, frameAt(this.world.origin), surveyed);
     this.contextBuildings = city.buildings;

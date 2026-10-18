@@ -17,7 +17,7 @@ from shapely.geometry import Point, Polygon, box
 from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.surfaces import build_surface_map
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.infrastructure.reports.artifacts import _round_turns, _smoothed, _surface
+from green.infrastructure.reports.artifacts import _round_turns, _smoothed, _surface, _tidy
 
 REF = SourceRef("f", "x", "1")
 SITE = box(0, 0, 60, 40)
@@ -285,3 +285,75 @@ def test_narrow_asphalt_across_the_curb_is_a_tiled_sidewalk(tmp_path: Path) -> N
     assert kinds["pavers"].intersection(strips["walk"]).area > 0.8 * strips["walk"].area
     assert kinds["pavers"].intersection(strips["parking"]).area < 0.01
     assert kinds["asphalt"].intersection(strips["path"]).area > 0.8 * strips["path"].area
+
+
+def test_playground_wins_a_tie_with_asphalt_labels(tmp_path: Path) -> None:
+    """Площадка у дома 1А: «ДЕТ.ПЛ.», «СПЕЦ.ПОКРЫТИЕ» и две «А» дорожек в одной части -
+    при равенстве голосов это площадка (подпись площадки прямо о ней, «А» - о соседях)."""
+    ground = box(20, 6, 34, 20)
+    features = [Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK)]
+    labels = [
+        MaterialLabel(27, 13, "ДЕТ.ПЛ.", "paved"),
+        MaterialLabel(27, 11, "СПЕЦ.ПОКРЫТИЕ", "paved"),
+        MaterialLabel(21, 7, "А", "paved"),
+        MaterialLabel(33, 19, "А", "paved"),
+    ]
+    kinds = _kinds(tmp_path, features, labels, [])
+    assert kinds["special"].intersection(ground).area > 0.9 * ground.area
+
+
+def test_path_through_the_playground_gate_is_not_rubber(tmp_path: Path) -> None:
+    """Дорожка 2 м, вошедшая в площадку через калитку, - одна часть покрытия с площадкой;
+    резина - только тело площадки, дорожка остаётся дорожкой."""
+    ground, path = box(20, 6, 34, 20), box(26, 20, 28, 34)
+    features = [
+        Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "path", path, object_class=ObjectClass.SIDEWALK),
+    ]
+    labels = [
+        MaterialLabel(27, 13, "ДЕТ.ПЛ.", "paved"),
+        MaterialLabel(27, 11, "СПЕЦ.ПОКРЫТИЕ", "paved"),
+        MaterialLabel(27, 30, "А", "paved"),
+    ]
+    kinds = _kinds(tmp_path, features, labels, [])
+    assert kinds["special"].intersection(ground).area > 0.9 * ground.area
+    assert kinds["special"].intersection(box(26, 22, 28, 34)).area < 0.05 * 24
+    outside = box(26, 22, 28, 34)
+    assert (kinds["pavers"] | kinds["asphalt"]).intersection(outside).area > 0.8 * outside.area
+
+
+def test_lawn_edge_loses_sawtooth_and_slivers() -> None:
+    """Харьковская, 19.10.2026: газон минус покрытие, чьи края разошлись на сантиметры, -
+    зубцы через полметра (36 713 вершин, 10 209 смен поворота) и щепки; в 3D край газона шёл
+    волной. Пила и щепки снимаются, полоса газона 1 м у борта остаётся."""
+    teeth = [(x * 0.5, 10.0 + (0.08 if x % 2 else 0.0)) for x in range(41)]
+    lawn = Polygon([(0.0, 0.0), (20.0, 0.0), *reversed(teeth)])
+    sliver = box(20.0, 0.0, 30.0, 0.1)
+    strip = box(0.0, 20.0, 20.0, 21.0)
+    tidy = _tidy(shapely.union_all([lawn, sliver, strip]))
+    assert tidy is not None
+    assert not tidy.intersects(box(21.0, 0.0, 30.0, 0.1))
+    assert tidy.contains(box(1.0, 20.2, 19.0, 20.8))
+    edge = tidy.boundary.intersection(box(1.0, 9.0, 19.0, 11.0))
+    assert len(shapely.get_coordinates(edge)) <= 4
+
+
+def test_playground_inside_a_big_paved_network_gets_rubber(tmp_path: Path) -> None:
+    """Харьковская: площадка, соединённая дорожками с большой сетью тротуаров, - одна часть
+    покрытия с десятком «А»; голосованием она проигрывала и шла плиткой. Тело площадки с её
+    подписью - резина, сеть остаётся тротуаром."""
+    ground = box(20, 6, 34, 20)
+    walk = box(0, 22, 60, 25)  # тротуар 3 м
+    path = box(26, 20, 28, 22)  # калитка
+    features = [
+        Feature(REF, name, g, object_class=ObjectClass.SIDEWALK)
+        for name, g in {"ground": ground, "walk": walk, "path": path}.items()
+    ]
+    labels = [
+        MaterialLabel(27, 13, "ДЕТ.ПЛ.", "paved"),
+        MaterialLabel(27, 11, "СПЕЦ.ПОКР.", "paved"),
+    ]
+    labels += [MaterialLabel(x, 23.5, "А", "paved") for x in range(3, 60, 6)]
+    kinds = _kinds(tmp_path, features, labels, [])
+    assert kinds["special"].intersection(ground).area > 0.9 * ground.area
+    assert kinds["special"].intersection(walk).area < 0.01

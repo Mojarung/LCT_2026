@@ -727,12 +727,19 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   // выравнивает порог шейдера. У растра без контуров - размытие на клетку.
   if (surface) softenCells(c, ctx, areas ? CONTOUR_SOFTEN_PX : surface.cell / mpp);
   const toPx = (p: Flat): [number, number] => [(p.x - minX) / mpp, (p.z - minZ) / mpp];
-  ctx.fillStyle = '#0000ff';
-  for (const rings of world.roads) ringPath(ctx, rings, toPx);
-  ctx.fillStyle = '#00ff00';
-  for (const rings of world.sidewalks) ringPath(ctx, rings, toPx);
-  ctx.fillStyle = '#ff0000';
-  for (const rings of world.lawns) ringPath(ctx, rings, toPx);
+  // Полигоны проезжей части, тротуаров и газонов подосновы уже в контурах surface.json:
+  // сервис свёл их с покрытиями и разрешил споры (покрытие сильнее газона). Нарисованные
+  // поверх, они отменяли это решение: проектный газон с плавными кривыми ложился на
+  // прямой тротуар съёмки, и край шёл волной (Харьковская, 19.10.2026). Поверх - только у
+  // прогонов без контуров.
+  if (!areas) {
+    ctx.fillStyle = '#0000ff';
+    for (const rings of world.roads) ringPath(ctx, rings, toPx);
+    ctx.fillStyle = '#00ff00';
+    for (const rings of world.sidewalks) ringPath(ctx, rings, toPx);
+    ctx.fillStyle = '#ff0000';
+    for (const rings of world.lawns) ringPath(ctx, rings, toPx);
+  }
   const image = ctx.getImageData(0, 0, w, h);
   const final = image.data;
   // Карта покрытий - клетки по 0,5 м: граница газона и асфальта шла лесенкой и волной.
@@ -1606,6 +1613,23 @@ export interface PaintedRoads {
 /** Дороги и дорожки OpenStreetMap там, где съёмки нет, вписываются в маску земли: плоская
  *  серая лента поверх газона читалась заплаткой без фактуры, а в маске дорожка получает
  *  плитку, проезд - асфальт, как всё остальное. Снятое съёмкой карта не перекрывает. */
+/** Дороги и тропы карты города (OpenStreetMap) ложатся на землю сцены не ближе этого к
+ *  тому, что знает съёмка, м. Пустое внутри съёмки - газон по умолчанию, и тропа карты
+ *  ложилась на него волнистой лентой с круглыми концами, которой на чертеже нет
+ *  (Харьковская, 19.10.2026: «слева тротуар... её кстати нет»). */
+export const CONTEXT_CLEAR_M = 30;
+
+/** Пиксели маски, куда можно класть дороги карты города: дальнее поле за съёмкой. */
+export function contextPaintable(known: Uint8Array, w: number, h: number, mpp: number): Uint8Array {
+  const near = maxFilter(
+    Float32Array.from(known),
+    w,
+    h,
+    Math.max(1, Math.round(CONTEXT_CLEAR_M / mpp)),
+  );
+  return Uint8Array.from(near, (v) => (v > 0 ? 0 : 1));
+}
+
 export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]): void {
   const { width: w, height: h, metresPerPx: mpp } = mask;
   const [minX, minZ] = mask.rect;
@@ -1616,6 +1640,7 @@ export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]
   const ctx = c.getContext('2d', { willReadFrequently: true });
   if (!ctx) return;
   let changed = false;
+  const free = contextPaintable(mask.known, w, h, mpp);
   for (const paved of ['asphalt', 'pavers'] as const) {
     const group = roads.filter((r) => r.paved === paved);
     if (!group.length) continue;
@@ -1642,7 +1667,7 @@ export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]
     const paint = blurBytes(raw, w, h, 1);
     for (let i = 0; i < paint.length; i++) {
       const v = paint[i] ?? 0;
-      if (!v || mask.known[i] || mask.road[i]) continue;
+      if (!v || !free[i] || mask.road[i]) continue;
       changed = true;
       data[i * 4] = Math.min(data[i * 4] ?? 0, 255 - v);
       data[i * 4 + 1] =

@@ -158,11 +158,11 @@ export function rubberCrumb(): THREE.CanvasTexture {
   const random = rng(179);
   const c = fromNoise(size, noise, (n) => {
     const r = random();
-    if (r > 0.94) return [128 + n * 20, 60, 50];
-    if (r > 0.9) return [72, 104 + n * 18, 76];
-    if (r > 0.87) return [118, 118, 114];
-    const v = 60 + n * 14;
-    return [v + 2, v + 2, v];
+    if (r > 0.9) return [140 + n * 20, 62, 50];
+    if (r > 0.87) return [72, 104 + n * 18, 76];
+    if (r > 0.84) return [118, 118, 114];
+    const v = 64 + n * 14;
+    return [v + 12, v + 2, v - 2];
   });
   return texture(c, true);
 }
