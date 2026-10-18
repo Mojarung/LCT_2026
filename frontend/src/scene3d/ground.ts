@@ -42,6 +42,10 @@ const SMOOTH_M = 1;
 const WAVE_M = 8;
 const STRAIGHT_M = 0.5;
 const CORNER_M = 2.5;
+/** Контуры surface.json уже идут по линиям чертежа: им нужно только снять лесенку пикселей
+ *  маски. Окно WAVE_M для них раздувало узкие дорожки и съезды в пятна (Харьковская,
+ *  18.10.2026): усреднение по 8 м превращало угол дорожки шириной 3 м в каплю. */
+export const CONTOUR_SHAPE = { window: 0, tolerance: 0.15, cap: 0.6 } as const;
 /** Обрывки на стыках дорожек, которые отдаются соседнему покрытию, м². */
 const SCRAP_ASPHALT_M2 = 40;
 const SCRAP_PAVERS_M2 = 4;
@@ -724,7 +728,9 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ...world.curbs,
     ...world.fences,
   ]);
-  const shape = { window: WAVE_M, tolerance: STRAIGHT_M, cap: CORNER_M, angles };
+  const shape = areas
+    ? { ...CONTOUR_SHAPE, angles }
+    : { window: WAVE_M, tolerance: STRAIGHT_M, cap: CORNER_M, angles };
   for (let offset = 0; offset < 3; offset++) {
     const plane = new Uint8Array(w * h);
     for (let i = 0; i < plane.length; i++) plane[i] = (final[i * 4 + offset] ?? 0) >= 128 ? 255 : 0;

@@ -129,10 +129,49 @@ describe('покрытие земли в 3D', () => {
   it('вид покрытия контура читается по цвету: проезд, асфальт тротуара, плитка, газон', () => {
     const w = 40;
     const h = 4;
-    const colors = [ROAD_RGB, ASPHALT_RGB, PAVERS_RGB, SOIL_RGB];
+    const colors = [ROAD_RGB, PAVERS_RGB, ASPHALT_RGB, SOIL_RGB];
     const rgba = raster(w, h, (x) => [...(colors[Math.floor(x / 10)] ?? SOIL_RGB), 255]);
     const kind = classifySurface(rgba, w, h, 0.25, 128);
-    expect([5, 15, 25, 35].map((x) => kind[2 * w + x])).toEqual([ROAD, ASPHALT, PAVERS, GRASS]);
+    expect([5, 15, 25, 35].map((x) => kind[2 * w + x])).toEqual([ROAD, PAVERS, ASPHALT, GRASS]);
+  });
+
+  describe('асфальт за бортом проезда', () => {
+    // 0,25 м на пиксель: проезд 10 м, щель 0,25 м (линия борта), асфальт шириной width, газон.
+    const strip = (width: number, gap = 1) => {
+      const w = 40 + gap + width * 4 + 8;
+      const h = 30;
+      const rgba = raster(w, h, (x) => {
+        if (x < 40) return [...ROAD_RGB, 255];
+        if (x < 40 + gap) return null;
+        if (x < 40 + gap + width * 4) return [...ASPHALT_RGB, 255];
+        return [...SOIL_RGB, 255];
+      });
+      return { kind: classifySurface(rgba, w, h, 0.25, 128), w, at: 40 + gap + width * 2 };
+    };
+
+    it('узкий асфальт у проезжей части - тротуар плиткой', () => {
+      const { kind, w, at } = strip(3);
+      expect(kind[15 * w + at]).toBe(PAVERS);
+    });
+
+    it('широкий асфальт у проезжей части (стоянка) остаётся асфальтом', () => {
+      const { kind, w, at } = strip(12);
+      expect(kind[15 * w + at]).toBe(ASPHALT);
+    });
+
+    it('узкий асфальт вдали от проезда остаётся асфальтом', () => {
+      // Газон 3 м между проездом и дорожкой: борта проезда у дорожки нет.
+      const w = 40 + 12 + 12 + 8;
+      const h = 30;
+      const rgba = raster(w, h, (x) => {
+        if (x < 40) return [...ROAD_RGB, 255];
+        if (x < 52) return [...SOIL_RGB, 255];
+        if (x < 64) return [...ASPHALT_RGB, 255];
+        return [...SOIL_RGB, 255];
+      });
+      const kind = classifySurface(rgba, w, h, 0.25, 128);
+      expect(kind[15 * w + 58]).toBe(ASPHALT);
+    });
   });
 
   it('щель между тротуаром и газоном - газон: садовый борт встаёт по краю тротуара', () => {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { CONTOUR_SHAPE } from './ground';
+import type { Flat, Line } from './types';
+
 import {
   chaikin,
   chain,
@@ -171,5 +174,42 @@ describe('выравнивание не перекраивает участок'
     ];
     const snapped = snapToAngles(loop, [0]);
     expect(snapped[1]?.[1]).toBeCloseTo(loop[1]?.[1] ?? 0, 1);
+  });
+});
+
+describe('outlines of survey contours', () => {
+  // Г-образная дорожка шириной 3 м: плечи 20 м вдоль x и 20 м вдоль y (Харьковская, 18.10:
+  // окно 8 м раздувало такие дорожки в пятна с «щупальцами»).
+  const mpp = 0.25;
+  const w = 120;
+  const h = 120;
+  const inL = (x: number, y: number) =>
+    (x >= 5 && x <= 25 && y >= 5 && y <= 8) || (x >= 5 && x <= 8 && y >= 5 && y <= 25);
+  const values = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) values[y * w + x] = inL((x + 0.5) * mpp, (y + 0.5) * mpp) ? 255 : 0;
+  }
+  const distanceToL = (x: number, y: number) => {
+    const box = (x0: number, y0: number, x1: number, y1: number) =>
+      Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1));
+    return Math.min(box(5, 5, 25, 8), box(5, 5, 8, 25));
+  };
+  const area = (pts: readonly Flat[]) =>
+    Math.abs(
+      pts.reduce((s, p, i) => {
+        const q = pts[(i + 1) % pts.length] as Flat;
+        return s + p.x * q.z - q.x * p.z;
+      }, 0) / 2,
+    );
+
+  it('keeps a narrow walk where the drawing put it', () => {
+    const [line] = outlines({ values, width: w, height: h }, [0, 0, w * mpp, h * mpp], mpp, {
+      ...CONTOUR_SHAPE,
+    });
+    expect(line).toBeDefined();
+    const pts = (line as Line).points;
+    expect(Math.max(...pts.map((p) => distanceToL(p.x, p.z)))).toBeLessThan(0.3);
+    expect(area(pts)).toBeGreaterThan(111 * 0.95);
+    expect(area(pts)).toBeLessThan(111 * 1.05);
   });
 });

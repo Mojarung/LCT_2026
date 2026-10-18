@@ -304,8 +304,57 @@ export function classifySurface(
   for (let i = 0; i < kind.length; i++) {
     if (unknown[i] && (middle[i] ?? 0) < half) kind[i] = PAVERS;
   }
+  walksBesideRoads(kind, w, h, metresPerPx);
   closeSeams(kind, paved, empty, w, h, Math.max(1, Math.round(SEAM_M / metresPerPx)));
   return kind;
+}
+
+/** Борт отделяет проезд от тротуара: асфальт не дальше этого от проезжей части - за бортом, м. */
+export const CURB_REACH_M = 1;
+
+/** Тротуар за бортом проезжей части - плитка (пользователь, 18.10.2026: «то, что идёт с
+ *  бордюром, меняется с асфальта на тротуар»). Асфальт той же фактуры, что проезд, расползался
+ *  за борт, и разворот читался одним пятном. Плиткой становятся полосы асфальта уже
+ *  TROTTOIR_M в связных областях асфальта, которые подходят к проезду ближе CURB_REACH_M;
+ *  широкое (стоянки, площадки, дворовые проезды) остаётся асфальтом, дорожки вдали от улицы -
+ *  тоже. Только 3D-вид: в чертеже и на карте вид покрытия - по подписи съёмки. */
+function walksBesideRoads(kind: Uint8Array, w: number, h: number, metresPerPx: number): void {
+  const road = Float32Array.from(kind, (k) => (k === ROAD ? 1 : 0));
+  const nearRoad = maxFilter(road, w, h, Math.max(1, Math.round(CURB_REACH_M / metresPerPx)));
+  const asphalt = Uint8Array.from(kind, (k) => (k === ASPHALT ? 1 : 0));
+  const beside = new Uint8Array(w * h);
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const members: number[] = [];
+  for (let start = 0; start < asphalt.length; start++) {
+    if (!asphalt[start] || seen[start]) continue;
+    seen[start] = 1;
+    stack.push(start);
+    members.length = 0;
+    let touches = false;
+    while (stack.length) {
+      const i = stack.pop() as number;
+      members.push(i);
+      if ((nearRoad[i] ?? 0) > 0) touches = true;
+      const x = i % w;
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+        if (j < 0 || j >= asphalt.length || !asphalt[j] || seen[j]) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    if (touches) for (const i of members) beside[i] = 1;
+  }
+  const middle = maxFilter(
+    distanceInside(asphalt, w, h),
+    w,
+    h,
+    Math.max(1, Math.round(WINDOW_M / metresPerPx)),
+  );
+  const half = TROTTOIR_M / 2 / metresPerPx;
+  for (let i = 0; i < kind.length; i++) {
+    if (beside[i] && (middle[i] ?? 0) < half) kind[i] = PAVERS;
+  }
 }
 
 /** Скользящее среднее по строкам (step 1) или столбцам (step w) с краем «как есть». */
