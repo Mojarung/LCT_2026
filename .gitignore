@@ -99,3 +99,7 @@ other/
 
 # Рабочие папки исполнения планов (superpowers)
 .superpowers/
+
+# Одноразовые скрипты снимков и отладки фронтенда
+frontend/.tmp-*
+frontend/.srv-*
