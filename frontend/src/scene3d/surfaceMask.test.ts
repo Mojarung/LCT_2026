@@ -135,43 +135,31 @@ describe('покрытие земли в 3D', () => {
     expect([5, 15, 25, 35].map((x) => kind[2 * w + x])).toEqual([ROAD, PAVERS, ASPHALT, GRASS]);
   });
 
-  describe('асфальт за бортом проезда', () => {
-    // 0,25 м на пиксель: проезд 10 м, щель 0,25 м (линия борта), асфальт шириной width, газон.
-    const strip = (width: number, gap = 1) => {
-      const w = 40 + gap + width * 4 + 8;
-      const h = 30;
-      const rgba = raster(w, h, (x) => {
-        if (x < 40) return [...ROAD_RGB, 255];
-        if (x < 40 + gap) return null;
-        if (x < 40 + gap + width * 4) return [...ASPHALT_RGB, 255];
-        return [...SOIL_RGB, 255];
-      });
-      return { kind: classifySurface(rgba, w, h, 0.25, 128), w, at: 40 + gap + width * 2 };
-    };
-
-    it('узкий асфальт у проезжей части - тротуар плиткой', () => {
-      const { kind, w, at } = strip(3);
-      expect(kind[15 * w + at]).toBe(PAVERS);
+  it('вид покрытия контура - от сервиса: узкий асфальт у проезда по ширине не делится', () => {
+    // Плитку за бортом и асфальт решает сервис целиком по части (surface.json, paved_kind).
+    const w = 40 + 1 + 12 + 8;
+    const h = 30;
+    const rgba = raster(w, h, (x) => {
+      if (x < 40) return [...ROAD_RGB, 255];
+      if (x < 41) return null;
+      if (x < 53) return [...ASPHALT_RGB, 255];
+      return [...SOIL_RGB, 255];
     });
+    const kind = classifySurface(rgba, w, h, 0.25, 128);
+    expect(kind[15 * w + 47]).toBe(ASPHALT);
+  });
 
-    it('широкий асфальт у проезжей части (стоянка) остаётся асфальтом', () => {
-      const { kind, w, at } = strip(12);
-      expect(kind[15 * w + at]).toBe(ASPHALT);
-    });
-
-    it('узкий асфальт вдали от проезда остаётся асфальтом', () => {
-      // Газон 3 м между проездом и дорожкой: борта проезда у дорожки нет.
-      const w = 40 + 12 + 12 + 8;
-      const h = 30;
-      const rgba = raster(w, h, (x) => {
-        if (x < 40) return [...ROAD_RGB, 255];
-        if (x < 52) return [...SOIL_RGB, 255];
-        if (x < 64) return [...ASPHALT_RGB, 255];
-        return [...SOIL_RGB, 255];
-      });
-      const kind = classifySurface(rgba, w, h, 0.25, 128);
-      expect(kind[15 * w + 58]).toBe(ASPHALT);
-    });
+  it('покрытие контура без вида по ширине тоже не делится', () => {
+    const w = 60;
+    const h = 30;
+    // Полоса 3 м посреди газона: раньше по ширине она становилась плиткой.
+    const rgba = raster(w, h, (x) =>
+      x >= 20 && x < 32 ? [140, 142, 150, 255] : [...SOIL_RGB, 255],
+    );
+    const kind = classifySurface(rgba, w, h, 0.25, 128);
+    expect(kind[15 * w + 26]).toBe(ASPHALT);
+    // Растр старых прогонов по-прежнему делится по ширине.
+    expect(classifySurface(rgba, w, h, 0.25)[15 * w + 26]).toBe(PAVERS);
   });
 
   it('щель между тротуаром и газоном - газон: садовый борт встаёт по краю тротуара', () => {

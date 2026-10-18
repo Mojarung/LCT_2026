@@ -20,6 +20,7 @@ from scipy.ndimage import label as connected_components
 from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
+from green.application.line_gaps import bridges
 from green.application.surface_faces import FaceMaterials, closed_face_materials
 from green.application.wording import counted
 from green.domain.objects import ObjectClass
@@ -109,6 +110,9 @@ class SurfaceMap:
     # Display raster and exact polygon evidence are kept separate: painting a
     # polygon into a cell must not expand it or erase a sub-cell hole.
     inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
+    # Растр для показа (3D, бумажная подоснова): грань между линиями чертежа - одним
+    # материалом (display_grid). Проверка посадок его не читает.
+    display_grid: NDArray[np.int8] | None = field(default=None, repr=False)
     soil_area: BaseGeometry | None = None
     paved_area: BaseGeometry | None = None
     uncertainty_area: BaseGeometry | None = None
@@ -553,6 +557,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         ambiguity_m=ambiguity_m,
         tree_distance_m=tree_distance_m,
         inferred_grid=inferred_grid,
+        display_grid=_display_grid(grid, barrier, barriers, origin, cell),
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
@@ -1177,3 +1182,44 @@ def _assign(
     material[soil + ambiguity < paved] = int(Material.SOIL)
     grid[free] = material
     return grid
+
+
+# Грань для показа отдаётся материалу, если другого в ней не больше этой доли известного:
+# пятно, протёкшее через разрыв, мало, а газон и асфальт одной большой незамкнутой грани -
+# соизмеримы, и такая грань остаётся как есть.
+DISPLAY_MINORITY = 0.25
+
+
+def _display_grid(
+    grid: NDArray[np.int8],
+    barrier: NDArray[np.bool_],
+    lines: NDArray[np.object_],
+    origin: tuple[float, float],
+    cell: float,
+) -> NDArray[np.int8]:
+    """Растр для показа: материал грани между линиями чертежа.
+
+    Разлив подписей идёт по клеткам и проходит через разрывы линий; в 3D это давало пятна,
+    пересекающие нарисованный борт (Харьковская, 18-19.10.2026). Здесь разрывы до
+    line_gaps.GAP_M закрываются перемычками, земля делится на грани между линиями, и в каждой
+    грани известные клетки меньшинства (не больше DISPLAY_MINORITY) получают материал
+    большинства. Неизвестное не заполняется, клетки линий остаются линиями."""
+    walls = barrier | _rasterize(
+        np.array(bridges(list(lines)), dtype=object), origin, cell, grid.shape
+    )
+    faces, count = connected_components(~walls)
+    paved = grid == Material.PAVED
+    soil = grid == Material.SOIL
+    flat = faces.ravel()
+    n_paved = np.bincount(flat, weights=paved.ravel(), minlength=count + 1)
+    n_soil = np.bincount(flat, weights=soil.ravel(), minlength=count + 1)
+    known = n_paved + n_soil
+    majority = np.full(count + 1, int(Material.UNKNOWN), dtype=np.int8)
+    majority[(known > 0) & (n_soil <= DISPLAY_MINORITY * known)] = int(Material.PAVED)
+    majority[(known > 0) & (n_paved <= DISPLAY_MINORITY * known)] = int(Material.SOIL)
+    majority[0] = int(Material.UNKNOWN)
+    out = grid.copy()
+    decided = majority[faces]
+    fix = (paved | soil) & (decided != Material.UNKNOWN)
+    out[fix] = decided[fix]
+    return out

@@ -150,6 +150,23 @@ export function grass(): THREE.CanvasTexture {
   return texture(c, true);
 }
 
+/** Резиновая крошка площадок: тёмно-серая основа с красными, зелёными и светлыми крупинками,
+ *  как на панораме площадки у дома 1А. Плитка текстуры - 2 м. */
+export function rubberCrumb(): THREE.CanvasTexture {
+  const size = 512;
+  const noise = fbm(size, [8, 32], 173);
+  const random = rng(179);
+  const c = fromNoise(size, noise, (n) => {
+    const r = random();
+    if (r > 0.94) return [128 + n * 20, 60, 50];
+    if (r > 0.9) return [72, 104 + n * 18, 76];
+    if (r > 0.87) return [118, 118, 114];
+    const v = 60 + n * 14;
+    return [v + 2, v + 2, v];
+  });
+  return texture(c, true);
+}
+
 /** Бетон бортового камня и цоколей: светло-серый с кавернами. */
 export function concrete(): THREE.CanvasTexture {
   const size = 512;

@@ -8,6 +8,8 @@ import {
   GROUND_MAP,
   ROAD_DROP_M,
   roadGeometry,
+  SPECIAL_LIFT_M,
+  specialGeometry,
   type MaskInfo,
   type SurfaceAreas,
   groundGeometry,
@@ -145,6 +147,37 @@ describe('борт по маске: дорожный у асфальта, сад
   it('внутри одного покрытия борта нет', () => {
     expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
     expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
+  });
+});
+
+describe('спецпокрытие площадок', () => {
+  it('сетка резинового покрытия - только части вида special, чуть выше земли', () => {
+    const square = (x: number, y: number) => [
+      [
+        [x, y],
+        [x + 10, y],
+        [x + 10, y + 10],
+        [x, y + 10],
+        [x, y],
+      ],
+    ];
+    const geometry = specialGeometry(
+      { soil: [], paved: [square(0, 0), square(30, 0)], paved_kind: ['asphalt', 'special'] },
+      [10, 20],
+    );
+    expect(geometry).not.toBeNull();
+    geometry?.computeBoundingBox();
+    const box = geometry?.boundingBox;
+    expect(box?.min.y).toBeCloseTo(SPECIAL_LIFT_M);
+    expect(box?.max.y).toBeCloseTo(SPECIAL_LIFT_M);
+    expect(box?.min.x).toBeCloseTo(20);
+    expect(box?.max.x).toBeCloseTo(30);
+    expect(box?.min.z).toBeCloseTo(10);
+    expect(box?.max.z).toBeCloseTo(20);
+  });
+
+  it('без спецпокрытия сетки нет', () => {
+    expect(specialGeometry(AREAS, [10, 20])).toBeNull();
   });
 });
 

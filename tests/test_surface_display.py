@@ -1,0 +1,83 @@
+"""Карта покрытий для показа: грани между линиями чертежа (surfaces.display_grid).
+
+Харьковская, 18-19.10.2026: разлив подписи «ГАЗОН» уходил через разрыв борта на асфальт
+пятном, и в 3D край газона и плитки шёл волнами поперёк нарисованных линий. Для показа
+каждая грань между линиями (разрывы до 2 м закрыты перемычками) отдаётся материалу, которого
+в ней явное большинство; неизвестное остаётся неизвестным, спорная грань - как есть.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from shapely.geometry import LineString, box
+
+from green.application.surfaces import Material, build_surface_map
+from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
+
+if TYPE_CHECKING:
+    import numpy as np
+
+EXTENT = box(0, 0, 100, 60)
+
+
+def _curb(i: int, coords: list[tuple[float, float]]) -> Feature:
+    return Feature(
+        SourceRef("12345678", "00000000", f"C{i}"),
+        "Бортовой камень",
+        LineString(coords),
+        object_class=ObjectClass.CURB,
+    )
+
+
+def _label(i: int, x: float, y: float, text: str) -> TextLabel:
+    return TextLabel(SourceRef("12345678", "00000000", f"L{i}"), "Подписи", x, y, text)
+
+
+def _at(surface, grid: np.ndarray, x: float, y: float) -> int:  # noqa: ANN001 - SurfaceMap
+    col = int((x - surface.origin[0]) / surface.cell)
+    row = int((y - surface.origin[1]) / surface.cell)
+    return int(grid[row, col])
+
+
+# Газон 20 x 20 м в бортах, в правом борту разрыв 1,2 м.
+SQUARE = [
+    _curb(1, [(40, 20), (60, 20)]),
+    _curb(2, [(60, 20), (60, 29.4)]),
+    _curb(3, [(60, 30.6), (60, 40)]),
+    _curb(4, [(60, 40), (40, 40)]),
+    _curb(5, [(40, 40), (40, 20)]),
+]
+
+
+def test_lawn_leaking_through_a_curb_gap_stays_inside_on_display() -> None:
+    labels = [_label(1, 50, 30, "ГАЗОН"), _label(2, 75, 30, "А")]
+    surface = build_surface_map(SQUARE, labels, EXTENT, 0.5, inference_mode="hybrid")
+    assert surface is not None
+    assert surface.display_grid is not None
+    # Контроль: разлив действительно проходит через разрыв.
+    assert _at(surface, surface.grid, 61.5, 30) == Material.SOIL
+    assert _at(surface, surface.display_grid, 61.5, 30) == Material.PAVED
+    assert _at(surface, surface.display_grid, 55, 30) == Material.SOIL
+    assert _at(surface, surface.display_grid, 59.75, 30) == Material.SOIL
+
+
+def test_unknown_ground_is_not_invented_on_display() -> None:
+    labels = [_label(1, 50, 30, "ГАЗОН"), _label(2, 75, 30, "А")]
+    surface = build_surface_map(SQUARE, labels, EXTENT, 0.5, inference_mode="hybrid")
+    assert surface is not None
+    assert surface.display_grid is not None
+    unknown = surface.grid == Material.UNKNOWN
+    assert unknown.any()
+    assert (surface.display_grid[unknown] == Material.UNKNOWN).all()
+
+
+def test_face_with_two_real_materials_is_left_as_drawn() -> None:
+    # Открытая полоса между двумя бортами: газон и асфальт подписаны поровну.
+    strip = [_curb(1, [(0, 20), (100, 20)]), _curb(2, [(0, 30), (100, 30)])]
+    labels = [_label(1, 20, 25, "ГАЗОН"), _label(2, 60, 25, "А")]
+    surface = build_surface_map(strip, labels, EXTENT, 0.5, inference_mode="hybrid")
+    assert surface is not None
+    assert surface.display_grid is not None
+    assert _at(surface, surface.display_grid, 25, 25) == Material.SOIL
+    assert _at(surface, surface.display_grid, 55, 25) == Material.PAVED

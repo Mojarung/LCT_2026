@@ -93,6 +93,8 @@ const PAVED_FILLS: Record<string, string> = {
   road: rgb(ROAD_RGB),
   asphalt: rgb(ASPHALT_RGB),
   pavers: rgb(PAVERS_RGB),
+  // Под резиной площадки маска - плитка: уровень тротуара, люди ходят, борт по краю садовый.
+  special: rgb(PAVERS_RGB),
 };
 const PAVED_FILL = rgb(PAVED_RGB);
 
@@ -439,10 +441,32 @@ export function drawSurfaceAreas(
   }
 }
 
+/** Спецпокрытие площадок над землёй, м: резина лежит поверх плитки маски, без мерцания. */
+export const SPECIAL_LIFT_M = 0.015;
+
+/** Сетка спецпокрытия (резиновая крошка детских и спортивных площадок): части покрытия
+ *  вида special из surface.json, по контуру чертежа (пользователь, 19.10.2026: площадка у
+ *  дома 1А на панораме - резина, а не плитка). */
+export function specialGeometry(
+  areas: SurfaceAreas,
+  origin: [number, number],
+): THREE.BufferGeometry | null {
+  const parts = areas.paved.filter((_, i) => areas.paved_kind?.[i] === 'special');
+  return flatGeometry(parts, origin, SPECIAL_LIFT_M);
+}
+
 /** Сетка проезжей части из контура road_mesh: на ROAD_DROP_M ниже земли, в координатах сцены. */
 export function roadGeometry(
   polygons: AreaPolygon[],
   origin: [number, number],
+): THREE.BufferGeometry | null {
+  return flatGeometry(polygons, origin, -ROAD_DROP_M);
+}
+
+function flatGeometry(
+  polygons: AreaPolygon[],
+  origin: [number, number],
+  y: number,
 ): THREE.BufferGeometry | null {
   const [ox, oy] = origin;
   const shapes = polygons
@@ -457,7 +481,7 @@ export function roadGeometry(
   if (!shapes.length) return null;
   const geometry = new THREE.ShapeGeometry(shapes);
   geometry.rotateX(-Math.PI / 2);
-  geometry.translate(0, -ROAD_DROP_M, 0);
+  geometry.translate(0, y, 0);
   return geometry;
 }
 

@@ -60,6 +60,7 @@ import {
   pavedOnLeft,
   paintContextRoads,
   ribbonBox,
+  specialGeometry,
   type SurfaceImage,
 } from './ground';
 import { pick } from './pick';
@@ -67,7 +68,13 @@ import type { ScenePostprocessing } from './postprocessing';
 import { AdaptiveQuality } from './adaptive';
 import { Atmosphere } from './sky';
 import type { Season } from './solar';
-import { CURB_STONES_PER_TEXTURE, curbStone, gutterShade, noiseTexture } from './textures';
+import {
+  CURB_STONES_PER_TEXTURE,
+  curbStone,
+  gutterShade,
+  noiseTexture,
+  rubberCrumb,
+} from './textures';
 import { loadGroundMaterials } from './materials';
 import { People, PEOPLE_MAX, placePeople } from './people';
 import { StreetLights } from './streetlights';
@@ -370,6 +377,7 @@ export class SceneEngine {
     });
     this.add(ground);
     if (lowered) this.add(groundMesh(this.world, mask, tex, this.groundWeather, { road: true }));
+    this.addSpecialCover(surface);
     if (this.edges.some((edge) => edge.lowered.some(Boolean))) {
       this.add(
         groundMesh(this.world, mask, tex, this.groundWeather, {
@@ -474,6 +482,30 @@ export class SceneEngine {
         disposeGroup(group);
       },
     });
+  }
+
+  /** Резиновое покрытие площадок «СПЕЦ.ПОКР.» поверх плитки маски, по контуру чертежа. */
+  private addSpecialCover(surface: SurfaceImage | null): void {
+    const geometry = surface?.areas ? specialGeometry(surface.areas, this.world.origin) : null;
+    if (!geometry) return;
+    const map = rubberCrumb();
+    map.repeat.set(0.5, 0.5);
+    map.anisotropy = 8;
+    this.disposables.push(map);
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({
+        map,
+        roughness: 0.96,
+        metalness: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
+    );
+    mesh.name = 'special-cover';
+    mesh.receiveShadow = true;
+    this.add(mesh);
   }
 
   private addStreetFurniture(mask: MaskInfo): void {

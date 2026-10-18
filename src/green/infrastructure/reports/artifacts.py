@@ -822,8 +822,13 @@ SURFACE_ROUND_TURN_DEG = (5.0, 75.0)
 SURFACE_ROUND_PASSES = 2
 # Части покрытия для 3D: проезжая часть опускается на высоту борта, тротуар и плитка - нет.
 PAVED_ROAD, PAVED_ASPHALT, PAVED_PAVERS, PAVED_UNKNOWN = "road", "asphalt", "pavers", "paved"
+# Специальное покрытие площадок (резиновая крошка): «СПЕЦ.ПОКР.», «ДЕТ.ПЛ.» Мосгеотреста.
+PAVED_SPECIAL = "special"
 # Полоса покрытия от этой ширины без плитки - проезд: тротуары дворов 1,5-3 м, проезды от 3,5 м.
 ROAD_MIN_WIDTH_M = 3.5
+# Тротуар - покрытие уже этого в среднем; асфальт ближе CURB_REACH_M к проезду - за бортом.
+WALK_MAX_WIDTH_M = 4.6
+CURB_REACH_M = 1.0
 # Сетка проезжей части шире её контура: край маски на 3D не точнее пикселя, дыра в земле
 # у борта должна попадать на асфальт, а не в пустоту.
 ROAD_MESH_MARGIN_M = 0.5
@@ -838,6 +843,7 @@ PAVED_SMOOTH_M = 0.5
 ASPHALT_LABELS = frozenset({"А", "АСФ", "Ц"})
 PAVERS_LABELS = frozenset({"ПЛ", "ПЛИТКА", "Б", "БР"})
 PAVERS_PHRASE = re.compile(r"ПЛИТК|БРУСЧ")
+SPECIAL_PHRASE = re.compile(r"^СПЕЦ|^ДЕТ\.?\s*ПЛ")
 
 
 def _surface(
@@ -846,7 +852,8 @@ def _surface(
     """Карта покрытий растром: PNG и привязка к координатам чертежа."""
     if surface is None:
         return {}
-    grid = surface.grid
+    # Растр для показа: грань между линиями чертежа одним материалом (surfaces.display_grid).
+    grid = surface.grid if surface.display_grid is None else surface.display_grid
     step = max(1, math.ceil(max(grid.shape) / SURFACE_MAX_SIDE))
     sampled = grid[::step, ::step]
     palette = np.zeros((max(int(m) for m in Material) + 1, 4), dtype=np.uint8)
@@ -989,7 +996,35 @@ def _paved_parts(
                     continue
                 parts.append(part)
                 kinds.append(fixed or _paved_kind(part, labels, drawn_walks))
-    return parts, kinds
+    return parts, _walks(parts, kinds)
+
+
+def _walks(parts: list[BaseGeometry], kinds: list[str]) -> list[str]:
+    """Тротуар целиком по части, а не по пикселю: узкое покрытие без подписи и узкий асфальт
+    за бортом проезжей части (не дальше CURB_REACH_M) - тротуар плиткой; широкое без подписи -
+    асфальт. Ширина части - средняя (2 x площадь / периметр): у сети дорожек это ширина
+    дорожки. 3D раньше делил покрытие по ширине попиксельно, и граница плитки и асфальта
+    шла пятнами (пользователь, 19.10.2026: «то, что идёт с бордюром, меняется с асфальта на
+    тротуар»; «меня бесит волнистость»)."""
+    roads = [p for p, k in zip(parts, kinds, strict=True) if k == PAVED_ROAD]
+    near_road = shapely.union_all(roads).buffer(CURB_REACH_M) if roads else None
+    if near_road is not None:
+        shapely.prepare(near_road)
+    out = []
+    for part, kind in zip(parts, kinds, strict=True):
+        narrow = 2 * part.area / part.length < WALK_MAX_WIDTH_M if part.length else False
+        if kind == PAVED_UNKNOWN:
+            out.append(PAVED_PAVERS if narrow else PAVED_ASPHALT)
+        elif (
+            kind == PAVED_ASPHALT
+            and narrow
+            and near_road is not None
+            and near_road.intersects(part)
+        ):
+            out.append(PAVED_PAVERS)
+        else:
+            out.append(kind)
+    return out
 
 
 def _smoothed(area: BaseGeometry) -> BaseGeometry:
@@ -1020,8 +1055,8 @@ def _areal(geometry: BaseGeometry) -> BaseGeometry:
 
 def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry | None) -> str:
     material = _label_material(part, labels)
-    if material == PAVED_PAVERS:
-        return PAVED_PAVERS
+    if material in {PAVED_PAVERS, PAVED_SPECIAL}:
+        return material
     if walks is not None and part.intersection(walks).area >= part.area / 2:
         return material or PAVED_UNKNOWN
     width = 2 * shapely.maximum_inscribed_circle(part, 0.25).length
@@ -1032,14 +1067,16 @@ def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry |
 
 def _label_material(part: BaseGeometry, labels: Sequence[Any]) -> str | None:
     """Материал части по подписям съёмки внутри неё: большинство решает."""
-    votes = {PAVED_ASPHALT: 0, PAVED_PAVERS: 0}
+    votes = {PAVED_ASPHALT: 0, PAVED_PAVERS: 0, PAVED_SPECIAL: 0}
     if not labels:
         return None
     shapely.prepare(part)
     for label in labels:
         text = label.text.strip().upper().rstrip(".")
         kind = (
-            PAVED_PAVERS
+            PAVED_SPECIAL
+            if SPECIAL_PHRASE.search(text)
+            else PAVED_PAVERS
             if text in PAVERS_LABELS or PAVERS_PHRASE.search(text)
             else PAVED_ASPHALT
             if text in ASPHALT_LABELS or "АСФАЛЬТ" in text
