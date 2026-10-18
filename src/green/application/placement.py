@@ -77,6 +77,8 @@ MODE_SHRUB_ROW = "shrub_row"
 MODE_CURB_HEDGE = "curb_hedge"
 MODE_UNDERSTORY = "understory"
 MODE_SHRUB_FILL = "shrub_fill"
+# Группы деревьев на газоне треугольником с газонными разрывами (задача 14 плана финала).
+MODE_GROUPS = "groups"
 MODE_LABELS = {
     MODE_ALLEY: "аллея вдоль борта",
     MODE_LAWN: "заполнение газона",
@@ -86,6 +88,7 @@ MODE_LABELS = {
     MODE_CURB_HEDGE: "живая изгородь вдоль борта",
     MODE_UNDERSTORY: "кустарник под кроной дерева",
     MODE_SHRUB_FILL: "группа кустарников на газоне",
+    MODE_GROUPS: "группа деревьев на газоне с газонными разрывами",
 }
 _TANGENT_STEP_M = 0.5
 
@@ -223,10 +226,8 @@ class GreedyPlantingStrategy:
             candidates = _outside_yards(_curb_candidates(lines, params), features)
             stats["alley_candidates"] = len(candidates)
             stats["alley_plantable"] = _offer(index, selector, candidates)
-        if MODE_LAWN in params.modes and index.surface is not None:
-            candidates = _lawn_candidates(index.surface, params)
-            stats["lawn_candidates"] = len(candidates)
-            stats["lawn_plantable"] = _offer(index, selector, candidates)
+        if index.surface is not None:
+            _offer_lawn(index, selector, params, stats)
         if MODE_FILL in params.modes and index.surface is not None:
             before = len(selector.placements)
             stats["fill_candidates"] = _fill(index, selector, params)
@@ -334,6 +335,21 @@ def _zones(
     if params.zones:
         stats.update(blocked_shares(index, params.zone_cell_m))
     return zones
+
+
+def _offer_lawn(
+    index: ConstraintIndex, selector: _Selector, params: PlanParams, stats: dict[str, int | float]
+) -> None:
+    """Места на газоне: сетка (lawn) и группы с газонными разрывами (groups)."""
+    assert index.surface is not None  # noqa: S101 - вызывается только с картой покрытий
+    for mode, build, key in (
+        (MODE_LAWN, _lawn_candidates, "lawn"),
+        (MODE_GROUPS, _group_candidates, "group"),
+    ):
+        if mode in params.modes:
+            candidates = build(index.surface, params)
+            stats[f"{key}_candidates"] = len(candidates)
+            stats[f"{key}_plantable"] = _offer(index, selector, candidates)
 
 
 def _offer(index: ConstraintIndex, selector: _Selector, candidates: list[_Candidate]) -> int:
@@ -642,6 +658,44 @@ def _lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate
             candidates.append(_Candidate(station, MODE_LAWN, x, y))
             station += 1
     return candidates
+
+
+# Станции групп: своя тысяча тысяч, кратная трём - номер группы = станция // 3.
+_GROUP_STATION = 3_000_000
+
+
+def _group_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:
+    """Группы по три дерева треугольником со стороной tree_group_side_m (743-ПП, табл. 3.6.2:
+    групповая посадка 5-7 м). Центры групп - шестиугольная решётка с шагом tree_group_step_m:
+    между группами газонный разрыв. Место группы - на грунте карты покрытий; нормы место
+    проходит в общем отборе, как место сетки, и от группы может остаться одно-два дерева."""
+    step = params.tree_group_step_m
+    radius = params.tree_group_side_m / math.sqrt(3)
+    height, width = np.array(surface.grid.shape) * surface.cell
+    x0, y0 = surface.origin
+    centers = []
+    for row, y in enumerate(np.arange(y0 + step / 2, y0 + height, step * math.sqrt(3) / 2)):
+        xs = np.arange(x0 + step / 2 + (row % 2) * step / 2, x0 + width, step)
+        centers.extend((float(x), float(y), row % 2) for x in xs)
+    if not centers:
+        return []
+    turns = [math.pi / 2 + k * 2 * math.pi / 3 for k in range(3)]
+    corners = np.array(
+        [
+            (
+                x + radius * math.cos(turn + flip * math.pi),
+                y + radius * math.sin(turn + flip * math.pi),
+            )
+            for x, y, flip in centers
+            for turn in turns
+        ]
+    )
+    soil = surface.material(shapely.points(corners)) == Material.SOIL
+    return [
+        _Candidate(_GROUP_STATION + index, MODE_GROUPS, float(x), float(y))
+        for index, ((x, y), on_soil) in enumerate(zip(corners, soil, strict=True))
+        if on_soil
+    ]
 
 
 def _oriented_lawn_candidates(surface: SurfaceMap, params: PlanParams) -> list[_Candidate]:

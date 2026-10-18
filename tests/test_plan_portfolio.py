@@ -136,6 +136,7 @@ def test_soil_frame_is_additional_and_cannot_replace_a_better_baseline() -> None
         "joint",
         "joint_lawn_6",
         "joint_lawn_7",
+        "joint_groups",
         "soil_frame_joint",
         "soil_frame",
         "phase_x",

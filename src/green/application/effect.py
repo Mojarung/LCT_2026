@@ -28,6 +28,7 @@ from green.application.placement import (
     MODE_ALLEY,
     MODE_CURB_HEDGE,
     MODE_EXISTING_ROW,
+    MODE_GROUPS,
     MODE_LABELS,
     MODE_LAWN,
     MODE_SHRUB_FILL,
@@ -80,6 +81,12 @@ _KINDS = (
         False,
     ),
     (MODE_LAWN, "Группы и одиночные деревья на газоне", "743-ПП, п. 10.8.1", False),
+    (
+        MODE_GROUPS,
+        "Группы деревьев с газонными разрывами",
+        "743-ПП, табл. 3.6.2 (групповая посадка)",
+        False,
+    ),
     (MODE_SHRUB_GROUP, "Группы кустарника на местах деревьев", "743-ПП, табл. 3.6.2, прим.", False),
     (
         MODE_SHRUB_ROW,

@@ -358,7 +358,7 @@ class ProfileModel(_Strict):
     surface_ambiguity_m: float = Field(default=1.0, ge=0, le=20)
     tree_seed_distance_m: float = Field(default=2.0, ge=0, le=20)
     drawing_unit: Literal["auto", "m", "dm", "cm", "mm", "km", "in", "ft", "yd"] = "auto"
-    modes: tuple[Literal["existing_row", "alley", "lawn", "fill"], ...] = Field(
+    modes: tuple[Literal["existing_row", "alley", "lawn", "groups", "fill"], ...] = Field(
         default=("existing_row", "alley", "lawn", "fill"), min_length=1
     )
     fill_step_m: float = Field(default=1.0, ge=0.5, le=5.0)
@@ -421,6 +421,8 @@ class ProfileModel(_Strict):
     shrub_fill_step_m: float = Field(default=4.0, ge=1, le=50)
     lawns: bool = True
     lawn_min_area_m2: float = Field(default=5.0, ge=0, le=10_000)
+    tree_group_side_m: float = Field(default=6.0, ge=3, le=15)
+    tree_group_step_m: float = Field(default=18.0, ge=8, le=100)
     flowerbeds: bool = True
     flowerbed_area_m2: float = Field(default=60.0, ge=5, le=5_000)
     flowerbed_spacing_m: float = Field(default=150.0, ge=10, le=5_000)

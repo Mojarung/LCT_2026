@@ -11,6 +11,7 @@ import numpy as np
 
 from green.application.constraints import work_boundary
 from green.application.errors import InputError
+from green.application.placement import MODE_GROUPS
 from green.application.quality.site import curb_segments
 from green.application.validation import summarize_issues
 from green.application.zones import CAPACITY_STAT, SITE_CAPACITY_STAT
@@ -161,6 +162,7 @@ _PRIORITY = (
     "joint",
     "joint_lawn_6",
     "joint_lawn_7",
+    "joint_groups",
     "soil_frame_joint",
     "aligned_joint",
     "soil_frame",
@@ -190,6 +192,12 @@ def _variants(params: PlanParams, features: Sequence[Feature]) -> list[tuple[str
             for step_name, step in (("joint_lawn_6", 6.0), ("joint_lawn_7", 7.0))
             if step > params.spacing_m
         )
+    # Группы вместо сетки газона, как у проектировщиков (docs/notes/34): добор зоны в этом
+    # варианте выключен - он засадил бы газонные разрывы между группами.
+    groups = tuple(
+        MODE_GROUPS if mode == "lawn" else mode for mode in params.modes if mode != "fill"
+    )
+    variants.append(("joint_groups", replace(base, modes=groups, placement_solver="milp")))
     px, py = params.lawn_phase
     variants.extend(
         (
