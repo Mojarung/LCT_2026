@@ -139,6 +139,7 @@ def _recognise(  # noqa: C901 - bounded geometric motif with explicit rejection 
                 shelf = _free_tail(features, index, tail, tree, endpoints, owners)
                 leader = (
                     not certain
+                    and _tip_on_trace(features, near - {left, right}, tip)
                     and not _continues(features, near - {left, right}, tip, following)
                     and shelf is not None
                     and shaft.geometry.length <= _MAX_LEADER_M
@@ -185,6 +186,23 @@ def _continues(features: list[Feature], others: set[int], tip: tuple, following:
         if _dot(incoming, _unit((step[0] - tip[0], step[1] - tip[1]))) >= _STRAIGHT_COS:
             return True
     return False
+
+
+def _tip_on_trace(features: list[Feature], others: set[int], tip: tuple) -> bool:
+    """Острие выноски лежит на трассе: у него нет чужих концов линий слоя или трасса проходит
+    через него насквозь (два конца почти по одной прямой). Одна линия у острия или развилка без
+    сквозной пары - излом самой сети, где стержень может быть её отрезком (ревью 18.10.2026)."""
+    if not others:
+        return True
+    outward = []
+    for other in others:
+        coords = list(features[other].geometry.coords)
+        if math.dist(coords[0][:2], tip[:2]) > math.dist(coords[-1][:2], tip[:2]):
+            coords.reverse()
+        step = next((p for p in coords[1:] if math.dist(p[:2], tip[:2]) > _JOIN_M), None)
+        if step is not None:
+            outward.append(_unit((step[0] - tip[0], step[1] - tip[1])))
+    return any(_dot(a, b) <= -_STRAIGHT_COS for a, b in combinations(outward, 2))
 
 
 def _free_tail(  # noqa: PLR0913, PLR0917 - индексы концов те же, что у _touching

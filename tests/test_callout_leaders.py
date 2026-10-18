@@ -122,3 +122,40 @@ def test_overlong_shaft_is_not_taken_for_a_leader() -> None:
         (TextLabel(SourceRef("12345678", "00000000", "t"), LAYER, -60, 2.5, "2тр."),),
     )
     assert not any(c.leader for c in recognise_callouts(long))
+
+
+def test_arrow_at_a_bend_of_the_trace_keeps_the_segment_for_review() -> None:
+    """Ревью 18.10.2026: стрелка направления на изломе кабеля (продолжение уходит под 60°),
+    у хвоста - подпись колодца. Стержень здесь - сам отрезок кабеля: снять его без проверки
+    значит убрать отступ кабеля под посадками."""
+    pipe = _line("pipe_a", [(0, 0), (20, 0)])
+    turn = _line("pipe_b", [(20, 0), (27.5, 12.99)])
+    wings = (_line("wl", [(20, 0), (19.2, 0.35)]), _line("wr", [(20, 0), (19.2, -0.35)]))
+    label = TextLabel(SourceRef("12345678", "00000000", "t"), LAYER, -1.0, 1.0, "К-12")
+    scene = Scene("bend.dxf", "b" * 64, "AC1032", (pipe, turn, *wings), (label,))
+    result = _classes(scene)
+    assert result["pipe_a"].object_class is not ObjectClass.IGNORE
+    assert not any(c.leader for c in recognise_callouts(scene))
+
+
+def test_leader_landing_where_the_trace_passes_through_is_still_annotation() -> None:
+    """Острие на вершине трассы, которая проходит насквозь (два отрезка по одной прямой), -
+    выноска к сети, как и острие посреди отрезка."""
+    upper = _line("trace_up", [(10, 0), (10, 6)])
+    lower = _line("trace_down", [(10, 0), (10, -6)])
+    scene = Scene(
+        "through.dxf",
+        "c" * 64,
+        "AC1032",
+        (
+            _line("shaft", [(10, 0), (8, 2), (0, 2)]),
+            _line("left", [(10, 0), (9.2, 0.3)]),
+            _line("right", [(10, 0), (9.7, 0.8)]),
+            upper,
+            lower,
+        ),
+        (TextLabel(SourceRef("12345678", "00000000", "t"), LAYER, 0, 2.5, "152.05лот."),),
+    )
+    result = _classes(scene)
+    assert result["shaft"].object_class is ObjectClass.IGNORE
+    assert result["trace_up"].object_class is not ObjectClass.IGNORE
