@@ -19,7 +19,7 @@ services:
       # них не зависит). Пусто - выключено. Ollama на этой машине: GREEN_LLM_URL=
       # http://host.docker.internal:11434 в .env рядом с compose.yaml.
       GREEN_LLM_URL: ${GREEN_LLM_URL:-}
-      GREEN_LLM_MODEL: ${GREEN_LLM_MODEL:-qwen3:8b}
+      GREEN_LLM_MODEL: ${GREEN_LLM_MODEL:-gemma4:e4b-it-qat}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

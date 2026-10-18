@@ -61,7 +61,9 @@ class Settings(BaseSettings):
     osm_timeout_s: int = Field(default=90, ge=5, le=300)
     # Локальная LLM (Ollama) для подсказок классов по именам слоёв; пусто - подсказок нет.
     llm_url: str = ""
-    llm_model: str = "qwen3:8b"
+    # gemma4:e4b-it-qat - 3,3 ГБ VRAM (стенд от 4 ГБ), лучшая из 24 моделей на отложенных именах
+    # пилота (docs/plans/2026-10-16-ml-experiments.md, 18.10.2026).
+    llm_model: str = "gemma4:e4b-it-qat"
     llm_timeout_s: int = Field(default=180, ge=5, le=1800)
     log_json: bool = False
     log_level: str = "INFO"
