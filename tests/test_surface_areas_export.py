@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 
 from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.constraints import work_boundary
@@ -1034,3 +1034,12 @@ def test_round_dashed_contour_with_a_lawn_mark_is_a_bed() -> None:
     assert beds.contains(Point(10, 10))
     assert not beds.intersects(Point(25, 10))
     assert not beds.contains(Point(35, 10))
+
+
+def test_a_multipart_paved_part_exports_as_parts_of_its_kind() -> None:
+    """Чертёж жюри 236287.dxf, 19.10.2026: выемка у крыльца, присоединённая к дорожке углом,
+    оставила мультиполигон, и выгрузка покрытий падала на нём. Каждый кусок - своя часть."""
+    two = MultiPolygon([box(0, 0, 5, 2), box(5, 2, 8, 6)])
+    rings, kinds = _export_parts([two, box(20, 0, 30, 5)], ["asphalt", "road"])
+    assert kinds == ["asphalt", "asphalt", "road"]
+    assert len(rings) == 3

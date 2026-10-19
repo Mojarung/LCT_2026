@@ -962,7 +962,7 @@ def _surface_areas(
         soil = shapely.union_all([soil, islands]) if soil is not None else islands
     parts, kinds = _paved_parts(paved, basemap, exact_paved)
     parts, kinds = _walk_ends_to_road(parts, kinds)
-    parts = _walk_notches_paved(parts, kinds, soil, basemap)
+    parts, kinds = _exploded(_walk_notches_paved(parts, kinds, soil, basemap), kinds)
     parts = [_without_artifact_holes(part, soil) for part in parts]
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
@@ -1089,10 +1089,20 @@ def _walk_ends_to_road(
             g = WALK_END_TOUCH_M
             out[road] = _areal(shapely.union_all([out[road], end]).buffer(g).buffer(-g))
             out[i] = _areal(out[i].difference(out[road]))
-    # Разрезанная часть - несколько многоугольников: каждый своей частью того же вида.
+    return _exploded(out, kinds)
+
+
+def _exploded(
+    parts: Sequence[BaseGeometry], kinds: Sequence[str]
+) -> tuple[list[BaseGeometry], list[str]]:
+    """Часть из нескольких многоугольников - несколько частей того же вида.
+
+    Обработка части (разрез концом дорожки, выемка у крыльца, объединение) может оставить
+    мультиполигон, а выгрузка и 3D ждут у каждой части одно внешнее кольцо: чертёж жюри
+    (паспорт ОГХ 236287.dxf) на этом падал (19.10.2026)."""
     flat = [
         (piece, kind)
-        for part, kind in zip(out, kinds, strict=True)
+        for part, kind in zip(parts, kinds, strict=True)
         for piece in shapely.get_parts(part)
         if piece.geom_type == "Polygon" and not piece.is_empty
     ]
@@ -1781,7 +1791,7 @@ def _export_parts(
     звеньев не осталось кольца, выпадает вместе со своим видом."""
     rings: list[list[list[list[float]]]] = []
     out_kinds: list[str] = []
-    for part, kind in zip(parts, kinds, strict=True):
+    for part, kind in zip(*_exploded(parts, kinds), strict=True):
         polygon = _polygon_rings(part)
         if polygon and len(polygon[0]) >= RING_MIN_POINTS:
             rings.append(polygon)
