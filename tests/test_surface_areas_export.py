@@ -11,6 +11,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import shapely
 from shapely.geometry import Point, Polygon, box
 
@@ -18,9 +19,12 @@ from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.surfaces import build_surface_map
 from green.domain.objects import Feature, ObjectClass, SourceRef
 from green.infrastructure.reports.artifacts import (
+    SUBDIVIDE_VERTICES,
+    _lawn_islands,
+    _overlap_areas,
     _round_turns,
-    _share_paved,
     _smoothed,
+    _subdivided,
     _surface,
     _tidy,
 )
@@ -492,6 +496,51 @@ def test_lawn_island_survives_a_geos_topology_failure(monkeypatch) -> None:  # n
 
     plaza = box(10, 5, 40, 30)
     bed = Point(25, 17).buffer(3, quad_segs=2)
+    ring = bed.buffer(1).difference(bed)
     monkeypatch.setattr(shapely, "intersection", flaky)
-    share = _share_paved(bed.buffer(1).difference(bed), plaza)
-    assert share > 0.99
+    covered = _overlap_areas([ring], plaza)
+    assert covered[0] > 0.99 * ring.area
+
+
+def test_subdivided_paved_keeps_its_area_in_small_pieces() -> None:
+    """Покрытие улицы режется на куски не больше SUBDIVIDE_VERTICES вершин без потери площади."""
+    street = Point(0, 0).buffer(500, quad_segs=2000).difference(Point(0, 0).buffer(200))
+    pieces = _subdivided(street)
+    assert len(pieces) > 1
+    assert max(shapely.get_num_coordinates(p) for p in pieces) <= SUBDIVIDE_VERTICES
+    assert abs(sum(p.area for p in pieces) - street.area) < 1e-6 * street.area
+    assert shapely.union_all(pieces).symmetric_difference(street).area < 1e-6 * street.area
+
+
+def test_lawn_islands_work_grows_with_the_street_not_street_times_lawns(monkeypatch) -> None:  # noqa: ANN001
+    """Фрунзенская, 19.10.2026: 13 тыс. газонов, и кольцо каждого пересекалось с покрытием
+    всей улицы - surface.json считался час. Кольцо меряется кусками покрытия рядом с ним:
+    вершин через пересечения проходит порядка самого покрытия, а не покрытие на число газонов."""
+    plaza = Point(0, 0).buffer(300, quad_segs=3000)
+    beds = [
+        Point(x, y).buffer(3, quad_segs=2)
+        for x in range(-120, 121, 20)
+        for y in range(-120, 121, 20)
+    ]
+    paved = plaza.difference(shapely.union_all(beds))
+    basemap = Basemap(
+        features=tuple(BasemapFeature(ObjectClass.LAWN, b) for b in beds),
+        features_in=len(beds),
+        features_out=len(beds),
+        dropped={},
+        bbox=plaza.bounds,
+        labels=(),
+    )
+    work = {"coords": 0}
+    real = shapely.intersection
+
+    def counting(a, b, **kwargs):  # noqa: ANN001, ANN003, ANN202
+        work["coords"] += int(np.sum(shapely.get_num_coordinates(a)))
+        work["coords"] += int(np.sum(shapely.get_num_coordinates(b)))
+        return real(a, b, **kwargs)
+
+    monkeypatch.setattr(shapely, "intersection", counting)
+    islands, _ = _lawn_islands(basemap, paved)
+    assert islands is not None
+    assert islands.area > 0.99 * sum(b.area for b in beds)
+    assert work["coords"] < 20 * shapely.get_num_coordinates(paved)

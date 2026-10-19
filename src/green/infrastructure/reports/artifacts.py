@@ -857,6 +857,9 @@ ISLAND_RING_M = 1.0
 ISLAND_PAVED_SHARE = 0.6
 FLOWERBED_LABEL_M = 8.0
 ISLAND_GRID_M = 1e-3
+# Покрытие улицы для пересечений режется на куски не больше стольких вершин (_subdivided).
+SUBDIVIDE_VERTICES = 256
+SUBDIVIDE_MIN_M = 0.01
 # Клумба - малый остров: большой газон в кольце дорожек цветником не становится.
 FLOWERBED_MAX_M2 = 120.0
 FLOWERBED_PHRASE = re.compile(r"КЛУМБ|ЦВЕТН")
@@ -963,8 +966,7 @@ def _lawn_islands(
     FLOWERBED_LABEL_M - цветник. Проверку посадок это не меняет."""
     if basemap is None or paved is None or paved.is_empty:
         return None, None
-    shapely.prepare(paved)
-    islands = []
+    lawns, rings = [], []
     for f in basemap.features:
         if f.object_class is not ObjectClass.LAWN or f.geometry.geom_type not in {
             "Polygon",
@@ -975,8 +977,15 @@ def _lawn_islands(
             if not 0 < lawn.area <= ISLAND_MAX_M2:
                 continue
             ring = lawn.buffer(ISLAND_RING_M).difference(lawn)
-            if ring.area and _share_paved(ring, paved) >= ISLAND_PAVED_SHARE:
-                islands.append(lawn)
+            if ring.area:
+                lawns.append(lawn)
+                rings.append(ring)
+    covered = _overlap_areas(rings, paved)
+    islands = [
+        lawn
+        for lawn, ring, area in zip(lawns, rings, covered, strict=True)
+        if area >= ISLAND_PAVED_SHARE * ring.area
+    ]
     if not islands:
         return None, None
     names = [lb for lb in basemap.labels if FLOWERBED_PHRASE.search(lb.text.strip().upper())]
@@ -991,17 +1000,71 @@ def _lawn_islands(
     return shapely.union_all(islands), (shapely.union_all(beds) if beds else None)
 
 
-def _share_paved(ring: BaseGeometry, paved: BaseGeometry) -> float:
-    """Доля кольца вокруг газона под покрытием. Пересечение GEOS на сложном покрытии улицы
-    бывает падает («Ring edge missing», Харьковский проезд 19.10.2026): тогда - на сетке 1 мм,
-    а если и там нет - газон не остров (0)."""
+def _overlap_areas(
+    shapes: Sequence[BaseGeometry] | np.ndarray, area: BaseGeometry | None
+) -> np.ndarray:
+    """Площадь каждой фигуры под area. Мерится по кускам area рядом с фигурой (_subdivided):
+    пересечение малого контура с покрытием всей улицы проходит по всем его вершинам, и на
+    Фрунзенской (13 тыс. газонов) surface.json считался час (19.10.2026)."""
+    shapes = np.asarray(shapes, dtype=object)
+    out = np.zeros(len(shapes))
+    pieces = np.asarray(_subdivided(area), dtype=object)
+    if not len(shapes) or not len(pieces):
+        return out
+    near, piece = shapely.STRtree(pieces).query(shapes, predicate="intersects")
+    try:
+        areas = shapely.area(shapely.intersection(shapes[near], pieces[piece]))
+    except shapely.errors.GEOSException:
+        areas = np.array(
+            [_intersection_area(shapes[i], pieces[j]) for i, j in zip(near, piece, strict=True)]
+        )
+    np.add.at(out, near, areas)
+    return out
+
+
+def _intersection_area(a: BaseGeometry, b: BaseGeometry) -> float:
+    """Площадь пересечения. GEOS на сложном покрытии улицы бывает падает («Ring edge missing»,
+    Харьковский проезд 19.10.2026): тогда - на сетке 1 мм, а если и там нет - 0."""
     for grid in (0.0, ISLAND_GRID_M):
         try:
-            a, b = (shapely.set_precision(g, grid) if grid else g for g in (ring, paved))
-            return float(shapely.area(shapely.intersection(a, b))) / ring.area
+            x, y = (shapely.set_precision(g, grid) if grid else g for g in (a, b))
+            return float(shapely.area(shapely.intersection(x, y)))
         except shapely.errors.GEOSException:
             continue
     return 0.0
+
+
+def _subdivided(area: BaseGeometry | None) -> list[BaseGeometry]:
+    """Площадь кусками не больше SUBDIVIDE_VERTICES вершин: рамка куска делится пополам по
+    длинной стороне, пока вершин много (как ST_Subdivide в PostGIS). Куски не перекрываются,
+    их сумма - исходная площадь."""
+    if area is None or area.is_empty:
+        return []
+    out: list[BaseGeometry] = []
+    stack = [p for p in shapely.get_parts(shapely.get_parts(area)) if p.geom_type == "Polygon"]
+    while stack:
+        g = stack.pop()
+        x0, y0, x1, y1 = g.bounds
+        if (
+            shapely.get_num_coordinates(g) <= SUBDIVIDE_VERTICES
+            or max(x1 - x0, y1 - y0) < SUBDIVIDE_MIN_M
+        ):
+            out.append(g)
+            continue
+        if x1 - x0 >= y1 - y0:
+            xm = (x0 + x1) / 2
+            halves = (shapely.box(x0, y0, xm, y1), shapely.box(xm, y0, x1, y1))
+        else:
+            ym = (y0 + y1) / 2
+            halves = (shapely.box(x0, y0, x1, ym), shapely.box(x0, ym, x1, y1))
+        try:
+            cut = [g.intersection(h) for h in halves]
+        except shapely.errors.GEOSException:
+            out.append(g)
+            continue
+        parts = shapely.get_parts(shapely.get_parts(cut))
+        stack.extend(p for p in parts if p.geom_type == "Polygon")
+    return out
 
 
 def _tidy(area: BaseGeometry | None) -> BaseGeometry | None:
@@ -1044,14 +1107,9 @@ def _snap_to_faces(
         return paved, soil
     houses = _class_area(basemap.features, ObjectClass.BUILDING)
     area = shapely.area(faces)
-    empty = shapely.Polygon()
-    share_p = shapely.area(shapely.intersection(faces, paved or empty)) / area
-    share_s = shapely.area(shapely.intersection(faces, soil or empty)) / area
-    inside_house = (
-        shapely.area(shapely.intersection(faces, houses)) / area > FACE_MAJORITY
-        if houses is not None
-        else np.zeros(len(faces), dtype=bool)
-    )
+    share_p = _overlap_areas(faces, paved) / area
+    share_s = _overlap_areas(faces, soil) / area
+    inside_house = _overlap_areas(faces, houses) / area > FACE_MAJORITY
     to_paved = (share_p >= FACE_MAJORITY) & (share_p >= share_s) & ~inside_house
     to_soil = (share_s >= FACE_MAJORITY) & (share_s > share_p) & ~inside_house
     decided = shapely.union_all(faces[to_paved | to_soil])
