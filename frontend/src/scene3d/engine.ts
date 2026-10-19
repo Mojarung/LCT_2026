@@ -98,7 +98,7 @@ import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
 import { GRASS_PRESETS, GrassField } from './grass';
-import type { Line, Plant, World } from './types';
+import type { Line, Plant, Ring, World } from './types';
 import { frameAt } from './world';
 
 export type Quality = 'low' | 'medium' | 'high';
@@ -583,9 +583,15 @@ export class SceneEngine {
   private addCrowd(mask: MaskInfo, surface: SurfaceImage | null): void {
     const blocked = this.walls.blockedCells(mask, 0.4);
     const special = specialCells(mask, surface?.areas, this.world.origin);
+    // В доме никто не ходит, даже если под ним покрытие: за границей работ подпись заливает
+    // грань, в которую открыт вход в дом, и люди появлялись внутри стен.
+    const houses = areaCells(
+      mask,
+      this.world.buildings.map((b) => b.rings),
+    );
     const walk = new Uint8Array(mask.kinds.length);
     for (let i = 0; i < walk.length; i++) {
-      if (blocked[i]) continue;
+      if (blocked[i] || houses[i]) continue;
       if (special[i]) walk[i] = 2;
       else if (mask.kinds[i] === PAVERS || mask.kinds[i] === ASPHALT) walk[i] = 1;
     }
@@ -1716,16 +1722,24 @@ function specialCells(
   areas: SurfaceImage['areas'] | undefined,
   origin: [number, number],
 ): Uint8Array {
-  const out = new Uint8Array(mask.width * mask.height);
-  if (!areas) return out;
+  if (!areas) return new Uint8Array(mask.width * mask.height);
   const [ox, oy] = origin;
+  const parts = areas.paved
+    .filter((_, i) => areas.paved_kind?.[i] === 'special')
+    .map((rings) =>
+      rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) }))),
+    );
+  return areaCells(mask, parts);
+}
+
+/** Клетки маски внутри площадей (внешнее кольцо и дыры) в координатах сцены. */
+function areaCells(mask: MaskInfo, areas: readonly (readonly Ring[])[]): Uint8Array {
+  const out = new Uint8Array(mask.width * mask.height);
   const m = mask.metresPerPx;
   const [x0, z0] = mask.rect;
-  areas.paved.forEach((rings, i) => {
-    if (areas.paved_kind?.[i] !== 'special') return;
-    const flat = rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) })));
+  for (const flat of areas) {
     const outer = flat[0] ?? [];
-    if (outer.length < 3) return;
+    if (outer.length < 3) continue;
     const xs = outer.map((p) => p.x);
     const zs = outer.map((p) => p.z);
     const px0 = Math.max(0, Math.floor((Math.min(...xs) - x0) / m));
@@ -1738,6 +1752,6 @@ function specialCells(
         if (distanceToArea(flat, p) === 0) out[pz * mask.width + px] = 1;
       }
     }
-  });
+  }
   return out;
 }
