@@ -26,6 +26,7 @@ from green.application.surfaces import (
 from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
 from green.infrastructure.reports.artifacts import (
     SUBDIVIDE_VERTICES,
+    _drawn_beds,
     _export_parts,
     _lawn_islands,
     _overlap_areas,
@@ -931,3 +932,27 @@ def test_porch_notch_of_a_walk_is_paved_but_lawn_and_corners_stay() -> None:
     assert out.contains(Point(2.5, 9.2))
     assert not out.contains(Point(2.5, 15))
     assert not out.contains(Point(3.5, 3.5))
+
+
+def test_labelled_dashed_circle_is_a_flowerbed() -> None:
+    """Харьковская, 19.10.2026: клумба нарисована пунктирным кругом слоя «Топографические
+    объекты» с подписью «КЛУМБА» внутри. Сшитый круг - замкнутый контур, клумба - он сам, а
+    не газон вокруг; круг без подписи клумбой не становится."""
+    bed = Point(10, 10).buffer(1.5)
+    other = Point(30, 10).buffer(1.5)
+    basemap = Basemap(
+        features=(
+            BasemapFeature(ObjectClass.LAWN, box(0, 0, 40, 20)),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(bed.exterior.coords), dashed=True),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(other.exterior.coords), dashed=True),
+        ),
+        features_in=3,
+        features_out=3,
+        dropped={},
+        bbox=(0, 0, 40, 20),
+        labels=(MaterialLabel(9.4, 9.6, "КЛУМБА", "soil"),),
+    )
+    beds = _drawn_beds(basemap)
+    assert beds is not None
+    assert beds.symmetric_difference(bed).area < 0.05 * bed.area
+    assert not beds.intersects(other)
