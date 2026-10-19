@@ -20,6 +20,7 @@ from scipy.ndimage import label as connected_components
 from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
+from green.application.line_gaps import GAP_M as LINE_GAP_M
 from green.application.line_gaps import bridges
 from green.application.surface_faces import FaceMaterials, closed_face_materials
 from green.application.wording import counted
@@ -417,6 +418,9 @@ class SurfaceMap:
 # за границей иначе стояли газоном, и дорожка от калитки обрывалась в траву (Харьковская,
 # 19.10.2026). Посадки и проверка читают карту в границе работ, как раньше.
 DISPLAY_MARGIN_M = 40.0
+# Разрыв между штрихами пунктира съёмки (борт, край покрытия) не шире этого закрывается в
+# карте для посадок, м: штрих около метра, просвет 0,3-0,6 м, проход и въезд - от 1,5 м.
+STROKE_GAP_M = 1.0
 
 
 def display_extent(extent: BaseGeometry | None) -> BaseGeometry | None:
@@ -493,12 +497,14 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
     uncertain = _uncertainty_area(features)
-    if display_around is not None:
-        # Борт и край покрытия съёмки часто пунктиром из отдельных штрихов: разлив подписи «А»
-        # уходил сквозь разрывы за борт, и край проезда в 3D шёл зубцами и лесенкой
-        # (Кустанайская, 19.10.2026: «асфальт прям грустно»). В карте для показа разрывы до
-        # line_gaps.GAP_M закрыты перемычками ещё до разлива; карта для посадок прежняя.
-        barriers = np.concatenate([barriers, np.array(bridges(list(barriers)), dtype=object)])
+    # Борт и край покрытия съёмки часто пунктиром из отдельных штрихов: разлив подписи «А»
+    # уходил сквозь разрывы за борт, и край проезда шёл зубцами и лесенкой (Кустанайская,
+    # 19.10.2026: «асфальт прям грустно», «нужно уметь распознавать штрихи»). Разрывы
+    # закрываются перемычками ещё до разлива: в карте для посадок - разрывы пунктира до
+    # STROKE_GAP_M (въезд и калитка шире остаются открытыми), в карте для показа - до
+    # line_gaps.GAP_M, как в гранях для показа.
+    gap = STROKE_GAP_M if display_around is None else LINE_GAP_M
+    barriers = np.concatenate([barriers, np.array(bridges(list(barriers), gap), dtype=object)])
     barrier = _rasterize(barriers, origin, cell, shape, uncertain=uncertain)
     free = ~barrier
     if extent is not None:

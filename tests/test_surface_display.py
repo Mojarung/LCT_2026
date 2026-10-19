@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
 from shapely.geometry import LineString, box
 
 from green.application.surfaces import Material, build_surface_map
@@ -115,3 +116,26 @@ def test_display_fills_a_closed_face_where_the_label_spread_stopped() -> None:
 
     assert material(surface.grid, 45, 3) != int(Material.PAVED)
     assert material(surface.display_grid, 45, 3) == int(Material.PAVED)
+
+
+def test_planting_map_does_not_leak_through_a_dashed_curb() -> None:
+    """Кустанайская, 19.10.2026: борт съёмки - пунктир из штрихов по метру с просветами по
+    полметра; подпись «А» разливалась сквозь просветы за борт. Просветы пунктира закрыты и в
+    карте для посадок, а проход шире STROKE_GAP_M остаётся открытым."""
+    strokes = [LineString([(1.5 * k, 10), (1.5 * k + 1.0, 10)]) for k in range(27)]
+    features = [
+        Feature(
+            SourceRef("12345678", "00000000", f"D{i}"), "curb", g, object_class=ObjectClass.CURB
+        )
+        for i, g in enumerate(strokes)
+    ]
+    labels = [TextLabel(SourceRef("12345678", "00000000", "LA"), "Подписи", 20.0, 5.0, "А")]
+    surface = build_surface_map(
+        features, labels, box(0, 0, 40, 20), 0.25, max_distance_m=30.0, inference_mode="distance"
+    )
+    assert surface is not None
+    col = int((20 - surface.origin[0]) / surface.cell)
+    above = int((15 - surface.origin[1]) / surface.cell)
+    below = int((5 - surface.origin[1]) / surface.cell)
+    assert int(surface.grid[below, col]) == int(Material.PAVED)
+    assert int(surface.grid[above, col]) != int(Material.PAVED)
