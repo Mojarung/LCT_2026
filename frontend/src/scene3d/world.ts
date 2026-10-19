@@ -18,6 +18,7 @@ import {
   type ExistingPlant,
 } from '../map/existing';
 import { isShrubType } from '../map/models';
+import { freeCanopies } from './canopies';
 import { simplifyRing } from './facades';
 import { poleSites } from './poles';
 import type {
@@ -453,7 +454,8 @@ function sceneBuildings(scene: SceneJson, box: Box, frame: Frame): Building[] {
 function basemapBuildings(features: readonly BasemapFeature[], box: Box, frame: Frame): Building[] {
   const out: Building[] = [];
   for (const feature of features) {
-    if (feature.properties.class !== 'building') continue;
+    // Пунктир - над землёй (навес, выступ): стен до земли у него нет.
+    if (feature.properties.class !== 'building' || feature.properties.dashed) continue;
     for (const polygon of polygons(feature.geometry)) {
       const outer = polygon[0];
       if (!outer || outer.length < 4 || !inBox(outer, box)) continue;
@@ -601,6 +603,25 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   const a = frame.toFlat(box[0], box[3]);
   const b = frame.toFlat(box[2], box[1]);
   plants.push(...stripShrubs(linework.shrubStrips, [a.x, a.z, b.x, b.z]));
+  // Навесы - замкнутый пунктир слоя зданий: и кольцом линии, и полигоном.
+  const dashedRings = features
+    .filter((f) => f.properties.class === 'building' && f.properties.dashed === true)
+    .flatMap((f) =>
+      f.geometry.type === 'LineString'
+        ? [f.geometry.coordinates]
+        : polygons(f.geometry).flatMap((polygon) => polygon.slice(0, 1)),
+    )
+    .filter((ring) => {
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      return ring.length >= 4 && first && last && first[0] === last[0] && first[1] === last[1];
+    })
+    .filter((ring) => inBox(ring, box))
+    .map((ring) => flatRing(ring, frame));
+  const canopies = freeCanopies(
+    dashedRings,
+    buildings.map((b) => b.rings[0] ?? []),
+  );
   const flowerbeds = (plan?.lawns ?? [])
     .filter((lawn) => lawn.kind === 'flowerbed')
     .flatMap((lawn) => polygons(lawn.geometry))
@@ -610,6 +631,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     origin,
     bounds: [a.x, a.z, b.x, b.z],
     flowerbeds,
+    canopies,
     fenceAxes: !!axes?.length,
     benches,
     groundLabels,

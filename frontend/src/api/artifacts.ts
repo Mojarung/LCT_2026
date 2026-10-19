@@ -206,6 +206,8 @@ export interface BasemapFeature {
     class: string;
     conifer?: boolean;
     vegetation_kind?: 'individual' | 'strip' | 'shrub_strip';
+    /** Пунктир чертежа: у здания - навес или выступ над землёй. */
+    dashed?: boolean;
   };
   geometry: Geometry;
 }

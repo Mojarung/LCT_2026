@@ -167,6 +167,16 @@ class Feature:
     uncertainty_footprint: BaseGeometry | None = None
     # Штрих условного знака: строка ref экземпляра SymbolInstance, которому принадлежит.
     symbol: str | None = None
+    # Линия прерывистая: тип линии с разрывами в таблице LTYPE или пунктир, сшитый ридером
+    # из отдельных штрихов (infrastructure/cad/dashes).
+    dashed: bool = False
+
+    @property
+    def overhead(self) -> bool:
+        """Контур над землёй: навес, козырёк, выступ, арку здания топоплан рисует пунктиром, и
+        земля под ними продолжается (Мосгеотрест - штрихи слоёв «Навесы» и «Части зданий»,
+        паспорт ОГХ - тип линии с разрывами у слоя «Навес»)."""
+        return self.dashed and self.object_class is ObjectClass.BUILDING
 
 
 @dataclass(frozen=True, slots=True)

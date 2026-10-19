@@ -82,7 +82,9 @@ def test_reading_and_measuring_leave_the_document_as_loaded(
     before = _state(doc)
     assert measure(doc) is not None
     scene = EzdxfSceneReader(documents=cache).read(source)
-    assert len(scene.features) > 100
+    # Прочитан весь чертёж: штрихи борта внутри блока-контейнера сшиваются в одну линию,
+    # поэтому считаются посещённые примитивы, а не объекты сцены.
+    assert sum(scene.read_diagnostics.visited_by_type.values()) > 100
     assert _state(doc) == before
 
 

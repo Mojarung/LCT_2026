@@ -114,7 +114,8 @@ def _candidates(
     skipped_trees = skipped_areas = 0
     for feature in features:
         kind, geometry = feature.object_class, feature.geometry
-        if kind != ObjectClass.EXISTING_TREE and kind not in AREA_CLASSES:
+        # Навес пунктиром - над землёй: дерево под ним не противоречит чертежу.
+        if kind != ObjectClass.EXISTING_TREE and (kind not in AREA_CLASSES or feature.overhead):
             continue
         valid = (
             geometry is not None

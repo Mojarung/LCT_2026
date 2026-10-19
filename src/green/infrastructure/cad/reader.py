@@ -11,7 +11,18 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 from ezdxf import bbox
-from ezdxf.entities import Body, Circle, Ellipse, Insert, LWPolyline, MText, Polyline, Spline, Text
+from ezdxf.entities import (
+    Body,
+    Circle,
+    Ellipse,
+    Insert,
+    Linetype,
+    LWPolyline,
+    MText,
+    Polyline,
+    Spline,
+    Text,
+)
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
 from ezdxf.tools.text import fast_plain_mtext, plain_text
@@ -37,6 +48,7 @@ from green.infrastructure.cad.curve_paths import (
     polyline_vertices,
     spline_vertices,
 )
+from green.infrastructure.cad.dashes import chain_dashes
 from green.infrastructure.cad.documents import entity_layer, load_document
 from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
@@ -209,6 +221,11 @@ class _Walker:
     sizes: dict[str, bbox.BoundingBox | None] = field(default_factory=dict)
     # Рамки обрезки XCLIP вставок, внутри которых идёт обход (единицы чертежа, WCS).
     clips: list[BaseGeometry] = field(default_factory=list)
+    # Тип линии вставок, внутри которых идёт обход: его берёт примитив с типом BYBLOCK.
+    block_linetypes: list[str] = field(default_factory=list)
+    # Тип линии слоя по имени слоя и наличие разрывов в типе линии (по имени в нижнем регистре).
+    layer_linetypes: dict[str, str] | None = None
+    patterned: dict[str, bool] | None = None
 
     def visit(  # noqa: PLR0913 - обход с явным учётом исходов
         self,
@@ -301,6 +318,7 @@ class _Walker:
                 if center is not None
                 else None,
                 symbol=owner,
+                dashed=kind not in _AREA_ENTITIES and self._dashed(entity, layer),
             )
         )
         self.bounded_hatches += int(uncertainty_footprint is not None)
@@ -514,6 +532,7 @@ class _Walker:
         """Роль и разбор вставки внутри её рамки обрезки, если рамка есть."""
         if region is not None:
             self.clips.append(region)
+        self.block_linetypes.append(self._linetype(insert, layer))
         try:
             outcome, child_owner = self._role(insert, block, ref, layer, owner)
             if outcome == CLIPPED:
@@ -523,6 +542,7 @@ class _Walker:
                 return "insert:not-explodable"
             return outcome
         finally:
+            self.block_linetypes.pop()
             if region is not None:
                 self.clips.pop()
 
@@ -574,6 +594,7 @@ class _Walker:
             children = list(insert.virtual_entities(skipped_entity_callback=self._virtual_skip))
         except ValueError, TypeError, ArithmeticError:
             return False
+        start = len(self.features)
         for position, child in enumerate(children):
             self.visit(
                 child,
@@ -584,7 +605,35 @@ class _Walker:
                 parent_block=name,
                 owner=owner,
             )
+        if owner is None:
+            # Пунктир, разобранный на штрихи (MicroStation): штрихи одной линии идут подряд и
+            # сшиваются обратно в линию. Исходы штрихов в учёте чтения остаются как были.
+            self.features[start:] = chain_dashes(
+                self.features[start:], parent=ref.handle, unit_m=self.unit_m
+            )
         return True
+
+    def _dashed(self, entity: DXFGraphic, layer: str) -> bool:
+        """Тип линии с разрывами: у сущности, по слою (BYLAYER) или по вставке (BYBLOCK)."""
+        if self.patterned is None:
+            self.patterned = {
+                str(record.dxf.name).casefold(): _has_gaps(record) for record in self.doc.linetypes
+            }
+        return self.patterned.get(self._linetype(entity, layer).casefold(), False)
+
+    def _linetype(self, entity: DXFGraphic, layer: str) -> str:
+        name = str(entity.dxf.get("linetype", "BYLAYER"))
+        key = name.casefold()
+        if key == "byblock":
+            return self.block_linetypes[-1] if self.block_linetypes else "CONTINUOUS"
+        if key != "bylayer":
+            return name
+        if self.layer_linetypes is None:
+            self.layer_linetypes = {
+                decode_dxf_unicode(str(record.dxf.name)): str(record.dxf.get("linetype", ""))
+                for record in self.doc.layers
+            }
+        return self.layer_linetypes.get(layer, "CONTINUOUS")
 
     def _is_container(self, insert: Insert, block: BlockLayout) -> bool:
         """Контейнер - обёртка или сборка, а не значок: знак - то, что внутри неё."""
@@ -827,6 +876,15 @@ def _repaired(
 
 def _has_area(geometry: BaseGeometry) -> bool:
     return geometry.area > 0
+
+
+def _has_gaps(record: Linetype) -> bool:
+    """В рисунке типа линии есть разрыв: dash, gap, dash, gap... с положительным gap."""
+    try:
+        pattern = record.simplified_line_pattern()
+    except AttributeError, TypeError, ValueError, IndexError:
+        return False
+    return any(value > 0 for value in pattern[1::2])
 
 
 def _to_metres(

@@ -26,6 +26,7 @@ from green.application.surfaces import (
 from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
 from green.infrastructure.reports.artifacts import (
     SUBDIVIDE_VERTICES,
+    _drawn_beds,
     _export_parts,
     _lawn_islands,
     _overlap_areas,
@@ -931,3 +932,79 @@ def test_porch_notch_of_a_walk_is_paved_but_lawn_and_corners_stay() -> None:
     assert out.contains(Point(2.5, 9.2))
     assert not out.contains(Point(2.5, 15))
     assert not out.contains(Point(3.5, 3.5))
+
+
+def test_labelled_dashed_circle_is_a_flowerbed() -> None:
+    """Харьковская, 19.10.2026: клумба нарисована пунктирным кругом слоя «Топографические
+    объекты» с подписью «КЛУМБА» внутри. Сшитый круг - замкнутый контур, клумба - он сам, а
+    не газон вокруг; круг без подписи клумбой не становится."""
+    bed = Point(10, 10).buffer(1.5)
+    other = Point(30, 10).buffer(1.5)
+    basemap = Basemap(
+        features=(
+            BasemapFeature(ObjectClass.LAWN, box(0, 0, 40, 20)),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(bed.exterior.coords), dashed=True),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(other.exterior.coords), dashed=True),
+        ),
+        features_in=3,
+        features_out=3,
+        dropped={},
+        bbox=(0, 0, 40, 20),
+        labels=(MaterialLabel(9.4, 9.6, "КЛУМБА", "soil"),),
+    )
+    beds = _drawn_beds(basemap)
+    assert beds is not None
+    assert beds.symmetric_difference(bed).area < 0.05 * bed.area
+    assert not beds.intersects(other)
+
+
+def test_label_past_the_boundary_fills_a_face_closed_by_drawn_lines() -> None:
+    """Харьковская, 19.10.2026: полоса «Ц» (цементобетон) между оградой и стеной школы лежит
+    за границей работ и в 3D стояла газоном. За границей подпись разливается только в грани,
+    которую замыкают линии чертежа; открытое к рамке место по-прежнему не заливается."""
+    boundary = box(0, 0, 30, 40)
+    yard = [
+        LineString([(35, 5), (45, 5), (45, 15), (35, 15), (35, 5)]),  # ограда и стены
+    ]
+    features = [
+        Feature(REF, "boundary", boundary, object_class=ObjectClass.WORK_BOUNDARY),
+        *(Feature(REF, "fence", g, object_class=ObjectClass.FENCE) for g in yard),
+    ]
+    labels = [
+        TextLabel(REF, "t", 10.0, 20.0, "А"),
+        TextLabel(REF, "t", 40.0, 10.0, "Ц"),  # в замкнутой грани за границей
+        TextLabel(REF, "t", 50.0, 30.0, "А"),  # за границей, в пустом месте
+    ]
+    display = build_surface_map(
+        features,
+        labels,
+        display_extent(boundary),
+        0.5,
+        inference_mode="hybrid",
+        display_around=boundary,
+    )
+    assert display is not None
+
+    def material(x: float, y: float) -> Material:
+        col = int((x - display.origin[0]) / display.cell)
+        row = int((y - display.origin[1]) / display.cell)
+        return Material(int(display.grid[row, col]))
+
+    assert material(42, 12) is Material.PAVED
+    assert material(50, 25) is Material.UNKNOWN
+
+
+def test_nearly_closed_flowerbed_outline_still_holds_the_bed() -> None:
+    """Харьковская: контур клумбы недозамкнут на 11 см - это всё ещё клумба."""
+    ring = list(Point(10, 10).buffer(2.0).exterior.coords)[:-2]  # концы разошлись
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.OBSTACLE, LineString(ring), dashed=True),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=(0, 0, 20, 20),
+        labels=(MaterialLabel(9.0, 9.5, "КЛУМБА", "soil"),),
+    )
+    beds = _drawn_beds(basemap)
+    assert beds is not None
+    assert beds.area > 0.8 * Point(10, 10).buffer(2.0).area

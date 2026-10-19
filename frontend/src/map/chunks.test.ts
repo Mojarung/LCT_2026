@@ -215,3 +215,15 @@ it('recognised shrub strip is a filled band, never a list of crowns', () => {
   expect(chunks[0]?.minX).toBeLessThan(0);
   expect(chunks[0]?.maxY).toBeGreaterThan(4);
 });
+
+it('пунктир чертежа остаётся пунктиром отдельным куском, сплошная линия того же класса - нет', () => {
+  const solid = line('curb', [0, 0], [10, 0]);
+  const dashed: BasemapFeature = {
+    ...line('curb', [0, 2], [10, 2]),
+    properties: { class: 'curb', dashed: true },
+  };
+  const chunks = buildChunks([solid, dashed], [0, 0, 10, 10]);
+  expect(chunks).toHaveLength(2);
+  const dashes = chunks.map((chunk) => chunk.dash.length > 0).sort();
+  expect(dashes).toEqual([false, true]);
+});

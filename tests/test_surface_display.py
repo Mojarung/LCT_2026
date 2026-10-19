@@ -139,3 +139,67 @@ def test_planting_map_does_not_leak_through_a_dashed_curb() -> None:
     below = int((5 - surface.origin[1]) / surface.cell)
     assert int(surface.grid[below, col]) == int(Material.PAVED)
     assert int(surface.grid[above, col]) != int(Material.PAVED)
+
+
+def test_paving_runs_under_a_dashed_canopy_but_not_into_a_house() -> None:
+    """Кустанайская, 19.10.2026: навес посреди детской площадки (пунктир слоя «Навесы»)
+    останавливал разлив «СПЕЦ.ПОКР.», и под ним в 3D рос газон. Пунктир здания - над землёй,
+    покрытие идёт под него; сплошной контур дома разлив по-прежнему не пускает."""
+    ring = LineString([(45, 25), (52, 25), (52, 33), (45, 33), (45, 25)])
+
+    def house(*, dashed: bool) -> Feature:
+        return Feature(
+            SourceRef("12345678", "00000000", "H1"),
+            "Навесы",
+            ring,
+            object_class=ObjectClass.BUILDING,
+            dashed=dashed,
+        )
+
+    labels = [_label(1, 42, 22, "А")]
+    for dashed, expected in ((True, True), (False, False)):
+        features = [*SQUARE[:2], _curb(9, [(60, 29), (60, 31)]), *SQUARE[2:], house(dashed=dashed)]
+        surface = build_surface_map(features, labels, EXTENT, 0.5, inference_mode="hybrid")
+        assert surface is not None
+        assert (_at(surface, surface.grid, 48.5, 29) == Material.PAVED) is expected
+
+
+def test_labelled_lawn_by_an_open_driveway_is_not_painted_over() -> None:
+    """Кустанайская, 19.10.2026: газон с подписью «ГАЗОН» и деревьями открыт к асфальту двора
+    (между ними нет линии), и в грани для показа он был меньшинством - его красили асфальтом,
+    деревья стояли на асфальте. Меньшинство со своей подписью в грани остаётся."""
+    strip = [_curb(1, [(0, 20), (100, 20)]), _curb(2, [(0, 30), (100, 30)])]
+    labels = [_label(i, x, 25, "А") for i, x in enumerate((10, 30, 50, 70))]
+    labels.append(_label(9, 95, 25, "ГАЗОН"))
+    surface = build_surface_map(strip, labels, EXTENT, 0.5, inference_mode="hybrid")
+    assert surface is not None
+    assert surface.display_grid is not None
+    assert _at(surface, surface.grid, 95, 25) == Material.SOIL
+    assert _at(surface, surface.display_grid, 95, 25) == Material.SOIL
+    assert _at(surface, surface.display_grid, 30, 25) == Material.PAVED
+
+
+def test_label_on_a_line_paints_the_narrow_walk_on_display_only() -> None:
+    """Кустанайская, 19.10.2026: «А» узкого тротуара между бортом и оградой стоит точкой
+    вставки на двойной линии знака ограды и не разливалась - тротуар в 3D был газоном. В
+    карте для показа такая подпись сдвигается в ближайшую свободную клетку; в карте для
+    посадок сторону не выбирает."""
+    walk = [
+        _curb(1, [(0, 20), (100, 20)]),
+        _curb(2, [(0, 22), (100, 22)]),
+        _curb(3, [(0, 22.5), (100, 22.5)]),
+    ]
+    labels = [_label(1, 50, 22.25, "А")]  # точка вставки между линиями знака ограды
+    planting = build_surface_map(walk, labels, EXTENT, 0.5, inference_mode="hybrid")
+    assert planting is not None
+    assert _at(planting, planting.grid, 50, 21) == Material.UNKNOWN
+    display = build_surface_map(
+        walk,
+        labels,
+        box(-10, -10, 110, 70),
+        0.5,
+        inference_mode="hybrid",
+        display_around=EXTENT,
+    )
+    assert display is not None
+    assert _at(display, display.grid, 50, 21) == Material.PAVED

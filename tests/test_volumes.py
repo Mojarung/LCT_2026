@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -385,3 +386,12 @@ def test_noding_failure_falls_back_to_a_snapped_overlay(monkeypatch: pytest.Monk
 
     (house,) = volumes.buildings
     assert house.footprint.area == pytest.approx(100, abs=0.5)
+
+
+def test_a_dashed_canopy_outline_is_not_a_volume() -> None:
+    """Навес и выступ здания топоплан рисует пунктиром: это над землёй, стен до земли нет.
+    Сшитый из штрихов контур замкнут, но объёмом не становится."""
+    ring = LineString([(0, 0), (6, 0), (6, 4), (0, 4), (0, 0)])
+    canopy = replace(_feature(ring, layer="Навесы"), dashed=True)
+    volumes = _balanced(build_volumes([canopy], []))
+    assert volumes.buildings == ()

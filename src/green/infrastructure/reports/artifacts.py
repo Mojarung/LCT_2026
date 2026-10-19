@@ -803,6 +803,8 @@ def _basemap_properties(feature: BasemapFeature) -> dict[str, Any]:
         properties["conifer"] = True
     if feature.vegetation_kind:
         properties["vegetation_kind"] = feature.vegetation_kind
+    if feature.dashed:
+        properties["dashed"] = True
     return properties
 
 
@@ -948,6 +950,10 @@ def _surface_areas(
         )
     )
     islands, flowerbeds = _lawn_islands(basemap, paved)
+    drawn_beds = _drawn_beds(basemap)
+    if drawn_beds is not None:
+        flowerbeds = shapely.union_all([g for g in (flowerbeds, drawn_beds) if g is not None])
+        islands = shapely.union_all([g for g in (islands, drawn_beds) if g is not None])
     islands = _islands_off_drawn(islands, exact_paved)
     if islands is not None:
         paved = _without(paved, islands)
@@ -999,9 +1005,12 @@ def _walk_notches_paved(
         # Замыкание с прямыми углами: прямоугольная выемка заливается, а внутренний угол
         # дорожки у стены дома не получает скругления.
         notch = _areal(
-            part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
-        ).difference(part)
-        if notch.is_empty:
+            _areal(part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")).difference(
+                part
+            )
+        )
+        # Разность бывает вырожденной (линия по краю части): у неё нет рамки для обрезки.
+        if notch.is_empty or notch.area < WALK_NOTCH_MIN_M2:
             continue
         # Вычитаются только соседи и газон с домами в рамке выемки: целиком это долго.
         box = notch.bounds
@@ -1133,6 +1142,85 @@ def _lawn_islands(
         if point.distance(nearest) <= FLOWERBED_LABEL_M and nearest not in beds:
             beds.append(nearest)
     return shapely.union_all(islands), (shapely.union_all(beds) if beds else None)
+
+
+# Классы, чьим замкнутым контуром съёмка обводит клумбу: пунктирный круг «Топографических
+# объектов» с подписью «КЛУМБА» внутри (Харьковская, Кустанайская), край площадки, садовый
+# борт, газон. Здания, проезды и оформление клумбой не бывают.
+_BED_CLASSES = frozenset(
+    {
+        ObjectClass.OBSTACLE,
+        ObjectClass.CONTOUR,
+        ObjectClass.PAVEMENT_EDGE,
+        ObjectClass.CURB,
+        ObjectClass.LAWN,
+        ObjectClass.UNKNOWN,
+    }
+)
+# Подпись у края контура клумбы (точка вставки текста - его левый нижний угол), м.
+BED_LABEL_REACH_M = 0.5
+BED_MIN_M2 = 1.0
+# Недозамкнутый контур клумбы замыкается, если концы ближе этого, м.
+BED_CLOSE_M = 0.5
+# Углы клумбы скругляются этим радиусом, пока она не теряет больше 1 - BED_ROUND_KEEP площади.
+BED_ROUND_M = 0.6
+BED_ROUND_KEEP = 0.85
+
+
+def _drawn_beds(basemap: Basemap | None) -> BaseGeometry | None:
+    """Клумбы, обведённые замкнутым контуром с подписью «КЛУМБА» или «ЦВЕТНИК» внутри.
+
+    Съёмка рисует клумбу пунктирным кругом, и пока ридер не сшивал штрихи, контура не было, а
+    клумба посреди газона или тротуара в 3D пропадала. Для каждой подписи берётся наименьший
+    замкнутый контур вокруг неё не больше FLOWERBED_MAX_M2."""
+    if basemap is None:
+        return None
+    names = [
+        shapely.Point(lb.x, lb.y)
+        for lb in basemap.labels
+        if FLOWERBED_PHRASE.search(lb.text.strip().upper())
+    ]
+    if not names:
+        return None
+    areas = [
+        area
+        for f in basemap.features
+        if f.object_class in _BED_CLASSES
+        for part in shapely.get_parts(f.geometry)
+        if (area := _closed(part)) is not None and BED_MIN_M2 <= area.area <= FLOWERBED_MAX_M2
+    ]
+    if not areas:
+        return None
+    tree = shapely.STRtree(areas)
+    beds = []
+    for point in names:
+        near = [
+            areas[int(i)]
+            for i in tree.query(point, predicate="dwithin", distance=BED_LABEL_REACH_M)
+        ]
+        holding = [a for a in near if a.buffer(BED_LABEL_REACH_M).contains(point)]
+        if holding:
+            bed = min(holding, key=lambda a: a.area)
+            # Карта упрощает контур (допуск 0,3 м), и круг клумбы выходил многоугольником.
+            rounded = bed.buffer(-BED_ROUND_M).buffer(BED_ROUND_M)
+            beds.append(rounded if rounded.area >= BED_ROUND_KEEP * bed.area else bed)
+    return shapely.union_all(beds) if beds else None
+
+
+def _closed(geometry: BaseGeometry) -> BaseGeometry | None:
+    """Площадь замкнутого контура: полигон или кольцо линии, концы которого сходятся ближе
+    BED_CLOSE_M (контур клумбы на Харьковской недозамкнут на 11 см); None - контур открыт."""
+    if geometry.geom_type == "Polygon":
+        return geometry
+    if (
+        geometry.geom_type == "LineString"
+        and len(geometry.coords) > 3  # noqa: PLR2004 - кольцу нужны три вершины
+        and shapely.Point(geometry.coords[0]).distance(shapely.Point(geometry.coords[-1]))
+        <= BED_CLOSE_M
+    ):
+        area = shapely.make_valid(shapely.Polygon(geometry.coords))
+        return area if area.geom_type == "Polygon" and area.area > 0 else None
+    return None
 
 
 def _islands_off_drawn(
@@ -1562,7 +1650,10 @@ def _class_area(features: Sequence[Any], object_class: ObjectClass) -> BaseGeome
     areas = [
         f.geometry
         for f in features
-        if f.object_class is object_class and f.geometry.geom_type in {"Polygon", "MultiPolygon"}
+        if f.object_class is object_class
+        and f.geometry.geom_type in {"Polygon", "MultiPolygon"}
+        # Навес пунктиром - над землёй, а не дом: покрытие под ним продолжается.
+        and not (object_class is ObjectClass.BUILDING and getattr(f, "dashed", False))
     ]
     return shapely.union_all(areas) if areas else None
 

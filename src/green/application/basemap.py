@@ -69,6 +69,8 @@ class BasemapFeature:
     # Существующее дерево со знаком хвойного (CONIFER_SYMBOLS): на карте - зелёное кольцо.
     conifer: bool = False
     vegetation_kind: str | None = None
+    # Пунктир чертежа: карта рисует его пунктиром, у здания это навес или выступ над землёй.
+    dashed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +186,7 @@ def build_basemap(
                 geometry=simplified,
                 conifer=_is_conifer(feature),
                 vegetation_kind=vegetation_kind,
+                dashed=feature.dashed,
             )
         )
 

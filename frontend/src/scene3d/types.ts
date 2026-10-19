@@ -128,6 +128,8 @@ export interface World {
   groundLabels?: { x: number; z: number; kind: 'kids' | 'sports' }[];
   /** Цветники плана (GREEN_FLOWERBED): земля с многолетниками. */
   flowerbeds?: Ring[][];
+  /** Навесы: замкнутый пунктир на слое зданий в стороне от стен (canopies.ts). */
+  canopies?: Ring[];
   /** Откуда взята этажность: число зданий по каждому источнику. */
   floorsBy: Record<FloorsSource, number>;
   /** scene.json не нашёлся: здания только замкнутые, по площади, виды - по жизненной форме. */
