@@ -22,6 +22,7 @@ import {
   type Season,
   SHRUBS,
 } from './archetypes';
+import { fitScale, type Measured, measureCrown } from './fit';
 import { existingSize, isTreeForm, sizeAt, type Size } from './growth';
 import { moduleMaterial } from './facadeModules';
 import { neutralLeaves } from './textures';
@@ -155,15 +156,26 @@ export interface Model {
   far: THREE.BufferGeometry;
   bark: string;
   leafType: string;
-  /** Высота и ширина кроны модели в её единицах: по ним экземпляр масштабируется в метры. */
-  height: number;
-  width: number;
+  /** Ширина кроны по осям и высота модели в её единицах (fit.ts): по ним экземпляр
+   *  масштабируется ровно в размеры плана. */
+  size: Measured;
   barkMaps: {
     map: THREE.Texture | null;
     normalMap: THREE.Texture | null;
     aoMap: THREE.Texture | null;
   };
   leafMap: THREE.Texture | null;
+}
+
+function positionsOf(geometry: THREE.BufferGeometry): Float32Array {
+  return Float32Array.from(geometry.getAttribute('position').array);
+}
+
+function joined(a: Float32Array, b: Float32Array): Float32Array {
+  const out = new Float32Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
 }
 
 /** Нормали листвы от центра кроны: плоский квадрат листа освещается как часть объёма, и крона
@@ -366,7 +378,6 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
   if (branches.boundingBox) box.union(branches.boundingBox);
   if (leaves.boundingBox) box.union(leaves.boundingBox);
   const crown = leaves.boundingBox && !leaves.boundingBox.isEmpty() ? leaves.boundingBox : box;
-  const width = Math.max(crown.max.x - crown.min.x, crown.max.z - crown.min.z, 1e-3);
   const barkMaterial = tree.branchesMesh.material as THREE.MeshPhongMaterial;
   const leafMaterial = tree.leavesMesh.material as THREE.MeshPhongMaterial;
   const model: Model = {
@@ -376,8 +387,7 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
     far: farGeometry(crown, archetype),
     bark: tree.options.bark.type,
     leafType: tree.options.leaves.type,
-    height: Math.max(box.max.y, 1e-3),
-    width,
+    size: measureCrown(positionsOf(leaves), joined(positionsOf(branches), positionsOf(leaves))),
     barkMaps: {
       map: barkMaterial.map,
       normalMap: barkMaterial.normalMap,
@@ -775,15 +785,15 @@ export class Forest {
     // Стелющийся можжевельник ниже высоты вида из каталога (она для куста в полный рост).
     const flatten = archetype === 'creeper' ? 0.6 : 1;
     const crown = size.crown * jitter;
-    const sx = crown / model.width;
-    const sz = sx * (0.84 + (((plant.seed >>> 13) % 1000) / 1000) * 0.15);
-    const sy = (height * flatten) / model.height;
+    // Обе оси кроны - ровно в диаметр, верх - ровно в высоту: подпись и рамка размеров в 3D
+    // совпадают с тем, что нарисовано (fit.ts).
+    const scale = fitScale(model.size, crown, height * flatten);
     const angle = ((plant.seed % 3600) / 3600) * Math.PI * 2;
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
     instance.matrix.compose(
       new THREE.Vector3(plant.x, 0, plant.z),
       q,
-      new THREE.Vector3(sx, sy, sz),
+      new THREE.Vector3(scale.x, scale.y, scale.z),
     );
     instance.size = { height: height * flatten, crown };
     instance.center.set(plant.x, (height * flatten) / 2, plant.z);
