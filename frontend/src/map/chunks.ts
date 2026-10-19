@@ -14,7 +14,7 @@ import {
   SHRUB_STRIP_WIDTH_M,
 } from './existing';
 import { addGeometry, type Box, measure } from './geometry';
-import { STYLES, type ClassStyle } from './palette';
+import { DRAWN_DASH, STYLES, type ClassStyle } from './palette';
 
 /** Сетка отсечения: на Камчатской (56 тыс. объектов) в кадре при 5 px/м остаётся ~4% ячеек. */
 export const GRID = 24;
@@ -83,7 +83,8 @@ export function buildChunks(
     while (band < BANDS.length && (BANDS[band] ?? Infinity) <= span) band += 1;
     const cx = Math.floor((box[0] - x0) / cell);
     const cy = Math.floor((box[1] - y0) / cell);
-    const key = `${feature.properties.class}|${feature.properties.vegetation_kind ?? ''}|${band}|${cx}|${cy}`;
+    const dashed = feature.properties.dashed === true;
+    const key = `${feature.properties.class}|${feature.properties.vegetation_kind ?? ''}|${dashed ? 'd' : ''}|${band}|${cx}|${cy}`;
     let chunk = byKey.get(key);
     if (!chunk) {
       chunk = {
@@ -91,7 +92,7 @@ export function buildChunks(
         strokeVar: style.stroke,
         fillVar: style.fill,
         width: style.width,
-        dash: style.dash ?? [],
+        dash: style.dash ?? (dashed ? DRAWN_DASH : []),
         texture: style.texture,
         shadow: style.shadow ?? false,
         hedge: shrubLines.length > 0,

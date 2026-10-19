@@ -14,6 +14,10 @@ export interface ClassStyle {
   shadow?: boolean;
 }
 
+/** Пунктир чертежа (навес, часть здания, борт и край покрытия штрихами), экранные пиксели:
+ * линия, сшитая из штрихов, на карте остаётся пунктиром, как в исходнике. */
+export const DRAWN_DASH = [4, 2.5];
+
 export const STYLES: Record<string, ClassStyle> = {
   lawn: { group: 'surfaces', fill: '--c-lawn', width: 0, texture: 'grass' },
   building: {

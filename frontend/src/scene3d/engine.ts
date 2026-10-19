@@ -18,6 +18,7 @@ import {
   streetShots,
 } from './autoshots';
 import { buildingGeometry, facadeMaterial, roofMaterial } from './buildings';
+import { canopyCover, canopyGroup } from './canopies';
 import { carGroup } from './cars';
 import {
   apronGeometry,
@@ -650,6 +651,8 @@ export class SceneEngine {
       ...this.world.poles.map((p) => ({ ...p, r: 0.6 })),
       ...(this.world.benches ?? []).map((b) => ({ x: b.x, z: b.z, r: 1.2 })),
       ...fencePoints,
+      // Под навесом качели и горка не встают: кровля на 2,6 м ниже их рам.
+      ...(this.world.canopies ?? []).flatMap((ring) => canopyCover(ring)),
     ];
     const drawn = this.world.benches ?? [];
     const items: Item[] = [];
@@ -1143,6 +1146,14 @@ export class SceneEngine {
     }
     wallMesh.name = 'walls';
     roofMesh.name = 'roofs';
+    // Навесы съёмки: кровля на стойках над покрытием площадки или остановки.
+    const canopies = canopyGroup(this.world.canopies ?? []);
+    this.scene.add(canopies);
+    this.disposables.push({
+      dispose: () => {
+        disposeGroup(canopies);
+      },
+    });
     // Лоджии, подъезды, парапеты и машинные помещения - объёмом, по серии дома.
     const modules = facadeModules(this.world.buildings, this.world.curbs);
     this.scene.add(modules);
