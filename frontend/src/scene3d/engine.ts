@@ -37,6 +37,7 @@ import { benchSpots, type Ground, manholeSpots, treePits } from './streetDetails
 import { streetDetails } from './streetDetailsMesh';
 import { keepSegments } from './contours';
 import { chainFences, dropTwinFences } from './fences';
+import { picketSpots, splitPlaygroundFences } from './fenceKinds';
 import { boundaryOverlay, utilityOverlay } from './overlays';
 import { type ContextJson, contextScene } from './context';
 import { disposeGroup, facadeModules, moduleMaterial, parapetGeometry } from './facadeModules';
@@ -85,7 +86,7 @@ import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
 import { GRASS_PRESETS, GrassField } from './grass';
-import type { Plant, World } from './types';
+import type { Line, Plant, World } from './types';
 import { frameAt } from './world';
 
 export type Quality = 'low' | 'medium' | 'high';
@@ -586,6 +587,28 @@ export class SceneEngine {
     }
   }
 
+  /** Деревянный штакетник площадки: доски 7,5 см через 13 см высотой 0,9 м на столбах. */
+  private addPicketFence(lines: Line[]): void {
+    const wood = new THREE.MeshStandardMaterial({ color: 0xcfa36e, roughness: 0.85, metalness: 0 });
+    const plank = new THREE.BoxGeometry(0.075, 0.9, 0.02);
+    plank.translate(0, 0.48, 0);
+    const spots = picketSpots(lines, 0.13);
+    const pickets = new THREE.InstancedMesh(plank, wood, Math.max(1, spots.length));
+    const m = new THREE.Matrix4();
+    const turn = new THREE.Matrix4();
+    spots.forEach((p, i) => {
+      pickets.setMatrixAt(i, m.makeTranslation(p.x, 0, p.z).multiply(turn.makeRotationY(p.yaw)));
+    });
+    pickets.count = spots.length;
+    pickets.computeBoundingSphere();
+    const frame = new THREE.Mesh(fenceFrame(lines), wood);
+    for (const mesh of [pickets, frame] as THREE.Mesh[]) {
+      mesh.castShadow = true;
+      mesh.name = 'playground-fences';
+      this.add(mesh);
+    }
+  }
+
   private addStreetFurniture(mask: MaskInfo, surface: SurfaceImage | null): void {
     const world = this.world;
     const hasRoads = this.edges.length > 0;
@@ -708,8 +731,20 @@ export class SceneEngine {
     if (world.fences.length) {
       // Пунктир съёмки - сплошной оградой; столбы и перила объёмом видны на любой дальности,
       // решётка между ними - текстурой с прозрачностью.
-      const fenceLines = world.fenceAxes ? world.fences : dropTwinFences(chainFences(world.fences));
-      this.walls.addLines(fenceLines, 1.2);
+      const allFences = world.fenceAxes ? world.fences : dropTwinFences(chainFences(world.fences));
+      this.walls.addLines(allFences, 1.2);
+      // Ограда детской площадки - деревянный штакетник (fenceKinds.ts), остальные - решётка.
+      const [ox, oy] = world.origin;
+      const playgrounds = (surface?.areas?.paved ?? [])
+        .filter((_, i) => surface?.areas?.paved_kind?.[i] === 'special')
+        .map((rings) =>
+          rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) }))),
+        );
+      const { playground: woodLines, other: fenceLines } = splitPlaygroundFences(
+        allFences,
+        playgrounds,
+      );
+      if (woodLines.length) this.addPicketFence(woodLines);
       const metal = new THREE.MeshStandardMaterial({
         color: 0x24292b,
         roughness: 0.55,
