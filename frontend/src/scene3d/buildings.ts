@@ -32,7 +32,7 @@ export function styleOf(b: Building): Style {
   return STYLE_OF[seriesOf(b)] as Style;
 }
 
-function ringArea(ring: Ring): number {
+function ringArea(ring: readonly Flat[]): number {
   let sum = 0;
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i];
@@ -187,6 +187,129 @@ export function pitchedRoof(b: Building): boolean {
   return Math.abs(ringArea(outer)) >= 0.85 * axis.length * axis.width;
 }
 
+/** Вальмовая крыша со срезанным верхом - у низкого (до 2 этажей) кирпичного или жилого дома
+ *  сложного плана, которому не подошла двускатная: так накрыт дом 1А на Харьковской на
+ *  панораме Яндекса (2023), а плоская крыша делала его коробкой. Скаты от стен к контуру,
+ *  отступившему внутрь на HIP_INSET_M (меньше, если план узкий), с уклоном около 22°. */
+const HIP_INSETS_M = [2.5, 2, 1.5, 1.2] as const;
+const HIP_SLOPE = Math.tan((22 * Math.PI) / 180);
+
+export function hipRoof(b: Building): { inset: Flat[]; rise: number } | null {
+  const [outer, ...holes] = b.rings;
+  if (!outer || outer.length < 4 || holes.length || b.kind !== 'building' || b.floors > 2) {
+    return null;
+  }
+  if (b.use !== 'residential' && b.wall !== 'brick') return null;
+  if (pitchedRoof(b)) return null;
+  const ring = openRing(outer);
+  for (const d of HIP_INSETS_M) {
+    const inset = insetRing(ring, d);
+    if (inset) return { inset, rise: d * HIP_SLOPE };
+  }
+  return null;
+}
+
+function openRing(ring: Ring): Flat[] {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  const closed = first && last && Math.hypot(first.x - last.x, first.z - last.z) < 1e-6;
+  return closed ? ring.slice(0, -1) : [...ring];
+}
+
+/** Контур, отступивший внутрь на d (пересечение сдвинутых сторон). null - если стороны
+ *  перевернулись или контур пересёк себя: план уже 2d в каком-то месте. */
+export function insetRing(ring: readonly Flat[], d: number): Flat[] | null {
+  const n = ring.length;
+  if (n < 3) return null;
+  const sign = ringArea(ring) > 0 ? 1 : -1;
+  const lines = ring.map((a, i) => {
+    const b = ring[(i + 1) % n] as Flat;
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const dx = (b.x - a.x) / len;
+    const dz = (b.z - a.z) / len;
+    // Нормаль внутрь: для обхода со знаком площади sign - поворот направления.
+    const nx = -dz * sign;
+    const nz = dx * sign;
+    return { x: a.x + nx * d, z: a.z + nz * d, dx, dz };
+  });
+  const out: Flat[] = [];
+  for (let i = 0; i < n; i++) {
+    const p = lines[(i - 1 + n) % n];
+    const q = lines[i];
+    if (!p || !q) return null;
+    const det = p.dx * q.dz - p.dz * q.dx;
+    if (Math.abs(det) < 1e-9) {
+      out.push({ x: q.x, z: q.z });
+      continue;
+    }
+    const t = ((q.x - p.x) * q.dz - (q.z - p.z) * q.dx) / det;
+    out.push({ x: p.x + p.dx * t, z: p.z + p.dz * t });
+  }
+  for (let i = 0; i < n; i++) {
+    const a = out[i] as Flat;
+    const b = out[(i + 1) % n] as Flat;
+    const l = lines[i];
+    if (!l || (b.x - a.x) * l.dx + (b.z - a.z) * l.dz <= 0) return null;
+  }
+  if (Math.sign(ringArea(out)) !== Math.sign(ringArea(ring))) return null;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (
+        crosses(out[i] as Flat, out[(i + 1) % n] as Flat, out[j] as Flat, out[(j + 1) % n] as Flat)
+      ) {
+        return null;
+      }
+    }
+  }
+  return out;
+}
+
+function crosses(a: Flat, b: Flat, c: Flat, d: Flat): boolean {
+  const o = (p: Flat, q: Flat, r: Flat) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  return o(c, d, a) * o(c, d, b) < 0 && o(a, b, c) * o(a, b, d) < 0;
+}
+
+/** Скаты вальмовой крыши: кольцо между стеной и отступившим контуром, верх - плоский. */
+function pushHipRoof(
+  out: Buffers,
+  b: Building,
+  hip: { inset: Flat[]; rise: number },
+  vertex: VertexInfo,
+): void {
+  const ring = openRing(b.rings[0] ?? []);
+  const contour = ring.map((p) => new THREE.Vector2(p.x, p.z));
+  const hole = hip.inset.map((p) => new THREE.Vector2(p.x, p.z));
+  const all = [...contour, ...hole];
+  const top = b.height + hip.rise;
+  const at = (i: number) => {
+    const p = all[i] as THREE.Vector2;
+    return new THREE.Vector3(p.x, i < contour.length ? b.height : top, p.y);
+  };
+  const roofUv = (q: THREE.Vector3): [number, number] => [q.x, q.z];
+  for (const face of THREE.ShapeUtils.triangulateShape(contour, [hole])) {
+    const [a, c, d] = face.map(at) as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    const n = new THREE.Vector3().subVectors(c, a).cross(new THREE.Vector3().subVectors(d, a));
+    if (n.lengthSq() < 1e-12) continue;
+    const up = n.y >= 0;
+    pushTriangle(
+      out,
+      up ? [a, c, d] : [a, d, c],
+      up ? n.normalize() : n.negate().normalize(),
+      roofUv,
+      vertex,
+    );
+  }
+  for (const face of THREE.ShapeUtils.triangulateShape(hole, [])) {
+    const [a, c, d] = face.map((i) => {
+      const p = hole[i] as THREE.Vector2;
+      return new THREE.Vector3(p.x, top, p.y);
+    }) as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    const n = new THREE.Vector3().subVectors(c, a).cross(new THREE.Vector3().subVectors(d, a));
+    pushTriangle(out, n.y >= 0 ? [a, c, d] : [a, d, c], new THREE.Vector3(0, 1, 0), roofUv, vertex);
+  }
+}
+
 /** Свес кровли за стену и подъём конька: 0,3 ширины дома, 1,6-4,5 м. */
 const EAVES_M = 0.35;
 const RIDGE_SHARE = 0.3;
@@ -265,7 +388,9 @@ export function buildingGeometry(buildings: readonly Building[]): BuildingMeshes
     b.rings.forEach((ring, i) => {
       if (ring.length >= 3) pushWalls(walls, ring, b.height, i > 0, vertex);
     });
+    const hip = pitchedRoof(b) ? null : hipRoof(b);
     if (pitchedRoof(b)) pushGableRoof(roofs, walls, b, vertex);
+    else if (hip) pushHipRoof(roofs, b, hip, vertex);
     else pushRoof(roofs, b, vertex);
   }
   return { walls: geometryOf(walls), roofs: geometryOf(roofs) };

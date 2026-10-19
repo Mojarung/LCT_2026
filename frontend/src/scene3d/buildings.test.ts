@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { buildingGeometry, pitchedRoof } from './buildings';
+import { buildingGeometry, hipRoof, pitchedRoof } from './buildings';
 import { parapetGeometry } from './facadeModules';
 import type { Building, Flat } from './types';
 
@@ -70,5 +70,37 @@ describe('здания', () => {
       { x: 0, z: 20 },
     ];
     expect(pitchedRoof(building(ell, { floors: 2, height: 7, use: 'residential' }))).toBe(false);
+  });
+
+  it('низкий кирпичный дом сложного плана - под вальмовой крышей, как дом 1А на панораме', () => {
+    const ell: Flat[] = [
+      { x: 0, z: 0 },
+      { x: 20, z: 0 },
+      { x: 20, z: 7 },
+      { x: 7, z: 7 },
+      { x: 7, z: 20 },
+      { x: 0, z: 20 },
+    ];
+    const shop = building(ell, { floors: 1, height: 4, wall: 'brick', use: 'non_residential' });
+    expect(pitchedRoof(shop)).toBe(false);
+    const hip = hipRoof(shop);
+    expect(hip).not.toBeNull();
+    const inset = hip?.inset ?? [];
+    expect(inset.every((p) => p.x > 0.5 && p.z > 0.5 && (p.x < 6.5 || p.z < 6.5))).toBe(true);
+    const top = maxY(buildingGeometry([shop]).roofs);
+    expect(top).toBeGreaterThan(4.4);
+    expect(top).toBeLessThan(6);
+  });
+
+  it('высокий дом сложного плана остаётся с плоской крышей', () => {
+    const ell: Flat[] = [
+      { x: 0, z: 0 },
+      { x: 30, z: 0 },
+      { x: 30, z: 12 },
+      { x: 12, z: 12 },
+      { x: 12, z: 30 },
+      { x: 0, z: 30 },
+    ];
+    expect(hipRoof(building(ell, { floors: 9, height: 28, wall: 'brick' }))).toBeNull();
   });
 });
