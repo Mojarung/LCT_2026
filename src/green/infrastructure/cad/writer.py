@@ -17,7 +17,13 @@ from green.application.results import SourceSnapshot
 from green.application.schedule import build_schedule
 from green.domain.norms import LawnKind
 from green.domain.planting import CheckOutcome, Verdict
-from green.infrastructure.cad.documents import APPID, RESULT_PREFIX, entity_layer, load_document
+from green.infrastructure.cad.documents import (
+    APPID,
+    RESULT_PREFIX,
+    entity_layer,
+    load_document,
+    upgrade_for_result,
+)
 from green.infrastructure.cad.integrity import fingerprints
 
 if TYPE_CHECKING:
@@ -150,6 +156,7 @@ class EzdxfPlanWriter:
         """
         scale = 1.0 / unit_m
         doc, _ = self._documents.take(source) if self._documents else load_document(source)
+        upgrade_for_result(doc)
         added = self._documents.added_since_load(doc) if self._documents else frozenset()
         digests, unexportable = fingerprints(doc)
         # Сущность, появившаяся после загрузки, исходной не считается: проверка целостности

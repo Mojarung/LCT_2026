@@ -9,7 +9,12 @@ from ezdxf.lldxf.tagwriter import TagCollector
 
 from green.application.errors import InputError
 from green.application.results import IntegrityReport, SourceSnapshot
-from green.infrastructure.cad.documents import RESULT_PREFIX, entity_layer, load_document
+from green.infrastructure.cad.documents import (
+    RESULT_PREFIX,
+    entity_layer,
+    load_document,
+    upgrade_for_result,
+)
 from green.infrastructure.cad.export_validation import check_written_plan
 
 if TYPE_CHECKING:
@@ -45,7 +50,9 @@ class EzdxfIntegrityChecker:
         return doc
 
     def snapshot(self, source: Path) -> SourceSnapshot:
-        digests, unexportable = fingerprints(load_document(source)[0])
+        doc = load_document(source)[0]
+        upgrade_for_result(doc)
+        digests, unexportable = fingerprints(doc)
         return SourceSnapshot(digests, unexportable)
 
     def check(self, before: SourceSnapshot, result: Path) -> IntegrityReport:

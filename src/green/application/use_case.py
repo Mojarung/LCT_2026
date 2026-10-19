@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
+import shutil
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -29,7 +31,11 @@ from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.fences import bridge_fence_gaps
 from green.application.gis_alignment import alignment_notes
-from green.application.input_quality import require_complete_geometry
+from green.application.input_quality import (
+    incomplete_geometry_note,
+    require_complete_geometry,
+    with_assumed_errors,
+)
 from green.application.insolation import ShadeMap, with_shade
 from green.application.kerbs import refine_kerbs
 from green.application.lawns import plan_lawns
@@ -63,6 +69,7 @@ from green.application.validation import (
 )
 from green.application.volumes import Volumes, build_volumes
 from green.application.wording import counted, decimal_g
+from green.application.work_area import with_work_area
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -294,7 +301,11 @@ class PlanSite:
             species = self._species.get(params.species_code)
         with watch.stage("read"):
             scene = self._reader.read(source, unit=params.drawing_unit)
-            require_complete_geometry(scene)
+            if params.strict_input:
+                require_complete_geometry(scene)
+            else:
+                scene, assumed = with_assumed_errors(scene)
+                scene = _noted(scene, incomplete_geometry_note(scene), assumed)
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map, params)
             semantics = classification_report(scene, layer_map, params)
@@ -351,6 +362,10 @@ class PlanSite:
             if bridged:
                 note = f"Ограда: {bridged} зазоров до 1 м между штрихами закрыто перемычками."
                 scene = replace(scene, warnings=(*scene.warnings, note))
+            # Чужой чертёж без замкнутой границы работ: участок по самому чертежу, а не пустой план.
+            if params.infer_work_boundary:
+                features, area_note = with_work_area(features)
+                scene = _noted(scene, area_note)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
@@ -781,15 +796,42 @@ def _issue_line(issue: ValidationIssue) -> str:
     return line
 
 
+_DWG_MAGIC = re.compile(rb"^AC10\d\d")
+_LEADING = b"\xef\xbb\xbf \t\r\n"  # BOM и пробелы перед первым кодом группы
+_BINARY_DXF = b"AutoCAD Binary DXF"
+
+
+def drawing_kind(source: Path) -> str | None:
+    """«.dwg» или «.dxf» по первым байтам файла; None - не узнан (решает расширение)."""
+    with source.open("rb") as stream:
+        head = stream.read(64)
+    if _DWG_MAGIC.match(head):
+        return ".dwg"
+    text = head.lstrip(_LEADING)
+    if head.startswith(_BINARY_DXF) or text.startswith((b"0", b"999")):
+        return ".dxf"
+    return None
+
+
 def to_dxf(
     converters: Sequence[DrawingConverter], source: Path, work_dir: Path
 ) -> tuple[Path, str | None]:
-    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер."""
+    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер.
+
+    Тип решает содержимое, а не расширение: DWG, сохранённый с расширением .dxf (или DXF с
+    расширением .dwg), - частая ошибка выгрузки, и чтение не должно на ней падать."""
     suffix = source.suffix.lower()
-    if suffix == ".dxf":
+    if suffix not in {".dxf", ".dwg"}:
+        raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+    kind = drawing_kind(source) or suffix
+    if kind == ".dxf":
         return source, None
     if suffix != ".dwg":
-        raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+        # Конвертеры выбирают файлы по расширению (ODA - маска *.DWG): копия с верным именем.
+        renamed = work_dir / "converted" / "renamed" / f"{source.stem}.dwg"
+        renamed.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, renamed)
+        source = renamed
     for converter in converters:
         if converter.available():
             # Packages often contain different drawings with the same basename.

@@ -12,6 +12,7 @@ import numpy as np
 import shapely
 from ezdxf import bbox
 from ezdxf.entities import (
+    Arc,
     Attrib,
     Body,
     Circle,
@@ -26,6 +27,7 @@ from ezdxf.entities import (
 )
 from ezdxf.lldxf.encoding import decode_dxf_unicode
 from ezdxf.path import make_path
+from ezdxf.render import MeshBuilder
 from ezdxf.tools.text import fast_plain_mtext, plain_text
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
@@ -51,13 +53,19 @@ from green.infrastructure.cad.curve_paths import (
     spline_vertices,
 )
 from green.infrastructure.cad.dashes import chain_dashes
-from green.infrastructure.cad.documents import entity_layer, load_document
+from green.infrastructure.cad.documents import (
+    R12_NOTE,
+    RESULT_MIN_VERSION,
+    entity_layer,
+    load_document,
+)
 from green.infrastructure.cad.ezdxf_fixes import install as install_ezdxf_fixes
 from green.infrastructure.cad.hatch_footprint import bounded_hatch_footprint
 from green.infrastructure.cad.hatch_geometry import GAP_CLOSED, HatchGeometryError, hatch_geometry
 from green.infrastructure.cad.units import AUTO, decide_units
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
     from pathlib import Path
 
     from ezdxf.document import Drawing
@@ -149,6 +157,8 @@ _SKIPPED = frozenset(
 # Тела 3D-чертежей: дом или сооружение моделью, а не контуром. На плане они - след (проекция
 # граней), а не пробел чтения (синтетические участки других финалистов, 17.10.2026).
 _VOLUMES = frozenset({"MESH", "3DSOLID", "BODY", "SURFACE"})
+# Конечные объекты, которые вырожденными читаются точкой (нулевой радиус, длина, угол).
+_POINT_LIKE = frozenset({"CIRCLE", "ARC", "LINE", "LWPOLYLINE", "POLYLINE", "ELLIPSE", "SPLINE"})
 
 
 class EzdxfSceneReader:
@@ -195,7 +205,13 @@ class EzdxfSceneReader:
             dxf_version=doc.dxfversion,
             features=features,
             labels=labels,
-            warnings=(*warnings, *units.notes, *walker.warnings(), *hidden_notes),
+            warnings=(
+                *warnings,
+                *((R12_NOTE,) if doc.dxfversion < RESULT_MIN_VERSION else ()),
+                *units.notes,
+                *walker.warnings(),
+                *hidden_notes,
+            ),
             unit_m=units.unit_m,
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
@@ -227,6 +243,8 @@ class _Walker:
     hidden_diameter_labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
     bounded_hatches: int = 0
+    # Вырожденные объекты (нулевой радиус или длина, одна вершина), прочитанные точкой.
+    degenerate: Counter[str] = field(default_factory=Counter)
     visited: Counter[str] = field(default_factory=Counter)
     unresolved_xrefs: set[str] = field(default_factory=set)
     gaps: Counter[tuple[str, str, str | None, str]] = field(default_factory=Counter)
@@ -276,7 +294,9 @@ class _Walker:
             outcome = self._drawn(entity, ref, layer, chain=chain, block=parent_block, owner=owner)
         elif kind == "REGION":
             outcome = self._region(entity, ref, layer, parent_block, owner)  # ty: ignore[invalid-argument-type]
-        elif kind in _VOLUMES:
+        elif kind in _VOLUMES or (
+            isinstance(entity, Polyline) and (entity.is_poly_face_mesh or entity.is_polygon_mesh)
+        ):
             outcome = self._volume(entity, ref, layer, parent_block, owner)
         elif kind in _SKIPPED or kind in UNDERLAYS:
             outcome = self._not_drawn(entity, layer, parent_block, ref)
@@ -301,29 +321,25 @@ class _Walker:
                 geometry, error = self._geometry(entity)
         except HatchGeometryError as exc:
             return self._skip(kind, layer, block, str(exc), ref)
-        if geometry is None or geometry.is_empty:
+        degenerate = geometry is None or geometry.is_empty
+        if degenerate:
+            geometry, error = self._point_of(entity), 0.0
+        if geometry is None:
             return self._skip(kind, layer, block, "geometry-not-readable", ref)
         if not np.isfinite(shapely.get_coordinates(geometry)).all():
             return self._skip(kind, layer, block, "non-finite-coordinates", ref)
         geometry, error, repairs = _repaired(geometry, error, repairs)
-        clipped = False
-        if self.clips:
-            visible = self._clip(geometry)
-            if visible.is_empty:
-                return CLIPPED
-            clipped = visible is not geometry
-            geometry = visible
-            if uncertainty_footprint is not None:
-                uncertainty_footprint = self._clip(uncertainty_footprint)
-                if uncertainty_footprint.is_empty:
-                    uncertainty_footprint = None
+        visible = self._inside_clips(geometry, uncertainty_footprint)
+        if visible is None:
+            return CLIPPED
+        clipped = visible[0] is not geometry
+        geometry, uncertainty_footprint = visible
         if error is None:
             self._gap(kind, layer, block, "approximation-error-not-bounded", ref)
         # Срезанный рамкой круг - уже не крона и не ствол целиком.
-        radius = abs(entity.dxf.radius) * self.unit_m if kind == "CIRCLE" and not clipped else None
-        center = (
-            entity.ocs().to_wcs(entity.dxf.center) if kind == "CIRCLE" and not clipped else None
-        )
+        whole_circle = kind == "CIRCLE" and not clipped and not degenerate
+        radius = abs(entity.dxf.radius) * self.unit_m if whole_circle else None
+        center = entity.ocs().to_wcs(entity.dxf.center) if whole_circle else None
         self._feature(
             Feature(
                 ref=ref,
@@ -344,6 +360,29 @@ class _Walker:
         self.bounded_hatches += int(uncertainty_footprint is not None)
         # Починенный контур не молчит: исход несёт вид починки (feature:hatch-even-odd).
         return "feature:" + "+".join(repairs) if repairs else "feature"
+
+    def _inside_clips(
+        self, geometry: BaseGeometry, footprint: BaseGeometry | None
+    ) -> tuple[BaseGeometry, BaseGeometry | None] | None:
+        """Часть внутри рамок обрезки XCLIP; None - объект целиком срезан."""
+        if not self.clips:
+            return geometry, footprint
+        visible = self._clip(geometry)
+        if visible.is_empty:
+            return None
+        if footprint is not None:
+            footprint = self._clip(footprint)
+            if footprint.is_empty:
+                footprint = None
+        return visible, footprint
+
+    def _point_of(self, entity: DXFGraphic) -> Point | None:
+        """Круг нулевого радиуса, дуга нулевого угла, полилиния из одной вершины - метка в
+        точке (колодец, опора), а не потерянная геометрия."""
+        point = _anchor_point(entity)
+        if point is not None:
+            self.degenerate[entity.dxftype()] += 1
+        return point
 
     def _hatch_uncertainty(
         self, entity: DXFGraphic, error: float, repairs: tuple[str, ...]
@@ -458,7 +497,10 @@ class _Walker:
         kind = entity.dxftype()
         try:
             if kind == "MESH":
-                geometry, error = _mesh_footprint(entity), 0.0
+                geometry, error = _mesh_footprint(entity.vertices, entity.faces), 0.0  # ty: ignore[unresolved-attribute]
+            elif kind == "POLYLINE":
+                mesh = MeshBuilder.from_polyface(entity)  # ty: ignore[invalid-argument-type]
+                geometry, error = _mesh_footprint(mesh.vertices, mesh.faces), 0.0  # ty: ignore[invalid-argument-type]
             else:
                 matrix = entity.temporary_transformation().get_matrix()  # ty: ignore[unresolved-attribute]
                 geometry, error = region_polygon(entity, matrix, self.flatten, footprint=True)  # ty: ignore[invalid-argument-type]
@@ -531,12 +573,23 @@ class _Walker:
         if (block.block.is_xref or block.block.is_xref_overlay) and len(block) == 0:
             self.unresolved_xrefs.add(name)
             return "insert:xref-unresolved"
-        if len(chain) >= MAX_BLOCK_DEPTH:
-            self.skipped["INSERT:too-deep"] += 1
-            return "insert:too-deep"
+        refused = self._too_deep(name, chain)
+        if refused is not None:
+            return refused
         return self._placed(
             insert, block, ref, layer, chain=(*chain, name), owner=owner, region=region
         )
+
+    def _too_deep(self, name: str, chain: tuple[str, ...]) -> str | None:
+        """Вставка, которую обход не разбирает: блок внутри самого себя (цикл ссылок, его
+        объекты уже учтены на этом пути) или вложенность глубже MAX_BLOCK_DEPTH."""
+        if name in chain:
+            self.skipped["INSERT:cycle"] += 1
+            return "insert:cycle"
+        if len(chain) >= MAX_BLOCK_DEPTH:
+            self.skipped["INSERT:too-deep"] += 1
+            return "insert:too-deep"
+        return None
 
     def _placed(  # noqa: PLR0913 - вставка, её блок и место в обходе
         self,
@@ -866,6 +919,12 @@ class _Walker:
         if self.skipped:
             details = ", ".join(f"{k}: {v}" for k, v in self.skipped.most_common(8))
             messages.append(f"Пропущены сущности без геометрии для расчёта: {details}")
+        if self.degenerate:
+            details = ", ".join(f"{k}: {v}" for k, v in self.degenerate.most_common(8))
+            messages.append(
+                "Вырожденные объекты (нулевой радиус или длина, одна вершина) прочитаны точкой: "
+                f"{details}."
+            )
         if self.bounded_hatches:
             messages.append(
                 f"HATCH с большим разрывом контура: {self.bounded_hatches}; "
@@ -978,6 +1037,28 @@ def _polyline(points: list[tuple[float, float]], *, closed: bool) -> BaseGeometr
     return Point(points[0]) if points else None
 
 
+def _anchor_point(entity: DXFGraphic) -> Point | None:
+    """Точка вырожденного объекта: центр круга и дуги, начало отрезка, первая вершина.
+
+    Только у конечных объектов: XLINE и RAY бесконечны, их точка - не место на плане."""
+    if entity.dxftype() not in _POINT_LIKE:
+        return None
+    if isinstance(entity, Arc):
+        start = entity.start_point
+        return Point(start.x, start.y)
+    dxf = entity.dxf
+    for name in ("center", "start", "insert", "location"):
+        if dxf.hasattr(name):
+            point = dxf.get(name)
+            if name in {"center", "insert"} and entity.dxf.hasattr("extrusion"):
+                point = entity.ocs().to_wcs(point)
+            return Point(point.x, point.y)
+    if isinstance(entity, LWPolyline) and len(entity):
+        first = next(iter(entity.vertices_in_wcs()))
+        return Point(first.x, first.y)
+    return None
+
+
 def _chain_hash(chain: tuple[str, ...]) -> str:
     if not chain:
         return NO_XREF
@@ -989,11 +1070,13 @@ def _sha256(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def _mesh_footprint(entity: DXFGraphic) -> Polygon | BaseGeometry:
+def _mesh_footprint(
+    vertices: Iterable[Sequence[float]], faces: Iterable[Sequence[int]]
+) -> Polygon | BaseGeometry:
     """Объединение проекций граней сетки на план; вертикальные грани площади не дают."""
-    vertices = list(entity.vertices)  # ty: ignore[unresolved-attribute]
+    vertices = list(vertices)
     polygons = []
-    for face in entity.faces:  # ty: ignore[unresolved-attribute]
+    for face in faces:
         ring = [(vertices[i][0], vertices[i][1]) for i in face]
         if len(ring) >= 3:  # noqa: PLR2004 - треугольник
             polygon = shapely.make_valid(Polygon(ring))

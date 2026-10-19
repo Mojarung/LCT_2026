@@ -17,6 +17,7 @@ _ASCII_ENTITIES = re.compile(
 _ASCII_EOF = re.compile(rb"(?:^|\n)[ \t]*0+[ \t]*\nEOF[ \t\n]*$")
 _BINARY_ENTITIES = (b"\x00\x00SECTION\x00\x02\x00ENTITIES\x00", b"\x00SECTION\x00\x02ENTITIES\x00")
 _LFS_POINTER = b"version https://git-lfs.github.com/spec/"
+_LEADING = b"\xef\xbb\xbf \t\r\n"  # BOM и пробелы перед первым кодом группы
 _CHUNK = 1_048_576
 _OVERLAP = 128
 
@@ -37,6 +38,14 @@ def require_complete_container(path: Path) -> None:
         binary = head.startswith(_BINARY_HEADER)
         stream.seek(0, 2)
         size = stream.tell()
+        if size == 0:
+            raise InputError(f"Файл {path.name} пуст (0 байт): загрузите чертёж ещё раз")
+        if not binary and not _looks_like_dxf(head):
+            raise InputError(
+                f"{path.name} - не DXF: в начале файла нет кодов групп DXF (текстовый DXF "
+                "начинается с «0 SECTION», двоичный - с «AutoCAD Binary DXF»). Сохраните "
+                "чертёж из CAD как DXF или загрузите DWG"
+            )
         stream.seek(max(0, size - _CHUNK))
         tail = stream.read()
         complete = (
@@ -59,6 +68,12 @@ def require_complete_container(path: Path) -> None:
                 return
             carry = data[-_OVERLAP:]
     raise InputError(f"Неполный DXF {path.name}: отсутствует секция ENTITIES")
+
+
+def _looks_like_dxf(head: bytes) -> bool:
+    """Текстовый DXF начинается с кода группы: 0 (SECTION) или 999 (комментарий)."""
+    text = head.lstrip(_LEADING)
+    return text[:1] == b"0" or text.startswith(b"999")
 
 
 def _newlines(data: bytes) -> bytes:
