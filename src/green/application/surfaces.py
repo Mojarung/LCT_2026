@@ -479,6 +479,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         for f in features
         if f.geometry.geom_type in _AREA_TYPES
         and (f.object_class is ObjectClass.LAWN or f.object_class.is_hard_surface)
+        and not f.overhead
     ]
     has_extent = extent is not None and not extent.is_empty
     evidence = len(seed_xy) or polygons or functional_labels
@@ -598,7 +599,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         ambiguity_m=ambiguity_m,
         tree_distance_m=tree_distance_m,
         inferred_grid=inferred_grid,
-        display_grid=_display_grid(grid, barrier, barriers, origin, cell),
+        display_grid=_display_grid(grid, barrier, barriers, origin, cell, (seed_xy, seed_kind)),
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
@@ -752,7 +753,7 @@ def _open_ground(  # noqa: PLR0913 - растр, объекты, граница 
         if f.object_class is ObjectClass.WORK_BOUNDARY and f.geometry.geom_type in _AREA_TYPES
     ]
     for f in features:
-        if (
+        if not f.overhead and (
             f.object_class in _NOT_GROUND
             or f.object_class in _SURFACE_LINEWORK
             or f.object_class is ObjectClass.IGNORE
@@ -796,6 +797,31 @@ def _exclude_conflicts(
     return shapely.union_all([uncertain, conflict])
 
 
+# Подпись, чья точка вставки легла на линию (на узком тротуаре между бортом и знаком ограды
+# - Кустанайская, 19.10.2026), в карте для показа сдвигается в ближайшую свободную клетку не
+# дальше этого. В карте для посадок такая подпись сторону не выбирает и не разливается, м.
+LABEL_SNAP_M = 1.0
+
+
+def _off_lines(
+    free: NDArray[np.bool_], rows: NDArray[np.int64], cols: NDArray[np.int64], reach: float
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Клетки подписей на линиях - ближайшие свободные клетки в пределах reach."""
+    inside = (rows >= 0) & (cols >= 0) & (rows < free.shape[0]) & (cols < free.shape[1])
+    stuck = np.zeros(len(rows), dtype=bool)
+    stuck[inside] = ~free[rows[inside], cols[inside]]
+    if not stuck.any() or not free.any():
+        return rows, cols
+    distance, (near_r, near_c) = distance_transform_edt(~free, return_indices=True)
+    r, c = rows[stuck], cols[stuck]
+    close = distance[r, c] <= reach
+    rows, cols = rows.copy(), cols.copy()
+    idx = np.flatnonzero(stuck)[close]
+    rows[idx] = near_r[r[close], c[close]]
+    cols[idx] = near_c[r[close], c[close]]
+    return rows, cols
+
+
 def _label_fallback(  # noqa: PLR0913 - именованные пределы разлива
     free: NDArray[np.bool_],
     faces: FaceMaterials,
@@ -833,11 +859,11 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     if not decided.is_empty:
         open_cells &= ~_inside(decided, origin, cell, free.shape)
     xy = seed_xy[labels]
-    seeds = _Seeds(
-        np.floor((xy[:, 1] - origin[1]) / cell).astype(np.int64),
-        np.floor((xy[:, 0] - origin[0]) / cell).astype(np.int64),
-        seed_kind[labels],
-    )
+    rows = np.floor((xy[:, 1] - origin[1]) / cell).astype(np.int64)
+    cols = np.floor((xy[:, 0] - origin[0]) / cell).astype(np.int64)
+    if spread is not None:
+        rows, cols = _off_lines(open_cells, rows, cols, LABEL_SNAP_M / cell)
+    seeds = _Seeds(rows, cols, seed_kind[labels])
     grid = _assign(open_cells, seeds, limit=limit / cell, ambiguity=ambiguity / cell, tree_limit=0)
     area = cell * cell
     return _Fallback(
@@ -1115,7 +1141,8 @@ def label_material(text: str) -> Material | None:
 def _barrier_lines(features: Sequence[Feature]) -> NDArray[np.object_]:
     lines: list[BaseGeometry] = []
     for feature in features:
-        if not feature.object_class.is_surface_barrier:
+        # Навес и выступ здания пунктиром - над землёй: покрытие под ними продолжается.
+        if not feature.object_class.is_surface_barrier or feature.overhead:
             continue
         geometry = feature.geometry
         if geometry.geom_type in _AREA_TYPES:
@@ -1258,12 +1285,39 @@ DISPLAY_FILL_KNOWN = 0.5
 DISPLAY_FILL_MAX_M2 = 3000.0
 
 
-def _display_grid(
+def _labelled(
+    grid: NDArray[np.int8],
+    walls: NDArray[np.bool_],
+    seeds: tuple[NDArray[np.float64], NDArray[np.int8]] | None,
+    origin: tuple[float, float],
+    cell: float,
+) -> NDArray[np.bool_]:
+    """Клетки пятен покрытия, внутри которых стоит подпись этого покрытия: газон с «ГАЗОН»
+    (или знаком массива), асфальт с «А». Пятно без своей подписи - протечка разлива."""
+    keep = np.zeros(grid.shape, dtype=bool)
+    if seeds is None or not len(seeds[0]):
+        return keep
+    xy, kind = seeds
+    cols = np.floor((xy[:, 0] - origin[0]) / cell).astype(np.int64)
+    rows = np.floor((xy[:, 1] - origin[1]) / cell).astype(np.int64)
+    ok = (rows >= 0) & (cols >= 0) & (rows < grid.shape[0]) & (cols < grid.shape[1])
+    rows, cols, paved_seed = rows[ok], cols[ok], kind[ok] == Material.PAVED
+    for material, mine in ((Material.PAVED, paved_seed), (Material.SOIL, ~paved_seed)):
+        patches, count = connected_components((grid == material) & ~walls)
+        said = np.zeros(count + 1, dtype=bool)
+        said[patches[rows[mine], cols[mine]]] = True
+        said[0] = False
+        keep |= said[patches]
+    return keep
+
+
+def _display_grid(  # noqa: PLR0913, PLR0917 - растр, линии, его рамка и подписи
     grid: NDArray[np.int8],
     barrier: NDArray[np.bool_],
     lines: NDArray[np.object_],
     origin: tuple[float, float],
     cell: float,
+    seeds: tuple[NDArray[np.float64], NDArray[np.int8]] | None = None,
 ) -> NDArray[np.int8]:
     """Растр для показа: материал грани между линиями чертежа.
 
@@ -1271,7 +1325,12 @@ def _display_grid(
     пересекающие нарисованный борт (Харьковская, 18-19.10.2026). Здесь разрывы до
     line_gaps.GAP_M закрываются перемычками, земля делится на грани между линиями, и в каждой
     грани известные клетки меньшинства (не больше DISPLAY_MINORITY) получают материал
-    большинства. Неизвестное не заполняется, клетки линий остаются линиями."""
+    большинства. Неизвестное не заполняется, клетки линий остаются линиями.
+
+    Пятно меньшинства со своей подписью внутри - не протечка, а нарисованное покрытие: газон с
+    подписью «ГАЗОН» у открытого въезда во двор красился асфальтом двора, и деревья стояли на
+    асфальте (Кустанайская, 19.10.2026). Такое пятно остаётся, перекрашиваются только пятна
+    без своей подписи."""
     walls = barrier | _rasterize(
         np.array(bridges(list(lines)), dtype=object), origin, cell, grid.shape
     )
@@ -1296,7 +1355,8 @@ def _display_grid(
     fill[0] = False
     out = grid.copy()
     decided = majority[faces]
-    fix = (paved | soil) & (decided != Material.UNKNOWN)
+    own = _labelled(grid, walls, seeds, origin, cell)
+    fix = (paved | soil) & (decided != Material.UNKNOWN) & ~own
     fix |= (grid == Material.UNKNOWN) & fill[faces] & (decided != Material.UNKNOWN)
     out[fix] = decided[fix]
     return out

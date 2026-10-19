@@ -803,6 +803,8 @@ def _basemap_properties(feature: BasemapFeature) -> dict[str, Any]:
         properties["conifer"] = True
     if feature.vegetation_kind:
         properties["vegetation_kind"] = feature.vegetation_kind
+    if feature.dashed:
+        properties["dashed"] = True
     return properties
 
 
@@ -1562,7 +1564,10 @@ def _class_area(features: Sequence[Any], object_class: ObjectClass) -> BaseGeome
     areas = [
         f.geometry
         for f in features
-        if f.object_class is object_class and f.geometry.geom_type in {"Polygon", "MultiPolygon"}
+        if f.object_class is object_class
+        and f.geometry.geom_type in {"Polygon", "MultiPolygon"}
+        # Навес пунктиром - над землёй, а не дом: покрытие под ним продолжается.
+        and not (object_class is ObjectClass.BUILDING and getattr(f, "dashed", False))
     ]
     return shapely.union_all(areas) if areas else None
 

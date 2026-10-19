@@ -265,7 +265,8 @@ def build_volumes(features: Sequence[Feature], labels: Sequence[TextLabel]) -> V
     Мосгеотрест пишет на отдельном слое, и за этажность он не сойдёт. Сооружения (парапеты,
     мосты, вентиляционные киоски) собираются отдельно и получают метр высоты без подписей.
     """
-    houses = [f for f in features if f.object_class is ObjectClass.BUILDING]
+    # Навес и выступ пунктиром - над землёй: это не стены, объёма до земли у них нет.
+    houses = [f for f in features if f.object_class is ObjectClass.BUILDING and not f.overhead]
     layers = frozenset(f.layer for f in houses)
     own = [label for label in labels if label.layer in layers]
     ground = _ground_points(features, labels, layers)
