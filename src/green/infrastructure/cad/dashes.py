@@ -18,9 +18,11 @@ MicroStation при выгрузке в DWG пишет линию со стил�
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+import numpy as np
+import shapely
 from shapely.geometry import LineString
 
 if TYPE_CHECKING:
@@ -59,7 +61,7 @@ def chain_dashes(features: Sequence[Feature], *, parent: str, unit_m: float = 1.
     def flush() -> None:
         nonlocal run, path, gaps
         if len(run) > 1 and gaps:
-            out.append(_merged(run, _closed(path, gap_max, touch)))
+            out.append(_merged(run, path))
         else:
             out.extend(run)
         run, path, gaps = [], [], 0
@@ -87,7 +89,86 @@ def chain_dashes(features: Sequence[Feature], *, parent: str, unit_m: float = 1.
         path.extend(points)
         gaps += gap
     flush()
-    return out
+    return _stitched(out, parent, gap_max, touch)
+
+
+@dataclass(slots=True)
+class _Path:
+    coords: list[_Point]
+    # Места штрихов и цепочек пути в списке объектов вставки.
+    members: list[int]
+    dashed: bool
+
+
+def _stitched(features: list[Feature], parent: str, gap_max: float, touch: float) -> list[Feature]:
+    """Цепочки одной линии, разорванные порядком записи, сшиваются концами.
+
+    На Харьковской лист пишет штрих, в который попала вершина, кусками далеко от соседних
+    штрихов (через 35 тыс. записей): подряд линия собиралась отрезками с разрывом 1,7 м, где
+    этот кусок и лежит. Концы цепочек и штрихов одного слоя ищутся рядом друг с другом и
+    сшиваются по тому же признаку, что подряд; две сплошные части концами не сшиваются.
+    Замкнутые контуры замыкаются здесь же."""
+    groups: dict[tuple[str, str | None], list[int]] = {}
+    for i, feature in enumerate(features):
+        if _dash(feature, parent):
+            groups.setdefault((feature.layer, feature.block), []).append(i)
+    placed: dict[int, Feature] = {}
+    dropped: set[int] = set()
+    for indices in groups.values():
+        paths = [
+            _Path(
+                [(float(x), float(y)) for x, y, *_ in features[i].geometry.coords],
+                [i],
+                features[i].dashed,
+            )
+            for i in indices
+        ]
+        for path in _joined(paths, gap_max, touch):
+            if not path.dashed:
+                continue
+            members = sorted(path.members)
+            ring = _closed(path.coords, gap_max, touch)
+            placed[members[0]] = _merged([features[m] for m in members], ring)
+            dropped.update(members[1:])
+    return [placed.get(i, f) for i, f in enumerate(features) if i not in dropped]
+
+
+def _joined(paths: list[_Path], gap_max: float, touch: float) -> list[_Path]:
+    """Сшивка концов кругами: в круге каждая цепочка входит не больше чем в одну сшивку."""
+    while len(paths) > 1:
+        ends = shapely.points(
+            [point for path in paths for point in (path.coords[0], path.coords[-1])]
+        )
+        tree = shapely.STRtree(ends)
+        a, b = tree.query(ends, predicate="dwithin", distance=gap_max)
+        keep = (a // 2) < (b // 2)
+        a, b = a[keep], b[keep]
+        if not len(a):
+            break
+        order = np.argsort(shapely.distance(ends[a], ends[b]), kind="stable")
+        used: set[int] = set()
+        merged: list[_Path] = []
+        for k in order:
+            pa, sa = divmod(int(a[k]), 2)
+            pb, sb = divmod(int(b[k]), 2)
+            if pa in used or pb in used:
+                continue
+            first = paths[pa].coords if sa == 1 else paths[pa].coords[::-1]
+            second = paths[pb].coords if sb == 0 else paths[pb].coords[::-1]
+            joined = _link(first, second, gap_max, touch, both=False)
+            if joined is None:
+                continue
+            points, gap = joined
+            if not (gap or paths[pa].dashed or paths[pb].dashed):
+                continue
+            used.update((pa, pb))
+            merged.append(
+                _Path([*first, *points], [*paths[pa].members, *paths[pb].members], dashed=True)
+            )
+        if not merged:
+            break
+        paths = [path for i, path in enumerate(paths) if i not in used] + merged
+    return paths
 
 
 def _dash(feature: Feature, parent: str) -> bool:
@@ -108,11 +189,12 @@ def _dash(feature: Feature, parent: str) -> bool:
 
 
 def _link(
-    path: list[_Point], piece: list[_Point], gap_max: float, touch: float
+    path: list[_Point], piece: list[_Point], gap_max: float, touch: float, *, both: bool = True
 ) -> tuple[list[_Point], int] | None:
-    """Точки, которыми штрих продолжает путь, и был ли между ними разрыв; None - не продолжает."""
+    """Точки, которыми штрих продолжает путь, и был ли между ними разрыв; None - не продолжает.
+    both=False - штрих только в своём направлении."""
     end, heading = path[-1], _heading(path)
-    for candidate in (piece, piece[::-1]):
+    for candidate in (piece, piece[::-1]) if both else (piece,):
         start = candidate[0]
         gx, gy = start[0] - end[0], start[1] - end[1]
         gap = math.hypot(gx, gy)

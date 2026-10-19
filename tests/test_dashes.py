@@ -150,3 +150,18 @@ def test_dashed_linetype_marks_the_feature(
     _write(source, exploded=False, linetype=linetype)
     scene = EzdxfSceneReader().read(source, unit="m")
     assert [f.dashed for f in scene.features] == [dashed]
+
+
+def test_dashes_written_out_of_order_still_join() -> None:
+    """Харьковская: штрих, в который попала вершина, лист пишет двумя отрезками далеко от
+    соседних штрихов. Подряд линия рвалась на куски с разрывом 1,7 м; концы сшиваются."""
+    path = [(0, 0), (10.5, 0), (10.5, 8)]
+    dashes = _dashes(path)
+    corner = next(i for i, c in enumerate(dashes) if len(c) == 3)  # штрих с вершиной
+    before, after = dashes[corner][:2], dashes[corner][1:]
+    order = [*dashes[:corner], *dashes[corner + 1 :], before, after]
+    pieces = [_piece(i, c) for i, c in enumerate(order)]
+    out = chain_dashes(pieces, parent=PARENT)
+    assert len(out) == 1
+    assert (10.5, 0) in out[0].geometry.coords
+    assert out[0].geometry.length == pytest.approx(LineString(path).length, abs=1.3)
