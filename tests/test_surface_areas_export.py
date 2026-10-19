@@ -544,3 +544,101 @@ def test_lawn_islands_work_grows_with_the_street_not_street_times_lawns(monkeypa
     assert islands is not None
     assert islands.area > 0.99 * sum(b.area for b in beds)
     assert work["coords"] < 20 * shapely.get_num_coordinates(paved)
+
+
+def test_drawn_rounded_corners_keep_their_arcs(tmp_path: Path) -> None:
+    """Харьковская, площадка у дома 1А (пользователь, 19.10.2026: «странные и кривые углы у
+    площадки»): контур площадки в чертеже со скруглёнными углами, а сглаживание пилы растра
+    (упрощение на полметра) превращало дуги в срезы и острые углы. Край, заданный контуром
+    чертежа, идёт по чертежу: и выпуклые, и вогнутые скругления."""
+    cross = shapely.union_all([box(10, 5, 30, 30), box(30, 15, 40, 25)])
+    r = 0.8
+    ground = cross.buffer(-r, quad_segs=8).buffer(r, quad_segs=8)
+    ground = ground.buffer(r, quad_segs=8).buffer(-r, quad_segs=8)
+    features = [Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK)]
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.SIDEWALK, ground),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=(),
+    )
+    _surface(tmp_path, surface, basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    paved = _union(areas["paved"])
+    assert paved.boundary.hausdorff_distance(ground.boundary) < 0.08
+
+
+def test_lawn_strip_overlapping_the_playground_edge_does_not_bite_it(tmp_path: Path) -> None:
+    """Харьковская, площадка у дома 1А: полоса газона между площадкой и оградой заходит на край
+    площадки на 10-20 см и считалась островом среди покрытия - остров вырезал из площадки
+    углы. Газон, лежащий больше чем наполовину вне контура покрытия чертежа, контур не режет;
+    клумба внутри площади (test_flowerbed_island_in_a_plaza_stays_soil) режет."""
+    ground = box(10, 5, 30, 25)
+    strip = box(29.85, 5, 30.6, 25)  # газон у ограды, на 15 см на площадке
+    walk = box(30.6, 0, 33, 30)  # тротуар за оградой
+    features = [
+        Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "walk", walk, object_class=ObjectClass.SIDEWALK),
+    ]
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(
+            BasemapFeature(ObjectClass.SIDEWALK, ground),
+            BasemapFeature(ObjectClass.SIDEWALK, walk),
+            BasemapFeature(ObjectClass.LAWN, strip),
+        ),
+        features_in=3,
+        features_out=3,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=(),
+    )
+    _surface(tmp_path, surface, basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    paved = _union(areas["paved"])
+    assert ground.difference(paved).area < 0.05
+
+
+def test_rubber_is_the_drawn_playground_exactly(tmp_path: Path) -> None:
+    """Харьковская, площадка у дома 1А: резина отделялась от дорожек размыканием на 1,5 м, и на
+    стыке с дорожкой у калитки оставался клин резины, а угол площадки срезался. Есть контур
+    площадки в чертеже с подписью площадки - резина ровно по нему, дорожка остаётся дорожкой."""
+    ground = box(20, 6, 34, 20).buffer(-0.8, quad_segs=8).buffer(0.8, quad_segs=8)
+    # Дорожка входит в площадку с расширением: в чертеже её край у площадки скруглён.
+    joined = shapely.union_all([ground, box(26, 19, 27.5, 34)])
+    path = joined.buffer(1.5, quad_segs=8).buffer(-1.5, quad_segs=8).difference(ground)
+    features = [
+        Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "path", path, object_class=ObjectClass.SIDEWALK),
+    ]
+    labels = (
+        MaterialLabel(27, 13, "ДЕТ.ПЛ.", "paved"),
+        MaterialLabel(27, 11, "СПЕЦ.ПОКРЫТИЕ", "paved"),
+        MaterialLabel(26.7, 30, "А", "paved"),
+    )
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(
+            BasemapFeature(ObjectClass.SIDEWALK, ground),
+            BasemapFeature(ObjectClass.SIDEWALK, path),
+        ),
+        features_in=2,
+        features_out=2,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=labels,
+        paved_polygons=(ground, path),
+    )
+    _surface(tmp_path, surface, basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    special = _union(
+        [p for p, k in zip(areas["paved"], areas["paved_kind"], strict=True) if k == "special"]
+    )
+    assert special.boundary.hausdorff_distance(ground.boundary) < 0.08
+    assert special.intersection(path.difference(ground)).area < 0.01

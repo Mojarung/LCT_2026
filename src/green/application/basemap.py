@@ -26,7 +26,7 @@ from green.domain.objects import ObjectClass
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from shapely import LineString
+    from shapely import LineString, Polygon
     from shapely.geometry.base import BaseGeometry
 
     from green.domain.objects import Feature, TextLabel
@@ -81,6 +81,10 @@ class MaterialLabel:
     material: str  # paved | soil
 
 
+# Классы полигонов покрытия, которые 3D берёт без упрощения (Basemap.paved_polygons).
+PAVED_POLYGON_CLASSES = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})
+
+
 @dataclass(frozen=True, slots=True)
 class Basemap:
     """Подоснова для карты вместе с балансом отбора.
@@ -105,6 +109,9 @@ class Basemap:
     # Оси оград для 3D (fences.fence_axes) - по полной ограде чертежа: облегчённая карта
     # теряет штрихи на углах, и ось рвалась на углу (Харьковская, 19.10.2026).
     fence_axes: tuple[LineString, ...] = ()
+    # Полигоны тротуаров и проездов чертежа без упрощения - для 3D: резина площадки идёт ровно
+    # по её контуру (Харьковская, 19.10.2026). В basemap.geojson не выгружаются.
+    paved_polygons: tuple[Polygon, ...] = ()
 
 
 def material_labels(labels: Sequence[TextLabel]) -> tuple[MaterialLabel, ...]:
@@ -198,6 +205,13 @@ def build_basemap(
                     if f.object_class is ObjectClass.FENCE and f.geometry is not None
                 ]
             )
+        ),
+        paved_polygons=tuple(
+            part
+            for f in features
+            if f.object_class in PAVED_POLYGON_CLASSES and f.geometry is not None
+            for part in shapely.get_parts(f.geometry)
+            if part.geom_type == "Polygon" and part.area > 0
         ),
     )
 
