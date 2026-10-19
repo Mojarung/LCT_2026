@@ -43,6 +43,7 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import KDTree
 
+from green.application.approximation import buffer_lines
 from green.application.assortment.context import site_context
 from green.application.assortment.filters import species_verdict
 from green.application.assortment.scoring import percent, score_species
@@ -191,7 +192,7 @@ def _curb_hedges(  # noqa: PLR0913 - этап получает всё, что у
         # Второй отступ добирает только то, где первый не встал: рядом с уже найденным
         # участком параллельный ряд не нужен.
         blockers = _Near(base, [s.points for s in segments], _PARALLEL_GAP_M)
-        ring = shapely.boundary(shapely.buffer(curbs, offset, quad_segs=4))
+        ring = shapely.boundary(buffer_lines(curbs, offset, quad_segs=4))
         for part in shapely.get_parts(ring):
             if part.length < params.shrub_row_min_length_m:
                 continue
