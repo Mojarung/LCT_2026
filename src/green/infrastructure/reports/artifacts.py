@@ -953,6 +953,8 @@ def _surface_areas(
         paved = _without(paved, islands)
         soil = shapely.union_all([soil, islands]) if soil is not None else islands
     parts, kinds = _paved_parts(paved, basemap, exact_paved)
+    parts, kinds = _walk_ends_to_road(parts, kinds)
+    parts = [_without_artifact_holes(part, soil) for part in parts]
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
         shapely.union_all(roads).buffer(ROAD_MESH_MARGIN_M, join_style="mitre") if roads else None
@@ -965,6 +967,75 @@ def _surface_areas(
         "road_mesh": _rings(mesh),
         "flowerbeds": _rings(flowerbeds),
     }
+
+
+# Дыра в покрытии меньше этого и не газон - след знака колодца или обрезка дорожки, м².
+ARTIFACT_HOLE_M2 = 4.0
+
+
+def _without_artifact_holes(part: BaseGeometry, soil: BaseGeometry | None) -> BaseGeometry:
+    """Малые дыры покрытия, под которыми нет газона, заливаются: в 3D борт обходил их
+    островком посреди проезда (Кустанайская, 19.10.2026). Газон-остров и клумба остаются."""
+    if part.geom_type != "Polygon" or not part.interiors:
+        return part
+    holes = []
+    for ring in part.interiors:
+        hole = shapely.Polygon(ring)
+        lawn = soil is not None and _intersection_area(hole, soil) >= hole.area / 2
+        if hole.area >= ARTIFACT_HOLE_M2 or lawn:
+            holes.append(ring)
+    return shapely.Polygon(part.exterior, holes)
+
+
+# Конец дорожки в выемке проезда меньше этой доли дорожки и не меньше WALK_END_MIN_M2 -
+# конец, заехавший на проезд; меньшее - скругление угла, его не трогаем.
+WALK_END_SHARE = 0.5
+WALK_END_MIN_M2 = 1.0
+# Выемка проезда уже этого замыкается, м: проход дорожки в борту - 1,5-3 м.
+WALK_END_MOUTH_M = 3.0
+# Дорожка ближе этого к проезду - примыкает к нему, м.
+WALK_END_TOUCH_M = 0.3
+
+
+def _walk_ends_to_road(
+    parts: list[BaseGeometry], kinds: list[str]
+) -> tuple[list[BaseGeometry], list[str]]:
+    """Конец тротуара или дорожки, заехавший в выемку проезда, - проезд.
+
+    Дорожка съёмки часто нарисована дальше борта, на сам проезд: в 3D её конец стоял
+    островом в опущенном проезде, и борт обходил его прямоугольником посреди асфальта
+    (Кустанайская, 19.10.2026). Выемка проезда уже WALK_END_MOUTH_M замыкается, и то, что
+    дорожка занимает внутри замкнутого проезда, отходит проезду."""
+    road_ids = [i for i, kind in enumerate(kinds) if kind == PAVED_ROAD]
+    if not road_ids:
+        return parts, kinds
+    road_tree = shapely.STRtree([parts[i] for i in road_ids])
+    closed: dict[int, BaseGeometry] = {}
+    out = list(parts)
+    r = WALK_END_MOUTH_M / 2
+    for i, kind in enumerate(kinds):
+        if kind not in {PAVED_ASPHALT, PAVED_PAVERS}:
+            continue
+        for k in road_tree.query(out[i], predicate="dwithin", distance=WALK_END_TOUCH_M):
+            road = road_ids[int(k)]
+            if road not in closed:
+                closed[road] = _areal(out[road].buffer(r).buffer(-r))
+            end = _areal(out[i].intersection(closed[road]))
+            if end.is_empty or not WALK_END_MIN_M2 <= end.area < WALK_END_SHARE * out[i].area:
+                continue
+            # Между дорожкой и проездом бывает щель в доли метра: склейка с замыканием, иначе
+            # конец остаётся островом проезда со своим бортом.
+            g = WALK_END_TOUCH_M
+            out[road] = _areal(shapely.union_all([out[road], end]).buffer(g).buffer(-g))
+            out[i] = _areal(out[i].difference(out[road]))
+    # Разрезанная часть - несколько многоугольников: каждый своей частью того же вида.
+    flat = [
+        (piece, kind)
+        for part, kind in zip(out, kinds, strict=True)
+        for piece in shapely.get_parts(part)
+        if piece.geom_type == "Polygon" and not piece.is_empty
+    ]
+    return [piece for piece, _ in flat], [kind for _, kind in flat]
 
 
 def _lawn_islands(

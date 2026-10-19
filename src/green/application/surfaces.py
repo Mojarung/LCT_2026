@@ -493,6 +493,12 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
     uncertain = _uncertainty_area(features)
+    if display_around is not None:
+        # Борт и край покрытия съёмки часто пунктиром из отдельных штрихов: разлив подписи «А»
+        # уходил сквозь разрывы за борт, и край проезда в 3D шёл зубцами и лесенкой
+        # (Кустанайская, 19.10.2026: «асфальт прям грустно»). В карте для показа разрывы до
+        # line_gaps.GAP_M закрыты перемычками ещё до разлива; карта для посадок прежняя.
+        barriers = np.concatenate([barriers, np.array(bridges(list(barriers)), dtype=object)])
     barrier = _rasterize(barriers, origin, cell, shape, uncertain=uncertain)
     free = ~barrier
     if extent is not None:
@@ -1240,6 +1246,10 @@ def _assign(
 # пятно, протёкшее через разрыв, мало, а газон и асфальт одной большой незамкнутой грани -
 # соизмеримы, и такая грань остаётся как есть.
 DISPLAY_MINORITY = 0.25
+# Неизвестное в грани для показа заполняется материалом грани, если известно не меньше этой доли
+# грани и грань не больше DISPLAY_FILL_MAX_M2: большая грань - это двор, а не проезд.
+DISPLAY_FILL_KNOWN = 0.5
+DISPLAY_FILL_MAX_M2 = 3000.0
 
 
 def _display_grid(
@@ -1270,8 +1280,17 @@ def _display_grid(
     majority[(known > 0) & (n_soil <= DISPLAY_MINORITY * known)] = int(Material.PAVED)
     majority[(known > 0) & (n_paved <= DISPLAY_MINORITY * known)] = int(Material.SOIL)
     majority[0] = int(Material.UNKNOWN)
+    # Неизвестное заполняется только в грани, замкнутой линиями и в основном известной: проезд
+    # между двумя бортами, куда подпись «А» дотекала ромбом на пределе разлива, выходил с
+    # зубцами по краю этого ромба (Кустанайская, 19.10.2026: «асфальт прям грустно»).
+    size = np.bincount(flat, minlength=count + 1)
+    edge = np.unique(np.concatenate([faces[0], faces[-1], faces[:, 0], faces[:, -1]]))
+    fill = (known >= DISPLAY_FILL_KNOWN * size) & (size * cell * cell <= DISPLAY_FILL_MAX_M2)
+    fill[edge] = False
+    fill[0] = False
     out = grid.copy()
     decided = majority[faces]
     fix = (paved | soil) & (decided != Material.UNKNOWN)
+    fix |= (grid == Material.UNKNOWN) & fill[faces] & (decided != Material.UNKNOWN)
     out[fix] = decided[fix]
     return out

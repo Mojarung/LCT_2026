@@ -81,3 +81,37 @@ def test_face_with_two_real_materials_is_left_as_drawn() -> None:
     assert surface.display_grid is not None
     assert _at(surface, surface.display_grid, 25, 25) == Material.SOIL
     assert _at(surface, surface.display_grid, 55, 25) == Material.PAVED
+
+
+def test_display_fills_a_closed_face_where_the_label_spread_stopped() -> None:
+    """Кустанайская, 19.10.2026: проезд между двумя бортами, куда «А» дотекала ромбом на
+    пределе разлива, выходил с зубцами. В карте для показа замкнутая линиями и в основном
+    известная грань заливается материалом целиком."""
+    lower = LineString([(0, 0), (50, 0)])
+    upper = LineString([(0, 6), (50, 6)])
+    ends = [LineString([(0, 0), (0, 6)]), LineString([(50, 0), (50, 6)])]
+    features = [
+        Feature(
+            SourceRef("12345678", "00000000", f"K{i}"), f"curb{i}", g, object_class=ObjectClass.CURB
+        )
+        for i, g in enumerate([lower, upper, *ends])
+    ]
+    labels = [TextLabel(SourceRef("12345678", "00000000", "LA"), "Подписи", 5.0, 3.0, "А")]
+    surface = build_surface_map(
+        features,
+        labels,
+        box(-10, -10, 60, 16),
+        0.5,
+        max_distance_m=30.0,
+        inference_mode="distance",
+    )
+    assert surface is not None
+    assert surface.display_grid is not None
+
+    def material(grid: object, x: float, y: float) -> int:
+        col = int((x - surface.origin[0]) / surface.cell)
+        row = int((y - surface.origin[1]) / surface.cell)
+        return int(grid[row, col])  # type: ignore[index]
+
+    assert material(surface.grid, 45, 3) != int(Material.PAVED)
+    assert material(surface.display_grid, 45, 3) == int(Material.PAVED)

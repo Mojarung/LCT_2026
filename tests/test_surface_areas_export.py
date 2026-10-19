@@ -35,6 +35,8 @@ from green.infrastructure.reports.artifacts import (
     _subdivided,
     _surface,
     _tidy,
+    _walk_ends_to_road,
+    _without_artifact_holes,
 )
 
 REF = SourceRef("f", "x", "1")
@@ -888,3 +890,28 @@ def test_tiny_part_is_dropped_with_its_kind_not_exported_as_a_broken_ring() -> N
     assert len(rings[0][0]) < 4
     assert kept[1] == ["pavers"]
     assert all(len(ring) >= 4 for polygon in kept[0] for ring in polygon)
+
+
+def test_walk_end_in_a_road_notch_goes_to_the_road() -> None:
+    """Кустанайская, 19.10.2026: дорожка нарисована дальше борта, её конец стоял островом в
+    опущенном проезде, и борт обходил его прямоугольником. Конец в выемке проезда - проезд."""
+    road = box(0, 0, 40, 10).difference(box(19, 6, 21.5, 10))  # выемка под конец дорожки
+    walk = box(19.2, 6.2, 21.3, 30)  # дорожка заходит в выемку на 3,8 м
+    parts, kinds = _walk_ends_to_road([road, walk], ["road", "asphalt"])
+    roads = shapely.union_all([p for p, k in zip(parts, kinds, strict=True) if k == "road"])
+    walks = shapely.union_all([p for p, k in zip(parts, kinds, strict=True) if k == "asphalt"])
+    assert walks.bounds[1] >= 9.0
+    assert roads.contains(Point(20.2, 7.5))
+    assert walks.area > 0.9 * box(19.2, 10, 21.3, 30).area
+
+
+def test_small_hole_in_paving_is_filled_but_a_lawn_island_stays() -> None:
+    """Дыра в проезде от знака колодца или обрезка дорожки - не остров: борт в 3D обходил её
+    кольцом посреди асфальта. Газон-остров той же величины остаётся дырой."""
+    well = box(10, 4, 11.5, 5)
+    island = box(30, 4, 31.5, 5.5)
+    road = box(0, 0, 40, 10).difference(well).difference(island)
+    out = _without_artifact_holes(road, island)
+    assert len(out.interiors) == 1
+    assert out.contains(Point(10.7, 4.5))
+    assert not out.contains(Point(30.7, 4.7))
