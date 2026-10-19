@@ -238,3 +238,15 @@ def test_tree_strip_semantics_survive_basemap_export() -> None:
     assert strips[0]["geometry"]["type"] == "MultiPoint"
     assert len(strips[0]["geometry"]["coordinates"]) == 4
     assert singles[0]["geometry"]["coordinates"] == [20, 10]
+
+
+def test_basemap_export_carries_fence_axes_for_3d() -> None:
+    """Ограда двумя линиями знака уходит в выгрузку и осью: 3D ставит одну решётку по ней."""
+    features = [
+        _feature("a", ObjectClass.FENCE, LineString([(0, 0.15), (20, 0.15)])),
+        _feature("b", ObjectClass.FENCE, LineString([(0, -0.15), (20, -0.15)])),
+    ]
+    payload = _basemap(build_basemap(features))
+    axes = payload["fence_axes"]
+    assert len(axes) == 1
+    assert all(abs(y) < 0.1 for _, y in axes[0])

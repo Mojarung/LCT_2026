@@ -10,7 +10,7 @@ import shapely
 import shapely.ops
 from shapely.geometry import LineString, Point
 
-from green.application.fences import bridge_fence_gaps
+from green.application.fences import JOIN_M, bridge_fence_gaps, fence_axes
 from green.domain.objects import Feature, ObjectClass, SourceRef
 
 
@@ -89,3 +89,47 @@ def test_sharp_corner_closes_only_when_the_gap_is_small() -> None:
 
     assert bridged_near == 1
     assert bridged_far == 0
+
+
+def test_double_line_fence_with_post_circles_becomes_one_axis() -> None:
+    """Ограда на столбах в съёмке - две параллельные линии через 0,3 м и кружки столбов. В 3D
+    она вставала двумя рядами решётки с кусками вразнобой (пользователь, 19.10.2026: «как
+    будто человек раскидал объекты»). Ось - одна линия посередине, кружки не дают оград."""
+    left = LineString([(0, 0.15), (30, 0.15)])
+    right = LineString([(0, -0.15), (12, -0.15)])
+    right2 = LineString([(12.4, -0.15), (30, -0.15)])  # разрыв штриха
+    posts = [Point(x, 0).buffer(0.25).exterior for x in range(0, 31, 3)]
+    axes = fence_axes([left, right, right2, *posts])
+    assert len(axes) == 1
+    axis = axes[0]
+    assert axis.length > 28.5
+    coords = shapely.get_coordinates(axis)
+    assert abs(coords[:, 1]).max() < 0.1
+    assert coords[:, 0].min() < 1
+    assert coords[:, 0].max() > 29
+
+
+def test_fence_corner_is_one_continuous_axis() -> None:
+    """Угол ограды площадки: две стороны сходятся под прямым углом с зазором - ось одна,
+    с углом, без разрыва (пользователь: «должен нормально стыковаться забор»)."""
+    a = LineString([(0, 0), (10, 0)])
+    b = LineString([(10.4, 0.4), (10.4, 10)])
+    axes = fence_axes([a, b])
+    assert len(axes) == 1
+    assert axes[0].distance(Point(10.2, 0.2)) < 0.3
+    assert axes[0].length > 18
+
+
+def test_separate_fences_stay_separate() -> None:
+    axes = fence_axes([LineString([(0, 0), (10, 0)]), LineString([(0, 5), (10, 5)])])
+    assert len(axes) == 2
+
+
+def test_fence_axis_gaps_up_to_join_m_are_closed() -> None:
+    """Штрихи ограды у дома 1А идут с разрывами 0,7-1,5 м: в 3D ограда стояла кусками."""
+    a = LineString([(0, 0), (10, 0)])
+    b = LineString([(10 + JOIN_M - 0.3, 0), (20, 0)])
+    far = LineString([(23, 0), (30, 0)])  # проход 3 м
+    axes = fence_axes([a, b, far])
+    assert len(axes) == 2
+    assert max(axis.length for axis in axes) > 19

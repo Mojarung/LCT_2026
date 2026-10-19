@@ -321,9 +321,11 @@ function edgeSpots(
       const nx = gx / g;
       const ny = gy / g;
       if (at(Math.round(x + nx * reach), Math.round(y + ny * reach)) < need) continue;
-      // Край прямой на всю длину машины: у носа и у багажника тот же отступ и та же нормаль.
+      // Край прямой на две длины машины: у носа и у багажника и ещё на корпус дальше тот же
+      // отступ и та же нормаль. На коротком косом куске края (съезд, излом у ограды) машина
+      // вставала поперёк проезда (пользователь, 19.10.2026: «как будто раскидал объекты»).
       let straight = true;
-      for (const k of [-half, half]) {
+      for (const k of [-2 * half, -half, half, 2 * half]) {
         const qx = x - ny * k;
         const qy = y + nx * k;
         const dq = at(Math.round(qx), Math.round(qy));

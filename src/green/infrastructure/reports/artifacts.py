@@ -19,6 +19,7 @@ from openpyxl import Workbook
 
 from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
+from green.application.fences import fence_axes
 from green.application.name_model import name_key
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material, cells_area
@@ -777,6 +778,13 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             [round(label.x, 2), round(label.y, 2), label.text, label.material]
             for label in basemap.labels
         ],
+        # Оси оград для 3D: двойная линия знака, штрихи и углы - одной линией (fences.py).
+        "fence_axes": [
+            [[round(x, 2), round(y, 2)] for x, y in axis.coords]
+            for axis in fence_axes(
+                [f.geometry for f in basemap.features if f.object_class is ObjectClass.FENCE]
+            )
+        ],
         "features": [
             {
                 "type": "Feature",
@@ -818,8 +826,12 @@ SURFACE_AREA_TOLERANCE_M = 0.05
 SURFACE_RASTER_TOLERANCE_CELLS = 1.5
 # Повороты скругляются (пользователь, 17.10.2026: «где поворот - закругление»): излом в этих
 # пределах срезается, прямой угол остаётся.
-SURFACE_ROUND_TURN_DEG = (5.0, 75.0)
+SURFACE_ROUND_TURN_DEG = (5.0, 60.0)
 SURFACE_ROUND_PASSES = 2
+# Поворот, а не пила: оба звена излома не короче этого, м.
+ROUND_MIN_SEG_M = 1.5
+# Наибольший срез угла при скруглении, м.
+ROUND_CUT_M = 1.0
 # Части покрытия для 3D: проезжая часть опускается на высоту борта, тротуар и плитка - нет.
 PAVED_ROAD, PAVED_ASPHALT, PAVED_PAVERS, PAVED_UNKNOWN = "road", "asphalt", "pavers", "paved"
 # Специальное покрытие площадок (резиновая крошка): «СПЕЦ.ПОКР.», «ДЕТ.ПЛ.» Мосгеотреста.
@@ -839,6 +851,14 @@ ROAD_MESH_MARGIN_M = 0.5
 SURFACE_MIN_PART_M2 = 0.5
 # Допуск снятия пилы и щепок с края газона, м: меньше ширины узкой полосы газона у борта.
 SOIL_TIDY_M = 0.25
+# Газон-остров среди покрытия (клумба, газон в кольце дорожек) - для показа грунт.
+ISLAND_MAX_M2 = 400.0
+ISLAND_RING_M = 1.0
+ISLAND_PAVED_SHARE = 0.6
+FLOWERBED_LABEL_M = 8.0
+# Клумба - малый остров: большой газон в кольце дорожек цветником не становится.
+FLOWERBED_MAX_M2 = 120.0
+FLOWERBED_PHRASE = re.compile(r"КЛУМБ|ЦВЕТН")
 # Грань линий чертежа отдаётся материалу растра, если его в грани не меньше этой доли.
 FACE_MAJORITY = 0.5
 FACE_MIN_M2 = 0.5
@@ -911,6 +931,10 @@ def _surface_areas(
             shapely.union_all([paved, uncertain]),
         )
     )
+    islands, flowerbeds = _lawn_islands(basemap, paved)
+    if islands is not None:
+        paved = _without(paved, islands)
+        soil = shapely.union_all([soil, islands]) if soil is not None else islands
     parts, kinds = _paved_parts(paved, basemap)
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
@@ -921,7 +945,49 @@ def _surface_areas(
         "paved": [_polygon_rings(part) for part in parts],
         "paved_kind": kinds,
         "road_mesh": _rings(mesh),
+        "flowerbeds": _rings(flowerbeds),
     }
+
+
+def _lawn_islands(
+    basemap: Basemap | None, paved: BaseGeometry | None
+) -> tuple[BaseGeometry | None, BaseGeometry | None]:
+    """Газоны-острова среди покрытия и цветники среди них - для показа.
+
+    Полигон газона чертежа не больше ISLAND_MAX_M2, у которого полоса ISLAND_RING_M снаружи
+    хотя бы на ISLAND_PAVED_SHARE - покрытие, - остров: клумба посреди площади, газон в
+    кольце дорожек. Карта покрытий могла снять его подписью покрытия внутри (подпись
+    вазы или постамента «Ц» в клумбе у дома 1А на Харьковской, пользователь 19.10.2026:
+    «стёр клумбу»), и 3D рисовал на его месте плитку. Подпись «КЛУМБА» или «ЦВЕТНИК» ближе
+    FLOWERBED_LABEL_M - цветник. Проверку посадок это не меняет."""
+    if basemap is None or paved is None or paved.is_empty:
+        return None, None
+    shapely.prepare(paved)
+    islands = []
+    for f in basemap.features:
+        if f.object_class is not ObjectClass.LAWN or f.geometry.geom_type not in {
+            "Polygon",
+            "MultiPolygon",
+        }:
+            continue
+        for lawn in shapely.get_parts(f.geometry):
+            if not 0 < lawn.area <= ISLAND_MAX_M2:
+                continue
+            ring = lawn.buffer(ISLAND_RING_M).difference(lawn)
+            if ring.area and ring.intersection(paved).area >= ISLAND_PAVED_SHARE * ring.area:
+                islands.append(lawn)
+    if not islands:
+        return None, None
+    names = [lb for lb in basemap.labels if FLOWERBED_PHRASE.search(lb.text.strip().upper())]
+    # Подпись съёмки стоит у выноски, в нескольких метрах: цветник - ближайший к ней остров.
+    small = [lawn for lawn in islands if lawn.area <= FLOWERBED_MAX_M2]
+    beds = []
+    for lb in names if small else ():
+        point = shapely.Point(lb.x, lb.y)
+        nearest = min(small, key=point.distance)
+        if point.distance(nearest) <= FLOWERBED_LABEL_M and nearest not in beds:
+            beds.append(nearest)
+    return shapely.union_all(islands), (shapely.union_all(beds) if beds else None)
 
 
 def _tidy(area: BaseGeometry | None) -> BaseGeometry | None:
@@ -1183,12 +1249,17 @@ def _without(area: BaseGeometry | None, cut: BaseGeometry | None) -> BaseGeometr
 def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
     """Скруглить повороты замкнутого кольца срезом углов (Чайкин, два прохода): излом от 5 до
     75° - поворот дороги или дуга, разбитая упрощением на отрезки, - срезается по четверти
-    соседних отрезков; прямой и острый угол (здание, площадка) остаётся углом."""
+    соседних отрезков; прямой и острый угол (здание, площадка) остаётся углом. Поворотом
+    считается излом, у которого оба звена не короче ROUND_MIN_SEG_M: пила края без линии
+    чертежа (звенья по полметра) скруглением становилась волной (пользователь, 19.10.2026).
+    Второй проход скругляет только точки, рождённые первым."""
     points = [(float(x), float(y)) for x, y in coords[:-1]]
-    for _ in range(SURFACE_ROUND_PASSES):
+    soft = [True] * len(points)
+    for pass_no in range(SURFACE_ROUND_PASSES):
         if len(points) < 3:  # noqa: PLR2004 - кольцо из трёх точек
             break
         out: list[tuple[float, float]] = []
+        out_soft: list[bool] = []
         for i, (vx, vy) in enumerate(points):
             px, py = points[i - 1]
             nx, ny = points[(i + 1) % len(points)]
@@ -1199,12 +1270,22 @@ def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, flo
                 if la and lb
                 else 0.0
             )
-            if SURFACE_ROUND_TURN_DEG[0] < turn < SURFACE_ROUND_TURN_DEG[1]:
-                out.append((vx - ax / 4, vy - ay / 4))
-                out.append((vx + bx / 4, vy + by / 4))
+            bend = (
+                min(la, lb) >= ROUND_MIN_SEG_M if pass_no == 0 else soft[i]
+            ) and SURFACE_ROUND_TURN_DEG[0] < turn < SURFACE_ROUND_TURN_DEG[1]
+            if bend:
+                # Срез - четверть стороны, но не длиннее ROUND_CUT_M: иначе у длинной стороны
+                # угол съедался на метры, и прямоугольник стоянки выглядел скошенным.
+                cap = ROUND_CUT_M * 0.5 ** (pass_no + 1)  # за все проходы - меньше ROUND_CUT_M
+                ka = min(0.25, cap / la)
+                kb = min(0.25, cap / lb)
+                out.append((vx - ax * ka, vy - ay * ka))
+                out.append((vx + bx * kb, vy + by * kb))
+                out_soft += [True, True]
             else:
                 out.append((vx, vy))
-        points = out
+                out_soft.append(False)
+        points, soft = out, out_soft
     return [*points, points[0]] if points else []
 
 

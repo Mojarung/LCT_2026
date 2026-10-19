@@ -8,6 +8,7 @@ import {
   GROUND_MAP,
   ROAD_DROP_M,
   roadGeometry,
+  pavingWins,
   CONTEXT_CLEAR_M,
   contextPaintable,
   SPECIAL_LIFT_M,
@@ -166,6 +167,32 @@ describe('дороги карты города на земле сцены', () =
     // Газон по умолчанию рядом со съёмкой: тропа OpenStreetMap туда не ложится.
     expect(at(10 + CONTEXT_CLEAR_M - 2)).toBe(0);
     expect(at(10 + CONTEXT_CLEAR_M + 2)).toBe(1);
+  });
+});
+
+describe('покрытие контура сильнее газона маски', () => {
+  it('край контура не трогается: зубцы пикселей за краем сетки тротуара не нужны', () => {
+    // Строка из 5 пикселей: плитка контура в 1..3, по краям газон.
+    const final = new Uint8Array(20);
+    for (let i = 0; i < 5; i++) final[i * 4] = 255;
+    const kinds = new Uint8Array(5).fill(GRASS);
+    pavingWins(final, kinds, new Uint8Array([GRASS, PAVERS, PAVERS, PAVERS, GRASS]), 5);
+    expect([...kinds]).toEqual([GRASS, GRASS, PAVERS, GRASS, GRASS]);
+  });
+
+  it('где контур сервиса - плитка или асфальт тротуара, газона и травинок нет', () => {
+    // Сетка 3 x 3 одного вида контура, газон по маске: решается середина.
+    const check = (kind: number, expected: number[]) => {
+      const final = new Uint8Array(36);
+      for (let i = 0; i < 9; i++) final[i * 4] = 255;
+      const kinds = new Uint8Array(9).fill(GRASS);
+      pavingWins(final, kinds, new Uint8Array(9).fill(kind), 3);
+      expect([...final.slice(16, 19)]).toEqual(expected);
+      expect(kinds[4]).toBe(kind);
+    };
+    check(PAVERS, [0, 255, 0]);
+    check(ASPHALT, [0, 0, 0]);
+    check(GRASS, [255, 0, 0]);
   });
 });
 

@@ -27,12 +27,12 @@ import {
   gutterGeometry,
   GUTTER_W_M,
   LOW_CURB_M,
-  roadEdgesFromMask,
+  sceneRoadEdges,
   type RoadEdge,
   TRANSITION_M,
 } from './edges';
 
-import { ASPHALT, PAVERS } from './surfaceMask';
+import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
 import { benchSpots, type Ground, manholeSpots, treePits } from './streetDetails';
 import { streetDetails } from './streetDetailsMesh';
 import { keepSegments } from './contours';
@@ -40,9 +40,11 @@ import { chainFences, dropTwinFences } from './fences';
 import { boundaryOverlay, utilityOverlay } from './overlays';
 import { type ContextJson, contextScene } from './context';
 import { disposeGroup, facadeModules, moduleMaterial, parapetGeometry } from './facadeModules';
-import { parkingSpots } from './parking';
+import { CAR_LENGTH_M, CAR_WIDTH_M, parkingSpots } from './parking';
 import { Walls } from './collide';
 import { nearPlane } from './depth';
+import { flowerbedGroup } from './flowerbeds';
+import { edgeCurbs, pavingGeometry } from './paving';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
   buildMask,
@@ -315,7 +317,8 @@ export class SceneEngine {
     this.freecam = new Freecam({
       element: canvas,
       pose: overviewPose(world),
-      collide: (from, to) => this.walls.resolve(from, to),
+      collide: (from, to, y) => this.walls.resolve(from, to, y),
+      roof: (p) => this.walls.roofAt(p),
       onChange: () => {
         this.emitCamera();
       },
@@ -369,7 +372,7 @@ export class SceneEngine {
     this.noise = noise;
     // Проезд ниже тротуара на высоту борта: своя плоскость асфальта под землёй, земля на
     // уровне тротуара вырезает её по маске (mask.cut), по краю выреза стоит бортовой камень.
-    this.edges = roadEdgesFromMask(mask);
+    this.edges = sceneRoadEdges(surface?.areas, this.world.origin, mask);
     const lowered = this.edges.length > 0;
     const ground = groundMesh(this.world, mask, tex, this.groundWeather, {
       geometry: lowered
@@ -378,7 +381,9 @@ export class SceneEngine {
     });
     this.add(ground);
     if (lowered) this.add(groundMesh(this.world, mask, tex, this.groundWeather, { road: true }));
+    this.addPaving(surface, mask, tex);
     this.addSpecialCover(surface);
+    this.addFlowerbeds(surface);
     if (this.edges.some((edge) => edge.lowered.some(Boolean))) {
       this.add(
         groundMesh(this.world, mask, tex, this.groundWeather, {
@@ -393,7 +398,7 @@ export class SceneEngine {
         }),
       );
     }
-    this.addStreetFurniture(mask);
+    this.addStreetFurniture(mask, surface);
     this.addStreetDetails(mask);
     for (const overlay of [
       utilityOverlay(this.world.utilities ?? []),
@@ -412,6 +417,21 @@ export class SceneEngine {
     this.scene.add(this.people.root, this.weather.root);
     await this.step('buildings');
     this.addBuildings(noise);
+    // Стволы и опоры - препятствия: квадрат вокруг ствола до высоты нижних ветвей.
+    const post = (p: { x: number; z: number }, r: number) => [
+      { x: p.x - r, z: p.z - r },
+      { x: p.x + r, z: p.z - r },
+      { x: p.x + r, z: p.z + r },
+      { x: p.x - r, z: p.z + r },
+    ];
+    this.walls.addRings(
+      this.world.plants.filter((p) => !/shrub|hedge/.test(p.type)).map((p) => post(p, 0.25)),
+      3,
+    );
+    this.walls.addRings(
+      this.world.poles.map((p) => post(p, 0.15)),
+      8,
+    );
     await this.forest.build((done, total) => {
       this.events.progress?.('plants', done, total);
     });
@@ -485,6 +505,22 @@ export class SceneEngine {
     });
   }
 
+  /** Цветники плана и клумбы съёмки: земля и многолетники (flowerbeds.ts). */
+  private addFlowerbeds(surface: SurfaceImage | null): void {
+    const [ox, oy] = this.world.origin;
+    const fromDrawing = (surface?.areas?.flowerbeds ?? []).map((rings) =>
+      rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) }))),
+    );
+    const group = flowerbedGroup([...(this.world.flowerbeds ?? []), ...fromDrawing]);
+    if (!group) return;
+    this.scene.add(group);
+    this.disposables.push({
+      dispose: () => {
+        disposeGroup(group);
+      },
+    });
+  }
+
   /** Резиновое покрытие площадок «СПЕЦ.ПОКР.» поверх плитки маски, по контуру чертежа. */
   private addSpecialCover(surface: SurfaceImage | null): void {
     const geometry = surface?.areas ? specialGeometry(surface.areas, this.world.origin) : null;
@@ -509,7 +545,30 @@ export class SceneEngine {
     this.add(mesh);
   }
 
-  private addStreetFurniture(mask: MaskInfo): void {
+  /** Плитка и асфальт тротуаров сетками по контурам частей surface.json (paving.ts). */
+  private addPaving(
+    surface: SurfaceImage | null,
+    mask: MaskInfo,
+    tex: Parameters<typeof groundMesh>[2],
+  ): void {
+    if (!surface?.areas) return;
+    for (const cover of ['pavers', 'asphalt'] as const) {
+      const geometry = pavingGeometry(surface.areas, this.world.origin, cover);
+      if (!geometry) continue;
+      const mesh = groundMesh(this.world, mask, tex, this.groundWeather, {
+        geometry,
+        cover,
+        name: `paving-${cover}`,
+      });
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.polygonOffset = true;
+      material.polygonOffsetFactor = -1;
+      material.polygonOffsetUnits = -1;
+      this.add(mesh);
+    }
+  }
+
+  private addStreetFurniture(mask: MaskInfo, surface: SurfaceImage | null): void {
     const world = this.world;
     const hasRoads = this.edges.length > 0;
     const curbLines = hasRoads
@@ -517,7 +576,18 @@ export class SceneEngine {
           curbProfile(edge, CURB_ABOVE_WALK_M, LOW_CURB_M - ROAD_DROP_M, TRANSITION_M),
         )
       : world.curbs;
-    const gardenLines = pavedOnLeft(mask.edges.garden, mask);
+    // Садовый борт - по контурам частей покрытия, где снаружи газон (paving.ts): тот же край,
+    // что у сетки плитки. Без контуров (старые прогоны) - по краю маски газона.
+    const [minX, minZ] = mask.rect;
+    const lawnAt = (p: { x: number; z: number }) => {
+      const col = Math.floor((p.x - minX) / mask.metresPerPx);
+      const row = Math.floor((p.z - minZ) / mask.metresPerPx);
+      if (col < 0 || row < 0 || col >= mask.width || row >= mask.height) return false;
+      return mask.kinds[row * mask.width + col] === GRASS;
+    };
+    const gardenLines = surface?.areas
+      ? edgeCurbs(surface.areas, world.origin, lawnAt)
+      : pavedOnLeft(mask.edges.garden, mask);
     if (curbLines.length || gardenLines.length) {
       // Гранит: камни по метру со швами и зерном, рельеф из той же текстуры, фаска по рёбрам.
       const stoneTex = curbStone();
@@ -537,6 +607,9 @@ export class SceneEngine {
           bumpScale: 1.5,
           roughness: 0.92,
           metalness: 0,
+          // Брус без дна: с какой стороны ни смотреть, грань видна - иначе при обратном ходе
+          // линии борт просвечивал насквозь.
+          side: THREE.DoubleSide,
         });
         material.onBeforeCompile = (shader) => {
           shader.vertexShader = shader.vertexShader
@@ -617,7 +690,8 @@ export class SceneEngine {
     if (world.fences.length) {
       // Пунктир съёмки - сплошной оградой; столбы и перила объёмом видны на любой дальности,
       // решётка между ними - текстурой с прозрачностью.
-      const fenceLines = dropTwinFences(chainFences(world.fences));
+      const fenceLines = world.fenceAxes ? world.fences : dropTwinFences(chainFences(world.fences));
+      this.walls.addLines(fenceLines, 1.2);
       const metal = new THREE.MeshStandardMaterial({
         color: 0x24292b,
         roughness: 0.55,
@@ -794,26 +868,40 @@ export class SceneEngine {
     const paved = mask.road;
     // Машины стоят на асфальте, а он ниже тротуара на высоту борта.
     const lowered = mask.edges.road.length ? -ROAD_DROP_M : 0;
-    const cars = carGroup(
-      parkingSpots(
-        {
-          curbs: this.world.curbs,
-          asphaltAt,
-          poles: this.world.poles,
-          plants: this.world.plants,
-          walls: this.world.buildings.flatMap((b) => (b.rings[0] ? [b.rings[0]] : [])),
-          fences: this.world.fences,
-        },
-        {
-          paved,
-          width: mask.width,
-          height: mask.height,
-          minX,
-          minZ,
-          metresPerPx: mask.metresPerPx,
-        },
-      ),
-      lowered,
+    const spots = parkingSpots(
+      {
+        curbs: this.world.curbs,
+        asphaltAt,
+        poles: this.world.poles,
+        plants: this.world.plants,
+        walls: this.world.buildings.flatMap((b) => (b.rings[0] ? [b.rings[0]] : [])),
+        fences: this.world.fences,
+      },
+      {
+        paved,
+        width: mask.width,
+        height: mask.height,
+        minX,
+        minZ,
+        metresPerPx: mask.metresPerPx,
+      },
+    );
+    const cars = carGroup(spots, lowered);
+    // Машина - препятствие: корпус по месту и углу стоянки, высотой 1,5 м.
+    this.walls.addRings(
+      spots.map((s) => {
+        const ux = Math.cos(s.angle);
+        const uz = -Math.sin(s.angle);
+        const hl = CAR_LENGTH_M / 2;
+        const hw = CAR_WIDTH_M / 2;
+        return [
+          [hl, hw],
+          [hl, -hw],
+          [-hl, -hw],
+          [-hl, hw],
+        ].map(([a = 0, b = 0]) => ({ x: s.x + ux * a - uz * b, z: s.z + uz * a + ux * b }));
+      }),
+      1.5,
     );
     this.scene.add(cars);
     this.disposables.push({

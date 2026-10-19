@@ -71,6 +71,8 @@ export interface SurfaceAreas {
   paved_kind?: string[];
   /** Проезжая часть с запасом под край тротуара: сетка асфальта ниже уровня земли. */
   road_mesh?: AreaPolygon[];
+  /** Клумбы съёмки: газон-остров среди покрытия с подписью «КЛУМБА». */
+  flowerbeds?: AreaPolygon[];
 }
 
 /** Проезжая часть ниже тротуара и газона на высоту дорожного борта. */
@@ -680,6 +682,34 @@ function fillLoops(
   return blurBytes(out, w, h, 1);
 }
 
+/** Покрытие контура сервиса сильнее газона маски: где контур - плитка или асфальт тротуара,
+ *  газона нет. Выпрямление и правило щели у проезда превращали узкий тротуар в газон, сетка
+ *  тротуара (paving.ts) ложилась поверх, и из плитки росли травинки (19.10.2026). */
+export function pavingWins(
+  final: Uint8Array | Uint8ClampedArray,
+  kinds: Uint8Array,
+  contour: Uint8Array,
+  width = contour.length,
+): void {
+  for (let i = 0; i < contour.length; i++) {
+    const k = contour[i];
+    if (k !== PAVERS && k !== ASPHALT) continue;
+    // Пиксель края контура не трогается: край даёт сетка тротуара, а лесенка пикселей маски
+    // за ним торчала бы зубцами плитки на газоне.
+    const x = i % width;
+    const edge =
+      (x > 0 && contour[i - 1] !== k) ||
+      (x < width - 1 && contour[i + 1] !== k) ||
+      (i >= width && contour[i - width] !== k) ||
+      (i + width < contour.length && contour[i + width] !== k);
+    if (edge) continue;
+    if ((final[i * 4 + 2] ?? 0) >= 128) continue;
+    final[i * 4] = 0;
+    final[i * 4 + 1] = k === PAVERS ? 255 : 0;
+    kinds[i] = k;
+  }
+}
+
 export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo {
   const [minX, minZ, maxX, maxZ] = world.bounds;
   const sizeX = Math.max(1, maxX - minX);
@@ -723,6 +753,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   // покрытый наполовину. С порогом «любой непустой» асфальт вылезал за край на пиксель маски
   // (до 0,4 м) - за бортовой камень. Растр старых прогонов полупрозрачный: порог - непустой.
   const kinds = surfaceToMask(ctx, w, h, mpp, areas ? 128 : 1);
+  const contourKinds = areas ? kinds.slice() : null;
   // Край контура на пикселе маски (у большой сцены до 0,4 м) - лесенка; лёгкое размытие
   // выравнивает порог шейдера. У растра без контуров - размытие на клетку.
   if (surface) softenCells(c, ctx, areas ? CONTOUR_SOFTEN_PX : surface.cell / mpp);
@@ -803,7 +834,8 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   const nearRoad = maxFilter(Float32Array.from(road), w, h, gapPx);
   const isLawn = (i: number) =>
     (final[i * 4] ?? 0) >= 128 ||
-    (road[i] === 0 &&
+    (!contourKinds &&
+      road[i] === 0 &&
       (final[i * 4 + 1] ?? 0) < 128 &&
       (nearLawn[i] ?? 0) >= 128 &&
       (nearRoad[i] ?? 0) > 0);
@@ -840,6 +872,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     else if (pv >= 128) kinds[i] = PAVERS;
   }
   absorbScraps(final, kinds, road, w, h, mpp);
+  if (contourKinds) pavingWins(final, kinds, contourKinds, w);
   const cut = new THREE.DataTexture(roadFill, w, h, THREE.RedFormat, THREE.UnsignedByteType);
   cut.magFilter = THREE.LinearFilter;
   cut.minFilter = THREE.LinearFilter;
@@ -947,6 +980,8 @@ export function groundMesh(
     name?: string;
     /** Плоскость проезда под вырезом: на ROAD_DROP_M ниже, только асфальт. */
     road?: boolean;
+    /** Сетка тротуара (paving.ts): материал задан, маска не спрашивается. */
+    cover?: 'pavers' | 'asphalt';
   } = {},
 ): THREE.Mesh {
   const [minX, minZ, maxX, maxZ] = world.bounds;
@@ -990,6 +1025,7 @@ export function groundMesh(
     uAsphaltArm: { value: tex.asphaltArmMap ?? tex.noise },
     uPaversArm: { value: tex.paversArmMap ?? tex.noise },
     uRoad: { value: options.road ? 1 : 0 },
+    uCover: { value: options.cover === 'pavers' ? 1 : options.cover === 'asphalt' ? 2 : 0 },
     uCut: { value: mask.cut },
     // Земля на уровне тротуара вырезает проезжую часть: там видна плоскость проезда ниже.
     uCutRoad: { value: options.cutRoad ? 1 : 0 },
@@ -1034,6 +1070,7 @@ uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
 uniform float uRoad;
+uniform float uCover;
 uniform sampler2D uCut;
 uniform float uCutRoad;
 vec3 groundWeights;
@@ -1102,6 +1139,11 @@ export const GROUND_MAP = /* glsl */ `
     lawn = 0.0;
     paver = 0.0;
   }
+  // Сетка тротуара по контуру части: материал её, а не маски (край маски - лесенка 0,25 м).
+  if (uCover > 0.5) {
+    lawn = 0.0;
+    paver = uCover < 1.5 ? 1.0 : 0.0;
+  }
   float asph = clamp(1.0 - lawn - paver, 0.0, 1.0);
   groundWeights = vec3(lawn, paver, asph);
   // Крупные пятна - шумом в десятки метров, а не фактурой: повтор плитки фактуры сверху
@@ -1154,8 +1196,9 @@ normal = normalize(mat3(viewMatrix) * vec3(scannedNormal.x, scannedNormal.z, sca
 /** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта - дорожный, у проезжей части. */
 export const CURB_W = 0.15;
 export const CURB_H = 0.15;
-/** Верх дорожного борта вровень с тротуаром. */
-export const CURB_ABOVE_WALK_M = 0;
+/** Верх дорожного борта над тротуаром и газоном: вровень он читался плоской ниткой на земле
+ *  (пользователь, 19.10.2026: «бордюры должны быть идеальными, не 2D»). */
+export const CURB_ABOVE_WALK_M = 0.05;
 /** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665, бывает и 10 см): над
  *  газоном выступает на 8-10 см. При 6 см он читался тёмной ниткой на земле, а не камнем
  *  (пользователь, 19.10.2026: «чтобы бордюры были объемные»). */

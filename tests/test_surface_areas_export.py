@@ -357,3 +357,115 @@ def test_playground_inside_a_big_paved_network_gets_rubber(tmp_path: Path) -> No
     kinds = _kinds(tmp_path, features, labels, [])
     assert kinds["special"].intersection(ground).area > 0.9 * ground.area
     assert kinds["special"].intersection(walk).area < 0.01
+
+
+def _areas_with(
+    tmp_path: Path, features: list[Feature], labels: list, basemap_features: list
+) -> dict:
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=tuple(basemap_features),
+        features_in=len(basemap_features),
+        features_out=len(basemap_features),
+        dropped={},
+        bbox=SITE.bounds,
+        labels=tuple(labels),
+    )
+    _surface(tmp_path, replace(surface, paved_area=None, soil_area=None), basemap)
+    return json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+
+
+def test_flowerbed_island_in_a_plaza_stays_soil(tmp_path: Path) -> None:
+    """Харьковская, площадка у дома 1А (пользователь, 19.10.2026: «стёр клумбу»): восьмиугольник
+    «Газон устраиваемый» 27,8 м² посреди плиточной площади, внутри подпись съёмки «Ц» -
+    карта покрытий снимала газон как противоречие. Газон-остров, со всех сторон окружённый
+    покрытием, на показе - грунт; рядом подпись «КЛУМБА» - цветник."""
+    plaza = box(10, 5, 40, 30)
+    bed = Point(25, 17).buffer(3, quad_segs=2)  # восьмиугольник
+    features = [Feature(REF, "plaza", plaza, object_class=ObjectClass.SIDEWALK)]
+    # «КЛУМБА» на Харьковской стоит в 4 м от края восьмиугольника, у выноски.
+    labels = [MaterialLabel(25, 17, "Ц", "paved"), MaterialLabel(32, 19, "КЛУМБА", "soil")]
+    areas = _areas_with(
+        tmp_path,
+        features,
+        labels,
+        [BasemapFeature(ObjectClass.SIDEWALK, plaza), BasemapFeature(ObjectClass.LAWN, bed)],
+    )
+    soil = _union(areas["soil"])
+    paved = _union(areas["paved"])
+    assert soil.intersection(bed).area > 0.9 * bed.area
+    assert paved.intersection(bed).area < 0.05 * bed.area
+    assert _union(areas["flowerbeds"]).intersection(bed).area > 0.9 * bed.area
+
+
+def test_lawn_strip_at_the_plaza_edge_is_not_an_island(tmp_path: Path) -> None:
+    """Полоса газона вдоль края покрытия (старый газон под новым тротуаром) - не остров: решает
+    карта покрытий, как раньше."""
+    plaza = box(10, 5, 40, 30)
+    strip = box(10, 5, 40, 6.5)
+    features = [Feature(REF, "plaza", plaza, object_class=ObjectClass.SIDEWALK)]
+    areas = _areas_with(
+        tmp_path,
+        features,
+        [],
+        [BasemapFeature(ObjectClass.SIDEWALK, plaza), BasemapFeature(ObjectClass.LAWN, strip)],
+    )
+    assert _union(areas["soil"]).intersection(strip).area < 0.1 * strip.area
+
+
+def test_short_zigzag_is_not_rounded_into_a_wave() -> None:
+    """Пила края без линии чертежа (звенья по полметра) скруглением Чайкина становилась волной
+    (пользователь, 19.10.2026: «меня бесит волнистость»). Скругляется только настоящий
+    поворот, где оба звена длиннее ROUND_MIN_SEG_M; короткие звенья остаются отрезками."""
+    teeth = [(x * 0.6, 0.15 if x % 2 else 0.0) for x in range(21)]
+    ring = [*teeth, (12.0, 10.0), (0.0, 10.0), teeth[0]]
+    rounded = _round_turns(ring)
+    assert all(pt in rounded for pt in teeth[1:-1])
+
+
+def test_parking_corner_is_not_chamfered() -> None:
+    """Стоянка у дома 1 корп. 1 на Харьковской - четырёхугольник с углами около 70-110°:
+    срез Чайкина по четверти стороны (до 2,5 м) делал её «не квадратной» (пользователь,
+    19.10.2026). Угол круче ROUND_MAX_TURN_DEG - угол, а не поворот дороги."""
+    lot = [(0.0, 0.0), (10.0, 1.5), (12.0, -12.0), (2.0, -14.0), (0.0, 0.0)]
+    assert _round_turns(lot) == lot
+
+
+def test_road_bend_is_rounded_with_a_short_cut() -> None:
+    """Поворот дороги скругляется, но срез не длиннее ROUND_CUT_M: длинная сторона не съедается."""
+    bend = [(0.0, 0.0), (40.0, 0.0), (60.0, 15.0), (60.0, 40.0), (0.0, 40.0), (0.0, 0.0)]
+    rounded = _round_turns(bend)
+    assert (40.0, 0.0) not in rounded
+    cut = [p for p in rounded if p[1] == 0.0 and 30.0 < p[0] < 40.0]
+    assert cut
+    assert min(p[0] for p in cut) > 38.9
+
+
+def test_flowerbed_label_picks_the_small_island_not_the_big_lawn(tmp_path: Path) -> None:
+    """Харьковская: «КЛУМБА» стоит у края большого газона рядом с круглой площадью; цветником
+    стал весь газон 300 м² вместо клумбы в середине площади. Цветник - малый остров."""
+    plaza = box(10, 5, 34, 30)
+    bed = Point(25, 17).buffer(3, quad_segs=2)
+    lawn = box(35, 5, 50, 25)  # 300 м² за краем площади, весь в дорожках
+    walk = box(34, 5, 35, 30)
+    ring = [walk, box(34, 4, 51, 5), box(50, 4, 51, 26), box(34, 25, 51, 26)]
+    features = [
+        Feature(REF, "plaza", plaza, object_class=ObjectClass.SIDEWALK),
+        *(Feature(REF, "walk", w, object_class=ObjectClass.SIDEWALK) for w in ring),
+    ]
+    labels = [MaterialLabel(25, 17, "Ц", "paved"), MaterialLabel(33, 19, "КЛУМБА", "soil")]
+    areas = _areas_with(
+        tmp_path,
+        features,
+        labels,
+        [
+            BasemapFeature(ObjectClass.SIDEWALK, plaza),
+            *(BasemapFeature(ObjectClass.SIDEWALK, w) for w in ring),
+            BasemapFeature(ObjectClass.LAWN, bed),
+            BasemapFeature(ObjectClass.LAWN, lawn),
+        ],
+    )
+    beds = _union(areas["flowerbeds"])
+    assert beds.intersection(bed).area > 0.9 * bed.area
+    assert beds.intersection(lawn).area < 1

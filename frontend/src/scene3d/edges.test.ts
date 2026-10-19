@@ -8,6 +8,7 @@ import {
   gutterGeometry,
   roadEdges,
   roadEdgesFromMask,
+  sceneRoadEdges,
   type RoadEdge,
 } from './edges';
 import { ribbonBox, type MaskInfo, type SurfaceAreas } from './ground';
@@ -307,5 +308,66 @@ describe('merged main mask and final-wave road edges', () => {
         rect: [0, 0, 10, 10],
       })({ x: 2, z: 5 }, { x: 8, z: 5 }),
     ).toBe(false);
+  });
+});
+
+describe('дорожный борт по контуру проезжей части из surface.json', () => {
+  it('идёт по контуру части road, а не по контуру растровой маски', () => {
+    // Маска думает, что проезд - квадрат 0..20, контур сервиса - прямоугольник 2..18 x 4..16.
+    const mask = {
+      roadContours: [
+        {
+          points: [
+            { x: 0, z: 0 },
+            { x: 20, z: 0 },
+            { x: 20, z: 20 },
+            { x: 0, z: 20 },
+            { x: 0, z: 0 },
+          ],
+        },
+      ],
+      rect: [0, 0, 20, 20],
+      kinds: new Uint8Array(400).fill(GRASS),
+      road: new Uint8Array(400),
+      width: 20,
+      height: 20,
+      metresPerPx: 1,
+    } as unknown as MaskInfo;
+    const areas: SurfaceAreas = {
+      soil: [],
+      paved: [
+        [
+          [
+            [2, -4],
+            [18, -4],
+            [18, -16],
+            [2, -16],
+            [2, -4],
+          ],
+        ],
+      ],
+      paved_kind: ['road'],
+    };
+    const edges = sceneRoadEdges(areas, [0, 0], mask);
+    expect(edges).toHaveLength(1);
+    const xs = edges.flatMap((e) => e.points.map((p) => p.x));
+    const zs = edges.flatMap((e) => e.points.map((p) => p.z));
+    expect(Math.min(...xs)).toBeCloseTo(2);
+    expect(Math.max(...xs)).toBeCloseTo(18);
+    expect(Math.min(...zs)).toBeCloseTo(4);
+    expect(Math.max(...zs)).toBeCloseTo(16);
+  });
+
+  it('без контуров (старые прогоны) - по маске', () => {
+    const mask = {
+      roadContours: [],
+      rect: [0, 0, 20, 20],
+      kinds: new Uint8Array(400).fill(GRASS),
+      road: new Uint8Array(400),
+      width: 20,
+      height: 20,
+      metresPerPx: 1,
+    } as unknown as MaskInfo;
+    expect(sceneRoadEdges(null, [0, 0], mask)).toHaveLength(0);
   });
 });

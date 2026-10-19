@@ -534,6 +534,13 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     if (linework.poles.some((q) => Math.hypot(q.x - site.x, q.z - site.z) < POLE_MERGE_M)) continue;
     linework.poles.push(site);
   }
+  // Оси оград от сервиса - одна линия на ограду вместо двух линий знака и штрихов.
+  const axes = basemap?.fence_axes;
+  if (axes?.length) {
+    linework.fences = axes
+      .filter((line) => line.length > 1 && inBox(line, box))
+      .map((line) => ({ points: line.map(([x, y]) => frame.toFlat(x, y)) }));
+  }
   plants.push(...existingPlants(features, box, frame));
   plants.push(...stripCrowns(linework.treeStrips));
   const buildings = scene
@@ -544,9 +551,16 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   const a = frame.toFlat(box[0], box[3]);
   const b = frame.toFlat(box[2], box[1]);
   plants.push(...stripShrubs(linework.shrubStrips, [a.x, a.z, b.x, b.z]));
+  const flowerbeds = (plan?.lawns ?? [])
+    .filter((lawn) => lawn.kind === 'flowerbed')
+    .flatMap((lawn) => polygons(lawn.geometry))
+    .filter((polygon) => (polygon[0]?.length ?? 0) > 3)
+    .map((polygon) => polygon.map((ring) => flatRing(ring, frame)));
   return {
     origin,
     bounds: [a.x, a.z, b.x, b.z],
+    flowerbeds,
+    fenceAxes: !!axes?.length,
     buildings,
     plants,
     ...linework,

@@ -130,6 +130,71 @@ describe('стены', () => {
   });
 });
 
+describe('физика полёта (пользователь, 19.10.2026: «летать сквозь объекты не могли»)', () => {
+  it('в полёте ниже крыши стена держит, выше крыши - нет', () => {
+    const walls = new Walls([box]);
+    const low = walls.resolve({ x: -2, z: 5 }, { x: 1, z: 5 }, 4);
+    expect(low.x).toBeLessThan(0);
+    expect(walls.resolve({ x: -2, z: 5 }, { x: 1, z: 5 }, 12)).toEqual({ x: 1, z: 5 });
+  });
+
+  it('над домом пол поднимается до крыши: сквозь крышу вниз не провалиться', () => {
+    const walls = new Walls([box]);
+    expect(walls.roofAt({ x: 5, z: 5 })).toBe(10);
+    expect(walls.roofAt({ x: -5, z: 5 })).toBe(0);
+  });
+
+  it('ограды, стволы и машины - тоже препятствия своей высоты', () => {
+    const walls = new Walls([]);
+    walls.addLines(
+      [
+        {
+          points: [
+            { x: 0, z: -10 },
+            { x: 0, z: 10 },
+          ],
+        },
+      ],
+      1.2,
+    );
+    walls.addRings(
+      [
+        [
+          { x: 9.8, z: -0.2 },
+          { x: 10.2, z: -0.2 },
+          { x: 10.2, z: 0.2 },
+          { x: 9.8, z: 0.2 },
+        ],
+      ],
+      3,
+    );
+    expect(walls.resolve({ x: -2, z: 0 }, { x: 1, z: 0 }, 0).x).toBeLessThan(0);
+    expect(walls.resolve({ x: -2, z: 0 }, { x: 1, z: 0 }, 2)).toEqual({ x: 1, z: 0 });
+    expect(walls.resolve({ x: 8, z: 0 }, { x: 12, z: 0 }, 1).x).toBeLessThan(10);
+    expect(walls.roofAt({ x: 10, z: 0 })).toBe(3);
+  });
+
+  it('шаг полёта не уходит сквозь стену и не опускается ниже крыши', () => {
+    const walls = new Walls([box]);
+    const keys = { forward: 0, right: 0, up: -1, fast: false, slow: false, jump: false };
+    let pose = { x: 5, y: 12, z: 5, yaw: 0, pitch: 0 };
+    let motion = { vx: 0, vy: 0, vz: 0, grounded: false };
+    for (let i = 0; i < 100; i++) {
+      ({ pose, motion } = step({
+        pose,
+        motion,
+        keys,
+        mode: 'fly',
+        flySpeed: 14,
+        dt: 0.05,
+        collide: (from, to, y) => walls.resolve(from, to, y),
+        roof: (p) => walls.roofAt(p),
+      }));
+    }
+    expect(pose.y).toBeGreaterThanOrEqual(10);
+  });
+});
+
 describe('прицел', () => {
   const tree = { x: 0, z: -20, height: 10, radius: 3 };
 

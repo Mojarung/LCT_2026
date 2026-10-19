@@ -252,6 +252,8 @@ export interface BasemapJson {
   features: BasemapFeature[];
   counts?: Record<string, unknown>;
   source_conflicts?: SourceConflicts | null;
+  /** Оси оград для 3D: двойная линия знака, штрихи и углы - одной линией [x, y] чертежа. */
+  fence_axes?: [number, number][][];
 }
 
 export interface SurfaceMeta {
@@ -260,5 +262,12 @@ export interface SurfaceMeta {
   width: number;
   height: number;
   /** Контуры грунта и покрытия, которыми закрашен растр: полигон - кольца [x, y] чертежа. */
-  areas?: { soil: number[][][][]; paved: number[][][][] };
+  areas?: {
+    soil: number[][][][];
+    paved: number[][][][];
+    paved_kind?: string[];
+    road_mesh?: number[][][][];
+    /** Клумбы съёмки: газон-остров среди покрытия с подписью «КЛУМБА». */
+    flowerbeds?: number[][][][];
+  };
 }

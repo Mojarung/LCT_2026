@@ -116,10 +116,14 @@ export interface World {
   /** Граница работ. */
   boundary?: Line[];
   fences: Line[];
+  /** Ограды - оси из выгрузки (basemap.fence_axes): склейка и снятие двойных не нужны. */
+  fenceAxes?: boolean;
   poles: Flat[];
   lawns: Ring[][];
   sidewalks: Ring[][];
   roads: Ring[][];
+  /** Цветники плана (GREEN_FLOWERBED): земля с многолетниками. */
+  flowerbeds?: Ring[][];
   /** Откуда взята этажность: число зданий по каждому источнику. */
   floorsBy: Record<FloorsSource, number>;
   /** scene.json не нашёлся: здания только замкнутые, по площади, виды - по жизненной форме. */

@@ -34,13 +34,13 @@ if TYPE_CHECKING:
     from green.domain.objects import Feature, TextLabel
 
 PAVED_LABELS = frozenset({"А", "Ц", "ПЛ", "БР", "Б", "Щ", "ГР", "АСФ", "ПЛИТКА"})
-SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
+SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК", "КЛУМБА"})
 # Подписи-фразы площадок и покрытий: «ДЕТ.ПЛ.», «СПОРТ ПЛ.», «СПЕЦ.ПОКРЫТИЕ», «ПЛИТКА БЕТОННАЯ».
 # Короткие обозначения («А», «Б») фразами не ищутся: «ж.б.» у трубы - не бетонное покрытие.
 PAVED_PHRASE = re.compile(r"ПОКР|^(ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК|АСФАЛЬТ|БРУСЧ|ПЛИТК|ТЕРРАВЕЙ")
 FUNCTIONAL_PHRASE = re.compile(r"^(?:ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК")
 FUNCTIONAL_MAX_AREA_M2 = 3000.0
-SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
+SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК|КЛУМБ")
 # Полигоны, чья середина - известный материал: штриховки газонов, тротуаров, проезжей части.
 SOIL_AREAS = frozenset({ObjectClass.LAWN})
 PAVED_AREAS = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})

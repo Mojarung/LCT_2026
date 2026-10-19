@@ -362,3 +362,95 @@ it('does not drop a shrub axis crossing the scene with both ends outside', () =>
   const [minX, , maxX] = world.bounds;
   expect(shrubs.every((p) => p.x >= minX && p.x <= maxX)).toBe(true);
 });
+
+it('takes plan flowerbeds into the scene in scene coordinates', () => {
+  const plan = {
+    run_id: 'r',
+    source: { name: 'x', sha256: '', dxf_version: '' },
+    summary: {},
+    placements: [],
+    rejections: [],
+    warnings: [],
+    lawns: [
+      {
+        id: 'L1',
+        number: 1,
+        planting_type: 'lawn',
+        kind: 'flowerbed',
+        area_m2: 4,
+        rule_ids: [],
+        notes: [],
+        explanation: '',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [1100, 2100],
+              [1102, 2100],
+              [1102, 2102],
+              [1100, 2102],
+              [1100, 2100],
+            ],
+          ],
+        },
+      },
+      {
+        id: 'L2',
+        number: 2,
+        planting_type: 'lawn',
+        kind: 'kept',
+        area_m2: 100,
+        rule_ids: [],
+        notes: [],
+        explanation: '',
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ],
+  } as unknown as PlanJson;
+  const world = buildWorld({ scene: scene(), plan, basemap: null });
+  expect(world.flowerbeds).toHaveLength(1);
+  const [ox, oy] = world.origin;
+  expect(world.flowerbeds?.[0]?.[0]?.[0]).toEqual({ x: 1100 - ox, z: -(2100 - oy) });
+});
+
+it('takes fence axes from the basemap instead of the raw double lines', () => {
+  const basemap = {
+    type: 'FeatureCollection',
+    bbox: [900, 1900, 1300, 2300],
+    features: [
+      {
+        type: 'Feature',
+        properties: { class: 'fence' },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [1100, 2100.15],
+            [1120, 2100.15],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { class: 'fence' },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [1100, 2099.85],
+            [1120, 2099.85],
+          ],
+        },
+      },
+    ],
+    fence_axes: [
+      [
+        [1100, 2100],
+        [1120, 2100],
+      ],
+    ],
+  } as unknown as BasemapJson;
+  const world = buildWorld({ scene: scene(), plan: null, basemap });
+  expect(world.fences).toHaveLength(1);
+  expect(world.fenceAxes).toBe(true);
+  const [ox, oy] = world.origin;
+  expect(world.fences[0]?.points[0]).toEqual({ x: 1100 - ox, z: -(2100 - oy) });
+});
