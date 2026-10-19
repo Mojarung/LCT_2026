@@ -141,6 +141,8 @@ export interface StreetDetailInput {
   bins: Spot[];
   /** Скамейки нарисованы в съёмке: они не условные (переключатель «добавленные объекты»). */
   benchesDrawn?: boolean;
+  /** Люки - по колодцам съёмки, а не условные по шагу трассы. */
+  manholesDrawn?: boolean;
   /** Высота земли в точке: проезд ниже тротуара на высоту борта. */
   levelAt: (x: number, z: number) => number;
 }
@@ -230,7 +232,10 @@ export function streetDetails(input: StreetDetailInput): THREE.Group {
   }
   // Решётки, мульча, люки и урны в чертеже не нарисованы: они условные, их можно скрыть.
   for (const child of group.children) {
-    if (['tree-grates', 'tree-mulch', 'manholes', 'bins'].includes(child.name)) {
+    if (
+      ['tree-grates', 'tree-mulch', 'bins'].includes(child.name) ||
+      (child.name === 'manholes' && !input.manholesDrawn)
+    ) {
       child.userData.extra = true;
     }
   }

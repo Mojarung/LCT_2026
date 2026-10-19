@@ -563,6 +563,9 @@ export class SceneEngine {
       benches: seated,
       bins,
       benchesDrawn: drawn.length > 0,
+      manholesDrawn: (this.world.utilities ?? []).some(
+        (g) => g.kind === 'utility.access' && g.lines.length > 0,
+      ),
       levelAt: (x, z) => (at(x, z) === 'road' ? -ROAD_DROP_M : 0),
     });
     this.scene.add(group);
