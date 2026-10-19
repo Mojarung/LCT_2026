@@ -153,6 +153,9 @@ export function parkingSpots(
 
 /** Здания для проверки места: внутри контура или ближе WALL_M к стене - нельзя. */
 const WALL_M = 1.6;
+/** Машина не ближе этого к стене дома: у фасада вход, крыльцо и газон за оградой, а машина
+ *  вплотную к ним выглядела брошенной (магазин в доме 1А на Харьковской, 19.10.2026). */
+const EDGE_WALL_M = 6;
 
 class Houses {
   private readonly items: { ring: readonly Flat[]; box: [number, number, number, number] }[];
@@ -206,9 +209,12 @@ class Houses {
     return false;
   }
 
-  blocks(p: Flat): boolean {
+  blocks(p: Flat, wall = WALL_M): boolean {
     for (const { ring, box } of this.items) {
-      if (p.x < box[0] || p.x > box[2] || p.z < box[1] || p.z > box[3]) continue;
+      const pad = wall - WALL_M;
+      if (p.x < box[0] - pad || p.x > box[2] + pad || p.z < box[1] - pad || p.z > box[3] + pad) {
+        continue;
+      }
       let inside = false;
       for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
         const a = ring[i];
@@ -222,7 +228,7 @@ class Houses {
         const len2 = vx * vx + vz * vz;
         const t =
           len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.z - a.z) * vz) / len2)) : 0;
-        if (Math.hypot(a.x + vx * t - p.x, a.z + vz * t - p.z) < WALL_M) return true;
+        if (Math.hypot(a.x + vx * t - p.x, a.z + vz * t - p.z) < wall) return true;
       }
       if (inside) return true;
     }
@@ -263,7 +269,7 @@ function curbSpots(
             const car = { x: px + nx * OFFSET_M, z: pz + nz * OFFSET_M };
             if (hash(car.x, car.z) > OCCUPANCY) continue;
             if (blockers.within(car, 2.2) || cars.within(car, CAR_LENGTH_M + 0.3)) continue;
-            if (houses.blocks(car)) continue;
+            if (houses.blocks(car, EDGE_WALL_M)) continue;
             if (!footprintOnRoad(car.x, car.z, Math.atan2(-tz, tx), asphaltAt)) continue;
             if (houses.crossesFence(car.x, car.z, Math.atan2(-tz, tx))) continue;
             spots.push({
@@ -340,7 +346,7 @@ function edgeSpots(
       const slot = hash(Math.floor(car.x / SLOT_M) * 7.3, Math.floor(car.z / SLOT_M) * 3.1);
       if (slot > OCCUPANCY) continue;
       if (blockers.within(car, 2.2) || cars.within(car, CAR_LENGTH_M + 0.4)) continue;
-      if (houses.blocks(car)) continue;
+      if (houses.blocks(car, EDGE_WALL_M)) continue;
       const angle = Math.atan2(-nx, -ny);
       const onRoad = (qx: number, qz: number) =>
         at(Math.floor((qx - minX) / mpp), Math.floor((qz - minZ) / mpp)) > 0;

@@ -112,3 +112,51 @@ describe('машины и ограды', () => {
     expect(spots).toHaveLength(0);
   });
 });
+
+describe('машины у края асфальта без борта и дома', () => {
+  it('у края без борта машину не ставят ближе EDGE_WALL_M к стене дома (вход в магазин у 1А)', () => {
+    // Проезд 10 м (z 5..15), дом стоит за краем: стена в 3,5 м от края проезда.
+    const mpp = 0.25;
+    const w = 240;
+    const h = 120;
+    const paved = new Uint8Array(w * h);
+    for (let y = 20; y < 60; y++) for (let x = 0; x < w; x++) paved[y * w + x] = 1;
+    const house = [
+      { x: 10, z: -10 },
+      { x: 50, z: -10 },
+      { x: 50, z: 1.5 },
+      { x: 10, z: 1.5 },
+    ];
+    const input = { curbs: [], asphaltAt: () => false, poles: [], plants: [], walls: [house] };
+    const spots = parkingSpots(input, {
+      paved,
+      width: w,
+      height: h,
+      minX: 0,
+      minZ: 0,
+      metresPerPx: mpp,
+    });
+    expect(spots.length).toBeGreaterThan(0);
+    // У дома (x 10..50) на ближнем к нему краю (z около 6) машин нет.
+    expect(spots.filter((s) => s.x > 8 && s.x < 52 && s.z < 10)).toHaveLength(0);
+  });
+});
+
+describe('машины у борта и дом', () => {
+  it('у борта машину не ставят ближе 6 м к стене дома', () => {
+    const house = [
+      { x: 20, z: 3 },
+      { x: 60, z: 3 },
+      { x: 60, z: 20 },
+      { x: 20, z: 20 },
+    ];
+    const spots = parkingSpots({
+      curbs: [curb],
+      asphaltAt: (_x, z) => z > 0 && z < 8,
+      poles: [],
+      plants: [],
+      walls: [house],
+    });
+    expect(spots.filter((s) => s.x > 15 && s.x < 65)).toHaveLength(0);
+  });
+});
