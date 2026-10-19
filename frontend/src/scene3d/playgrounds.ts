@@ -1,12 +1,14 @@
 /* Оборудование детских и спортивных площадок. Чертёж даёт контур резины (part вида special в
  * surface.json) и подписи «ДЕТ.ПЛ.» и «СПОРТ ПЛ.», но не сами качели и ворота: площадка в 3D
- * стояла пустой резиной (пользователь, 19.10.2026: «качели, горку, песочницу и пару скамеек
- * по бокам, как везде»). Набор - типовой: на детской качели, горка, песочница и две скамейки,
- * на спортивной ворота у торцов и турники. Места ищутся внутри контура с запасом от края, от
- * деревьев, опор и друг от друга; не влезло - предмет пропускается. */
-
-import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+ * стояла пустой резиной (пользователь, 19.10.2026). Каталог - типовые московские предметы с
+ * габаритом и свободной зоной вокруг (у качелей - в сторону качания): комплекс с башнями и
+ * горкой, качели, гнездо, карусель, балансир, качалка, песочница; на спортивной ворота,
+ * турники, баскетбольная стойка, теннисный стол. Что ставить, решает площадь: набор идёт по
+ * каталогу от крупного к мелкому, и предмет встаёт, только если он со своей зоной целиком
+ * влез в контур, не задел деревья, опоры и зоны других предметов (пользователь, 19.10.2026:
+ * «дать им размер и по тому, что влезет в площадь площадки, то и ставить»). Место - самое
+ * свободное: дальше всего от края и от уже поставленного. Скамейки - спинкой к ограде,
+ * рядом урна. */
 
 import { mainAxis } from './facades';
 import type { Flat } from './types';
@@ -14,7 +16,21 @@ import type { Flat } from './types';
 type Ring = readonly Flat[];
 
 export type GroundKind = 'kids' | 'sports';
-export type ItemKind = 'swing' | 'slide' | 'sandbox' | 'goal' | 'bars' | 'bench';
+export type ItemKind =
+  | 'complex'
+  | 'slide'
+  | 'swing'
+  | 'nest'
+  | 'carousel'
+  | 'seesaw'
+  | 'rocker'
+  | 'sandbox'
+  | 'goal'
+  | 'bars'
+  | 'hoop'
+  | 'table'
+  | 'bench'
+  | 'bin';
 
 export interface GroundLabel {
   x: number;
@@ -26,6 +42,8 @@ export interface Ground {
   rings: Ring[];
   kind: GroundKind;
   anchor: Flat;
+  /** Номер части резины: подписи на одной части делят её между собой. */
+  part: number;
 }
 
 export interface Item {
@@ -36,22 +54,103 @@ export interface Item {
   angle: number;
 }
 
-/** Габарит предмета в плане (вдоль, поперёк) и свободная зона вокруг, м. */
-const FOOT: Record<ItemKind, { len: number; wid: number; clear: number; height: number }> = {
-  swing: { len: 3.2, wid: 1.8, clear: 1.2, height: 2.3 },
-  slide: { len: 4.0, wid: 1.2, clear: 0.8, height: 2.6 },
-  sandbox: { len: 2.0, wid: 2.0, clear: 0.6, height: 0.3 },
-  goal: { len: 3.0, wid: 1.0, clear: 0.6, height: 2.0 },
-  bars: { len: 2.6, wid: 0.6, clear: 0.8, height: 2.3 },
-  bench: { len: 1.8, wid: 0.6, clear: 0.2, height: 0.9 },
+/** Занятое место: прямоугольник предмета с его свободной зоной. */
+export interface Zone {
+  x: number;
+  z: number;
+  angle: number;
+  hu: number;
+  hv: number;
+}
+
+/** Препятствие кругом: ствол с лункой, опора, нарисованная скамейка. */
+export interface Obstacle {
+  x: number;
+  z: number;
+  r: number;
+}
+
+interface Spec {
+  /** Габарит в плане вдоль оси модели x и поперёк, м; высота - для твёрдой камеры. */
+  len: number;
+  wid: number;
+  height: number;
+  /** Свободная зона за габаритом вдоль и поперёк, м: в ней не стоит другое оборудование. */
+  zoneU: number;
+  zoneV: number;
+  /** Габарит не ближе этого к краю контура, м. */
+  edge: number;
+  /** Круглый предмет: поворот не важен. */
+  round?: boolean;
+}
+
+export const SPECS: Record<ItemKind, Spec> = {
+  complex: { len: 7.0, wid: 5.0, height: 3.4, zoneU: 1.5, zoneV: 1.5, edge: 0.4 },
+  slide: { len: 4.4, wid: 1.3, height: 2.7, zoneU: 1.5, zoneV: 1.0, edge: 0.4 },
+  swing: { len: 3.4, wid: 1.9, height: 2.4, zoneU: 0.5, zoneV: 1.8, edge: 0.4 },
+  nest: { len: 2.8, wid: 1.9, height: 2.3, zoneU: 0.5, zoneV: 1.6, edge: 0.4 },
+  carousel: { len: 1.7, wid: 1.7, height: 1.0, zoneU: 1.5, zoneV: 1.5, edge: 0.4, round: true },
+  seesaw: { len: 3.0, wid: 0.6, height: 0.9, zoneU: 1.0, zoneV: 1.0, edge: 0.4 },
+  rocker: { len: 1.0, wid: 0.45, height: 0.9, zoneU: 0.8, zoneV: 0.8, edge: 0.4 },
+  sandbox: { len: 2.0, wid: 2.0, height: 0.3, zoneU: 0.6, zoneV: 0.6, edge: 0.4 },
+  goal: { len: 3.0, wid: 1.0, height: 2.0, zoneU: 0.3, zoneV: 0.3, edge: 0.3 },
+  bars: { len: 2.6, wid: 0.6, height: 2.3, zoneU: 1.0, zoneV: 1.0, edge: 0.4 },
+  hoop: { len: 1.2, wid: 1.4, height: 3.4, zoneU: 0.5, zoneV: 0.5, edge: 0.3 },
+  table: { len: 2.74, wid: 1.53, height: 0.76, zoneU: 1.5, zoneV: 1.0, edge: 0.4 },
+  bench: { len: 1.8, wid: 0.6, height: 0.9, zoneU: 0.1, zoneV: 0.4, edge: 0.15 },
+  bin: { len: 0.45, wid: 0.45, height: 0.8, zoneU: 0.05, zoneV: 0.05, edge: 0.1, round: true },
 };
-/** Предмет не ближе этого к краю контура площадки, м. */
-const EDGE_M = 0.5;
-const GRID_M = 0.5;
+
+/** Набор детской площадки по порядку: крупное раньше, со своей наименьшей площадью, м².
+ *  Горка - если комплекс не встал. */
+const KIDS: { kind: ItemKind; minArea: number }[] = [
+  { kind: 'complex', minArea: 150 },
+  { kind: 'slide', minArea: 0 },
+  { kind: 'swing', minArea: 40 },
+  { kind: 'carousel', minArea: 100 },
+  { kind: 'seesaw', minArea: 70 },
+  { kind: 'sandbox', minArea: 0 },
+  { kind: 'nest', minArea: 220 },
+  { kind: 'rocker', minArea: 120 },
+  { kind: 'swing', minArea: 380 },
+  { kind: 'rocker', minArea: 260 },
+];
+/** Спортивная без поля: стол, турники, стойка. */
+const SPORTS: { kind: ItemKind; minArea: number }[] = [
+  { kind: 'table', minArea: 60 },
+  { kind: 'bars', minArea: 0 },
+  { kind: 'hoop', minArea: 80 },
+  { kind: 'bars', minArea: 160 },
+  { kind: 'table', minArea: 240 },
+];
+/** Ценность предмета для выбора между расстановками: крупное и игровое дороже. */
+const VALUE: Record<ItemKind, number> = {
+  complex: 5,
+  slide: 3,
+  swing: 3,
+  nest: 2,
+  carousel: 2,
+  seesaw: 2,
+  sandbox: 2,
+  rocker: 1,
+  goal: 3,
+  bars: 2,
+  hoop: 2,
+  table: 2,
+  bench: 0,
+  bin: 0,
+};
+/** Поле с воротами - на площадке не короче и не уже этого, м. */
+const FIELD_LENGTH_M = 14;
+const FIELD_WIDTH_M = 7;
 /** Подпись площадки дальше этого от контура резины - не этой площадки, м. */
 const LABEL_REACH_M = 1.0;
 /** Две подписи одного вида ближе этого - одна площадка, м. */
 const SAME_GROUND_M = 8.0;
+/** Точек-кандидатов на площадку не больше этого: шаг сетки растёт с площадью. */
+const MAX_CANDIDATES = 1500;
+/** Шаг проверки стороны зоны на вхождение в контур, м. */
+const SAMPLE_M = 1.0;
 
 export function groundKind(text: string): GroundKind | null {
   const t = text.trim().toUpperCase();
@@ -63,7 +162,7 @@ export function groundKind(text: string): GroundKind | null {
 /** Площадки: контур резины и подписи на нём. Подпись каждого вида даёт свой набор. */
 export function groundsOf(parts: readonly Ring[][], labels: readonly GroundLabel[]): Ground[] {
   const out: Ground[] = [];
-  for (const rings of parts) {
+  parts.forEach((rings, part) => {
     const own: GroundLabel[] = [];
     for (const label of labels) {
       if (distanceToArea(rings, label) > LABEL_REACH_M) continue;
@@ -72,359 +171,360 @@ export function groundsOf(parts: readonly Ring[][], labels: readonly GroundLabel
       );
       if (!twin) own.push(label);
     }
-    for (const label of own) out.push({ rings: [...rings], kind: label.kind, anchor: label });
-  }
+    for (const label of own) out.push({ rings: [...rings], kind: label.kind, anchor: label, part });
+  });
   return out;
 }
 
-interface Placed {
-  x: number;
-  z: number;
-  r: number;
+interface Spot extends Flat {
+  /** Расстояние до края контура, м. */
+  edge: number;
 }
 
-/** Расстановка набора площадки. avoid - деревья, опоры, нарисованные скамейки (центр и
- *  радиус), taken - уже поставленное на других наборах той же резины. */
-export function furnish(
-  ground: Ground,
-  avoid: readonly Placed[],
-  taken: Placed[] = [],
-  withBenches = true,
-): Item[] {
+interface Options {
+  /** Уже занятое на этой части резины другими наборами. */
+  taken?: Zone[];
+  /** Скамейки ставить: нарисованные в съёмке уже стоят - своих не нужно. */
+  benches?: boolean;
+  /** Подписи других площадок той же части: каждой достаётся ближняя к ней доля резины. */
+  rivals?: readonly Flat[];
+}
+
+/** Расстановка набора площадки по каталогу: что влезло, то и встало. */
+export function furnish(ground: Ground, avoid: readonly Obstacle[], options: Options = {}): Item[] {
   const outer = ground.rings[0];
   if (!outer || outer.length < 3) return [];
+  const taken = options.taken ?? [];
+  const rivals = options.rivals ?? [];
   const axis = mainAxis([...outer]);
-  const along = { x: axis.dx, z: axis.dz };
-  const across = { x: -axis.dz, z: axis.dx };
-  const yaw = Math.atan2(-along.z, along.x);
-  const center = { x: axis.cx, z: axis.cz };
-  // Набор строится вокруг подписи, но не дальше середины контура, чем на треть длины.
-  const reach = axis.length / 3;
-  const du = (ground.anchor.x - center.x) * along.x + (ground.anchor.z - center.z) * along.z;
-  const origin = {
-    x: center.x + along.x * Math.max(-reach, Math.min(reach, du)),
-    z: center.z + along.z * Math.max(-reach, Math.min(reach, du)),
-  };
-  const at = (base: Flat, u: number, v: number): Flat => ({
-    x: base.x + along.x * u + across.x * v,
-    z: base.z + along.z * u + across.z * v,
-  });
-  const wishes: { kind: ItemKind; p: Flat; angle: number }[] = [];
-  const step = Math.min(4.5, axis.length / 3);
-  if (ground.kind === 'kids') {
-    wishes.push({ kind: 'slide', p: origin, angle: yaw });
-    wishes.push({ kind: 'swing', p: at(origin, step, 0), angle: yaw });
-    wishes.push({ kind: 'sandbox', p: at(origin, -step, 0), angle: yaw });
-  } else {
-    const end = axis.length / 2 - FOOT.goal.wid - EDGE_M;
-    if (axis.length >= 14) {
-      // Ворота у торцов, лицом в поле: ось x ворот поперёк длины площадки.
-      wishes.push({ kind: 'goal', p: at(center, end, 0), angle: yaw - Math.PI / 2 });
-      wishes.push({ kind: 'goal', p: at(center, -end, 0), angle: yaw + Math.PI / 2 });
-    }
-    wishes.push({ kind: 'bars', p: at(center, 0, axis.width / 2 - 1.5), angle: yaw });
-  }
-  if (withBenches) {
-    // Скамейки по длинным сторонам, сиденьем к середине площадки.
-    for (const side of [1, -1]) {
-      const p = at(center, 0, side * (axis.width / 2 - FOOT.bench.wid));
-      const angle = Math.atan2(-side * across.x, -side * across.z);
-      wishes.push({ kind: 'bench', p, angle: angle });
-    }
-  }
-  const candidates = gridInside(ground.rings, GRID_M);
+  const yaw = Math.atan2(-axis.dz, axis.dx);
+  const step = Math.max(0.5, Math.sqrt(Math.abs(ringArea(outer)) / MAX_CANDIDATES));
+  const own = (p: Flat) =>
+    rivals.every(
+      (r) =>
+        Math.hypot(p.x - ground.anchor.x, p.z - ground.anchor.z) <=
+        Math.hypot(p.x - r.x, p.z - r.z),
+    );
+  const spots = gridInside(ground.rings, step).filter(own);
+  const area = spots.length * step * step;
+  const xs = spots.map((s) => s.x);
+  const zs = spots.map((s) => s.z);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  // Препятствие дальше своего радиуса за контуром зону не заденет: зоны лежат в контуре.
+  const near = avoid.filter(
+    (o) =>
+      o.x > x0 - o.r - 1 &&
+      o.x < x1 + o.r + 1 &&
+      o.z > z0 - o.r - 1 &&
+      o.z < z1 + o.r + 1 &&
+      distanceToArea(ground.rings, o) < o.r,
+  );
   const items: Item[] = [];
-  for (const wish of wishes) {
-    const foot = FOOT[wish.kind];
-    const r = Math.hypot(foot.len, foot.wid) / 2 + foot.clear;
-    const ordered = [...candidates].sort(
-      (a, b) =>
-        Math.hypot(a.x - wish.p.x, a.z - wish.p.z) - Math.hypot(b.x - wish.p.x, b.z - wish.p.z),
-    );
-    const spot = ordered.find(
-      (p) =>
-        fits(ground.rings, p, wish.angle, foot) &&
-        [...avoid, ...taken].every((o) => Math.hypot(o.x - p.x, o.z - p.z) >= o.r + r),
-    );
-    if (!spot) continue;
-    items.push({ kind: wish.kind, x: spot.x, z: spot.z, angle: wish.angle });
-    taken.push({ x: spot.x, z: spot.z, r });
+  const place = (kind: ItemKind, spot: Flat, angle: number) => {
+    items.push({ kind, x: spot.x, z: spot.z, angle });
+    taken.push(zoneOf(kind, spot, angle));
+  };
+  const angles = (kind: ItemKind) => (SPECS[kind].round ? [yaw] : [yaw, yaw + Math.PI / 2]);
+  /** Место предмета. spread - самое свободное: дальше всего от края и от поставленного;
+   *  иначе плотно: у края и рядом с поставленным, чтобы в середине осталось место. */
+  const best = (kind: ItemKind, zones: readonly Zone[], spread: boolean) => {
+    let pick: { spot: Spot; angle: number; score: number } | null = null;
+    for (const spot of spots) {
+      for (const angle of angles(kind)) {
+        if (!fits(ground.rings, kind, spot, angle, zones, near)) continue;
+        const gaps = zones.map(
+          (z) => Math.hypot(z.x - spot.x, z.z - spot.z) - Math.max(z.hu, z.hv),
+        );
+        const score = spread
+          ? Math.min(spot.edge, ...gaps)
+          : -spot.edge - 0.2 * Math.min(10, ...gaps);
+        if (!pick || score > pick.score) pick = { spot, angle, score };
+      }
+    }
+    return pick;
+  };
+  let field = false;
+  if (ground.kind === 'sports' && axis.length >= FIELD_LENGTH_M && axis.width >= FIELD_WIDTH_M) {
+    // Ворота у торцов лицом в поле: ось x ворот поперёк длины площадки.
+    const along = { x: axis.dx, z: axis.dz };
+    const end = axis.length / 2 - 1.0;
+    for (const side of [1, -1]) {
+      const p = { x: axis.cx + along.x * side * end, z: axis.cz + along.z * side * end };
+      const angle = yaw + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+      const spot = spots
+        .filter((s) => Math.hypot(s.x - p.x, s.z - p.z) < 1.5)
+        .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))
+        .find((s) => fits(ground.rings, 'goal', s, angle, taken, near));
+      if (spot) {
+        place('goal', spot, angle);
+        field = true;
+      }
+    }
+    if (field) {
+      // Поле между воротами свободно: остальное - по краям.
+      taken.push({
+        x: axis.cx,
+        z: axis.cz,
+        angle: yaw,
+        hu: axis.length / 2 - SPECS.goal.wid,
+        hv: Math.min(axis.width / 2 - 2.5, 7.5),
+      });
+    }
+  }
+  const list = (ground.kind === 'kids' ? KIDS : SPORTS).filter(
+    ({ kind, minArea }) => area >= minArea && !(field && kind === 'hoop'),
+  );
+  // Набор пробуется двумя расстановками: вольной и плотной; берётся та, где встало больше.
+  const trial = (spread: boolean): Item[] => {
+    const zones = [...taken];
+    const got: Item[] = [];
+    for (const { kind } of list) {
+      if (kind === 'slide' && got.some((i) => i.kind === 'complex')) continue;
+      const pick = best(kind, zones, spread);
+      if (!pick) continue;
+      got.push({ kind, x: pick.spot.x, z: pick.spot.z, angle: pick.angle });
+      zones.push(zoneOf(kind, pick.spot, pick.angle));
+    }
+    return got;
+  };
+  const worth = (set: Item[]) => set.reduce((sum, i) => sum + VALUE[i.kind], 0);
+  const spread = trial(true);
+  const packed = trial(false);
+  for (const item of worth(packed) > worth(spread) ? packed : spread) {
+    place(item.kind, item, item.angle);
+  }
+  if (options.benches ?? true) {
+    const center = { x: axis.cx, z: axis.cz };
+    addBenches(ground, spots, area, center, { taken, near }, place);
   }
   return items;
 }
 
-function gridInside(rings: readonly Ring[], step: number): Flat[] {
+/** Скамейки спинкой к краю площадки, сиденьем внутрь, разнесённые друг от друга; у каждой
+ *  урна, если влезла. */
+function addBenches(
+  ground: Ground,
+  spots: readonly Spot[],
+  area: number,
+  center: Flat,
+  { taken, near }: { taken: Zone[]; near: readonly Obstacle[] },
+  place: (kind: ItemKind, spot: Flat, angle: number) => void,
+): void {
+  const count = area < 60 ? 1 : area < 200 ? 2 : area < 450 ? 3 : 4;
+  const spec = SPECS.bench;
+  const rim = spots.filter(
+    (s) => s.edge >= spec.wid / 2 + spec.edge && s.edge <= spec.wid / 2 + spec.edge + 0.6,
+  );
+  const benches: Flat[] = [];
+  for (let k = 0; k < count; k++) {
+    let pick: { spot: Spot; angle: number; score: number } | null = null;
+    for (const spot of rim) {
+      // Сиденье смотрит от ближайшей стороны внутрь: +z модели - по нормали внутрь.
+      const inward = inwardNormal(ground.rings, spot);
+      const angle = Math.atan2(inward.x, inward.z);
+      if (!fits(ground.rings, 'bench', spot, angle, taken, near)) continue;
+      // Первая - у середины длинной стороны, следующие - подальше от уже стоящих.
+      const score =
+        Math.min(30, ...benches.map((b) => Math.hypot(b.x - spot.x, b.z - spot.z))) -
+        0.3 * Math.hypot(spot.x - center.x, spot.z - center.z);
+      if (!pick || score > pick.score) pick = { spot, angle, score };
+    }
+    if (!pick) break;
+    place('bench', pick.spot, pick.angle);
+    benches.push(pick.spot);
+    const c = Math.cos(pick.angle);
+    const s = Math.sin(pick.angle);
+    for (const side of [1, -1]) {
+      const off = side * (spec.len / 2 + 0.4);
+      const p = { x: pick.spot.x + off * c, z: pick.spot.z - off * s };
+      const bin: Spot = { ...p, edge: edgeDistance(ground.rings, p) };
+      if (fits(ground.rings, 'bin', bin, pick.angle, taken, near)) {
+        place('bin', bin, pick.angle);
+        break;
+      }
+    }
+  }
+}
+
+/** Нормаль внутрь контура у точки: к точке от ближайшей точки края. */
+function inwardNormal(rings: readonly Ring[], p: Flat): Flat {
+  let best = Infinity;
+  let foot: Flat = p;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[j] as Flat;
+      const b = ring[i] as Flat;
+      const q = closest(p, a, b);
+      const d = Math.hypot(p.x - q.x, p.z - q.z);
+      if (d < best) {
+        best = d;
+        foot = q;
+      }
+    }
+  }
+  const len = Math.hypot(p.x - foot.x, p.z - foot.z) || 1;
+  return { x: (p.x - foot.x) / len, z: (p.z - foot.z) / len };
+}
+
+function zoneOf(kind: ItemKind, p: Flat, angle: number): Zone {
+  const spec = SPECS[kind];
+  return {
+    x: p.x,
+    z: p.z,
+    angle,
+    hu: spec.len / 2 + spec.zoneU,
+    hv: spec.wid / 2 + spec.zoneV,
+  };
+}
+
+/** Предмет встаёт: зона целиком в контуре, габарит с запасом от края, зона не задевает чужие
+ *  зоны и препятствия. */
+function fits(
+  rings: readonly Ring[],
+  kind: ItemKind,
+  spot: Spot,
+  angle: number,
+  taken: readonly Zone[],
+  avoid: readonly Obstacle[],
+): boolean {
+  const spec = SPECS[kind];
+  const zone = zoneOf(kind, spot, angle);
+  const body = { hu: spec.len / 2 + spec.edge, hv: spec.wid / 2 + spec.edge };
+  const reach = Math.max(Math.hypot(zone.hu, zone.hv), Math.hypot(body.hu, body.hv));
+  if (spot.edge < Math.min(body.hu, body.hv)) return false;
+  for (const other of taken) if (rectsOverlap(zone, other)) return false;
+  for (const o of avoid) if (circleInRect(o, zone)) return false;
+  // Круг вокруг точки целиком в контуре - прямоугольник тоже.
+  if (spot.edge >= reach) return true;
+  for (const half of [zone, { ...zone, ...body }]) {
+    for (const q of rectSamples(spot, angle, half.hu, half.hv)) {
+      if (distanceToArea(rings, q) > 0) return false;
+    }
+  }
+  for (const q of rectSamples(spot, angle, spec.len / 2, spec.wid / 2)) {
+    if (edgeDistance(rings, q) < spec.edge) return false;
+  }
+  return true;
+}
+
+/** Точки по периметру прямоугольника не реже SAMPLE_M: вогнутый угол контура не проскочит. */
+function rectSamples(c: Flat, angle: number, hu: number, hv: number): Flat[] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const at = (u: number, v: number): Flat => ({
+    x: c.x + u * cos + v * sin,
+    z: c.z - u * sin + v * cos,
+  });
+  const out: Flat[] = [];
+  const nu = Math.max(1, Math.ceil((2 * hu) / SAMPLE_M));
+  const nv = Math.max(1, Math.ceil((2 * hv) / SAMPLE_M));
+  for (let i = 0; i <= nu; i++) {
+    const u = -hu + (2 * hu * i) / nu;
+    out.push(at(u, -hv), at(u, hv));
+  }
+  for (let i = 1; i < nv; i++) {
+    const v = -hv + (2 * hv * i) / nv;
+    out.push(at(-hu, v), at(hu, v));
+  }
+  return out;
+}
+
+function corners(z: Zone): Flat[] {
+  const cos = Math.cos(z.angle);
+  const sin = Math.sin(z.angle);
+  return (
+    [
+      [-z.hu, -z.hv],
+      [z.hu, -z.hv],
+      [z.hu, z.hv],
+      [-z.hu, z.hv],
+    ] as const
+  ).map(([u, v]) => ({ x: z.x + u * cos + v * sin, z: z.z - u * sin + v * cos }));
+}
+
+/** Пересечение повёрнутых прямоугольников по разделяющим осям. */
+export function rectsOverlap(a: Zone, b: Zone): boolean {
+  const ca = corners(a);
+  const cb = corners(b);
+  for (const angle of [a.angle, b.angle]) {
+    for (const axis of [
+      { x: Math.cos(angle), z: -Math.sin(angle) },
+      { x: Math.sin(angle), z: Math.cos(angle) },
+    ]) {
+      const pa = ca.map((p) => p.x * axis.x + p.z * axis.z);
+      const pb = cb.map((p) => p.x * axis.x + p.z * axis.z);
+      if (Math.max(...pa) <= Math.min(...pb) || Math.max(...pb) <= Math.min(...pa)) return false;
+    }
+  }
+  return true;
+}
+
+function circleInRect(o: Obstacle, z: Zone): boolean {
+  const dx = o.x - z.x;
+  const dz = o.z - z.z;
+  const cos = Math.cos(z.angle);
+  const sin = Math.sin(z.angle);
+  const u = dx * cos - dz * sin;
+  const v = dx * sin + dz * cos;
+  const cu = Math.max(-z.hu, Math.min(z.hu, u));
+  const cv = Math.max(-z.hv, Math.min(z.hv, v));
+  return Math.hypot(u - cu, v - cv) < o.r;
+}
+
+function gridInside(rings: readonly Ring[], step: number): Spot[] {
   const outer = rings[0] ?? [];
   const xs = outer.map((p) => p.x);
   const zs = outer.map((p) => p.z);
-  const out: Flat[] = [];
-  for (let x = Math.min(...xs); x <= Math.max(...xs); x += step) {
-    for (let z = Math.min(...zs); z <= Math.max(...zs); z += step) {
-      if (distanceToArea(rings, { x, z }) === 0) out.push({ x, z });
+  const out: Spot[] = [];
+  for (let x = Math.min(...xs) + step / 2; x <= Math.max(...xs); x += step) {
+    for (let z = Math.min(...zs) + step / 2; z <= Math.max(...zs); z += step) {
+      if (distanceToArea(rings, { x, z }) > 0) continue;
+      out.push({ x, z, edge: edgeDistance(rings, { x, z }) });
     }
   }
   return out;
 }
 
-/** Прямоугольник предмета с запасом от края целиком в контуре. */
-function fits(
-  rings: readonly Ring[],
-  p: Flat,
-  angle: number,
-  foot: { len: number; wid: number },
-): boolean {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const hl = foot.len / 2;
-  const hw = foot.wid / 2;
-  for (const [u, v] of [
-    [-hl, -hw],
-    [hl, -hw],
-    [hl, hw],
-    [-hl, hw],
-    [0, -hw],
-    [0, hw],
-    [-hl, 0],
-    [hl, 0],
-  ] as const) {
-    // Поворот вокруг вертикали как у three.js: x' = x cos + z sin, z' = -x sin + z cos.
-    const q = { x: p.x + u * c + v * s, z: p.z - u * s + v * c };
-    if (distanceToArea(rings, q) > 0) return false;
-    if (edgeDistance(rings, q) < EDGE_M) return false;
-  }
-  return true;
-}
-
 function edgeDistance(rings: readonly Ring[], p: Flat): number {
-  let best = Infinity;
+  let edge = Infinity;
   for (const ring of rings) {
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const a = ring[j] as Flat;
-      const b = ring[i] as Flat;
-      const vx = b.x - a.x;
-      const vz = b.z - a.z;
-      const len2 = vx * vx + vz * vz;
-      const t =
-        len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.z - a.z) * vz) / len2)) : 0;
-      best = Math.min(best, Math.hypot(p.x - (a.x + vx * t), p.z - (a.z + vz * t)));
+      const q = closest(p, ring[j] as Flat, ring[i] as Flat);
+      edge = Math.min(edge, Math.hypot(p.x - q.x, p.z - q.z));
     }
   }
-  return best;
+  return edge;
+}
+
+function closest(p: Flat, a: Flat, b: Flat): Flat {
+  const vx = b.x - a.x;
+  const vz = b.z - a.z;
+  const len2 = vx * vx + vz * vz;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.z - a.z) * vz) / len2)) : 0;
+  return { x: a.x + vx * t, z: a.z + vz * t };
+}
+
+function ringArea(ring: Ring): number {
+  let s = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[j] as Flat;
+    const b = ring[i] as Flat;
+    s += a.x * b.z - b.x * a.z;
+  }
+  return s / 2;
 }
 
 /** Контур предмета в плане для твёрдой камеры: прямоугольник и высота. */
 export function itemFootprint(item: Item): { ring: Flat[]; height: number } {
-  const foot = FOOT[item.kind];
-  const c = Math.cos(item.angle);
-  const s = Math.sin(item.angle);
-  const hl = foot.len / 2;
-  const hw = foot.wid / 2;
-  const ring = (
-    [
-      [-hl, -hw],
-      [hl, -hw],
-      [hl, hw],
-      [-hl, hw],
-    ] as const
-  ).map(([u, v]) => ({ x: item.x + u * c + v * s, z: item.z - u * s + v * c }));
-  return { ring, height: foot.height };
-}
-
-// --- Модели -------------------------------------------------------------------------------
-
-type Paint = 'blue' | 'red' | 'yellow' | 'steel' | 'wood' | 'sand' | 'white' | 'rubber';
-
-const PAINTS: Record<Paint, { color: number; roughness: number; metalness: number }> = {
-  blue: { color: 0x2f6fb5, roughness: 0.5, metalness: 0.2 },
-  red: { color: 0xc6372d, roughness: 0.5, metalness: 0.2 },
-  yellow: { color: 0xf0b62c, roughness: 0.5, metalness: 0.1 },
-  steel: { color: 0x8c949b, roughness: 0.35, metalness: 0.8 },
-  wood: { color: 0xa9784a, roughness: 0.8, metalness: 0 },
-  sand: { color: 0xe3cf9c, roughness: 1, metalness: 0 },
-  white: { color: 0xf2f2ee, roughness: 0.4, metalness: 0.3 },
-  rubber: { color: 0x1d1f22, roughness: 0.9, metalness: 0 },
-};
-
-function tube(a: THREE.Vector3, b: THREE.Vector3, r: number): THREE.BufferGeometry {
-  const len = a.distanceTo(b);
-  const g = new THREE.CylinderGeometry(r, r, len, 8);
-  const mid = a.clone().add(b).multiplyScalar(0.5);
-  const dir = b.clone().sub(a).normalize();
-  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
-  g.translate(mid.x, mid.y, mid.z);
-  return g;
-}
-
-function block(
-  w: number,
-  h: number,
-  d: number,
-  x: number,
-  y: number,
-  z: number,
-): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(w, h, d);
-  g.translate(x, y, z);
-  return g;
-}
-
-const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-
-/** Модель предмета: куски по краскам, в осях модели (x - вдоль, y - вверх). */
-function model(kind: ItemKind): Partial<Record<Paint, THREE.BufferGeometry[]>> {
-  switch (kind) {
-    case 'swing': {
-      const frame = [tube(v(-1.5, 2.2, 0), v(1.5, 2.2, 0), 0.05)];
-      for (const x of [-1.5, 1.5]) {
-        frame.push(
-          tube(v(x, 2.2, 0), v(x, 0, 0.85), 0.045),
-          tube(v(x, 2.2, 0), v(x, 0, -0.85), 0.045),
-        );
-      }
-      const chains: THREE.BufferGeometry[] = [];
-      const seats: THREE.BufferGeometry[] = [];
-      for (const x of [-0.65, 0.65]) {
-        chains.push(tube(v(x - 0.22, 2.2, 0), v(x - 0.22, 0.47, 0), 0.008));
-        chains.push(tube(v(x + 0.22, 2.2, 0), v(x + 0.22, 0.47, 0), 0.008));
-        seats.push(block(0.5, 0.04, 0.2, x, 0.45, 0));
-      }
-      return { blue: frame, steel: chains, rubber: seats };
-    }
-    case 'slide': {
-      // Площадка с крышей на четырёх стойках, лесенка сзади, скат вперёд по +x.
-      const posts: THREE.BufferGeometry[] = [];
-      for (const [x, z] of [
-        [-1.6, -0.5],
-        [-0.6, -0.5],
-        [-1.6, 0.5],
-        [-0.6, 0.5],
-      ] as const) {
-        posts.push(tube(v(x, 0, z), v(x, 2.2, z), 0.05));
-      }
-      const deck = [block(1.0, 0.08, 1.0, -1.1, 1.2, 0)];
-      const rails = [
-        block(1.0, 0.05, 0.04, -1.1, 1.75, -0.5),
-        block(1.0, 0.05, 0.04, -1.1, 1.75, 0.5),
-      ];
-      const roof = new THREE.ConeGeometry(0.85, 0.5, 4);
-      roof.rotateY(Math.PI / 4);
-      roof.translate(-1.1, 2.45, 0);
-      const ladder: THREE.BufferGeometry[] = [
-        tube(v(-1.6, 1.2, -0.25), v(-2.0, 0, -0.25), 0.03),
-        tube(v(-1.6, 1.2, 0.25), v(-2.0, 0, 0.25), 0.03),
-      ];
-      for (let k = 1; k <= 4; k++) {
-        const t = k / 5;
-        ladder.push(
-          tube(
-            v(-1.6 - 0.4 * t, 1.2 - 1.2 * t, -0.25),
-            v(-1.6 - 0.4 * t, 1.2 - 1.2 * t, 0.25),
-            0.02,
-          ),
-        );
-      }
-      const chute = new THREE.BoxGeometry(2.6, 0.04, 0.5);
-      const sides = [
-        new THREE.BoxGeometry(2.6, 0.18, 0.04),
-        new THREE.BoxGeometry(2.6, 0.18, 0.04),
-      ];
-      const tilt = -Math.atan2(1.05, 2.4);
-      chute.rotateZ(tilt);
-      chute.translate(0.6, 0.68, 0);
-      sides.forEach((g, i) => {
-        g.rotateZ(tilt);
-        g.translate(0.6, 0.76, i ? 0.25 : -0.25);
-      });
-      return {
-        steel: [...posts, ...ladder],
-        wood: deck,
-        blue: rails,
-        red: [roof],
-        yellow: [chute, ...sides],
-      };
-    }
-    case 'sandbox': {
-      const boards = [
-        block(2.0, 0.25, 0.12, 0, 0.125, -0.94),
-        block(2.0, 0.25, 0.12, 0, 0.125, 0.94),
-        block(0.12, 0.25, 1.76, -0.94, 0.125, 0),
-        block(0.12, 0.25, 1.76, 0.94, 0.125, 0),
-      ];
-      return { wood: boards, sand: [block(1.76, 0.1, 1.76, 0, 0.12, 0)] };
-    }
-    case 'goal': {
-      const frame = [
-        tube(v(-1.5, 0, 0), v(-1.5, 2.0, 0), 0.04),
-        tube(v(1.5, 0, 0), v(1.5, 2.0, 0), 0.04),
-        tube(v(-1.5, 2.0, 0), v(1.5, 2.0, 0), 0.04),
-        tube(v(-1.5, 2.0, 0), v(-1.5, 0, -0.9), 0.025),
-        tube(v(1.5, 2.0, 0), v(1.5, 0, -0.9), 0.025),
-        tube(v(-1.5, 0, -0.9), v(1.5, 0, -0.9), 0.025),
-      ];
-      return { white: frame };
-    }
-    case 'bars': {
-      const posts = [-1.2, -0.4, 0.4, 1.2].map((x, i) =>
-        tube(v(x, 0, 0), v(x, [1.7, 2.3, 2.3, 2.0][i] ?? 2, 0), 0.05),
-      );
-      const bars = [
-        tube(v(-1.2, 1.65, 0), v(-0.4, 1.65, 0), 0.02),
-        tube(v(-0.4, 2.25, 0), v(0.4, 2.25, 0), 0.02),
-        tube(v(0.4, 1.95, 0), v(1.2, 1.95, 0), 0.02),
-      ];
-      return { blue: posts, steel: bars };
-    }
-    case 'bench': {
-      const slats = [0, 1, 2].map((k) => block(1.8, 0.035, 0.11, 0, 0.45, -0.16 + k * 0.14));
-      const back = [0, 1].map((k) => {
-        const g = new THREE.BoxGeometry(1.8, 0.1, 0.03);
-        g.rotateX(-0.25);
-        g.translate(0, 0.62 + k * 0.15, -0.27 - k * 0.04);
-        return g;
-      });
-      const legs = [-0.75, 0.75].map((x) => block(0.06, 0.45, 0.5, x, 0.225, -0.02));
-      return { wood: [...slats, ...back], rubber: legs };
-    }
-  }
-}
-
-/** Все предметы площадок одной группой: по краске одна сетка на вид предмета, экземпляры. */
-export function playgroundGroup(items: readonly Item[], level = 0): THREE.Group | null {
-  if (!items.length) return null;
-  const group = new THREE.Group();
-  group.name = 'playgrounds';
-  const materials = new Map<Paint, THREE.MeshStandardMaterial>();
-  const material = (paint: Paint) => {
-    let m = materials.get(paint);
-    if (!m) {
-      m = new THREE.MeshStandardMaterial(PAINTS[paint]);
-      materials.set(paint, m);
-    }
-    return m;
-  };
-  const kinds = [...new Set(items.map((i) => i.kind))];
-  const matrix = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
-  const one = new THREE.Vector3(1, 1, 1);
-  for (const kind of kinds) {
-    const mine = items.filter((i) => i.kind === kind);
-    for (const [paint, parts] of Object.entries(model(kind)) as [Paint, THREE.BufferGeometry[]][]) {
-      if (!parts.length) continue;
-      const geometry = mergeGeometries(parts.map((p) => p.toNonIndexed()));
-      for (const p of parts) p.dispose();
-      const mesh = new THREE.InstancedMesh(geometry, material(paint), mine.length);
-      mine.forEach((item, k) => {
-        q.setFromAxisAngle(up, item.angle);
-        mesh.setMatrixAt(k, matrix.compose(new THREE.Vector3(item.x, level, item.z), q, one));
-      });
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.name = `playground-${kind}-${paint}`;
-      group.add(mesh);
-    }
-  }
-  return group;
+  const spec = SPECS[item.kind];
+  const ring = corners({
+    x: item.x,
+    z: item.z,
+    angle: item.angle,
+    hu: spec.len / 2,
+    hv: spec.wid / 2,
+  });
+  return { ring, height: spec.height };
 }
 
 /** Расстояние от точки до многоугольника с дырами: 0 внутри. */
@@ -438,16 +538,11 @@ export function distanceToArea(rings: readonly Ring[], p: Flat): number {
       if (a.z > p.z !== b.z > p.z && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) {
         inside = !inside;
       }
-      best = Math.min(best, segmentDistance(p, a, b));
+      const q = closest(p, a, b);
+      best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z));
     }
   }
   return inside ? 0 : best;
 }
 
-function segmentDistance(p: Flat, a: Flat, b: Flat): number {
-  const vx = b.x - a.x;
-  const vz = b.z - a.z;
-  const len2 = vx * vx + vz * vz;
-  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.z - a.z) * vz) / len2)) : 0;
-  return Math.hypot(p.x - (a.x + vx * t), p.z - (a.z + vz * t));
-}
+export { playgroundGroup } from './playgroundModels';

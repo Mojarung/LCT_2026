@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 
 import { dominantAngles, keepSegments, outlines } from './contours';
+import { LITTER_HEAD, type LitterUniforms, litterUniforms } from './litter';
 import {
   absorbSmall,
   ASPHALT,
@@ -540,8 +541,9 @@ export interface MaskInfo {
   metresPerPx: number;
 }
 
-/** Погода на земле: мокрый асфальт темнеет и блестит, снег ложится сначала на газон. */
-export interface GroundWeather {
+/** Погода на земле: мокрый асфальт темнеет и блестит, снег ложится сначала на газон,
+ *  осенью - опавшие листья (litter.ts). */
+export interface GroundWeather extends Partial<LitterUniforms> {
   uWet: { value: number };
   uSnow: { value: number };
 }
@@ -1077,6 +1079,7 @@ export function groundMesh(
     uCut: { value: mask.cut },
     // Земля на уровне тротуара вырезает проезжую часть: там видна плоскость проезда ниже.
     uCutRoad: { value: options.cutRoad ? 1 : 0 },
+    ...litterUniforms(),
     ...weather,
   };
   material.onBeforeCompile = (shader) => {
@@ -1088,7 +1091,7 @@ export function groundMesh(
         '#include <worldpos_vertex>\nvGroundPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${GROUND_FRAGMENT_HEAD}`)
+      .replace('#include <common>', `#include <common>\n${GROUND_FRAGMENT_HEAD}\n${LITTER_HEAD}`)
       .replace('#include <map_fragment>', GROUND_MAP)
       .replace('#include <roughnessmap_fragment>', GROUND_ROUGHNESS)
       .replace('#include <normal_fragment_maps>', GROUND_NORMAL);
@@ -1207,6 +1210,8 @@ export const GROUND_MAP = /* glsl */ `
   vec3 pv = paverTile(p) * (0.95 + 0.07 * macro);
   vec3 a = antiTile(uAsphalt, p, 3.0) * (0.74 + 0.26 * macro);
   vec3 col = g * lawn + pv * paver + a * asph;
+  // Осенний опад: на проезде мало - сметают машины, на асфальте тротуара меньше, чем на газоне.
+  col = applyLitter(col, p, uRoad > 0.5 ? 0.12 : 1.0 - 0.3 * asph, 0.0);
   // Мокрое покрытие темнее, газон темнеет меньше; лужи - пятнами шума.
   float puddle = smoothstep(0.55, 0.7, texture2D(uNoise, p / 9.0).g) * (1.0 - lawn);
   col *= 1.0 - uWet * (0.3 * (1.0 - lawn) + 0.15 * lawn + 0.2 * puddle);

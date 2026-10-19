@@ -44,6 +44,7 @@ import {
   type Item,
   itemFootprint,
   playgroundGroup,
+  type Zone,
 } from './playgrounds';
 import { boundaryOverlay, utilityOverlay } from './overlays';
 import { type ContextJson, contextScene } from './context';
@@ -52,7 +53,9 @@ import { CAR_LENGTH_M, CAR_WIDTH_M, parkingSpots } from './parking';
 import { Walls } from './collide';
 import { nearPlane } from './depth';
 import { flowerbedGroup } from './flowerbeds';
-import { edgeCurbs, pavingGeometry } from './paving';
+import { edgeCurbs, PAVING_LIFT_M, pavingGeometry } from './paving';
+import { litterTexture, litterUniforms, withLitter } from './litter';
+import { pitGroup, pitsOnPaving } from './treePits';
 import { Freecam, type Mode, type Pose } from './freecam';
 import {
   buildMask,
@@ -71,6 +74,7 @@ import {
   pavedOnLeft,
   paintContextRoads,
   ribbonBox,
+  SPECIAL_LIFT_M,
   specialGeometry,
   type SurfaceImage,
 } from './ground';
@@ -279,7 +283,8 @@ export class SceneEngine {
   private readonly weather = new Weather();
   private people: People | null = null;
   /** Погода на земле и крышах: общие uniform-ы шейдеров земли, крыш и крон. */
-  private readonly groundWeather = { uWet: { value: 0 }, uSnow: { value: 0 } };
+  /** Погода на земле и осенний опад (litter.ts): общие для земли, резины и лунок. */
+  private readonly groundWeather = { uWet: { value: 0 }, uSnow: { value: 0 }, ...litterUniforms() };
   private grassQuality: Quality | null = null;
   private mask: MaskInfo | null = null;
   private noise: THREE.Texture | null = null;
@@ -378,6 +383,7 @@ export class SceneEngine {
     this.disposables.push(mask.texture, mask.cut);
     this.mask = mask;
     this.noise = noise;
+    this.buildLitter();
     // Проезд ниже тротуара на высоту борта: своя плоскость асфальта под землёй, земля на
     // уровне тротуара вырезает её по маске (mask.cut), по краю выреза стоит бортовой камень.
     this.edges = sceneRoadEdges(surface?.areas, this.world.origin, mask);
@@ -391,6 +397,7 @@ export class SceneEngine {
     if (lowered) this.add(groundMesh(this.world, mask, tex, this.groundWeather, { road: true }));
     this.addPaving(surface, mask, tex);
     this.addSpecialCover(surface);
+    this.addTreePits(surface);
     this.addPlaygrounds(surface);
     this.addFlowerbeds(surface);
     if (this.edges.some((edge) => edge.lowered.some(Boolean))) {
@@ -560,20 +567,45 @@ export class SceneEngine {
       .map((rings) =>
         rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) }))),
       );
+    // Ствол с лункой (treePits.ts), опора, нарисованная скамейка, ограда внутри резины - не
+    // под оборудованием. Ограда - точками через 0,5 м по оси.
+    const fencePoints = this.world.fences.flatMap((line) => {
+      const out: { x: number; z: number; r: number }[] = [];
+      line.points.forEach((b, i) => {
+        const a = line.points[i - 1];
+        if (!a) return;
+        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.5));
+        for (let k = 0; k <= n; k++) {
+          out.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n, r: 0.3 });
+        }
+      });
+      return out;
+    });
     const avoid = [
       ...this.world.plants
         .filter((p) => !/shrub|hedge/.test(p.type))
-        .map((p) => ({ x: p.x, z: p.z, r: 1.2 })),
-      ...this.world.poles.map((p) => ({ ...p, r: 0.8 })),
+        .map((p) => ({ x: p.x, z: p.z, r: 1.15 })),
+      ...this.world.poles.map((p) => ({ ...p, r: 0.6 })),
       ...(this.world.benches ?? []).map((b) => ({ x: b.x, z: b.z, r: 1.2 })),
+      ...fencePoints,
     ];
     const drawn = this.world.benches ?? [];
     const items: Item[] = [];
-    const taken: { x: number; z: number; r: number }[] = [];
-    for (const ground of groundsOf(parts, labels)) {
-      // Нарисованные в съёмке скамейки уже стоят - своих не добавляем.
-      const benches = !drawn.some((b) => distanceToArea(ground.rings, b) === 0);
-      items.push(...furnish(ground, avoid, taken, benches));
+    const grounds = groundsOf(parts, labels);
+    const taken = new Map<number, Zone[]>();
+    for (const ground of grounds) {
+      const zones = taken.get(ground.part) ?? [];
+      taken.set(ground.part, zones);
+      items.push(
+        ...furnish(ground, avoid, {
+          taken: zones,
+          // Нарисованные в съёмке скамейки уже стоят - своих не добавляем.
+          benches: !drawn.some((b) => distanceToArea(ground.rings, b) === 0),
+          rivals: grounds
+            .filter((g) => g !== ground && g.part === ground.part)
+            .map((g) => g.anchor),
+        }),
+      );
     }
     const group = playgroundGroup(items);
     if (!group) return;
@@ -589,6 +621,51 @@ export class SceneEngine {
     }
   }
 
+  /** Карта осеннего опада по кронам растений сцены (litter.ts). */
+  private buildLitter(): void {
+    const [minX, minZ, maxX, maxZ] = this.world.bounds;
+    const pad = 40;
+    const { texture, rect } = litterTexture(this.world.plants, [
+      minX - pad,
+      minZ - pad,
+      maxX - minX + 2 * pad,
+      maxZ - minZ + 2 * pad,
+    ]);
+    this.groundWeather.uLitterMap.value = texture;
+    this.groundWeather.uLitterRect.value.copy(rect);
+    this.disposables.push(texture);
+  }
+
+  /** Лунки стволов съёмки на резине площадок и на плитке тротуаров (treePits.ts). */
+  private addTreePits(surface: SurfaceImage | null): void {
+    const areas = surface?.areas;
+    if (!areas) return;
+    const [ox, oy] = this.world.origin;
+    const parts = areas.paved.map((rings, i) => ({
+      rings: rings.map((ring) => ring.map(([x = 0, y = 0]) => ({ x: x - ox, z: -(y - oy) }))),
+      kind: areas.paved_kind?.[i] ?? 'asphalt',
+    }));
+    // Посадкам плана лунки и решётки ставит addStreetDetails; здесь - деревья съёмки.
+    const trees = this.world.plants.filter(
+      (p) => p.existing && !/shrub|hedge/.test(p.type) && !p.strip,
+    );
+    const built = pitGroup(
+      pitsOnPaving(trees, parts, {
+        special: SPECIAL_LIFT_M,
+        pavers: PAVING_LIFT_M,
+        asphalt: PAVING_LIFT_M,
+      }),
+    );
+    if (!built) return;
+    withLitter(built.soil, this.groundWeather, 0.6);
+    this.scene.add(built.group);
+    this.disposables.push({
+      dispose: () => {
+        disposeGroup(built.group);
+      },
+    });
+  }
+
   /** Резиновое покрытие площадок «СПЕЦ.ПОКР.» поверх плитки маски, по контуру чертежа. */
   private addSpecialCover(surface: SurfaceImage | null): void {
     const geometry = surface?.areas ? specialGeometry(surface.areas, this.world.origin) : null;
@@ -597,17 +674,17 @@ export class SceneEngine {
     map.repeat.set(0.5, 0.5);
     map.anisotropy = 8;
     this.disposables.push(map);
-    const mesh = new THREE.Mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({
-        map,
-        roughness: 0.96,
-        metalness: 0,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-        polygonOffsetUnits: -2,
-      }),
-    );
+    const material = new THREE.MeshStandardMaterial({
+      map,
+      roughness: 0.96,
+      metalness: 0,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+    // Осенью листья лежат и на резине (litter.ts).
+    withLitter(material, this.groundWeather);
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'special-cover';
     mesh.receiveShadow = true;
     this.add(mesh);
@@ -1037,6 +1114,7 @@ export class SceneEngine {
     const weather = this.lightAt(s.hour);
     this.weather.apply(s, weather);
     this.groundWeather.uWet.value = weather.wet;
+    this.groundWeather.uLitter.value = s.season === 'autumn' ? 1 : 0;
     // Зимой снег лежит и без снегопада: московский январь белый.
     const cover = Math.max(weather.snowCover, s.season === 'winter' ? WINTER_COVER : 0);
     this.groundWeather.uSnow.value = cover;
