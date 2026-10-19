@@ -156,13 +156,16 @@ export function rubberCrumb(): THREE.CanvasTexture {
   const size = 512;
   const noise = fbm(size, [8, 32], 173);
   const random = rng(179);
+  // Бордово-коричневая резиновая крошка, как на площадке у дома 1А (панорама 2023) и на
+  // фото пользователя (19.10.2026): серо-бурая читалась асфальтом. Крупинки светлее, темнее и
+  // редкие чёрные и терракотовые.
   const c = fromNoise(size, noise, (n) => {
     const r = random();
-    if (r > 0.9) return [140 + n * 20, 62, 50];
-    if (r > 0.87) return [72, 104 + n * 18, 76];
-    if (r > 0.84) return [118, 118, 114];
-    const v = 64 + n * 14;
-    return [v + 12, v + 2, v - 2];
+    const v = 86 + n * 18;
+    if (r > 0.93) return [v + 50, v - 14, v - 24];
+    if (r > 0.88) return [v - 30, v - 56, v - 58];
+    if (r > 0.86) return [36, 34, 34];
+    return [v + 16, v - 42, v - 46];
   });
   return texture(c, true);
 }

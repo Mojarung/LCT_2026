@@ -124,6 +124,8 @@ export interface World {
   roads: Ring[][];
   /** Скамейки, нарисованные в съёмке (МАФ 1,9 x 0,6 м): центр и угол, ось x модели вдоль. */
   benches?: { x: number; z: number; angle: number }[];
+  /** Подписи площадок съёмки («ДЕТ.ПЛ.», «СПОРТ ПЛ.») в координатах сцены. */
+  groundLabels?: { x: number; z: number; kind: 'kids' | 'sports' }[];
   /** Цветники плана (GREEN_FLOWERBED): земля с многолетниками. */
   flowerbeds?: Ring[][];
   /** Откуда взята этажность: число зданий по каждому источнику. */

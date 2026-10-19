@@ -8,6 +8,7 @@
  * контуров подосновы с высотой по площади, виды - по жизненной форме. Об этом говорит флаг
  * fallback, и интерфейс обязан его показать: такая сцена грубее, чем могла бы быть. */
 
+import { type GroundLabel, groundKind } from './playgrounds';
 import type { BasemapFeature, BasemapJson, Geometry, PlanJson, Position } from '../api/artifacts';
 import {
   mergePlants,
@@ -586,6 +587,11 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   }
   plants.push(...existingPlants(features, box, frame));
   const benches = drawnBenches(features, box, frame);
+  // Подписи площадок «ДЕТ.ПЛ.», «СПОРТ ПЛ.» - по ним на резине ставится оборудование.
+  const groundLabels: GroundLabel[] = (basemap?.labels ?? []).flatMap(([x, y, text]) => {
+    const kind = groundKind(text);
+    return kind ? [{ ...frame.toFlat(x, y), kind }] : [];
+  });
   plants.push(...stripCrowns(linework.treeStrips));
   const buildings = scene
     ? sceneBuildings(scene, box, frame)
@@ -606,6 +612,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     flowerbeds,
     fenceAxes: !!axes?.length,
     benches,
+    groundLabels,
     buildings,
     plants,
     ...linework,
