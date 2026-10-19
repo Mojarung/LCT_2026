@@ -586,9 +586,13 @@ function surfaceToMask(
     Math.max(1, Math.round(DRIVE_M / mpp)),
   );
   const halfDrive = DRIVE_M / 2 / mpp;
+  // Контуры новых прогонов несут вид покрытия от сервиса: проезд - только «road», широкий
+  // асфальт - аллея или тротуар, и машины на нём не стоят (Харьковская, аллея со скамейками
+  // шириной 5 м, 19.10.2026: «по тротуару машина едет»). Ширина решает только у растра.
+  const byWidth = minAlpha <= 1;
   for (let i = 0; i < kind.length; i++) {
     const k = kind[i];
-    const drive = k === ROAD || (k === ASPHALT && (middle[i] ?? 0) >= halfDrive);
+    const drive = k === ROAD || (byWidth && k === ASPHALT && (middle[i] ?? 0) >= halfDrive);
     // R - газон (и пустое), G - плитка, B - проезд: его землю шейдер вырезает, под ней лежит
     // плоскость проезда ниже на высоту борта. Асфальт тротуара - где нет ни одного канала.
     d[i * 4] = k === GRASS || k === EMPTY ? 255 : 0;

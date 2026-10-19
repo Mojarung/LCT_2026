@@ -593,6 +593,8 @@ export class SceneEngine {
     for (let i = 0; i < walk.length; i++) {
       if (blocked[i] || houses[i]) continue;
       if (special[i]) walk[i] = 2;
+      // Проезжая часть в маске тоже асфальт, но по ней не гуляют: только тротуары и аллеи.
+      else if (mask.road[i]) continue;
       else if (mask.kinds[i] === PAVERS || mask.kinds[i] === ASPHALT) walk[i] = 1;
     }
     const grid = { ...mask, kinds: walk };
