@@ -36,6 +36,7 @@ from green.infrastructure.reports.artifacts import (
     _surface,
     _tidy,
     _walk_ends_to_road,
+    _walk_notches_paved,
     _without_artifact_holes,
 )
 
@@ -915,3 +916,18 @@ def test_small_hole_in_paving_is_filled_but_a_lawn_island_stays() -> None:
     assert len(out.interiors) == 1
     assert out.contains(Point(10.7, 4.5))
     assert not out.contains(Point(30.7, 4.7))
+
+
+def test_porch_notch_of_a_walk_is_paved_but_lawn_and_corners_stay() -> None:
+    """Харьковская, 19.10.2026: у входа в дом крыльцо нарисовано линиями без материала,
+    выемка дорожки оставалась неизвестной, и в 3D у крыльца стоял островок травы. Узкая
+    выемка мостится; газон в такой же выемке и внутренний угол дорожки не трогаются."""
+    walk = box(0, 0, 3, 20).difference(box(2, 8, 3, 10.5))  # крыльцо 1 x 2,5 м
+    lawn_bay = box(2, 14, 3, 16)
+    walk = walk.difference(lawn_bay)
+    corner = box(0, 0, 10, 3)  # дорожка уходит вбок: внутренний угол
+    walk = shapely.union_all([walk, corner])
+    out = _walk_notches_paved([walk], ["asphalt"], lawn_bay, None)[0]
+    assert out.contains(Point(2.5, 9.2))
+    assert not out.contains(Point(2.5, 15))
+    assert not out.contains(Point(3.5, 3.5))

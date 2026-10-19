@@ -954,6 +954,7 @@ def _surface_areas(
         soil = shapely.union_all([soil, islands]) if soil is not None else islands
     parts, kinds = _paved_parts(paved, basemap, exact_paved)
     parts, kinds = _walk_ends_to_road(parts, kinds)
+    parts = _walk_notches_paved(parts, kinds, soil, basemap)
     parts = [_without_artifact_holes(part, soil) for part in parts]
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
@@ -967,6 +968,55 @@ def _surface_areas(
         "road_mesh": _rings(mesh),
         "flowerbeds": _rings(flowerbeds),
     }
+
+
+# Выемка тротуара уже 2 x WALK_NOTCH_M, где нет ни газона, ни дома, ни другого покрытия, -
+# крыльцо, вход или отмостка: она мостится тем же покрытием, м.
+WALK_NOTCH_M = 1.5
+WALK_NOTCH_MIN_M2 = 0.3
+
+
+def _walk_notches_paved(
+    parts: list[BaseGeometry],
+    kinds: list[str],
+    soil: BaseGeometry | None,
+    basemap: Basemap | None,
+) -> list[BaseGeometry]:
+    """Узкие выемки тротуара без материала отходят тротуару.
+
+    У входа в дом съёмка рисует крыльцо линиями, без подписи материала: выемка между
+    дорожкой и стеной оставалась «неизвестной», в 3D неизвестное - газон, и у крыльца стоял
+    круглый островок травы с асфальтовыми углами (Харьковская, 19.10.2026)."""
+    houses = _class_area(basemap.features, ObjectClass.BUILDING) if basemap is not None else None
+    blocked = shapely.union_all([g for g in (soil, houses) if g is not None])
+    tree = shapely.STRtree(parts) if parts else None
+    out = list(parts)
+    r = WALK_NOTCH_M
+    for i, kind in enumerate(kinds):
+        if kind not in {PAVED_ASPHALT, PAVED_PAVERS} or tree is None:
+            continue
+        part = out[i]
+        # Замыкание с прямыми углами: прямоугольная выемка заливается, а внутренний угол
+        # дорожки у стены дома не получает скругления.
+        notch = _areal(
+            part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
+        ).difference(part)
+        if notch.is_empty:
+            continue
+        # Вычитаются только соседи и газон с домами в рамке выемки: целиком это долго.
+        box = notch.bounds
+        neighbours = [out[int(k)] for k in tree.query(notch) if int(k) != i]
+        cut = shapely.union_all(
+            [
+                *[shapely.clip_by_rect(g, *box) for g in neighbours],
+                shapely.clip_by_rect(blocked, *box),
+            ]
+        )
+        notch = _areal(notch.difference(cut))
+        pieces = [g for g in shapely.get_parts(notch) if g.area >= WALK_NOTCH_MIN_M2]
+        if pieces:
+            out[i] = _areal(shapely.union_all([part, *pieces]))
+    return out
 
 
 # Дыра в покрытии меньше этого и не газон - след знака колодца или обрезка дорожки, м².
