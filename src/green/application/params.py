@@ -165,6 +165,9 @@ class PlanParams:
     # hybrid (вопрос 3 пользователя, 25.09.2026): замкнутые грани решают сами, подписи вне
     # решённых граней - по расстоянию; closed_faces - строгий режим тиммейта.
     surface_inference_mode: str = "hybrid"
+    # Opt-in experiment: mixed preserves the main branch's material inference.
+    surface_target_stage: str = "mixed"
+    surface_source_stages: Mapping[str, str] = field(default_factory=dict)
     # Limits on evidence propagation are project assumptions, not soil measurements.
     surface_max_distance_m: float = 30.0
     surface_ambiguity_m: float = 1.0

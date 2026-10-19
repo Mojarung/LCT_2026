@@ -908,6 +908,8 @@ def _surface(
         "counts": {m.name.lower(): int((grid == m).sum()) for m in Material},
         "areas": _surface_areas(surface, sampled, surface.cell * step, basemap),
     }
+    if surface.stage_report is not None:
+        meta["stage_resolution"] = asdict(surface.stage_report)
     return {"surface.png": image, "surface.json": _write_json(directory / "surface.json", meta)}
 
 

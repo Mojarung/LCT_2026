@@ -12,6 +12,7 @@ import numpy as np
 import shapely
 from ezdxf import bbox
 from ezdxf.entities import (
+    Attrib,
     Body,
     Circle,
     Ellipse,
@@ -29,6 +30,7 @@ from ezdxf.tools.text import fast_plain_mtext, plain_text
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Point, Polygon
 
+from green.application.diameters import parse_diameter_m
 from green.application.semantic_names import local_name
 from green.domain.objects import (
     NO_XREF,
@@ -174,13 +176,26 @@ class EzdxfSceneReader:
         features, labels, symbols = _to_metres(
             walker.features, walker.labels, walker.instances(), units.unit_m
         )
+        _, hidden_diameter_labels, _ = _to_metres(
+            [], walker.hidden_diameter_labels, [], units.unit_m
+        )
+        hidden_notes = (
+            (
+                (
+                    f"Скрытые подписи диаметров: {len(hidden_diameter_labels)} сохранены только "
+                    "для отступов от сетей; они не участвуют в определении покрытий."
+                ),
+            )
+            if hidden_diameter_labels
+            else ()
+        )
         return Scene(
             source_name=path.name,
             source_sha256=digest,
             dxf_version=doc.dxfversion,
             features=features,
             labels=labels,
-            warnings=(*warnings, *units.notes, *walker.warnings()),
+            warnings=(*warnings, *units.notes, *walker.warnings(), *hidden_notes),
             unit_m=units.unit_m,
             read_diagnostics=ReadDiagnostics(
                 visited_by_type=dict(walker.visited),
@@ -197,6 +212,7 @@ class EzdxfSceneReader:
                 outcomes=dict(walker.outcomes),
             ),
             symbols=symbols,
+            hidden_diameter_labels=hidden_diameter_labels,
         )
 
 
@@ -208,6 +224,7 @@ class _Walker:
     unit_m: float = 1.0
     features: list[Feature] = field(default_factory=list)
     labels: list[TextLabel] = field(default_factory=list)
+    hidden_diameter_labels: list[TextLabel] = field(default_factory=list)
     skipped: Counter[str] = field(default_factory=Counter)
     bounded_hatches: int = 0
     visited: Counter[str] = field(default_factory=Counter)
@@ -221,6 +238,9 @@ class _Walker:
     sizes: dict[str, bbox.BoundingBox | None] = field(default_factory=dict)
     # Рамки обрезки XCLIP вставок, внутри которых идёт обход (единицы чертежа, WCS).
     clips: list[BaseGeometry] = field(default_factory=list)
+    # Hidden inserts suppress their text, but keep physical constraint geometry.
+    hidden_text_depth: int = 0
+    hidden_layers: dict[str, str] | None = None
     # Тип линии вставок, внутри которых идёт обход: его берёт примитив с типом BYBLOCK.
     block_linetypes: list[str] = field(default_factory=list)
     # Тип линии слоя по имени слоя и наличие разрывов в типе линии (по имени в нижнем регистре).
@@ -533,6 +553,10 @@ class _Walker:
         if region is not None:
             self.clips.append(region)
         self.block_linetypes.append(self._linetype(insert, layer))
+        hidden = (
+            bool(insert.dxf.get("invisible", 0)) or self._hidden_layer_reason(layer) is not None
+        )
+        self.hidden_text_depth += int(hidden)
         try:
             outcome, child_owner = self._role(insert, block, ref, layer, owner)
             if outcome == CLIPPED:
@@ -542,6 +566,7 @@ class _Walker:
                 return "insert:not-explodable"
             return outcome
         finally:
+            self.hidden_text_depth -= int(hidden)
             self.block_linetypes.pop()
             if region is not None:
                 self.clips.pop()
@@ -690,6 +715,30 @@ class _Walker:
     def _virtual_skip(self, entity: DXFGraphic, reason: str) -> None:
         self.skipped[f"VIRTUAL:{entity.dxftype()}:{reason}"] += 1
 
+    def _hidden_layer_reason(self, layer: str) -> str | None:
+        if self.hidden_layers is None:
+            self.hidden_layers = {}
+            for record in self.doc.layers:
+                reason = (
+                    "layer-frozen"
+                    if record.is_frozen()
+                    else "layer-off"
+                    if record.is_off()
+                    else None
+                )
+                if reason is not None:
+                    name = decode_dxf_unicode(str(record.dxf.name)).casefold()
+                    self.hidden_layers[name] = reason
+        return self.hidden_layers.get(layer.casefold())
+
+    def _hidden_text_reason(self, entity: DXFGraphic, layer: str) -> str | None:
+        # DXF group 60 applies to all text; ATTRIB also has its own group 70 bit.
+        if entity.dxf.get("invisible", 0):
+            return "invisible"
+        if isinstance(entity, Attrib) and entity.is_invisible:
+            return "invisible-attribute"
+        return "invisible-parent" if self.hidden_text_depth else self._hidden_layer_reason(layer)
+
     def _label(  # noqa: PLR0913 - подпись с владельцем-знаком
         self,
         entity: DXFGraphic,
@@ -700,6 +749,7 @@ class _Walker:
         *,
         owner: str | None,
     ) -> str:
+        reason = self._hidden_text_reason(entity, layer)
         # CIF escapes are not decoded by ezdxf on load, including R2007+.
         # Decode before stripping MTEXT control sequences, only in our scene;
         # keep the source Drawing unchanged for export and integrity checks.
@@ -707,6 +757,9 @@ class _Walker:
             text = str(fast_plain_mtext(decode_dxf_unicode(entity.text)))
         else:
             text = plain_text(decode_dxf_unicode(entity.dxf.text))
+        if reason is not None and parse_diameter_m(text) is None:
+            self.skipped[f"{entity.dxftype()}:{reason}"] += 1
+            return f"skipped:{entity.dxftype()}:{reason}"
         if not text or not text.strip():
             return "label:empty"
         original = entity.origin_of_copy or entity
@@ -731,7 +784,8 @@ class _Walker:
             return self._skip(entity.dxftype(), layer, block, "non-finite-text-coordinates", ref)
         if self.clips and not self._visible(Point(point.x, point.y)):
             return CLIPPED
-        self.labels.append(
+        target = self.hidden_diameter_labels if reason is not None else self.labels
+        target.append(
             TextLabel(
                 ref=ref,
                 layer=layer,
@@ -739,13 +793,14 @@ class _Walker:
                 y=point.y,
                 text=text.strip(),
                 block=block,
+                surface_role="ignore" if reason is not None else "auto",
                 block_chain=tuple(decode_dxf_unicode(name) for name in chain),
                 symbol=owner,
             )
         )
-        if owner is not None:
+        if owner is not None and reason is None:
             self.strokes[owner] += 1
-        return "label"
+        return f"label:hidden-diameter:{reason}" if reason is not None else "label"
 
     def _geometry(self, entity: DXFGraphic) -> tuple[BaseGeometry | None, float | None]:  # noqa: C901, PLR0911 - one branch per entity type
         kind = entity.dxftype()

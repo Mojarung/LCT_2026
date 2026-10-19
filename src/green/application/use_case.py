@@ -292,7 +292,11 @@ class PlanSite:
                 publish(semantics, scene, source)
             if request.gis_layers:
                 scene, gis_notes = self._with_gis_layers(scene, request.gis_layers)
-            features = assign_diameters(scene.features, scene.labels, params.label_search_radius_m)
+            features = assign_diameters(
+                scene.features,
+                (*scene.labels, *scene.hidden_diameter_labels),
+                params.label_search_radius_m,
+            )
             # Борт тротуара - край тротуара, а не проезжей части (аудит Берзарина 16.10.2026).
             # Граница покрытия съёмки внутри проектного газона - след прежнего состояния.
             features, _ = drop_edges_inside_lawn(features)
@@ -345,6 +349,8 @@ class PlanSite:
                     tree_distance_m=params.tree_seed_distance_m,
                     inference_mode=params.surface_inference_mode,
                     open_ground=params.open_ground,
+                    target_stage=params.surface_target_stage,
+                    source_stages=params.surface_source_stages,
                 )
                 if params.require_soil
                 else None
@@ -365,6 +371,8 @@ class PlanSite:
                     inference_mode=params.surface_inference_mode,
                     open_ground=params.open_ground,
                     display_around=boundary,
+                    target_stage=params.surface_target_stage,
+                    source_stages=params.surface_source_stages,
                 )
                 if surface is not None
                 else None

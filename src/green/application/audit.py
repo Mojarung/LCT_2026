@@ -316,7 +316,11 @@ class AuditSite:
                     *notes,
                     "Семантика не уточнена: нормоконтроль неполон; см. classification.json.",
                 )
-            features = assign_diameters(base.features, base.labels, params.label_search_radius_m)
+            features = assign_diameters(
+                base.features,
+                (*base.labels, *base.hidden_diameter_labels),
+                params.label_search_radius_m,
+            )
             # Граница покрытия съёмки внутри проектного газона - след прежнего состояния.
             features, _ = drop_edges_inside_lawn(features)
             features, kerb_note = refine_kerbs(features)

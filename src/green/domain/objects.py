@@ -288,3 +288,6 @@ class Scene:
     read_diagnostics: ReadDiagnostics = field(default_factory=ReadDiagnostics)
     symbols: tuple[SymbolInstance, ...] = field(default=())
     callouts: tuple[Callout, ...] = field(default=())
+    # Hidden diameter annotations only feed conservative physical clearances.
+    # They never participate in materials, callouts, basemap or building volumes.
+    hidden_diameter_labels: tuple[TextLabel, ...] = field(default=())

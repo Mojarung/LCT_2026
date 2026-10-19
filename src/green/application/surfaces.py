@@ -23,11 +23,12 @@ from green.application.approximation import error_bound, inner_area, outer_area,
 from green.application.line_gaps import GAP_M as LINE_GAP_M
 from green.application.line_gaps import bridges
 from green.application.surface_faces import FaceMaterials, closed_face_materials
+from green.application.surface_stages import SurfaceStageReport, projected_label_view
 from green.application.wording import counted
 from green.domain.objects import ObjectClass
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
@@ -137,6 +138,7 @@ class SurfaceMap:
     _soil_distances: NDArray[np.float64] | None = field(default=None, init=False, repr=False)
     # Граница грунта нужна каждой проверке посадочного места: считается и готовится один раз.
     _soil_edge: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
+    stage_report: SurfaceStageReport | None = None
     # Грунт разлива контуром: нужен газонам плана, считается один раз (растр в контур - секунды).
     _label_soil: BaseGeometry | None = field(default=None, init=False, repr=False, compare=False)
 
@@ -318,6 +320,18 @@ class SurfaceMap:
         }
 
     def review_notes(self) -> tuple[str, ...]:
+        notes = self._stage_review_notes()
+        if self.stage_report and self.stage_report.superseded_labels:
+            return (
+                (
+                    "Покрытия рассчитаны для проектного состояния. Требуется подтвердить "
+                    "актуальность источников и выполнение предусмотренных работ."
+                ),
+                *notes,
+            )
+        return notes
+
+    def _stage_review_notes(self) -> tuple[str, ...]:
         notes = self._review_notes()
         if not self.open_ground_m2:
             return notes
@@ -442,6 +456,8 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     inference_mode: str = "closed_faces",
     open_ground: bool = True,
     display_around: BaseGeometry | None = None,
+    target_stage: str = "mixed",
+    source_stages: Mapping[str, str] | None = None,
 ) -> SurfaceMap | None:
     """Use explicit polygons or bounded, competing material evidence; preserve unknowns.
 
@@ -459,8 +475,15 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         raise ValueError("Invalid surface distance or resolution")
     if inference_mode not in {"closed_faces", "distance", "hybrid"}:
         raise ValueError("Unknown surface inference mode")
+    if target_stage not in {"mixed", "proposed"}:
+        raise ValueError("Unknown target surface stage")
     faces_mode = inference_mode != "distance"
     features = _near_extent(features, extent)
+    stage_report = None
+    if target_stage == "proposed":
+        labels, stage_report = projected_label_view(
+            features, labels, source_stages or {}, _label_seed, _functional_label
+        )
     functional_labels = tuple(
         (label.x, label.y, label.text.strip()) for label in labels if _functional_label(label)
     )
@@ -620,6 +643,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         unassigned_labels=faces.unassigned_labels if faces else 0,
         open_edges=faces.open_edges if faces else 0,
         unsupported_boundary_faces=faces.unsupported_boundaries if faces else 0,
+        stage_report=stage_report,
     )
 
 
