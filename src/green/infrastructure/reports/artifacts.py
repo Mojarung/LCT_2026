@@ -4,6 +4,7 @@ interpretations.csv/json, run_manifest.json, verify.json."""
 from __future__ import annotations
 
 import csv
+import logging
 import math
 import platform
 import re
@@ -37,7 +38,7 @@ from green.infrastructure.reports.scene import scene_payload
 from green.infrastructure.reports.semantic_review import save_review_geometry
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from shapely.geometry.base import BaseGeometry
@@ -90,6 +91,19 @@ CSV_COLUMNS = (
     "area_m2",
 )
 _PACKAGES = ("green", "ezdxf", "shapely", "fastapi", "pydantic")
+_LOG = logging.getLogger(__name__)
+# Сбои необязательного файла прогона, после которых остальные файлы и план остаются верны:
+# геометрия (GEOS, мультиполигон вместо полигона), данные неожиданного вида. Нехватка памяти
+# и диска (MemoryError, OSError) прогон останавливают - это не свойство чертежа.
+_OPTIONAL_FAILURES = (
+    shapely.errors.GEOSException,
+    ValueError,
+    TypeError,
+    AttributeError,
+    IndexError,
+    KeyError,
+    ArithmeticError,
+)
 # Геометрия газона в plan.json: сантиметры - точность чертежа 1:500, больше знаков только
 # раздувают файл, который браузер разбирает при открытии прогона.
 _LAWN_DIGITS = 2
@@ -97,23 +111,18 @@ _LAWN_DIGITS = 2
 
 class FileArtifactSink:
     def save(self, directory: Path, report: RunReport) -> dict[str, Path]:
+        """Файлы прогона. План, объяснения и проверки пишутся всегда; отчёты для людей, карта,
+        3D и выгрузки - по возможности: сбой одного из них не роняет прогон, а называется в
+        предупреждениях plan.json и в artifact_errors (чертёж жюри 236287.dxf падал на выгрузке
+        покрытий для 3D уже после записи result.dxf, 19.10.2026)."""
         directory.mkdir(parents=True, exist_ok=True)
         rows = build_rows(report.plan, report.rulebook)
-        return {
+        errors: list[str] = []
+        saved: dict[str, Path] = {
             "result.dxf": report.output_dxf,
-            "plan.json": _write_json(directory / "plan.json", _plan(report)),
             "interpretations.json": _write_json(directory / "interpretations.json", rows),
             "interpretations.csv": _write_csv(directory / "interpretations.csv", rows),
             "interpretations.md": write_markdown(directory / "interpretations.md", report),
-            "report.html": write_html(directory / "report.html", report),
-            "plantings.csv": write_plantings_csv(directory / "plantings.csv", report),
-            "workbook.xlsx": write_workbook(
-                directory / "workbook.xlsx", report.plan, report.rulebook
-            ),
-            "note.docx": write_note(directory / "note.docx", report),
-            "result_layers.dxf": write_result_layers(
-                report.output_dxf, directory / "result_layers.dxf"
-            ),
             "run_manifest.json": _write_json(directory / "run_manifest.json", _manifest(report)),
             "verify.json": _write_json(directory / "verify.json", _integrity(report)),
             "export_validation.json": _write_json(
@@ -128,7 +137,6 @@ class FileArtifactSink:
                 if report.validation
                 else None,
             ),
-            "layers_report.json": _write_json(directory / "layers_report.json", _layers(report)),
             "classification.json": _write_json(
                 directory / "classification.json",
                 classification_payload(report.classification, report.name_hints),
@@ -136,64 +144,120 @@ class FileArtifactSink:
             "input_read.json": _write_json(
                 directory / "input_read.json", asdict(report.read_diagnostics)
             ),
+        }
+        for name, make in self._optional(directory, report):
+            try:
+                made = make()
+            except _OPTIONAL_FAILURES as exc:
+                _LOG.warning("Файл %s не собран", name, exc_info=True)
+                errors.append(f"{name}: {type(exc).__name__}: {exc}"[:300])
+                continue
+            if isinstance(made, dict):
+                saved.update(made)
+            elif made is not None:
+                saved[name] = made
+        payload = _plan(report)
+        if errors:
+            payload["warnings"] = [
+                *payload["warnings"],
+                *(f"Файл прогона не собран, остальные готовы: {e}" for e in errors),
+            ]
+            payload["artifact_errors"] = errors
+        saved["plan.json"] = _write_json(directory / "plan.json", payload)
+        return saved
+
+    def _optional(
+        self, directory: Path, report: RunReport
+    ) -> list[tuple[str, Callable[[], Path | dict[str, Path] | None]]]:
+        """Файлы, без которых план, объяснения и проверки остаются полными."""
+        plan = report.plan
+        name_hints = {
+            "note": (
+                "Предположения LLM о классе слоёв, которые сервис понял только "
+                "по геометрии. План от них не зависит; принять подсказку - "
+                "назначить класс слою (layer_classes) и перезапустить."
+            ),
+            "hints": [asdict(h) for h in report.name_hints],
+        }
+
+        def json_file(name: str, data: object, *, indent: bool = True) -> Path:
+            return _write_json(directory / name, data, indent=indent)
+
+        return [
+            ("report.html", lambda: write_html(directory / "report.html", report)),
+            ("plantings.csv", lambda: write_plantings_csv(directory / "plantings.csv", report)),
+            (
+                "workbook.xlsx",
+                lambda: write_workbook(directory / "workbook.xlsx", plan, report.rulebook),
+            ),
+            ("note.docx", lambda: write_note(directory / "note.docx", report)),
+            (
+                "result_layers.dxf",
+                lambda: write_result_layers(report.output_dxf, directory / "result_layers.dxf"),
+            ),
+            ("layers_report.json", lambda: json_file("layers_report.json", _layers(report))),
             # Подсказки LLM по именам слоёв: только когда их спрашивали и было что сказать.
-            **(
-                {
-                    "name_hints.json": _write_json(
-                        directory / "name_hints.json",
-                        {
-                            "note": (
-                                "Предположения LLM о классе слоёв, которые сервис понял только "
-                                "по геометрии. План от них не зависит; принять подсказку - "
-                                "назначить класс слою (layer_classes) и перезапустить."
-                            ),
-                            "hints": [asdict(h) for h in report.name_hints],
-                        },
-                    )
-                }
-                if report.name_hints
-                else {}
+            (
+                "name_hints.json",
+                lambda: json_file("name_hints.json", name_hints) if report.name_hints else None,
             ),
-            "assembly.json": _write_json(
-                directory / "assembly.json", asdict(report.assembly) if report.assembly else None
+            (
+                "assembly.json",
+                lambda: json_file(
+                    "assembly.json", asdict(report.assembly) if report.assembly else None
+                ),
             ),
-            "zones.geojson": _write_json(directory / "zones.geojson", _zones(report.plan)),
-            "basemap.geojson": self.save_basemap(directory, report.basemap),
+            ("zones.geojson", lambda: json_file("zones.geojson", _zones(plan))),
+            ("basemap.geojson", lambda: self.save_basemap(directory, report.basemap)),
             # Сцену, как и подоснову, читает браузер, а не человек: без отступов.
-            "scene.json": _write_json(
-                directory / "scene.json",
-                scene_payload(report.plan, report.volumes),
-                indent=False,
+            (
+                "scene.json",
+                lambda: json_file("scene.json", scene_payload(plan, report.volumes), indent=False),
             ),
-            "rules.json": _write_json(directory / "rules.json", _rules(report.rulebook)),
-            "assortment.json": _write_json(
-                directory / "assortment.json",
-                _assortment_summary(report.plan.assortment_summary),
+            ("rules.json", lambda: json_file("rules.json", _rules(report.rulebook))),
+            (
+                "assortment.json",
+                lambda: json_file("assortment.json", _assortment_summary(plan.assortment_summary)),
             ),
-            "planting_schedule.csv": _write_schedule(
-                directory / "planting_schedule.csv", report.plan
+            (
+                "planting_schedule.csv",
+                lambda: _write_schedule(directory / "planting_schedule.csv", plan),
             ),
-            "assortment_shrubs.json": _write_json(
-                directory / "assortment_shrubs.json",
-                _assortment_summary(report.plan.shrub_assortment_summary),
+            (
+                "assortment_shrubs.json",
+                lambda: json_file(
+                    "assortment_shrubs.json", _assortment_summary(plan.shrub_assortment_summary)
+                ),
             ),
-            "quality.json": _write_json(
-                directory / "quality.json",
-                quality_payload(report.plan.quality, report.plan.effect),
+            (
+                "quality.json",
+                lambda: json_file("quality.json", quality_payload(plan.quality, plan.effect)),
             ),
-            "selection.json": _write_json(
-                directory / "selection.json",
-                asdict(report.plan.selection) if report.plan.selection is not None else None,
+            (
+                "selection.json",
+                lambda: json_file(
+                    "selection.json", asdict(plan.selection) if plan.selection else None
+                ),
             ),
-            "portfolio.json": _write_json(
-                directory / "portfolio.json",
-                asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
+            (
+                "portfolio.json",
+                lambda: json_file(
+                    "portfolio.json", asdict(plan.portfolio) if plan.portfolio else None
+                ),
             ),
-            **_surface(directory, report.display_surface or report.surface, report.basemap),
+            (
+                "surface.json",
+                lambda: _surface(
+                    directory, report.display_surface or report.surface, report.basemap
+                ),
+            ),
             # Исходник сверки комплекта (склеенный чертёж): с ним `green verify` повторяет
             # сверку результата. У одиночного файла исходник - сам входной файл, ссылки нет.
-            **({report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else {}),
-        }
+            (
+                "merged_source.dxf",
+                lambda: {report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else None,
+            ),
+        ]
 
     def save_basemap(self, directory: Path, basemap: Basemap | None) -> Path:
         """Подоснова отдельно от остального: карта забирает её, пока план ещё считается.
