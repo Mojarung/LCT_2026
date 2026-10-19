@@ -1005,9 +1005,12 @@ def _walk_notches_paved(
         # Замыкание с прямыми углами: прямоугольная выемка заливается, а внутренний угол
         # дорожки у стены дома не получает скругления.
         notch = _areal(
-            part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
-        ).difference(part)
-        if notch.is_empty:
+            _areal(part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")).difference(
+                part
+            )
+        )
+        # Разность бывает вырожденной (линия по краю части): у неё нет рамки для обрезки.
+        if notch.is_empty or notch.area < WALK_NOTCH_MIN_M2:
             continue
         # Вычитаются только соседи и газон с домами в рамке выемки: целиком это долго.
         box = notch.bounds
