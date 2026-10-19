@@ -1160,6 +1160,11 @@ _BED_CLASSES = frozenset(
 # Подпись у края контура клумбы (точка вставки текста - его левый нижний угол), м.
 BED_LABEL_REACH_M = 0.5
 BED_MIN_M2 = 1.0
+# Недозамкнутый контур клумбы замыкается, если концы ближе этого, м.
+BED_CLOSE_M = 0.5
+# Углы клумбы скругляются этим радиусом, пока она не теряет больше 1 - BED_ROUND_KEEP площади.
+BED_ROUND_M = 0.6
+BED_ROUND_KEEP = 0.85
 
 
 def _drawn_beds(basemap: Basemap | None) -> BaseGeometry | None:
@@ -1195,15 +1200,24 @@ def _drawn_beds(basemap: Basemap | None) -> BaseGeometry | None:
         ]
         holding = [a for a in near if a.buffer(BED_LABEL_REACH_M).contains(point)]
         if holding:
-            beds.append(min(holding, key=lambda a: a.area))
+            bed = min(holding, key=lambda a: a.area)
+            # Карта упрощает контур (допуск 0,3 м), и круг клумбы выходил многоугольником.
+            rounded = bed.buffer(-BED_ROUND_M).buffer(BED_ROUND_M)
+            beds.append(rounded if rounded.area >= BED_ROUND_KEEP * bed.area else bed)
     return shapely.union_all(beds) if beds else None
 
 
 def _closed(geometry: BaseGeometry) -> BaseGeometry | None:
-    """Площадь замкнутого контура: полигон или кольцо линии; None - контур открыт."""
+    """Площадь замкнутого контура: полигон или кольцо линии, концы которого сходятся ближе
+    BED_CLOSE_M (контур клумбы на Харьковской недозамкнут на 11 см); None - контур открыт."""
     if geometry.geom_type == "Polygon":
         return geometry
-    if geometry.geom_type == "LineString" and geometry.is_closed and len(geometry.coords) > 3:  # noqa: PLR2004 - кольцу нужны три вершины
+    if (
+        geometry.geom_type == "LineString"
+        and len(geometry.coords) > 3  # noqa: PLR2004 - кольцу нужны три вершины
+        and shapely.Point(geometry.coords[0]).distance(shapely.Point(geometry.coords[-1]))
+        <= BED_CLOSE_M
+    ):
         area = shapely.make_valid(shapely.Polygon(geometry.coords))
         return area if area.geom_type == "Polygon" and area.area > 0 else None
     return None

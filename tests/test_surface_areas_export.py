@@ -992,3 +992,19 @@ def test_label_past_the_boundary_fills_a_face_closed_by_drawn_lines() -> None:
 
     assert material(42, 12) is Material.PAVED
     assert material(50, 25) is Material.UNKNOWN
+
+
+def test_nearly_closed_flowerbed_outline_still_holds_the_bed() -> None:
+    """Харьковская: контур клумбы недозамкнут на 11 см - это всё ещё клумба."""
+    ring = list(Point(10, 10).buffer(2.0).exterior.coords)[:-2]  # концы разошлись
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.OBSTACLE, LineString(ring), dashed=True),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=(0, 0, 20, 20),
+        labels=(MaterialLabel(9.0, 9.5, "КЛУМБА", "soil"),),
+    )
+    beds = _drawn_beds(basemap)
+    assert beds is not None
+    assert beds.area > 0.8 * Point(10, 10).buffer(2.0).area
