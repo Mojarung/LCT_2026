@@ -536,7 +536,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
             ambiguity=ambiguity_m,
             spread=None
             if display_around is None
-            else _inside(display_around, origin, cell, free.shape),
+            else _display_spread(free, display_around, origin, cell),
         )
         grid = fallback.grid
     else:
@@ -795,6 +795,28 @@ def _exclude_conflicts(
     # pit queries. An outside label must not flood through the disputed face.
     free &= ~_inside(reserved_buffer(conflict, cell / np.sqrt(2)), origin, cell, free.shape)
     return shapely.union_all([uncertain, conflict])
+
+
+def _display_spread(
+    free: NDArray[np.bool_], around: BaseGeometry, origin: tuple[float, float], cell: float
+) -> NDArray[np.bool_]:
+    """Где подписи разливаются в карте для показа: граница работ и грани, замкнутые линиями.
+
+    За границей работ съёмка обрывается краем листа, и разлив в пустое место давал резиновые
+    пятна в тысячу квадратных метров. Но грань, которую со всех сторон замыкают линии
+    чертежа (ограда, стена, граница работ), - не пустое место: полоса «Ц» (цементобетон)
+    между оградой и стеной школы на Харьковской стояла в 3D газоном (19.10.2026). Грань,
+    касающаяся рамки карты или больше DISPLAY_FILL_MAX_M2, разливу закрыта."""
+    inside = _inside(around, origin, cell, free.shape)
+    faces, count = connected_components(free)
+    if not count:
+        return inside
+    size = np.bincount(faces.ravel(), minlength=count + 1)
+    edge = np.unique(np.concatenate([faces[0], faces[-1], faces[:, 0], faces[:, -1]]))
+    closed = size * cell * cell <= DISPLAY_FILL_MAX_M2
+    closed[edge] = False
+    closed[0] = False
+    return inside | closed[faces]
 
 
 # Подпись, чья точка вставки легла на линию (на узком тротуаре между бортом и знаком ограды
