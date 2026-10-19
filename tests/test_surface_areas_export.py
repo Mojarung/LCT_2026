@@ -1008,3 +1008,29 @@ def test_nearly_closed_flowerbed_outline_still_holds_the_bed() -> None:
     beds = _drawn_beds(basemap)
     assert beds is not None
     assert beds.area > 0.8 * Point(10, 10).buffer(2.0).area
+
+
+def test_round_dashed_contour_with_a_lawn_mark_is_a_bed() -> None:
+    """Харьковская: у парковки дома пунктирный круг со знаком травяного покрова внутри, без
+    подписи. Это круглая клумба; газон со своим знаком и некруглый контур клумбой не становятся."""
+    circle = Point(10, 10).buffer(2.2)
+    square = box(20, 5, 30, 15)
+    basemap = Basemap(
+        features=(
+            BasemapFeature(ObjectClass.LAWN, box(0, 0, 40, 20)),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(circle.exterior.coords), dashed=True),
+            BasemapFeature(ObjectClass.OBSTACLE, LineString(square.exterior.coords), dashed=True),
+            BasemapFeature(ObjectClass.LAWN, Point(10, 10)),
+            BasemapFeature(ObjectClass.LAWN, Point(25, 10)),
+            BasemapFeature(ObjectClass.LAWN, Point(35, 10)),
+        ),
+        features_in=6,
+        features_out=6,
+        dropped={},
+        bbox=(0, 0, 40, 20),
+    )
+    beds = _drawn_beds(basemap)
+    assert beds is not None
+    assert beds.contains(Point(10, 10))
+    assert not beds.intersects(Point(25, 10))
+    assert not beds.contains(Point(35, 10))

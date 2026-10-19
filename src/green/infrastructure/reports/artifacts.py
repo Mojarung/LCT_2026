@@ -1160,6 +1160,9 @@ _BED_CLASSES = frozenset(
 # Подпись у края контура клумбы (точка вставки текста - его левый нижний угол), м.
 BED_LABEL_REACH_M = 0.5
 BED_MIN_M2 = 1.0
+# Круглая клумба без подписи: круглость 4пS/P² не меньше этого, площадь не больше, м².
+ROUND_BED_MIN = 0.85
+ROUND_BED_MAX_M2 = 60.0
 # Недозамкнутый контур клумбы замыкается, если концы ближе этого, м.
 BED_CLOSE_M = 0.5
 # Углы клумбы скругляются этим радиусом, пока она не теряет больше 1 - BED_ROUND_KEEP площади.
@@ -1180,19 +1183,20 @@ def _drawn_beds(basemap: Basemap | None) -> BaseGeometry | None:
         for lb in basemap.labels
         if FLOWERBED_PHRASE.search(lb.text.strip().upper())
     ]
-    if not names:
-        return None
-    areas = [
-        area
+    shaped = [
+        (area, f.object_class)
         for f in basemap.features
         if f.object_class in _BED_CLASSES
         for part in shapely.get_parts(f.geometry)
         if (area := _closed(part)) is not None and BED_MIN_M2 <= area.area <= FLOWERBED_MAX_M2
     ]
-    if not areas:
+    if not shaped:
         return None
+    areas = [area for area, _ in shaped]
+    beds = _marked_rounds(basemap, shaped)
+    if not names:
+        return shapely.union_all(beds) if beds else None
     tree = shapely.STRtree(areas)
-    beds = []
     for point in names:
         near = [
             areas[int(i)]
@@ -1205,6 +1209,37 @@ def _drawn_beds(basemap: Basemap | None) -> BaseGeometry | None:
             rounded = bed.buffer(-BED_ROUND_M).buffer(BED_ROUND_M)
             beds.append(rounded if rounded.area >= BED_ROUND_KEEP * bed.area else bed)
     return shapely.union_all(beds) if beds else None
+
+
+def _marked_rounds(
+    basemap: Basemap, shaped: list[tuple[BaseGeometry, ObjectClass]]
+) -> list[BaseGeometry]:
+    """Круглые контуры со знаком газона внутри - круглые клумбы без подписи.
+
+    Съёмка рисует круглую клумбу тем же пунктирным кругом, что и клумбу с подписью, а внутрь
+    ставит знак травяного покрова: у парковки дома на Харьковской такой круг стоял посреди
+    газона и в 3D не был виден (пользователь, 19.10.2026: «круглое зелёное пространство для
+    клумбы»). Сам газон кругом не считается: контур не класса газона, круглый, не больше
+    ROUND_BED_MAX_M2."""
+    marks = [
+        f.geometry
+        for f in basemap.features
+        if f.object_class is ObjectClass.LAWN and f.geometry.geom_type == "Point"
+    ]
+    if not marks:
+        return []
+    tree = shapely.STRtree(marks)
+    beds = []
+    for area, cls in shaped:
+        if cls is ObjectClass.LAWN or area.area > ROUND_BED_MAX_M2:
+            continue
+        if 4 * np.pi * area.area / (area.length**2) < ROUND_BED_MIN:
+            continue
+        if not len(tree.query(area, predicate="contains")):
+            continue
+        rounded = area.buffer(-BED_ROUND_M).buffer(BED_ROUND_M)
+        beds.append(rounded if rounded.area >= BED_ROUND_KEEP * area.area else area)
+    return beds
 
 
 def _closed(geometry: BaseGeometry) -> BaseGeometry | None:
