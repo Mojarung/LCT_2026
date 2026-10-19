@@ -41,9 +41,15 @@ export class StreetLights {
   private readonly meshes: THREE.InstancedMesh[] = [];
   private halo: THREE.Points | null = null;
 
-  constructor(poles: readonly Flat[], curbs: readonly Line[]) {
+  /** overRoof - точка под крышей дома: консоль над ней не вешается. */
+  constructor(
+    poles: readonly Flat[],
+    curbs: readonly Line[],
+    overRoof: (p: Flat) => boolean = () => false,
+  ) {
     this.root.name = 'street-lights';
     if (!poles.length) return;
+    const angles = poles.map((p) => lampAngle(p, curbs, overRoof));
     const mast = new THREE.InstancedMesh(
       streetLightGeometry(),
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1 }),
@@ -73,7 +79,7 @@ export class StreetLights {
     const m = new THREE.Matrix4();
     const head = new THREE.Vector3();
     poles.forEach((p, i) => {
-      const angle = nearestCurbDirection(p, curbs) ?? 0;
+      const angle = angles[i] ?? 0;
       m.makeRotationY(angle).setPosition(p.x, 0, p.z);
       mast.setMatrixAt(i, m);
       head.copy(HEAD).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
@@ -88,7 +94,7 @@ export class StreetLights {
       this.root.add(mesh);
     }
     pool.renderOrder = 1;
-    this.halo = haloPoints(poles, curbs);
+    this.halo = haloPoints(poles, angles);
     this.root.add(this.halo);
   }
 
@@ -121,12 +127,12 @@ export class StreetLights {
 
 /** Ореолы светильников одним облаком точек: точка всегда смотрит в камеру и сложена со сценой,
  *  поэтому сотни фонарей стоят одну отрисовку. */
-function haloPoints(poles: readonly Flat[], curbs: readonly Line[]): THREE.Points {
+function haloPoints(poles: readonly Flat[], angles: readonly number[]): THREE.Points {
   const positions = new Float32Array(poles.length * 3);
   const head = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
   poles.forEach((p, i) => {
-    const angle = nearestCurbDirection(p, curbs) ?? 0;
+    const angle = angles[i] ?? 0;
     head.copy(HEAD).applyAxisAngle(up, angle);
     positions.set([p.x + head.x, head.y - 0.15, p.z + head.z], i * 3);
   });
@@ -167,4 +173,24 @@ function haloTexture(): THREE.Texture {
   const texture = new THREE.DataTexture(data, size, size);
   texture.needsUpdate = true;
   return texture;
+}
+
+/** Консоль светильника - к ближайшему борту, но не над крышей: у опоры в метре от дома консоль
+ *  к борту за домом висела над скатом, и казалось, что столб проходит сквозь крышу (дом 1А на
+ *  Харьковской, пользователь 19.10.2026). Занятое направление сменяется обратным, потом
+ *  поперечными; все заняты - остаётся направление к борту. */
+export function lampAngle(
+  pole: Flat,
+  curbs: readonly Line[],
+  overRoof: (p: Flat) => boolean,
+): number {
+  const base = nearestCurbDirection(pole, curbs) ?? 0;
+  const clear = (angle: number) =>
+    [0.4, 0.9, 1.4, HEAD.z + 0.4].every(
+      (d) => !overRoof({ x: pole.x + Math.sin(angle) * d, z: pole.z + Math.cos(angle) * d }),
+    );
+  for (const turn of [0, Math.PI, Math.PI / 2, -Math.PI / 2]) {
+    if (clear(base + turn)) return base + turn;
+  }
+  return base;
 }

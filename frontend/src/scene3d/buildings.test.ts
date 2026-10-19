@@ -104,3 +104,51 @@ describe('здания', () => {
     expect(hipRoof(building(ell, { floors: 9, height: 28, wall: 'brick' }))).toBeNull();
   });
 });
+
+describe('двускатная крыша над контуром дома', () => {
+  // 24 x 10 м с западом 3 x 1,5 м в углу: план почти прямоугольный, крыша двускатная.
+  const ring: Flat[] = [
+    { x: 0, z: 0 },
+    { x: 24, z: 0 },
+    { x: 24, z: 10 },
+    { x: 3, z: 10 },
+    { x: 3, z: 8.5 },
+    { x: 0, z: 8.5 },
+  ];
+  const house = building(ring, { floors: 1, height: 4, wall: 'brick', use: 'residential' });
+
+  it('скат не накрывает запад: фонарь у стены не проходит сквозь крышу', () => {
+    expect(pitchedRoof(house)).toBe(true);
+    const pos = buildingGeometry([house]).roofs.getAttribute('position');
+    // Точка запада в метре от стен - под открытым небом.
+    const p = { x: 1.5, z: 9.5 };
+    const side = (a: Flat, b: Flat) => (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
+    for (let i = 0; i < pos.count; i += 3) {
+      const [a, b, c] = [i, i + 1, i + 2].map((k) => ({ x: pos.getX(k), z: pos.getZ(k) })) as [
+        Flat,
+        Flat,
+        Flat,
+      ];
+      const s1 = side(a, b);
+      const s2 = side(b, c);
+      const s3 = side(c, a);
+      const inside = (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0);
+      expect(inside).toBe(false);
+    }
+  });
+
+  it('стены запада и торцов подняты до ската: под крышей нет щели', () => {
+    const pos = buildingGeometry([house]).walls.getAttribute('position');
+    let notchTop = 0;
+    let gableTop = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      if (Math.abs(x - 3) < 1e-6 && z > 8.4) notchTop = Math.max(notchTop, pos.getY(i));
+      if (Math.abs(x - 24) < 1e-6) gableTop = Math.max(gableTop, pos.getY(i));
+    }
+    // Конёк по оси z = 5, подъём 3 м на 5 м: у стены запада (z = 8,5) скат на 0,9 м выше стен.
+    expect(notchTop).toBeCloseTo(4.9, 2);
+    expect(gableTop).toBeCloseTo(7, 2);
+  });
+});

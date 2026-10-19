@@ -706,7 +706,7 @@ export function pavingWins(
       }
       continue;
     }
-    if (k !== PAVERS && k !== ASPHALT) continue;
+    if (k !== PAVERS && k !== ASPHALT && k !== GRASS) continue;
     // Пиксель края контура не трогается: край даёт сетка тротуара, а лесенка пикселей маски
     // за ним торчала бы зубцами плитки на газоне.
     const x = i % width;
@@ -717,6 +717,16 @@ export function pavingWins(
       (i + width < contour.length && contour[i + width] !== k);
     if (edge) continue;
     if ((final[i * 4 + 2] ?? 0) >= 128) continue;
+    // Газон контура - газон: выпрямленная плитка, вылезшая на него, снимается (клин плитки у
+    // резины площадки, щель асфальта на скруглённом углу).
+    if (k === GRASS) {
+      if ((final[i * 4] ?? 0) < 128) {
+        final[i * 4] = 255;
+        final[i * 4 + 1] = 0;
+        kinds[i] = GRASS;
+      }
+      continue;
+    }
     final[i * 4] = 0;
     final[i * 4 + 1] = k === PAVERS ? 255 : 0;
     kinds[i] = k;
@@ -838,8 +848,11 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ...world.curbs,
     ...world.fences,
   ]);
+  // Контуры surface.json уже по чертежу: поворот их сторон к главным направлениям сдвигал край
+  // маски с края сеток плитки и резины, и из-под резины площадки торчал светлый клин плитки
+  // (Харьковская, спортплощадка у дома 1А, 19.10.2026). С контурами стороны не поворачиваются.
   const shape = areas
-    ? { ...CONTOUR_SHAPE, angles }
+    ? { ...CONTOUR_SHAPE }
     : { window: WAVE_M, tolerance: STRAIGHT_M, cap: CORNER_M, angles };
   for (let offset = 0; offset < 3; offset++) {
     const plane = new Uint8Array(w * h);
@@ -847,6 +860,8 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     const smooth = smoothBinary(plane, w, h, smoothPx);
     for (let i = 0; i < plane.length; i++) final[i * 4 + offset] = smooth[i] ?? 0;
   }
+  // Покрытие до выпрямления краёв: им заполняются щели, которые выпрямление оставляет.
+  const before = final.slice();
   // Растр покрывает w x h пикселей по mpp метров - чуть больше сцены. Маска в шейдере
   // растягивается на этот прямоугольник: при размере сцены вместо него она съезжала к краю
   // участка на пиксель, и вырез под проезд расходился с бортовым камнем.
@@ -907,8 +922,15 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   );
   for (let i = 0; i < road.length; i++) {
     const r = roadFill[i] ?? 0;
-    const g = Math.min(lawnFill[i] ?? 0, 255 - r);
-    const pv = Math.min(paverFill[i] ?? 0, 255 - r, 255 - g);
+    let g = Math.min(lawnFill[i] ?? 0, 255 - r);
+    let pv = Math.min(paverFill[i] ?? 0, 255 - r, 255 - g);
+    // Газон и плитка выпрямляются порознь, и на скруглённых углах между ними оставалась щель:
+    // в шейдере она асфальт - светлый клин у резины площадки и у дорожек (пользователь,
+    // 19.10.2026: «пофикси везде траблы с асфальтом»). Щель берёт своё покрытие из контуров.
+    if (contourKinds && r < 128 && g < 128 && pv < 128) {
+      if ((before[i * 4] ?? 0) >= 128) g = 255 - r;
+      else if ((before[i * 4 + 1] ?? 0) >= 128) pv = 255 - r;
+    }
     final[i * 4] = g;
     final[i * 4 + 1] = pv;
     final[i * 4 + 2] = r;
@@ -1208,7 +1230,9 @@ export const GROUND_MAP = /* glsl */ `
   // Дальнее поле за краем съёмки глуше: оно фон, а не газон участка.
   g = mix(g * vec3(0.86, 0.84, 0.8), g, outside);
   vec3 pv = paverTile(p) * (0.95 + 0.07 * macro);
-  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.74 + 0.26 * macro);
+  // Асфальт дворов и тротуаров на панорамах тёмно-серый: прежний на солнце выходил почти
+  // белым и путался с плиткой (пользователь, 19.10.2026, фото Харьковской).
+  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.42 + 0.16 * macro);
   vec3 col = g * lawn + pv * paver + a * asph;
   // Осенний опад: на проезде мало - сметают машины, на асфальте тротуара меньше, чем на газоне.
   col = applyLitter(col, p, uRoad > 0.5 ? 0.12 : 1.0 - 0.3 * asph, 0.0);
@@ -1231,6 +1255,9 @@ export const GROUND_MAP = /* glsl */ `
 
 const GROUND_ROUGHNESS = /* glsl */ `
 float roughnessFactor = clamp(groundArm.g, 0.45, 1.0);
+// Асфальт матовый: с шероховатостью фактуры дорожка против солнца бликовала и выходила
+// почти белой, хотя на панорамах она тёмно-серая (19.10.2026).
+roughnessFactor = mix(roughnessFactor, max(roughnessFactor, 0.9), groundWeights.z);
 roughnessFactor = mix(roughnessFactor, 0.12, groundWet * (1.0 - groundWeights.x) * 0.9);
 roughnessFactor = mix(roughnessFactor, 0.75, groundSnow);
 `;
