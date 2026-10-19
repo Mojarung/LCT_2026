@@ -171,6 +171,18 @@ export function roadEdges(
   return out;
 }
 
+/** Края проезжей части сцены: по контурам частей road из surface.json - тем же, что у сеток
+ *  тротуаров (paving.ts); борт по выпрямленному контуру маски расходился с ровным краем плитки
+ *  и шёл волной рядом с ним (пользователь, 19.10.2026). Без контуров - по маске. */
+export function sceneRoadEdges(
+  areas: SurfaceAreas | null | undefined,
+  origin: [number, number],
+  mask: MaskInfo,
+): RoadEdge[] {
+  if (areas?.paved_kind?.includes('road')) return roadEdges(areas, origin, crossingTest(mask));
+  return roadEdgesFromMask(mask);
+}
+
 /** Main's smoothed mask is authoritative for road, planting, cars and context.
  * Adapt its complete rings to the final-wave curb/apron pipeline without using stale raw areas. */
 export function roadEdgesFromMask(mask: MaskInfo): RoadEdge[] {

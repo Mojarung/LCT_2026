@@ -290,7 +290,7 @@ it('точная копия объекта подосновы в 3D не зад�
   expect(world.plants.filter((p) => p.existing)).toHaveLength(1);
 });
 
-it('shrub strips become continuous axes, without invented individual plants', () => {
+it('shrub strips become continuous axes planted with a row of bushes', () => {
   const world = buildWorld({
     scene: null,
     plan: null,
@@ -313,7 +313,14 @@ it('shrub strips become continuous axes, without invented individual plants', ()
       ],
     },
   });
-  expect(world.plants).toHaveLength(0);
+  // Кустарниковая полоса - ряд кустов по оси с шагом STRIP_SHRUB_STEP_M (пользователь,
+  // 19.10.2026: брус с фактурой листвы читался плоским), а не плоский брус.
+  expect(world.plants.length).toBeGreaterThanOrEqual(10);
+  expect(world.plants.every((p) => p.type === 'existing_shrub' && p.strip)).toBe(true);
+  const onAxis = (p: { x: number; z: number }) =>
+    (Math.abs(p.z - 8) < 1e-6 && p.x >= -9 && p.x <= -5) ||
+    (p.x >= -5 && p.x <= -2 && Math.abs(p.z - (8 - (p.x + 5) / 3)) < 1e-6);
+  expect(world.plants.every(onAxis)).toBe(true);
   expect(world.treeStrips).toHaveLength(0);
   expect(world.shrubStrips).toEqual([
     {
@@ -349,4 +356,149 @@ it('does not drop a shrub axis crossing the scene with both ends outside', () =>
     },
   });
   expect(world.shrubStrips).toHaveLength(1);
+  const shrubs = world.plants.filter((p) => p.strip);
+  expect(shrubs.length).toBeGreaterThan(5);
+  // Кусты - только в пределах сцены, хотя ось уходит на 20 м за край.
+  const [minX, , maxX] = world.bounds;
+  expect(shrubs.every((p) => p.x >= minX && p.x <= maxX)).toBe(true);
+});
+
+it('takes plan flowerbeds into the scene in scene coordinates', () => {
+  const plan = {
+    run_id: 'r',
+    source: { name: 'x', sha256: '', dxf_version: '' },
+    summary: {},
+    placements: [],
+    rejections: [],
+    warnings: [],
+    lawns: [
+      {
+        id: 'L1',
+        number: 1,
+        planting_type: 'lawn',
+        kind: 'flowerbed',
+        area_m2: 4,
+        rule_ids: [],
+        notes: [],
+        explanation: '',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [1100, 2100],
+              [1102, 2100],
+              [1102, 2102],
+              [1100, 2102],
+              [1100, 2100],
+            ],
+          ],
+        },
+      },
+      {
+        id: 'L2',
+        number: 2,
+        planting_type: 'lawn',
+        kind: 'kept',
+        area_m2: 100,
+        rule_ids: [],
+        notes: [],
+        explanation: '',
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ],
+  } as unknown as PlanJson;
+  const world = buildWorld({ scene: scene(), plan, basemap: null });
+  expect(world.flowerbeds).toHaveLength(1);
+  const [ox, oy] = world.origin;
+  expect(world.flowerbeds?.[0]?.[0]?.[0]).toEqual({ x: 1100 - ox, z: -(2100 - oy) });
+});
+
+it('takes fence axes from the basemap instead of the raw double lines', () => {
+  const basemap = {
+    type: 'FeatureCollection',
+    bbox: [900, 1900, 1300, 2300],
+    features: [
+      {
+        type: 'Feature',
+        properties: { class: 'fence' },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [1100, 2100.15],
+            [1120, 2100.15],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { class: 'fence' },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [1100, 2099.85],
+            [1120, 2099.85],
+          ],
+        },
+      },
+    ],
+    fence_axes: [
+      [
+        [1100, 2100],
+        [1120, 2100],
+      ],
+    ],
+  } as unknown as BasemapJson;
+  const world = buildWorld({ scene: scene(), plan: null, basemap });
+  expect(world.fences).toHaveLength(1);
+  expect(world.fenceAxes).toBe(true);
+  const [ox, oy] = world.origin;
+  expect(world.fences[0]?.points[0]).toEqual({ x: 1100 - ox, z: -(2100 - oy) });
+});
+
+it('takes benches drawn in the survey (1.9 x 0.6 m rectangles) as bench spots along their axis', () => {
+  const bench = (x: number, y: number) => ({
+    type: 'Feature',
+    properties: { class: 'obstacle' },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [x, y],
+          [x + 1.9, y],
+          [x + 1.9, y + 0.6],
+          [x, y + 0.6],
+          [x, y],
+        ],
+      ],
+    },
+  });
+  const pit = {
+    type: 'Feature',
+    properties: { class: 'obstacle' },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [1150, 2150],
+          [1156, 2150],
+          [1156, 2152],
+          [1150, 2152],
+          [1150, 2150],
+        ],
+      ],
+    },
+  };
+  const basemap = {
+    type: 'FeatureCollection',
+    bbox: [900, 1900, 1300, 2300],
+    features: [bench(1100, 2100), pit],
+  } as unknown as BasemapJson;
+  const world = buildWorld({ scene: scene(), plan: null, basemap });
+  expect(world.benches).toHaveLength(1);
+  const b = world.benches?.[0];
+  const [ox, oy] = world.origin;
+  expect(b?.x).toBeCloseTo(1100.95 - ox);
+  expect(b?.z).toBeCloseTo(-(2100.3 - oy));
+  // Ось x модели - вдоль длинной стороны (x чертежа): угол 0 или пи.
+  expect(Math.abs(Math.sin(b?.angle ?? 1))).toBeLessThan(1e-6);
 });

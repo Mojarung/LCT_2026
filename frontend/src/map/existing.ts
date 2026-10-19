@@ -53,9 +53,8 @@ export function shrubStripLines(feature: BasemapFeature): Position[][] {
   return [];
 }
 
-/** Illustrative width and height, not dimensions measured from the survey. */
+/** Illustrative width, not a dimension measured from the survey. */
 export const SHRUB_STRIP_WIDTH_M = 0.8;
-export const SHRUB_STRIP_HEIGHT_M = 0.8;
 
 /** Метки ближе друг к другу - одно растение (как MERGE_M в application/stock.py). */
 export const MERGE_M = 1;

@@ -210,6 +210,11 @@ def delete_run(run_id: str, container: ContainerDep) -> None:
     container.runs.delete(run_id)
 
 
+# Артефакт прогона меняется на месте (правка плана, пересборка): браузер обязан сверяться с
+# сервером, иначе по эвристике кэша показывал прежние surface.png и surface.json.
+REVALIDATE = "no-cache"
+
+
 @router.get(
     "/{run_id}/artifacts/{name}",
     name="get_artifact",
@@ -244,9 +249,11 @@ def get_artifact(run_id: str, name: str, container: ContainerDep) -> Response:
         return Response(
             content,
             media_type=media_type,
-            headers={"Content-Disposition": disposition},
+            headers={"Content-Disposition": disposition, "Cache-Control": REVALIDATE},
         )
-    return FileResponse(path, media_type=media_type, filename=name)
+    return FileResponse(
+        path, media_type=media_type, filename=name, headers={"Cache-Control": REVALIDATE}
+    )
 
 
 @router.get(

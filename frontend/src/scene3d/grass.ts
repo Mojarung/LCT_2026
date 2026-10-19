@@ -167,7 +167,9 @@ export class GrassField {
       uSize: { value: opts.size },
       uRadius: { value: opts.radius },
       uTime: { value: 0 },
-      uMask: { value: mask.texture },
+      // Своя маска травы: газон без пикселей под сетками покрытия контуров - иначе травинки
+      // прорастали сквозь асфальт проезда россыпью точек (у оград дома 1А, 19.10.2026).
+      uMask: { value: mask.grass ?? mask.texture },
       uMaskRect: { value: new THREE.Vector4(...mask.rect) },
       uNoise: { value: noise },
       uGrow: { value: 1 },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chainFences, dropTwinFences } from './fences';
+import { chainFences, dropTwinFences, FENCE_CORNER_M, roundFenceCorners } from './fences';
 import type { Line } from './types';
 
 const seg = (x0: number, z0: number, x1: number, z1: number): Line => ({
@@ -59,5 +59,61 @@ describe('сдвоенная ограда', () => {
       },
     ]);
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('углы ограды', () => {
+  it('прямой угол и угол с фаской скругляются одной дугой, прямые участки не трогаются', () => {
+    const square: Line = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+        { x: 10, z: 10 },
+      ],
+    };
+    const [round] = roundFenceCorners([square]);
+    const pts = round?.points ?? [];
+    expect(pts[0]).toEqual({ x: 0, z: 0 });
+    expect(pts[pts.length - 1]).toEqual({ x: 10, z: 10 });
+    // Вершина угла срезана: ближайшая точка в 0,6 x (sqrt2 - 1) от неё.
+    const corner = Math.min(...pts.map((p) => Math.hypot(p.x - 10, p.z)));
+    expect(corner).toBeCloseTo(FENCE_CORNER_M * (Math.SQRT2 - 1), 1);
+    // Все точки дуги - на расстоянии радиуса от центра (9,4; 0,6).
+    for (const p of pts.slice(1, -1)) {
+      expect(Math.hypot(p.x - (10 - FENCE_CORNER_M), p.z - FENCE_CORNER_M)).toBeCloseTo(
+        FENCE_CORNER_M,
+        3,
+      );
+    }
+  });
+
+  it('излом меньше 20 градусов не скругляется, замкнутая ограда скругляется во всех углах', () => {
+    const bend: Line = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 10, z: 0 },
+        { x: 20, z: 1 },
+      ],
+    };
+    expect(roundFenceCorners([bend])[0]?.points).toHaveLength(3);
+    const closed: Line = {
+      points: [
+        { x: 0, z: 0 },
+        { x: 8, z: 0 },
+        { x: 8, z: 6 },
+        { x: 0, z: 6 },
+        { x: 0, z: 0 },
+      ],
+    };
+    const pts = roundFenceCorners([closed])[0]?.points ?? [];
+    for (const [cx, cz] of [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ] as const) {
+      expect(Math.min(...pts.map((p) => Math.hypot(p.x - cx, p.z - cz)))).toBeGreaterThan(0.2);
+    }
+    expect(pts[0]).toEqual(pts[pts.length - 1]);
   });
 });

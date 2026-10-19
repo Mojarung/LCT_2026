@@ -301,8 +301,12 @@ export function classifySurface(
     Math.max(1, Math.round(WINDOW_M / metresPerPx)),
   );
   const half = TROTTOIR_M / 2 / metresPerPx;
-  for (let i = 0; i < kind.length; i++) {
-    if (unknown[i] && (middle[i] ?? 0) < half) kind[i] = PAVERS;
+  // Контуры новых прогонов несут вид покрытия от сервиса целиком по части: делить по ширине
+  // попиксельно нельзя, граница плитки и асфальта шла пятнами (пользователь, 19.10.2026).
+  if (minAlpha <= 1) {
+    for (let i = 0; i < kind.length; i++) {
+      if (unknown[i] && (middle[i] ?? 0) < half) kind[i] = PAVERS;
+    }
   }
   closeSeams(kind, paved, empty, w, h, Math.max(1, Math.round(SEAM_M / metresPerPx)));
   return kind;

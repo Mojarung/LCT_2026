@@ -26,6 +26,7 @@ from green.application.editing import RunContext
 from green.application.effect import street_effect
 from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
+from green.application.fences import bridge_fence_gaps
 from green.application.gis_alignment import alignment_notes
 from green.application.input_quality import require_complete_geometry
 from green.application.insolation import ShadeMap, with_shade
@@ -50,7 +51,7 @@ from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
 from green.application.shrub_rows import fill_shrub_rows
 from green.application.species_traces import with_species_traces
-from green.application.surfaces import build_surface_map
+from green.application.surfaces import build_surface_map, display_extent
 from green.application.understory import fill_understory
 from green.application.validation import (
     PlanValidation,
@@ -304,6 +305,12 @@ class PlanSite:
                     scene = replace(scene, warnings=(*scene.warnings, school_note))
             # Пересмотры классов по контексту (борта, края внутри газона) - в отчёт классов.
             semantics = classification_report(replace(scene, features=features), layer_map, params)
+            # Ограда штрихами: зазоры до метра закрываются перемычками, иначе материал от подписи
+            # протекает сквозь ограду, а в 3D ограда стоит с дырами (Харьковская, 18.10.2026).
+            features, bridged = bridge_fence_gaps(features)
+            if bridged:
+                note = f"Ограда: {bridged} зазоров до 1 м между штрихами закрыто перемычками."
+                scene = replace(scene, warnings=(*scene.warnings, note))
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
@@ -340,6 +347,26 @@ class PlanSite:
                     open_ground=params.open_ground,
                 )
                 if params.require_soil
+                else None
+            )
+        # Для 3D карта покрытий шире границы работ: за границей съёмка тоже нарисована, а без
+        # карты там был газон. В границе - те же правила, за ней решает только нарисованное.
+        with watch.stage("surface_display"):
+            boundary = work_boundary(features)
+            display_surface = (
+                build_surface_map(
+                    features,
+                    scene.labels,
+                    display_extent(boundary),
+                    params.surface_cell_m,
+                    max_distance_m=params.surface_max_distance_m,
+                    ambiguity_m=params.surface_ambiguity_m,
+                    tree_distance_m=params.tree_seed_distance_m,
+                    inference_mode=params.surface_inference_mode,
+                    open_ground=params.open_ground,
+                    display_around=boundary,
+                )
+                if surface is not None
                 else None
             )
         site = site_of(features, surface, crown_m=params.existing_crown_m)
@@ -546,6 +573,7 @@ class PlanSite:
             load_notes=(*merge_notes, *gis_notes),
             basemap=basemap,
             surface=surface,
+            display_surface=display_surface,
             volumes=volumes,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,

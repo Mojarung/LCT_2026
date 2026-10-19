@@ -133,3 +133,78 @@ export function dropTwinFences(lines: readonly Line[]): Line[] {
   }
   return out;
 }
+
+/** Радиус скругления углов ограды, м: как у резины площадок по чертежу (0,5-0,6 м). */
+export const FENCE_CORNER_M = 0.6;
+/** Поворот меньше этого - не угол, а излом линии съёмки: не скругляется, рад. */
+const CORNER_MIN_TURN = (20 * Math.PI) / 180;
+
+/** Углы ограды - дугой одного радиуса везде. Ось ограды из съёмки то с острым углом, то с
+ *  фаской из двух близких вершин, и рядом стояли прямой угол и скруглённый (пользователь,
+ *  19.10.2026: «если ты закругляешь забор, то закругляй везде»). Радиус ограничен половиной
+ *  соседних отрезков: короткий отрезок не выворачивается. Замкнутая линия скругляется и в
+ *  точке замыкания. */
+export function roundFenceCorners(lines: readonly Line[], radius = FENCE_CORNER_M): Line[] {
+  return lines.map((line) => {
+    const pts = line.points;
+    if (pts.length < 3) return line;
+    const first = pts[0] as Flat;
+    const last = pts[pts.length - 1] as Flat;
+    const closed = Math.hypot(first.x - last.x, first.z - last.z) < 1e-6;
+    const ring = closed ? pts.slice(0, -1) : [...pts];
+    const n = ring.length;
+    const out: Flat[] = [];
+    for (let i = 0; i < n; i++) {
+      const p = ring[i] as Flat;
+      const inner = closed || (i > 0 && i < n - 1);
+      if (!inner) {
+        out.push(p);
+        continue;
+      }
+      const a = ring[(i - 1 + n) % n] as Flat;
+      const c = ring[(i + 1) % n] as Flat;
+      const la = Math.hypot(p.x - a.x, p.z - a.z);
+      const lc = Math.hypot(c.x - p.x, c.z - p.z);
+      if (la < 1e-6 || lc < 1e-6) {
+        out.push(p);
+        continue;
+      }
+      const ux = (a.x - p.x) / la;
+      const uz = (a.z - p.z) / la;
+      const vx = (c.x - p.x) / lc;
+      const vz = (c.z - p.z) / lc;
+      // Угол между отрезками в вершине: pi - прямо, меньше - поворот.
+      const inside = Math.acos(Math.max(-1, Math.min(1, ux * vx + uz * vz)));
+      const turn = Math.PI - inside;
+      if (turn < CORNER_MIN_TURN || inside < 1e-3) {
+        out.push(p);
+        continue;
+      }
+      // Точки касания дуги на отрезках: на расстоянии r / tan(inside / 2) от вершины.
+      const tan = Math.tan(inside / 2);
+      const cut = Math.min(radius / tan, la / 2, lc / 2);
+      const r = cut * tan;
+      const t1 = { x: p.x + ux * cut, z: p.z + uz * cut };
+      const t2 = { x: p.x + vx * cut, z: p.z + vz * cut };
+      // Центр дуги - по биссектрисе на r / sin(inside / 2) от вершины.
+      const bx = ux + vx;
+      const bz = uz + vz;
+      const bl = Math.hypot(bx, bz) || 1;
+      const d = r / Math.sin(inside / 2);
+      const cx = p.x + (bx / bl) * d;
+      const cz = p.z + (bz / bl) * d;
+      const a1 = Math.atan2(t1.z - cz, t1.x - cx);
+      let a2 = Math.atan2(t2.z - cz, t2.x - cx);
+      // Короткая дуга: разворот не больше pi.
+      while (a2 - a1 > Math.PI) a2 -= 2 * Math.PI;
+      while (a2 - a1 < -Math.PI) a2 += 2 * Math.PI;
+      const steps = Math.max(2, Math.ceil(Math.abs(a2 - a1) / (Math.PI / 12)));
+      for (let k = 0; k <= steps; k++) {
+        const t = a1 + ((a2 - a1) * k) / steps;
+        out.push({ x: cx + Math.cos(t) * r, z: cz + Math.sin(t) * r });
+      }
+    }
+    if (closed && out[0]) out.push({ ...out[0] });
+    return { ...line, points: out };
+  });
+}

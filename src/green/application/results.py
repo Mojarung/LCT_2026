@@ -102,6 +102,8 @@ class RunReport:
     basemap: Basemap | None = None
     # Карта покрытий прогона: грунт и твёрдое, как их понял сервис. Уходит в веб растром.
     surface: SurfaceMap | None = None
+    # Карта покрытий для 3D шире границы работ (surfaces.display_extent); посадки её не читают.
+    display_surface: SurfaceMap | None = None
     # Объёмы зданий для трёхмерной сцены. Считаются вместе с подосновой и от правки плана не
     # зависят: пересборка после правки переносит их в новый отчёт как есть.
     volumes: Volumes | None = None

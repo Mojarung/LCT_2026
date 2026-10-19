@@ -16,7 +16,7 @@ import {
   seriesOf,
   wallsOf,
 } from './facades';
-import { pitchedRoof } from './buildings';
+import { hipRoof, pitchedRoof } from './buildings';
 import type { Building, Line } from './types';
 
 interface Parts {
@@ -184,7 +184,7 @@ export function parapetGeometry(buildings: readonly Building[]): THREE.BufferGeo
   for (const b of buildings) {
     const series = seriesOf(b);
     // Двускатной крыше парапет не нужен: карниз со свесом.
-    if (series === 'porch' || b.floors < 2 || pitchedRoof(b)) continue;
+    if (series === 'porch' || b.floors < 2 || pitchedRoof(b) || hipRoof(b)) continue;
     const outer = b.rings[0];
     if (!outer) continue;
     const wall = linear(paletteOf(b, series).wall).map((v) => v * 0.86) as [number, number, number];

@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 
 import { dominantAngles, keepSegments, outlines } from './contours';
+import { LITTER_HEAD, type LitterUniforms, litterUniforms } from './litter';
 import {
   absorbSmall,
   ASPHALT,
@@ -42,6 +43,10 @@ const SMOOTH_M = 1;
 const WAVE_M = 8;
 const STRAIGHT_M = 0.5;
 const CORNER_M = 2.5;
+/** Контуры surface.json уже идут по линиям чертежа: им нужно только снять лесенку пикселей
+ *  маски. Окно WAVE_M для них раздувало узкие дорожки и съезды в пятна (Харьковская,
+ *  18.10.2026): усреднение по 8 м превращало угол дорожки шириной 3 м в каплю. */
+export const CONTOUR_SHAPE = { window: 0, tolerance: 0.15, cap: 0.6 } as const;
 /** Обрывки на стыках дорожек, которые отдаются соседнему покрытию, м². */
 const SCRAP_ASPHALT_M2 = 40;
 const SCRAP_PAVERS_M2 = 4;
@@ -67,6 +72,8 @@ export interface SurfaceAreas {
   paved_kind?: string[];
   /** Проезжая часть с запасом под край тротуара: сетка асфальта ниже уровня земли. */
   road_mesh?: AreaPolygon[];
+  /** Клумбы съёмки: газон-остров среди покрытия с подписью «КЛУМБА». */
+  flowerbeds?: AreaPolygon[];
 }
 
 /** Проезжая часть ниже тротуара и газона на высоту дорожного борта. */
@@ -89,6 +96,8 @@ const PAVED_FILLS: Record<string, string> = {
   road: rgb(ROAD_RGB),
   asphalt: rgb(ASPHALT_RGB),
   pavers: rgb(PAVERS_RGB),
+  // Под резиной площадки маска - плитка: уровень тротуара, люди ходят, борт по краю садовый.
+  special: rgb(PAVERS_RGB),
 };
 const PAVED_FILL = rgb(PAVED_RGB);
 
@@ -435,10 +444,32 @@ export function drawSurfaceAreas(
   }
 }
 
+/** Спецпокрытие площадок над землёй, м: резина лежит поверх плитки маски, без мерцания. */
+export const SPECIAL_LIFT_M = 0.015;
+
+/** Сетка спецпокрытия (резиновая крошка детских и спортивных площадок): части покрытия
+ *  вида special из surface.json, по контуру чертежа (пользователь, 19.10.2026: площадка у
+ *  дома 1А на панораме - резина, а не плитка). */
+export function specialGeometry(
+  areas: SurfaceAreas,
+  origin: [number, number],
+): THREE.BufferGeometry | null {
+  const parts = areas.paved.filter((_, i) => areas.paved_kind?.[i] === 'special');
+  return flatGeometry(parts, origin, SPECIAL_LIFT_M);
+}
+
 /** Сетка проезжей части из контура road_mesh: на ROAD_DROP_M ниже земли, в координатах сцены. */
 export function roadGeometry(
   polygons: AreaPolygon[],
   origin: [number, number],
+): THREE.BufferGeometry | null {
+  return flatGeometry(polygons, origin, -ROAD_DROP_M);
+}
+
+function flatGeometry(
+  polygons: AreaPolygon[],
+  origin: [number, number],
+  y: number,
 ): THREE.BufferGeometry | null {
   const [ox, oy] = origin;
   const shapes = polygons
@@ -453,7 +484,7 @@ export function roadGeometry(
   if (!shapes.length) return null;
   const geometry = new THREE.ShapeGeometry(shapes);
   geometry.rotateX(-Math.PI / 2);
-  geometry.translate(0, -ROAD_DROP_M, 0);
+  geometry.translate(0, y, 0);
   return geometry;
 }
 
@@ -488,6 +519,8 @@ export interface MaskInfo {
   /** Полные контуры итоговой проезжей части до отсечения борта у рамки сцены. */
   roadContours?: Line[];
   texture: THREE.DataTexture;
+  /** Газон для травинок (красный канал): без пикселей, где контур surface.json - покрытие. */
+  grass?: THREE.DataTexture;
   /** minX, minZ и размер растра (w и h пикселей по metresPerPx) в координатах сцены. */
   rect: [number, number, number, number];
   /** Покрытие каждого пикселя (surfaceMask.ts) до размытия: по нему расставляются люди. */
@@ -508,8 +541,9 @@ export interface MaskInfo {
   metresPerPx: number;
 }
 
-/** Погода на земле: мокрый асфальт темнеет и блестит, снег ложится сначала на газон. */
-export interface GroundWeather {
+/** Погода на земле: мокрый асфальт темнеет и блестит, снег ложится сначала на газон,
+ *  осенью - опавшие листья (litter.ts). */
+export interface GroundWeather extends Partial<LitterUniforms> {
   uWet: { value: number };
   uSnow: { value: number };
 }
@@ -652,6 +686,88 @@ function fillLoops(
   return blurBytes(out, w, h, 1);
 }
 
+/** Покрытие контура сервиса сильнее газона маски: где контур - плитка или асфальт тротуара,
+ *  газона нет. Выпрямление и правило щели у проезда превращали узкий тротуар в газон, сетка
+ *  тротуара (paving.ts) ложилась поверх, и из плитки росли травинки (19.10.2026). */
+export function pavingWins(
+  final: Uint8Array | Uint8ClampedArray,
+  kinds: Uint8Array,
+  contour: Uint8Array,
+  width = contour.length,
+): void {
+  for (let i = 0; i < contour.length; i++) {
+    const k = contour[i];
+    // Проезд контура - тоже не газон: у оград дома 1А травинки маски росли сквозь асфальт
+    // проезда россыпью точек (19.10.2026).
+    if (k === ROAD) {
+      if ((final[i * 4] ?? 0) > 0) {
+        final[i * 4] = 0;
+        kinds[i] = ROAD;
+      }
+      continue;
+    }
+    if (k !== PAVERS && k !== ASPHALT && k !== GRASS) continue;
+    // Пиксель края контура не трогается: край даёт сетка тротуара, а лесенка пикселей маски
+    // за ним торчала бы зубцами плитки на газоне.
+    const x = i % width;
+    const edge =
+      (x > 0 && contour[i - 1] !== k) ||
+      (x < width - 1 && contour[i + 1] !== k) ||
+      (i >= width && contour[i - width] !== k) ||
+      (i + width < contour.length && contour[i + width] !== k);
+    if (edge) continue;
+    if ((final[i * 4 + 2] ?? 0) >= 128) continue;
+    // Газон контура - газон: выпрямленная плитка, вылезшая на него, снимается (клин плитки у
+    // резины площадки, щель асфальта на скруглённом углу).
+    if (k === GRASS) {
+      if ((final[i * 4] ?? 0) < 128) {
+        final[i * 4] = 255;
+        final[i * 4 + 1] = 0;
+        kinds[i] = GRASS;
+      }
+      continue;
+    }
+    final[i * 4] = 0;
+    final[i * 4 + 1] = k === PAVERS ? 255 : 0;
+    kinds[i] = k;
+  }
+}
+
+/** Газон маски для травинок: под сеткой покрытия контура (плитка, асфальт, проезд) травы нет
+ *  даже там, где размытая маска газона заходит под край сетки. */
+export function grassLawn(final: Uint8Array | Uint8ClampedArray, contour: Uint8Array): Uint8Array {
+  const out = new Uint8Array(contour.length);
+  for (let i = 0; i < out.length; i++) {
+    const k = contour[i];
+    out[i] = k === PAVERS || k === ASPHALT || k === ROAD ? 0 : (final[i * 4] ?? 0);
+  }
+  return out;
+}
+
+function grassTexture(
+  final: Uint8Array | Uint8ClampedArray,
+  contour: Uint8Array,
+  w: number,
+  h: number,
+): THREE.DataTexture {
+  const t = new THREE.DataTexture(
+    grassLawn(final, contour),
+    w,
+    h,
+    THREE.RedFormat,
+    THREE.UnsignedByteType,
+  );
+  t.unpackAlignment = 1;
+  t.generateMipmaps = false;
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
 export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo {
   const [minX, minZ, maxX, maxZ] = world.bounds;
   const sizeX = Math.max(1, maxX - minX);
@@ -695,16 +811,24 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   // покрытый наполовину. С порогом «любой непустой» асфальт вылезал за край на пиксель маски
   // (до 0,4 м) - за бортовой камень. Растр старых прогонов полупрозрачный: порог - непустой.
   const kinds = surfaceToMask(ctx, w, h, mpp, areas ? 128 : 1);
+  const contourKinds = areas ? kinds.slice() : null;
   // Край контура на пикселе маски (у большой сцены до 0,4 м) - лесенка; лёгкое размытие
   // выравнивает порог шейдера. У растра без контуров - размытие на клетку.
   if (surface) softenCells(c, ctx, areas ? CONTOUR_SOFTEN_PX : surface.cell / mpp);
   const toPx = (p: Flat): [number, number] => [(p.x - minX) / mpp, (p.z - minZ) / mpp];
-  ctx.fillStyle = '#0000ff';
-  for (const rings of world.roads) ringPath(ctx, rings, toPx);
-  ctx.fillStyle = '#00ff00';
-  for (const rings of world.sidewalks) ringPath(ctx, rings, toPx);
-  ctx.fillStyle = '#ff0000';
-  for (const rings of world.lawns) ringPath(ctx, rings, toPx);
+  // Полигоны проезжей части, тротуаров и газонов подосновы уже в контурах surface.json:
+  // сервис свёл их с покрытиями и разрешил споры (покрытие сильнее газона). Нарисованные
+  // поверх, они отменяли это решение: проектный газон с плавными кривыми ложился на
+  // прямой тротуар съёмки, и край шёл волной (Харьковская, 19.10.2026). Поверх - только у
+  // прогонов без контуров.
+  if (!areas) {
+    ctx.fillStyle = '#0000ff';
+    for (const rings of world.roads) ringPath(ctx, rings, toPx);
+    ctx.fillStyle = '#00ff00';
+    for (const rings of world.sidewalks) ringPath(ctx, rings, toPx);
+    ctx.fillStyle = '#ff0000';
+    for (const rings of world.lawns) ringPath(ctx, rings, toPx);
+  }
   const image = ctx.getImageData(0, 0, w, h);
   const final = image.data;
   // Карта покрытий - клетки по 0,5 м: граница газона и асфальта шла лесенкой и волной.
@@ -724,13 +848,20 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     ...world.curbs,
     ...world.fences,
   ]);
-  const shape = { window: WAVE_M, tolerance: STRAIGHT_M, cap: CORNER_M, angles };
+  // Контуры surface.json уже по чертежу: поворот их сторон к главным направлениям сдвигал край
+  // маски с края сеток плитки и резины, и из-под резины площадки торчал светлый клин плитки
+  // (Харьковская, спортплощадка у дома 1А, 19.10.2026). С контурами стороны не поворачиваются.
+  const shape = areas
+    ? { ...CONTOUR_SHAPE }
+    : { window: WAVE_M, tolerance: STRAIGHT_M, cap: CORNER_M, angles };
   for (let offset = 0; offset < 3; offset++) {
     const plane = new Uint8Array(w * h);
     for (let i = 0; i < plane.length; i++) plane[i] = (final[i * 4 + offset] ?? 0) >= 128 ? 255 : 0;
     const smooth = smoothBinary(plane, w, h, smoothPx);
     for (let i = 0; i < plane.length; i++) final[i * 4 + offset] = smooth[i] ?? 0;
   }
+  // Покрытие до выпрямления краёв: им заполняются щели, которые выпрямление оставляет.
+  const before = final.slice();
   // Растр покрывает w x h пикселей по mpp метров - чуть больше сцены. Маска в шейдере
   // растягивается на этот прямоугольник: при размере сцены вместо него она съезжала к краю
   // участка на пиксель, и вырез под проезд расходился с бортовым камнем.
@@ -766,7 +897,8 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   const nearRoad = maxFilter(Float32Array.from(road), w, h, gapPx);
   const isLawn = (i: number) =>
     (final[i * 4] ?? 0) >= 128 ||
-    (road[i] === 0 &&
+    (!contourKinds &&
+      road[i] === 0 &&
       (final[i * 4 + 1] ?? 0) < 128 &&
       (nearLawn[i] ?? 0) >= 128 &&
       (nearRoad[i] ?? 0) > 0);
@@ -790,8 +922,15 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   );
   for (let i = 0; i < road.length; i++) {
     const r = roadFill[i] ?? 0;
-    const g = Math.min(lawnFill[i] ?? 0, 255 - r);
-    const pv = Math.min(paverFill[i] ?? 0, 255 - r, 255 - g);
+    let g = Math.min(lawnFill[i] ?? 0, 255 - r);
+    let pv = Math.min(paverFill[i] ?? 0, 255 - r, 255 - g);
+    // Газон и плитка выпрямляются порознь, и на скруглённых углах между ними оставалась щель:
+    // в шейдере она асфальт - светлый клин у резины площадки и у дорожек (пользователь,
+    // 19.10.2026: «пофикси везде траблы с асфальтом»). Щель берёт своё покрытие из контуров.
+    if (contourKinds && r < 128 && g < 128 && pv < 128) {
+      if ((before[i * 4] ?? 0) >= 128) g = 255 - r;
+      else if ((before[i * 4 + 1] ?? 0) >= 128) pv = 255 - r;
+    }
     final[i * 4] = g;
     final[i * 4 + 1] = pv;
     final[i * 4 + 2] = r;
@@ -803,6 +942,7 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
     else if (pv >= 128) kinds[i] = PAVERS;
   }
   absorbScraps(final, kinds, road, w, h, mpp);
+  if (contourKinds) pavingWins(final, kinds, contourKinds, w);
   const cut = new THREE.DataTexture(roadFill, w, h, THREE.RedFormat, THREE.UnsignedByteType);
   cut.magFilter = THREE.LinearFilter;
   cut.minFilter = THREE.LinearFilter;
@@ -862,8 +1002,10 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
+  const grass = contourKinds ? grassTexture(final, contourKinds, w, h) : undefined;
   return {
     texture,
+    grass,
     rect,
     kinds,
     known,
@@ -910,6 +1052,8 @@ export function groundMesh(
     name?: string;
     /** Плоскость проезда под вырезом: на ROAD_DROP_M ниже, только асфальт. */
     road?: boolean;
+    /** Сетка тротуара (paving.ts): материал задан, маска не спрашивается. */
+    cover?: 'pavers' | 'asphalt';
   } = {},
 ): THREE.Mesh {
   const [minX, minZ, maxX, maxZ] = world.bounds;
@@ -953,9 +1097,11 @@ export function groundMesh(
     uAsphaltArm: { value: tex.asphaltArmMap ?? tex.noise },
     uPaversArm: { value: tex.paversArmMap ?? tex.noise },
     uRoad: { value: options.road ? 1 : 0 },
+    uCover: { value: options.cover === 'pavers' ? 1 : options.cover === 'asphalt' ? 2 : 0 },
     uCut: { value: mask.cut },
     // Земля на уровне тротуара вырезает проезжую часть: там видна плоскость проезда ниже.
     uCutRoad: { value: options.cutRoad ? 1 : 0 },
+    ...litterUniforms(),
     ...weather,
   };
   material.onBeforeCompile = (shader) => {
@@ -967,7 +1113,7 @@ export function groundMesh(
         '#include <worldpos_vertex>\nvGroundPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${GROUND_FRAGMENT_HEAD}`)
+      .replace('#include <common>', `#include <common>\n${GROUND_FRAGMENT_HEAD}\n${LITTER_HEAD}`)
       .replace('#include <map_fragment>', GROUND_MAP)
       .replace('#include <roughnessmap_fragment>', GROUND_ROUGHNESS)
       .replace('#include <normal_fragment_maps>', GROUND_NORMAL);
@@ -997,6 +1143,7 @@ uniform sampler2D uPaversArm;
 uniform float uWet;
 uniform float uSnow;
 uniform float uRoad;
+uniform float uCover;
 uniform sampler2D uCut;
 uniform float uCutRoad;
 vec3 groundWeights;
@@ -1065,6 +1212,11 @@ export const GROUND_MAP = /* glsl */ `
     lawn = 0.0;
     paver = 0.0;
   }
+  // Сетка тротуара по контуру части: материал её, а не маски (край маски - лесенка 0,25 м).
+  if (uCover > 0.5) {
+    lawn = 0.0;
+    paver = uCover < 1.5 ? 1.0 : 0.0;
+  }
   float asph = clamp(1.0 - lawn - paver, 0.0, 1.0);
   groundWeights = vec3(lawn, paver, asph);
   // Крупные пятна - шумом в десятки метров, а не фактурой: повтор плитки фактуры сверху
@@ -1078,8 +1230,16 @@ export const GROUND_MAP = /* glsl */ `
   // Дальнее поле за краем съёмки глуше: оно фон, а не газон участка.
   g = mix(g * vec3(0.86, 0.84, 0.8), g, outside);
   vec3 pv = paverTile(p) * (0.95 + 0.07 * macro);
-  vec3 a = antiTile(uAsphalt, p, 3.0) * (0.74 + 0.26 * macro);
+  // Асфальт дворов и тротуаров на панорамах тёмно-серый: прежний на солнце выходил почти
+  // белым и путался с плиткой (пользователь, 19.10.2026, фото Харьковской).
+  // Серый без синевы: фактура асфальта с небом давала синий проезд («асфальт грустно»).
+  vec3 a = antiTile(uAsphalt, p, 3.0);
+  a = mix(vec3(dot(a, vec3(0.299, 0.587, 0.114))), a, 0.3) * (0.58 + 0.18 * macro);
+  // Небо подсвечивает тень синим: асфальт чуть теплее, чтобы проезд не выходил синим.
+  a *= vec3(1.05, 1.0, 0.92);
   vec3 col = g * lawn + pv * paver + a * asph;
+  // Осенний опад: на проезде мало - сметают машины, на асфальте тротуара меньше, чем на газоне.
+  col = applyLitter(col, p, uRoad > 0.5 ? 0.12 : 1.0 - 0.3 * asph, 0.0);
   // Мокрое покрытие темнее, газон темнеет меньше; лужи - пятнами шума.
   float puddle = smoothstep(0.55, 0.7, texture2D(uNoise, p / 9.0).g) * (1.0 - lawn);
   col *= 1.0 - uWet * (0.3 * (1.0 - lawn) + 0.15 * lawn + 0.2 * puddle);
@@ -1099,6 +1259,9 @@ export const GROUND_MAP = /* glsl */ `
 
 const GROUND_ROUGHNESS = /* glsl */ `
 float roughnessFactor = clamp(groundArm.g, 0.45, 1.0);
+// Асфальт матовый: с шероховатостью фактуры дорожка против солнца бликовала и выходила
+// почти белой, хотя на панорамах она тёмно-серая (19.10.2026).
+roughnessFactor = mix(roughnessFactor, max(roughnessFactor, 0.9), groundWeights.z);
 roughnessFactor = mix(roughnessFactor, 0.12, groundWet * (1.0 - groundWeights.x) * 0.9);
 roughnessFactor = mix(roughnessFactor, 0.75, groundSnow);
 `;
@@ -1117,12 +1280,14 @@ normal = normalize(mat3(viewMatrix) * vec3(scannedNormal.x, scannedNormal.z, sca
 /** Бортовой камень: брус 15 x 15 см вдоль каждой линии борта - дорожный, у проезжей части. */
 export const CURB_W = 0.15;
 export const CURB_H = 0.15;
-/** Верх дорожного борта вровень с тротуаром. */
-export const CURB_ABOVE_WALK_M = 0;
-/** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665): 8 см шириной, над
- *  газоном выступает на несколько сантиметров. */
-export const GARDEN_CURB_W = 0.08;
-export const GARDEN_CURB_H = 0.06;
+/** Верх дорожного борта над тротуаром и газоном: вровень он читался плоской ниткой на земле
+ *  (пользователь, 19.10.2026: «бордюры должны быть идеальными, не 2D»). */
+export const CURB_ABOVE_WALK_M = 0.05;
+/** Садовый борт между тротуаром и газоном (БР 100.20.8 по ГОСТ 6665, бывает и 10 см): над
+ *  газоном выступает на 8-10 см. При 6 см он читался тёмной ниткой на земле, а не камнем
+ *  (пользователь, 19.10.2026: «чтобы бордюры были объемные»). */
+export const GARDEN_CURB_W = 0.1;
+export const GARDEN_CURB_H = 0.1;
 
 /** Сетка бруса вдоль ломаной: верх и две боковые грани без дна. Пролёты стыкуются срезом
  *  угла (без щели и нахлёста на изломе, срез не длиннее ширины бруса), открытая ломаная
@@ -1575,6 +1740,23 @@ export interface PaintedRoads {
 /** Дороги и дорожки OpenStreetMap там, где съёмки нет, вписываются в маску земли: плоская
  *  серая лента поверх газона читалась заплаткой без фактуры, а в маске дорожка получает
  *  плитку, проезд - асфальт, как всё остальное. Снятое съёмкой карта не перекрывает. */
+/** Дороги и тропы карты города (OpenStreetMap) ложатся на землю сцены не ближе этого к
+ *  тому, что знает съёмка, м. Пустое внутри съёмки - газон по умолчанию, и тропа карты
+ *  ложилась на него волнистой лентой с круглыми концами, которой на чертеже нет
+ *  (Харьковская, 19.10.2026: «слева тротуар... её кстати нет»). */
+export const CONTEXT_CLEAR_M = 30;
+
+/** Пиксели маски, куда можно класть дороги карты города: дальнее поле за съёмкой. */
+export function contextPaintable(known: Uint8Array, w: number, h: number, mpp: number): Uint8Array {
+  const near = maxFilter(
+    Float32Array.from(known),
+    w,
+    h,
+    Math.max(1, Math.round(CONTEXT_CLEAR_M / mpp)),
+  );
+  return Uint8Array.from(near, (v) => (v > 0 ? 0 : 1));
+}
+
 export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]): void {
   const { width: w, height: h, metresPerPx: mpp } = mask;
   const [minX, minZ] = mask.rect;
@@ -1585,6 +1767,7 @@ export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]
   const ctx = c.getContext('2d', { willReadFrequently: true });
   if (!ctx) return;
   let changed = false;
+  const free = contextPaintable(mask.known, w, h, mpp);
   for (const paved of ['asphalt', 'pavers'] as const) {
     const group = roads.filter((r) => r.paved === paved);
     if (!group.length) continue;
@@ -1611,7 +1794,7 @@ export function paintContextRoads(mask: MaskInfo, roads: readonly PaintedRoads[]
     const paint = blurBytes(raw, w, h, 1);
     for (let i = 0; i < paint.length; i++) {
       const v = paint[i] ?? 0;
-      if (!v || mask.known[i] || mask.road[i]) continue;
+      if (!v || !free[i] || mask.road[i]) continue;
       changed = true;
       data[i * 4] = Math.min(data[i * 4] ?? 0, 255 - v);
       data[i * 4 + 1] =

@@ -150,27 +150,23 @@ export function grass(): THREE.CanvasTexture {
   return texture(c, true);
 }
 
-/** Неспецифичная листва условной изгороди: рисунок не задаёт породу или число кустов. */
-export function hedgeLeaves(): THREE.CanvasTexture {
-  const [c, ctx] = canvas(256);
-  const random = rng(239);
-  ctx.fillStyle = '#334426';
-  ctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 2400; i++) {
-    const shade = random();
-    ctx.fillStyle = `rgb(${42 + shade * 38},${62 + shade * 48},${26 + shade * 25})`;
-    ctx.beginPath();
-    ctx.ellipse(
-      random() * 256,
-      random() * 256,
-      2 + random() * 4,
-      1 + random() * 2,
-      random() * Math.PI,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-  }
+/** Резиновая крошка площадок: тёмно-серая основа с красными, зелёными и светлыми крупинками,
+ *  как на панораме площадки у дома 1А. Плитка текстуры - 2 м. */
+export function rubberCrumb(): THREE.CanvasTexture {
+  const size = 512;
+  const noise = fbm(size, [8, 32], 173);
+  const random = rng(179);
+  // Бордово-коричневая резиновая крошка, как на площадке у дома 1А (панорама 2023) и на
+  // фото пользователя (19.10.2026): серо-бурая читалась асфальтом. Крупинки светлее, темнее и
+  // редкие чёрные и терракотовые.
+  const c = fromNoise(size, noise, (n) => {
+    const r = random();
+    const v = 86 + n * 18;
+    if (r > 0.93) return [v + 50, v - 14, v - 24];
+    if (r > 0.88) return [v - 30, v - 56, v - 58];
+    if (r > 0.86) return [36, 34, 34];
+    return [v + 16, v - 42, v - 46];
+  });
   return texture(c, true);
 }
 

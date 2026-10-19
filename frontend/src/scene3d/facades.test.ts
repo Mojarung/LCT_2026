@@ -42,9 +42,12 @@ describe('серия дома', () => {
   });
 
   it('нежилое низкое - павильон, металл - ангар, крыльцо - не дом', () => {
-    expect(seriesOf(building(rect(30, 20), { floors: 2, use: 'non_residential' }))).toBe(
-      'pavilion',
-    );
+    expect(
+      seriesOf(building(rect(30, 20), { floors: 2, use: 'non_residential', wall: 'mixed' })),
+    ).toBe('pavilion');
+    // Кирпичный магазин по подписи «К-» - кирпич, а не стеклянный павильон (дом 1А на
+    // Харьковской, панорама 19.10.2026).
+    expect(seriesOf(building(rect(16, 14), { floors: 1, use: 'non_residential' }))).toBe('brick');
     expect(seriesOf(building(rect(30, 20), { floors: 1, wall: 'metal' }))).toBe('metal');
     expect(seriesOf(building(rect(3, 2), { kind: 'porch', floors: 1 }))).toBe('porch');
   });

@@ -8,13 +8,19 @@ import {
   GROUND_MAP,
   ROAD_DROP_M,
   roadGeometry,
+  grassLawn,
+  pavingWins,
+  CONTEXT_CLEAR_M,
+  contextPaintable,
+  SPECIAL_LIFT_M,
+  specialGeometry,
   type MaskInfo,
   type SurfaceAreas,
   groundGeometry,
   pavedOnLeft,
   smoothSurfaceAreas,
 } from './ground';
-import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
+import { ASPHALT, GRASS, PAVERS, ROAD } from './surfaceMask';
 import { groundCutRings, roadEdges } from './edges';
 
 /* Контуры карты покрытий поверх растра: край проезда - прямая, а не лесенка клеток
@@ -145,6 +151,98 @@ describe('борт по маске: дорожный у асфальта, сад
   it('внутри одного покрытия борта нет', () => {
     expect(road({ x: 1, z: 2 }, { x: 9, z: 2 })).toBe(false);
     expect(garden({ x: 1, z: 5.5 }, { x: 9, z: 5.5 })).toBe(false);
+  });
+});
+
+describe('дороги карты города на земле сцены', () => {
+  it('не рисуются в пределах съёмки и рядом с ней, только на дальнем поле', () => {
+    // 0,25 м на пиксель: съёмка знает полосу 10 м у левого края, дальше 60 м пусто.
+    const mpp = 0.25;
+    const w = 280;
+    const h = 4;
+    const known = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < 40; x++) known[y * w + x] = 1;
+    const paintable = contextPaintable(known, w, h, mpp);
+    const at = (m: number) => paintable[2 * w + Math.round(m / mpp)];
+    expect(at(5)).toBe(0);
+    // Газон по умолчанию рядом со съёмкой: тропа OpenStreetMap туда не ложится.
+    expect(at(10 + CONTEXT_CLEAR_M - 2)).toBe(0);
+    expect(at(10 + CONTEXT_CLEAR_M + 2)).toBe(1);
+  });
+});
+
+describe('покрытие контура сильнее газона маски', () => {
+  it('край контура не трогается: зубцы пикселей за краем сетки тротуара не нужны', () => {
+    // Строка из 5 пикселей: плитка контура в 1..3, по краям газон.
+    const final = new Uint8Array(20);
+    for (let i = 0; i < 5; i++) final[i * 4] = 255;
+    const kinds = new Uint8Array(5).fill(GRASS);
+    pavingWins(final, kinds, new Uint8Array([GRASS, PAVERS, PAVERS, PAVERS, GRASS]), 5);
+    expect([...kinds]).toEqual([GRASS, GRASS, PAVERS, GRASS, GRASS]);
+  });
+
+  it('где контур сервиса - плитка или асфальт тротуара, газона и травинок нет', () => {
+    // Сетка 3 x 3 одного вида контура, газон по маске: решается середина.
+    const check = (kind: number, expected: number[]) => {
+      const final = new Uint8Array(36);
+      for (let i = 0; i < 9; i++) final[i * 4] = 255;
+      const kinds = new Uint8Array(9).fill(GRASS);
+      pavingWins(final, kinds, new Uint8Array(9).fill(kind), 3);
+      expect([...final.slice(16, 19)]).toEqual(expected);
+      expect(kinds[4]).toBe(kind);
+    };
+    check(PAVERS, [0, 255, 0]);
+    check(ASPHALT, [0, 0, 0]);
+    check(GRASS, [255, 0, 0]);
+  });
+
+  it('проезд контура - не газон: травинки не растут сквозь асфальт у оград', () => {
+    const final = new Uint8Array(12);
+    for (let i = 0; i < 3; i++) final[i * 4] = 200;
+    const kinds = new Uint8Array(3).fill(GRASS);
+    pavingWins(final, kinds, new Uint8Array(3).fill(ROAD), 3);
+    expect([final[0], final[4], final[8]]).toEqual([0, 0, 0]);
+    expect([...kinds]).toEqual([ROAD, ROAD, ROAD]);
+  });
+});
+
+describe('травинки', () => {
+  it('не растут под сеткой покрытия контура, даже на краю, где маска ещё газон', () => {
+    const final = new Uint8Array(16);
+    for (let i = 0; i < 4; i++) final[i * 4] = 200;
+    const lawn = grassLawn(final, new Uint8Array([GRASS, ROAD, ASPHALT, PAVERS]));
+    expect([...lawn]).toEqual([200, 0, 0, 0]);
+  });
+});
+
+describe('спецпокрытие площадок', () => {
+  it('сетка резинового покрытия - только части вида special, чуть выше земли', () => {
+    const square = (x: number, y: number) => [
+      [
+        [x, y],
+        [x + 10, y],
+        [x + 10, y + 10],
+        [x, y + 10],
+        [x, y],
+      ],
+    ];
+    const geometry = specialGeometry(
+      { soil: [], paved: [square(0, 0), square(30, 0)], paved_kind: ['asphalt', 'special'] },
+      [10, 20],
+    );
+    expect(geometry).not.toBeNull();
+    geometry?.computeBoundingBox();
+    const box = geometry?.boundingBox;
+    expect(box?.min.y).toBeCloseTo(SPECIAL_LIFT_M);
+    expect(box?.max.y).toBeCloseTo(SPECIAL_LIFT_M);
+    expect(box?.min.x).toBeCloseTo(20);
+    expect(box?.max.x).toBeCloseTo(30);
+    expect(box?.min.z).toBeCloseTo(10);
+    expect(box?.max.z).toBeCloseTo(20);
+  });
+
+  it('без спецпокрытия сетки нет', () => {
+    expect(specialGeometry(AREAS, [10, 20])).toBeNull();
   });
 });
 

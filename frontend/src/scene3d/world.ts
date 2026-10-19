@@ -8,6 +8,7 @@
  * контуров подосновы с высотой по площади, виды - по жизненной форме. Об этом говорит флаг
  * fallback, и интерфейс обязан его показать: такая сцена грубее, чем могла бы быть. */
 
+import { type GroundLabel, groundKind } from './playgrounds';
 import type { BasemapFeature, BasemapJson, Geometry, PlanJson, Position } from '../api/artifacts';
 import {
   mergePlants,
@@ -312,6 +313,95 @@ function stripCrowns(strips: readonly Flat[][]): Plant[] {
   return out;
 }
 
+/** Скамейка в съёмке - прямоугольник МАФ: длина и ширина в этих пределах, м. */
+const BENCH_LENGTH_M: [number, number] = [1.5, 2.3];
+const BENCH_WIDTH_M: [number, number] = [0.45, 0.85];
+
+/** Скамейки, нарисованные в съёмке (слой МАФ, класс obstacle): прямоугольник 1,9 x 0,6 м.
+ *  В 3D они встают туда, где нарисованы, а не по правилу вдоль края газона (пользователь,
+ *  19.10.2026: «как на картах, а не как будто человек раскидал объекты»). */
+function drawnBenches(
+  features: readonly BasemapFeature[],
+  box: Box,
+  frame: Frame,
+): { x: number; z: number; angle: number }[] {
+  const out: { x: number; z: number; angle: number }[] = [];
+  for (const feature of features) {
+    if (feature.properties.class !== 'obstacle') continue;
+    for (const polygon of polygons(feature.geometry)) {
+      const ring = polygon[0];
+      if (!ring || ring.length < 4 || !inBox(ring, box)) continue;
+      const pts = ring.slice(0, -1).map(([x, y]) => frame.toFlat(x, y));
+      if (pts.length !== 4) continue;
+      const side = (i: number) => {
+        const a = pts[i] as Flat;
+        const b = pts[(i + 1) % 4] as Flat;
+        return Math.hypot(b.x - a.x, b.z - a.z);
+      };
+      const long = side(0) >= side(1) ? 0 : 1;
+      const length = side(long);
+      const width = side(1 - long);
+      if (length < BENCH_LENGTH_M[0] || length > BENCH_LENGTH_M[1]) continue;
+      if (width < BENCH_WIDTH_M[0] || width > BENCH_WIDTH_M[1]) continue;
+      const a = pts[long] as Flat;
+      const b = pts[long + 1] as Flat;
+      out.push({
+        x: pts.reduce((s, p) => s + p.x, 0) / 4,
+        z: pts.reduce((s, p) => s + p.z, 0) / 4,
+        // Ось x модели (cos, -sin) - вдоль длинной стороны.
+        angle: Math.atan2(-(b.z - a.z), b.x - a.x),
+      });
+    }
+  }
+  return out;
+}
+
+/** Шаг кустов в ряду кустарниковой полосы, м: кроны около 0,9 м смыкаются в живую изгородь. */
+export const STRIP_SHRUB_STEP_M = 0.7;
+
+/** Кустарниковая полоса съёмки - ряд кустов по её оси. Брусом с фактурой листвы она читалась
+ *  плоской стенкой (пользователь, 19.10.2026: «кусты еще 2д»). Кусты - условные, в счёт
+ *  насаждений не идут (strip), как кроны полосы деревьев. */
+function stripShrubs(
+  strips: readonly Line[],
+  bounds: readonly [number, number, number, number],
+): Plant[] {
+  const [minX, minZ, maxX, maxZ] = bounds;
+  const out: Plant[] = [];
+  for (const strip of strips) {
+    let carry = 0;
+    for (let i = 0; i + 1 < strip.points.length; i++) {
+      const a = strip.points[i] as Flat;
+      const b = strip.points[i + 1] as Flat;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-9) continue;
+      let u = carry;
+      for (; u <= len; u += STRIP_SHRUB_STEP_M) {
+        const x = a.x + ((b.x - a.x) * u) / len;
+        const z = a.z + ((b.z - a.z) * u) / len;
+        if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+        const seed = hashOf(`hedge:${x.toFixed(2)}:${z.toFixed(2)}`);
+        const radius = 0.42 + ((seed % 1000) / 1000) * 0.12;
+        out.push({
+          id: `hedge-${String(out.length)}`,
+          x,
+          z,
+          type: 'existing_shrub',
+          code: 'existing_shrub',
+          name: 'Кустарниковая полоса (знак съёмки)',
+          species: speciesFallback('existing_shrub', 'shrub_tall', '', radius * 2),
+          existing: true,
+          existingRadius: radius,
+          strip: true,
+          seed,
+        });
+      }
+      carry = u - len;
+    }
+  }
+  return out;
+}
+
 function existingPlants(features: readonly BasemapFeature[], box: Box, frame: Frame): Plant[] {
   const marks: ExistingPlant[] = [];
   for (const feature of features) {
@@ -488,7 +578,20 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     if (linework.poles.some((q) => Math.hypot(q.x - site.x, q.z - site.z) < POLE_MERGE_M)) continue;
     linework.poles.push(site);
   }
+  // Оси оград от сервиса - одна линия на ограду вместо двух линий знака и штрихов.
+  const axes = basemap?.fence_axes;
+  if (axes?.length) {
+    linework.fences = axes
+      .filter((line) => line.length > 1 && inBox(line, box))
+      .map((line) => ({ points: line.map(([x, y]) => frame.toFlat(x, y)) }));
+  }
   plants.push(...existingPlants(features, box, frame));
+  const benches = drawnBenches(features, box, frame);
+  // Подписи площадок «ДЕТ.ПЛ.», «СПОРТ ПЛ.» - по ним на резине ставится оборудование.
+  const groundLabels: GroundLabel[] = (basemap?.labels ?? []).flatMap(([x, y, text]) => {
+    const kind = groundKind(text);
+    return kind ? [{ ...frame.toFlat(x, y), kind }] : [];
+  });
   plants.push(...stripCrowns(linework.treeStrips));
   const buildings = scene
     ? sceneBuildings(scene, box, frame)
@@ -497,9 +600,19 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
   for (const b of buildings) if (b.kind === 'building') floorsBy[b.source] += 1;
   const a = frame.toFlat(box[0], box[3]);
   const b = frame.toFlat(box[2], box[1]);
+  plants.push(...stripShrubs(linework.shrubStrips, [a.x, a.z, b.x, b.z]));
+  const flowerbeds = (plan?.lawns ?? [])
+    .filter((lawn) => lawn.kind === 'flowerbed')
+    .flatMap((lawn) => polygons(lawn.geometry))
+    .filter((polygon) => (polygon[0]?.length ?? 0) > 3)
+    .map((polygon) => polygon.map((ring) => flatRing(ring, frame)));
   return {
     origin,
     bounds: [a.x, a.z, b.x, b.z],
+    flowerbeds,
+    fenceAxes: !!axes?.length,
+    benches,
+    groundLabels,
     buildings,
     plants,
     ...linework,

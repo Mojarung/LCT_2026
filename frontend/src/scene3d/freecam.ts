@@ -92,11 +92,13 @@ export interface StepInput {
   mode: Mode;
   flySpeed: number;
   dt: number;
-  /** Сдвиг за стены: получает старую и новую точку на земле, возвращает допустимую. */
-  collide?: (from: Flat, to: Flat) => Flat;
+  /** Сдвиг за стены: старая и новая точка на земле и высота низа тела, возвращает допустимую. */
+  collide?: (from: Flat, to: Flat, y: number) => Flat;
+  /** Верх дома или машины под точкой: в полёте ниже него не опуститься. */
+  roof?: (p: Flat) => number;
 }
 
-export function step({ pose, motion, keys, mode, flySpeed, dt, collide }: StepInput): {
+export function step({ pose, motion, keys, mode, flySpeed, dt, collide, roof }: StepInput): {
   pose: Pose;
   motion: Motion;
 } {
@@ -119,13 +121,19 @@ export function step({ pose, motion, keys, mode, flySpeed, dt, collide }: StepIn
   let z = pose.z + vz * dt;
   let y = pose.y + vy * dt;
   if (collide) {
-    const moved = collide({ x: pose.x, z: pose.z }, { x, z });
+    // Пешеход упирается во всё выше колена, камера в полёте - только в то, что выше неё.
+    const moved = collide(
+      { x: pose.x, z: pose.z },
+      { x, z },
+      mode === 'walk' ? 0 : Math.min(pose.y, y),
+    );
     if (moved.x !== x) vx = 0;
     if (moved.z !== z) vz = 0;
     x = moved.x;
     z = moved.z;
   }
-  const floor = mode === 'walk' ? EYE_M : FLY_FLOOR_M;
+  const top = mode === 'fly' && roof ? roof({ x, z }) : 0;
+  const floor = mode === 'walk' ? EYE_M : top > 0 ? top + FLY_FLOOR_M : FLY_FLOOR_M;
   if (y <= floor) {
     y = floor;
     vy = Math.max(0, vy);
@@ -203,7 +211,8 @@ export function clampSpeed(speed: number): number {
 export interface FreecamOptions {
   element: HTMLElement;
   pose: Pose;
-  collide?: (from: Flat, to: Flat) => Flat;
+  collide?: (from: Flat, to: Flat, y: number) => Flat;
+  roof?: (p: Flat) => number;
   onChange?: () => void;
   /** Человек взялся за управление: клавиша движения или поворот мышью. Облёт на этом стоп. */
   onInput?: () => void;
@@ -217,15 +226,17 @@ export class Freecam {
   private down = new Set<string>();
   private dragging = false;
   private readonly element: HTMLElement;
-  private readonly collide?: (from: Flat, to: Flat) => Flat;
+  private readonly collide?: (from: Flat, to: Flat, y: number) => Flat;
+  private readonly roof?: (p: Flat) => number;
   private readonly onChange?: () => void;
   private readonly onInput?: () => void;
   private readonly off: (() => void)[] = [];
 
-  constructor({ element, pose, collide, onChange, onInput }: FreecamOptions) {
+  constructor({ element, pose, collide, roof, onChange, onInput }: FreecamOptions) {
     this.element = element;
     this.pose = pose;
     this.collide = collide;
+    this.roof = roof;
     this.onChange = onChange;
     this.onInput = onInput;
     this.bind();
@@ -274,7 +285,8 @@ export class Freecam {
       mode: this.mode,
       flySpeed: this.flySpeed,
       dt: Math.min(dt, 0.1),
-      collide: this.mode === 'walk' ? this.collide : undefined,
+      collide: this.collide,
+      roof: this.roof,
     });
     this.pose = next.pose;
     this.motion = next.motion;

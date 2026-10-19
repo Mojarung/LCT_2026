@@ -189,7 +189,7 @@ class FileArtifactSink:
                 directory / "portfolio.json",
                 asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
             ),
-            **_surface(directory, report.surface, report.basemap),
+            **_surface(directory, report.display_surface or report.surface, report.basemap),
             # Исходник сверки комплекта (склеенный чертёж): с ним `green verify` повторяет
             # сверку результата. У одиночного файла исходник - сам входной файл, ссылки нет.
             **({report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else {}),
@@ -777,6 +777,10 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
             [round(label.x, 2), round(label.y, 2), label.text, label.material]
             for label in basemap.labels
         ],
+        # Оси оград для 3D: двойная линия знака, штрихи и углы - одной линией (fences.py).
+        "fence_axes": [
+            [[round(x, 2), round(y, 2)] for x, y in axis.coords] for axis in basemap.fence_axes
+        ],
         "features": [
             {
                 "type": "Feature",
@@ -818,22 +822,63 @@ SURFACE_AREA_TOLERANCE_M = 0.05
 SURFACE_RASTER_TOLERANCE_CELLS = 1.5
 # Повороты скругляются (пользователь, 17.10.2026: «где поворот - закругление»): излом в этих
 # пределах срезается, прямой угол остаётся.
-SURFACE_ROUND_TURN_DEG = (5.0, 75.0)
+SURFACE_ROUND_TURN_DEG = (5.0, 60.0)
 SURFACE_ROUND_PASSES = 2
+# Поворот, а не пила: оба звена излома не короче этого, м.
+ROUND_MIN_SEG_M = 1.5
+# Наибольший срез угла при скруглении, м.
+ROUND_CUT_M = 1.0
 # Части покрытия для 3D: проезжая часть опускается на высоту борта, тротуар и плитка - нет.
 PAVED_ROAD, PAVED_ASPHALT, PAVED_PAVERS, PAVED_UNKNOWN = "road", "asphalt", "pavers", "paved"
+# Специальное покрытие площадок (резиновая крошка): «СПЕЦ.ПОКР.», «ДЕТ.ПЛ.» Мосгеотреста.
+PAVED_SPECIAL = "special"
 # Полоса покрытия от этой ширины без плитки - проезд: тротуары дворов 1,5-3 м, проезды от 3,5 м.
 ROAD_MIN_WIDTH_M = 3.5
+# Дорожка уже 2 x SPECIAL_PATH_M, вошедшая в площадку, - не резина, м.
+SPECIAL_PATH_M = 1.5
+# Тело площадки, отделённое от сети, - не больше этой доли части; больше - решают голоса.
+SPECIAL_BODY_SHARE = 0.8
 # Сетка проезжей части шире её контура: край маски на 3D не точнее пикселя, дыра в земле
 # у борта должна попадать на асфальт, а не в пустоту.
 ROAD_MESH_MARGIN_M = 0.5
 SURFACE_MIN_PART_M2 = 0.5
+# Допуск снятия пилы и щепок с края газона, м: меньше ширины узкой полосы газона у борта.
+SOIL_TIDY_M = 0.25
+# Газон-остров среди покрытия (клумба, газон в кольце дорожек) - для показа грунт.
+ISLAND_MAX_M2 = 400.0
+ISLAND_RING_M = 1.0
+ISLAND_PAVED_SHARE = 0.6
+FLOWERBED_LABEL_M = 8.0
+ISLAND_GRID_M = 1e-3
+# Остров режет контур покрытия чертежа, только если лежит в нём хотя бы на эту долю.
+ISLAND_INSIDE_DRAWN_SHARE = 0.5
+# Покрытие улицы для пересечений режется на куски не больше стольких вершин (_subdivided).
+SUBDIVIDE_VERTICES = 256
+SUBDIVIDE_MIN_M = 0.01
+# Клумба - малый остров: большой газон в кольце дорожек цветником не становится.
+FLOWERBED_MAX_M2 = 120.0
+FLOWERBED_PHRASE = re.compile(r"КЛУМБ|ЦВЕТН")
+# Грань линий чертежа отдаётся материалу растра, если его в грани не меньше этой доли.
+FACE_MAJORITY = 0.5
+FACE_MIN_M2 = 0.5
+_FACE_LINE_TYPES = frozenset({"LineString", "MultiLineString", "LinearRing"})
 PAVED_SMOOTH_M = 0.5
+# Щепки сглаженного растра за краем контура чертежа уже 2 x DRAWN_SLIVER_M снимаются: это
+# хорды упрощения у вогнутых скруглений, а не покрытие.
+DRAWN_SLIVER_M = 0.3
+DRAWN_SEAM_M = 0.02
+DRAWN_JOG_M = 0.15
+DRAWN_HOLE_M2 = 1.0
+DRAWN_SIMPLIFY_M = 0.04
+# Звено кольца в surface.json не короче этого, м.
+RING_MIN_SEG_M = 0.05
+RING_MIN_POINTS = 4
 # Подписи материала съёмки Мосгеотреста: «А» - асфальт, «Ц» - цементобетон, «ПЛ» - плитка,
 # «Б», «БР» - брусчатка.
 ASPHALT_LABELS = frozenset({"А", "АСФ", "Ц"})
 PAVERS_LABELS = frozenset({"ПЛ", "ПЛИТКА", "Б", "БР"})
 PAVERS_PHRASE = re.compile(r"ПЛИТК|БРУСЧ")
+SPECIAL_PHRASE = re.compile(r"^СПЕЦ|^ДЕТ\.?\s*ПЛ")
 
 
 def _surface(
@@ -842,7 +887,8 @@ def _surface(
     """Карта покрытий растром: PNG и привязка к координатам чертежа."""
     if surface is None:
         return {}
-    grid = surface.grid
+    # Растр для показа: грань между линиями чертежа одним материалом (surfaces.display_grid).
+    grid = surface.grid if surface.display_grid is None else surface.display_grid
     step = max(1, math.ceil(max(grid.shape) / SURFACE_MAX_SIDE))
     sampled = grid[::step, ::step]
     palette = np.zeros((max(int(m) for m in Material) + 1, 4), dtype=np.uint8)
@@ -872,46 +918,382 @@ def _surface_areas(
     запасной грунт) - растр в контурах, выпрямленный с допуском в полторы клетки. Полигон -
     список колец: внешнее, затем дыры."""
     uncertain = surface.uncertainty_area
-    exact_paved = _without(surface.paved_area, uncertain)
+    # Для показа покрытие, заданное контуром чертежа, не отдаётся растру ни в полосе
+    # погрешности линии, ни в спорной грани: растр там выпрямлялся и давал на краю площадки
+    # срезанные углы и зацепы, по которым ломался борт (Харьковская, 19.10.2026). Проверка
+    # посадок читает неопределённость по-прежнему.
+    exact_paved = surface.paved_area
     exact_soil = _without(surface.soil_area, shapely.union_all([exact_paved, uncertain]))
     tolerance = cell * SURFACE_RASTER_TOLERANCE_CELLS
     raster_paved = cells_area(grid == int(Material.PAVED), surface.origin, cell)
     raster_soil = cells_area(grid == int(Material.SOIL), surface.origin, cell)
+    # Растр разлива - капли с круглым краем, перелезающие через ограду и борт. Край
+    # материала берётся по линиям чертежа: грань, замкнутая оградой, бортом, краем покрытия
+    # и стеной, целиком того материала, которого в ней больше (пользователь, 18.10.2026:
+    # «плитка до забора, как у площадки»).
+    raster_paved, raster_soil = _snap_to_faces(raster_paved, raster_soil, basemap)
     paved = shapely.union_all(
         [
-            _without(_simplified(raster_paved, tolerance), exact_soil),
+            _without(
+                _off_drawn_slivers(_simplified(raster_paved, tolerance), raster_paved, exact_paved),
+                exact_soil,
+            ),
             exact_paved,
         ]
     )
-    soil = _without(
-        shapely.union_all([_simplified(raster_soil, tolerance), exact_soil]),
-        shapely.union_all([paved, uncertain]),
+    soil = _tidy(
+        _without(
+            shapely.union_all([_simplified(raster_soil, tolerance), exact_soil]),
+            shapely.union_all([paved, uncertain]),
+        )
     )
-    parts, kinds = _paved_parts(paved, basemap)
+    islands, flowerbeds = _lawn_islands(basemap, paved)
+    islands = _islands_off_drawn(islands, exact_paved)
+    if islands is not None:
+        paved = _without(paved, islands)
+        soil = shapely.union_all([soil, islands]) if soil is not None else islands
+    parts, kinds = _paved_parts(paved, basemap, exact_paved)
+    parts, kinds = _walk_ends_to_road(parts, kinds)
+    parts = _walk_notches_paved(parts, kinds, soil, basemap)
+    parts = [_without_artifact_holes(part, soil) for part in parts]
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
         shapely.union_all(roads).buffer(ROAD_MESH_MARGIN_M, join_style="mitre") if roads else None
     )
+    exported = _export_parts(parts, kinds)
     return {
         "soil": _rings(soil),
-        "paved": [_polygon_rings(part) for part in parts],
-        "paved_kind": kinds,
+        "paved": exported[0],
+        "paved_kind": exported[1],
         "road_mesh": _rings(mesh),
+        "flowerbeds": _rings(flowerbeds),
     }
 
 
+# Выемка тротуара уже 2 x WALK_NOTCH_M, где нет ни газона, ни дома, ни другого покрытия, -
+# крыльцо, вход или отмостка: она мостится тем же покрытием, м.
+WALK_NOTCH_M = 1.5
+WALK_NOTCH_MIN_M2 = 0.3
+
+
+def _walk_notches_paved(
+    parts: list[BaseGeometry],
+    kinds: list[str],
+    soil: BaseGeometry | None,
+    basemap: Basemap | None,
+) -> list[BaseGeometry]:
+    """Узкие выемки тротуара без материала отходят тротуару.
+
+    У входа в дом съёмка рисует крыльцо линиями, без подписи материала: выемка между
+    дорожкой и стеной оставалась «неизвестной», в 3D неизвестное - газон, и у крыльца стоял
+    круглый островок травы с асфальтовыми углами (Харьковская, 19.10.2026)."""
+    houses = _class_area(basemap.features, ObjectClass.BUILDING) if basemap is not None else None
+    blocked = shapely.union_all([g for g in (soil, houses) if g is not None])
+    tree = shapely.STRtree(parts) if parts else None
+    out = list(parts)
+    r = WALK_NOTCH_M
+    for i, kind in enumerate(kinds):
+        if kind not in {PAVED_ASPHALT, PAVED_PAVERS} or tree is None:
+            continue
+        part = out[i]
+        # Замыкание с прямыми углами: прямоугольная выемка заливается, а внутренний угол
+        # дорожки у стены дома не получает скругления.
+        notch = _areal(
+            part.buffer(r, join_style="mitre").buffer(-r, join_style="mitre")
+        ).difference(part)
+        if notch.is_empty:
+            continue
+        # Вычитаются только соседи и газон с домами в рамке выемки: целиком это долго.
+        box = notch.bounds
+        neighbours = [out[int(k)] for k in tree.query(notch) if int(k) != i]
+        cut = shapely.union_all(
+            [
+                *[shapely.clip_by_rect(g, *box) for g in neighbours],
+                shapely.clip_by_rect(blocked, *box),
+            ]
+        )
+        notch = _areal(notch.difference(cut))
+        pieces = [g for g in shapely.get_parts(notch) if g.area >= WALK_NOTCH_MIN_M2]
+        if pieces:
+            out[i] = _areal(shapely.union_all([part, *pieces]))
+    return out
+
+
+# Дыра в покрытии меньше этого и не газон - след знака колодца или обрезка дорожки, м².
+ARTIFACT_HOLE_M2 = 4.0
+
+
+def _without_artifact_holes(part: BaseGeometry, soil: BaseGeometry | None) -> BaseGeometry:
+    """Малые дыры покрытия, под которыми нет газона, заливаются: в 3D борт обходил их
+    островком посреди проезда (Кустанайская, 19.10.2026). Газон-остров и клумба остаются."""
+    if part.geom_type != "Polygon" or not part.interiors:
+        return part
+    holes = []
+    for ring in part.interiors:
+        hole = shapely.Polygon(ring)
+        lawn = soil is not None and _intersection_area(hole, soil) >= hole.area / 2
+        if hole.area >= ARTIFACT_HOLE_M2 or lawn:
+            holes.append(ring)
+    return shapely.Polygon(part.exterior, holes)
+
+
+# Конец дорожки в выемке проезда меньше этой доли дорожки и не меньше WALK_END_MIN_M2 -
+# конец, заехавший на проезд; меньшее - скругление угла, его не трогаем.
+WALK_END_SHARE = 0.5
+WALK_END_MIN_M2 = 1.0
+# Выемка проезда уже этого замыкается, м: проход дорожки в борту - 1,5-3 м.
+WALK_END_MOUTH_M = 3.0
+# Дорожка ближе этого к проезду - примыкает к нему, м.
+WALK_END_TOUCH_M = 0.3
+
+
+def _walk_ends_to_road(
+    parts: list[BaseGeometry], kinds: list[str]
+) -> tuple[list[BaseGeometry], list[str]]:
+    """Конец тротуара или дорожки, заехавший в выемку проезда, - проезд.
+
+    Дорожка съёмки часто нарисована дальше борта, на сам проезд: в 3D её конец стоял
+    островом в опущенном проезде, и борт обходил его прямоугольником посреди асфальта
+    (Кустанайская, 19.10.2026). Выемка проезда уже WALK_END_MOUTH_M замыкается, и то, что
+    дорожка занимает внутри замкнутого проезда, отходит проезду."""
+    road_ids = [i for i, kind in enumerate(kinds) if kind == PAVED_ROAD]
+    if not road_ids:
+        return parts, kinds
+    road_tree = shapely.STRtree([parts[i] for i in road_ids])
+    closed: dict[int, BaseGeometry] = {}
+    out = list(parts)
+    r = WALK_END_MOUTH_M / 2
+    for i, kind in enumerate(kinds):
+        if kind not in {PAVED_ASPHALT, PAVED_PAVERS}:
+            continue
+        for k in road_tree.query(out[i], predicate="dwithin", distance=WALK_END_TOUCH_M):
+            road = road_ids[int(k)]
+            if road not in closed:
+                closed[road] = _areal(out[road].buffer(r).buffer(-r))
+            end = _areal(out[i].intersection(closed[road]))
+            if end.is_empty or not WALK_END_MIN_M2 <= end.area < WALK_END_SHARE * out[i].area:
+                continue
+            # Между дорожкой и проездом бывает щель в доли метра: склейка с замыканием, иначе
+            # конец остаётся островом проезда со своим бортом.
+            g = WALK_END_TOUCH_M
+            out[road] = _areal(shapely.union_all([out[road], end]).buffer(g).buffer(-g))
+            out[i] = _areal(out[i].difference(out[road]))
+    # Разрезанная часть - несколько многоугольников: каждый своей частью того же вида.
+    flat = [
+        (piece, kind)
+        for part, kind in zip(out, kinds, strict=True)
+        for piece in shapely.get_parts(part)
+        if piece.geom_type == "Polygon" and not piece.is_empty
+    ]
+    return [piece for piece, _ in flat], [kind for _, kind in flat]
+
+
+def _lawn_islands(
+    basemap: Basemap | None, paved: BaseGeometry | None
+) -> tuple[BaseGeometry | None, BaseGeometry | None]:
+    """Газоны-острова среди покрытия и цветники среди них - для показа.
+
+    Полигон газона чертежа не больше ISLAND_MAX_M2, у которого полоса ISLAND_RING_M снаружи
+    хотя бы на ISLAND_PAVED_SHARE - покрытие, - остров: клумба посреди площади, газон в
+    кольце дорожек. Карта покрытий могла снять его подписью покрытия внутри (подпись
+    вазы или постамента «Ц» в клумбе у дома 1А на Харьковской, пользователь 19.10.2026:
+    «стёр клумбу»), и 3D рисовал на его месте плитку. Подпись «КЛУМБА» или «ЦВЕТНИК» ближе
+    FLOWERBED_LABEL_M - цветник. Проверку посадок это не меняет."""
+    if basemap is None or paved is None or paved.is_empty:
+        return None, None
+    lawns, rings = [], []
+    for f in basemap.features:
+        if f.object_class is not ObjectClass.LAWN or f.geometry.geom_type not in {
+            "Polygon",
+            "MultiPolygon",
+        }:
+            continue
+        for lawn in shapely.get_parts(f.geometry):
+            if not 0 < lawn.area <= ISLAND_MAX_M2:
+                continue
+            ring = lawn.buffer(ISLAND_RING_M).difference(lawn)
+            if ring.area:
+                lawns.append(lawn)
+                rings.append(ring)
+    covered = _overlap_areas(rings, paved)
+    islands = [
+        lawn
+        for lawn, ring, area in zip(lawns, rings, covered, strict=True)
+        if area >= ISLAND_PAVED_SHARE * ring.area
+    ]
+    if not islands:
+        return None, None
+    names = [lb for lb in basemap.labels if FLOWERBED_PHRASE.search(lb.text.strip().upper())]
+    # Подпись съёмки стоит у выноски, в нескольких метрах: цветник - ближайший к ней остров.
+    small = [lawn for lawn in islands if lawn.area <= FLOWERBED_MAX_M2]
+    beds = []
+    for lb in names if small else ():
+        point = shapely.Point(lb.x, lb.y)
+        nearest = min(small, key=point.distance)
+        if point.distance(nearest) <= FLOWERBED_LABEL_M and nearest not in beds:
+            beds.append(nearest)
+    return shapely.union_all(islands), (shapely.union_all(beds) if beds else None)
+
+
+def _islands_off_drawn(
+    islands: BaseGeometry | None, exact: BaseGeometry | None
+) -> BaseGeometry | None:
+    """Острова газона, которые не режут контур покрытия чертежа сбоку.
+
+    Полоса газона между площадкой и оградой на Харьковской заходит на край площадки на 10-20
+    см и проходит как остров среди покрытия: остров вырезал из площадки углы. Газон больше
+    чем наполовину вне контура чертежа - край, а не клумба: из контура он не вырезается.
+    Клумба посреди площади лежит в контуре целиком и вырезается, как раньше."""
+    if islands is None or exact is None or exact.is_empty:
+        return islands
+    parts = shapely.get_parts(islands)
+    inside = _overlap_areas(parts, exact) / shapely.area(parts)
+    kept = [
+        part if share >= ISLAND_INSIDE_DRAWN_SHARE else _areal(part.difference(exact))
+        for part, share in zip(parts, inside, strict=True)
+    ]
+    kept = [g for g in kept if not g.is_empty]
+    return shapely.union_all(kept) if kept else None
+
+
+def _overlap_areas(
+    shapes: Sequence[BaseGeometry] | np.ndarray, area: BaseGeometry | None
+) -> np.ndarray:
+    """Площадь каждой фигуры под area. Мерится по кускам area рядом с фигурой (_subdivided):
+    пересечение малого контура с покрытием всей улицы проходит по всем его вершинам, и на
+    Фрунзенской (13 тыс. газонов) surface.json считался час (19.10.2026)."""
+    shapes = np.asarray(shapes, dtype=object)
+    out = np.zeros(len(shapes))
+    pieces = np.asarray(_subdivided(area), dtype=object)
+    if not len(shapes) or not len(pieces):
+        return out
+    near, piece = shapely.STRtree(pieces).query(shapes, predicate="intersects")
+    try:
+        areas = shapely.area(shapely.intersection(shapes[near], pieces[piece]))
+    except shapely.errors.GEOSException:
+        areas = np.array(
+            [_intersection_area(shapes[i], pieces[j]) for i, j in zip(near, piece, strict=True)]
+        )
+    np.add.at(out, near, areas)
+    return out
+
+
+def _intersection_area(a: BaseGeometry, b: BaseGeometry) -> float:
+    """Площадь пересечения. GEOS на сложном покрытии улицы бывает падает («Ring edge missing»,
+    Харьковский проезд 19.10.2026): тогда - на сетке 1 мм, а если и там нет - 0."""
+    for grid in (0.0, ISLAND_GRID_M):
+        try:
+            x, y = (shapely.set_precision(g, grid) if grid else g for g in (a, b))
+            return float(shapely.area(shapely.intersection(x, y)))
+        except shapely.errors.GEOSException:
+            continue
+    return 0.0
+
+
+def _subdivided(area: BaseGeometry | None) -> list[BaseGeometry]:
+    """Площадь кусками не больше SUBDIVIDE_VERTICES вершин: рамка куска делится пополам по
+    длинной стороне, пока вершин много (как ST_Subdivide в PostGIS). Куски не перекрываются,
+    их сумма - исходная площадь."""
+    if area is None or area.is_empty:
+        return []
+    out: list[BaseGeometry] = []
+    stack = [p for p in shapely.get_parts(shapely.get_parts(area)) if p.geom_type == "Polygon"]
+    while stack:
+        g = stack.pop()
+        x0, y0, x1, y1 = g.bounds
+        if (
+            shapely.get_num_coordinates(g) <= SUBDIVIDE_VERTICES
+            or max(x1 - x0, y1 - y0) < SUBDIVIDE_MIN_M
+        ):
+            out.append(g)
+            continue
+        if x1 - x0 >= y1 - y0:
+            xm = (x0 + x1) / 2
+            halves = (shapely.box(x0, y0, xm, y1), shapely.box(xm, y0, x1, y1))
+        else:
+            ym = (y0 + y1) / 2
+            halves = (shapely.box(x0, y0, x1, ym), shapely.box(x0, ym, x1, y1))
+        try:
+            cut = [g.intersection(h) for h in halves]
+        except shapely.errors.GEOSException:
+            out.append(g)
+            continue
+        parts = shapely.get_parts(shapely.get_parts(cut))
+        stack.extend(p for p in parts if p.geom_type == "Polygon")
+    return out
+
+
+def _tidy(area: BaseGeometry | None) -> BaseGeometry | None:
+    """Снять пилу и щепки края газона: вычитание покрытия из газона, у которых края чертежа
+    разошлись на сантиметры, давало зубцы через каждые полметра, и в 3D край газона шёл
+    волной (пользователь, 19.10.2026: «меня бесит волнистость»). Размыкание на SOIL_TIDY_M
+    убирает щепки, упрощение с тем же допуском - пилу."""
+    if area is None or area.is_empty:
+        return area
+    r = SOIL_TIDY_M
+    opened = _areal(area.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+    return _simplified(opened.intersection(_areal(area)), r)
+
+
+def _snap_to_faces(
+    paved: BaseGeometry | None, soil: BaseGeometry | None, basemap: Basemap | None
+) -> tuple[BaseGeometry | None, BaseGeometry | None]:
+    """Растровые покрытие и грунт по граням линий чертежа.
+
+    Грани - polygonize линий-разделителей подосновы (ограда, борт, край покрытия, стены,
+    контуры полигонов покрытий) вместе с рамкой подосновы. Грань, где одного материала растра
+    не меньше FACE_MAJORITY, отдаётся этому материалу целиком; где растр молчит или спорит,
+    остаётся растр. Здания не закрашиваются.
+    """
+    if basemap is None or (paved is None and soil is None):
+        return paved, soil
+    lines = [
+        f.geometry.boundary if f.geometry.geom_type in {"Polygon", "MultiPolygon"} else f.geometry
+        for f in basemap.features
+        if f.object_class.is_surface_barrier and f.object_class is not ObjectClass.WORK_BOUNDARY
+    ]
+    lines = [g for g in lines if not g.is_empty and g.geom_type in _FACE_LINE_TYPES]
+    if not lines:
+        return paved, soil
+    frame = shapely.box(*basemap.bbox).boundary
+    noded = shapely.union_all([*lines, frame])
+    faces = shapely.get_parts(shapely.polygonize(shapely.get_parts(noded)))
+    faces = faces[shapely.area(faces) >= FACE_MIN_M2]
+    if not len(faces):
+        return paved, soil
+    houses = _class_area(basemap.features, ObjectClass.BUILDING)
+    area = shapely.area(faces)
+    share_p = _overlap_areas(faces, paved) / area
+    share_s = _overlap_areas(faces, soil) / area
+    inside_house = _overlap_areas(faces, houses) / area > FACE_MAJORITY
+    to_paved = (share_p >= FACE_MAJORITY) & (share_p >= share_s) & ~inside_house
+    to_soil = (share_s >= FACE_MAJORITY) & (share_s > share_p) & ~inside_house
+    decided = shapely.union_all(faces[to_paved | to_soil])
+    snapped_paved = shapely.union_all([_without(paved, decided), *faces[to_paved]])
+    snapped_soil = shapely.union_all([_without(soil, decided), *faces[to_soil]])
+    snapped_soil = _without(snapped_soil, snapped_paved)
+    return (
+        None if snapped_paved.is_empty else snapped_paved,
+        None if snapped_soil is None or snapped_soil.is_empty else snapped_soil,
+    )
+
+
 def _paved_parts(
-    paved: BaseGeometry | None, basemap: Basemap | None
+    paved: BaseGeometry | None, basemap: Basemap | None, exact: BaseGeometry | None = None
 ) -> tuple[list[BaseGeometry], list[str]]:
     """Покрытие по частям: проезжая часть, асфальтовый тротуар, плитка или неизвестное.
 
     На 3D проезжая часть ниже тротуара на высоту борта, а тротуар и плитка различаются
     фактурой (пользователь, 17.10.2026). Решает чертёж: полигон проезжей части (класс road) -
     проезд, тротуара (sidewalk) - не проезд; подпись съёмки внутри части - материал («ПЛ» -
-    плитка, «А» - асфальт); без этого полоса шире ROAD_MIN_WIDTH_M без плитки - проезд."""
+    плитка, «А» - асфальт); без этого полоса шире ROAD_MIN_WIDTH_M без плитки - проезд.
+    exact - покрытие, заданное контурами чертежа: его край идёт по чертежу (_drawn_edges)."""
     simple = _simplified(paved, SURFACE_AREA_TOLERANCE_M)
     if simple is None:
         return [], []
+    # Контуры целиком, не куски _subdivided: швы кусков после склейки оставляли в части щели.
+    exact_pieces = shapely.get_parts(exact) if exact is not None else np.asarray([], dtype=object)
+    exact_tree = shapely.STRtree(exact_pieces) if len(exact_pieces) else None
     features = basemap.features if basemap is not None else ()
     drawn_roads = _class_area(features, ObjectClass.ROAD)
     drawn_walks = _class_area(features, ObjectClass.SIDEWALK)
@@ -927,15 +1309,192 @@ def _paved_parts(
         # Сглаживается каждая часть отдельно: щель между частями - линия борта, замыкание всего
         # покрытия разом склеило бы плиточную площадку с проездом.
         for raw in shapely.get_parts(area):
-            for part in shapely.get_parts(_smoothed(raw)):
+            near = exact_tree.query(raw, predicate="intersects") if exact_tree is not None else []
+            # Части объединения не перекрываются: мультиполигон без склейки.
+            own = shapely.multipolygons(exact_pieces[near]) if len(near) else None
+            for part in shapely.get_parts(_drawn_edges(raw, own)):
                 if part.geom_type != "Polygon" or part.area < SURFACE_MIN_PART_M2:
                     continue
                 parts.append(part)
                 kinds.append(fixed or _paved_kind(part, labels, drawn_walks))
-    return parts, kinds
+    drawn = basemap.paved_polygons if basemap is not None else ()
+    parts, kinds = _special_bodies(parts, kinds, labels, drawn)
+    return parts, _walks(kinds)
 
 
-def _smoothed(area: BaseGeometry) -> BaseGeometry:
+def _special_bodies(
+    parts: list[BaseGeometry],
+    kinds: list[str],
+    labels: Sequence[Any],
+    drawn: Sequence[BaseGeometry] = (),
+) -> tuple[list[BaseGeometry], list[str]]:
+    """Резина - тело площадки, а не дорожки, вошедшие в неё через калитку, и не сеть
+    тротуаров, с которой она соединена: часть покрытия одна, но размыкание на SPECIAL_PATH_M
+    отделяет дорожки уже 2 x SPECIAL_PATH_M. Тело с подписью площадки - спецпокрытие,
+    остальное - по подписям без подписей площадки."""
+    r = SPECIAL_PATH_M
+    plain = [lb for lb in labels if not SPECIAL_PHRASE.search(lb.text.strip().upper().rstrip("."))]
+    special = [lb for lb in labels if SPECIAL_PHRASE.search(lb.text.strip().upper().rstrip("."))]
+    drawn_arr = np.asarray(drawn, dtype=object)
+    drawn_tree = shapely.STRtree(drawn_arr) if len(drawn_arr) else None
+    out_parts: list[BaseGeometry] = []
+    out_kinds: list[str] = []
+    for part, kind in zip(parts, kinds, strict=True):
+        inside = [lb for lb in special if shapely.contains_xy(part, lb.x, lb.y)]
+        if not inside:
+            out_parts.append(part)
+            out_kinds.append(kind)
+            continue
+        bodies = _drawn_bodies(part, inside, drawn_arr, drawn_tree)
+        # Подписи площадок вне контуров чертежа (спортплощадка за дорожкой от обведённой
+        # площадки, Харьковская) ищут тело размыканием остатка части.
+        left = [lb for lb in inside if not any(shapely.contains_xy(b, lb.x, lb.y) for b in bodies)]
+        if left:
+            rest_part = _areal(part.difference(shapely.union_all(bodies))) if bodies else part
+            opened = _areal(rest_part.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+            bodies += [
+                body
+                for body in shapely.get_parts(_areal(opened.intersection(rest_part)))
+                if body.geom_type == "Polygon"
+                and any(shapely.contains_xy(body, lb.x, lb.y) for lb in left)
+            ]
+        body = shapely.union_all(bodies) if bodies else None
+        # Площадка в большой сети тротуаров голосованием проигрывает «А» дорожек; её тело с
+        # подписью площадки - резина. Не отделилось (тело - почти вся часть) - решили голоса,
+        # но только если в самом теле есть подпись материала: «А» на дорожке к спортплощадке
+        # не делает её асфальтом (Харьковская, 19.10.2026).
+        contested = body is not None and _label_material(body, plain) is not None
+        if body is None or (
+            kind != PAVED_SPECIAL and contested and body.area > SPECIAL_BODY_SHARE * part.area
+        ):
+            out_parts.append(part)
+            out_kinds.append(kind)
+            continue
+        out_parts.extend(bodies)
+        out_kinds.extend([PAVED_SPECIAL] * len(bodies))
+        for rest in shapely.get_parts(_areal(part.difference(body))):
+            if rest.geom_type == "Polygon" and rest.area >= SURFACE_MIN_PART_M2:
+                out_parts.append(rest)
+                out_kinds.append(_label_material(rest, plain) or PAVED_UNKNOWN)
+    return out_parts, out_kinds
+
+
+def _drawn_bodies(
+    part: BaseGeometry,
+    inside: Sequence[Any],
+    drawn: np.ndarray,
+    tree: shapely.STRtree | None,
+) -> list[BaseGeometry]:
+    """Тело площадки по её контуру в чертеже: полигон тротуара с подписью площадки внутри.
+
+    Размыкание на SPECIAL_PATH_M оставляло на стыке с дорожкой у калитки клин резины и
+    срезало скругление угла (Харьковская, площадка у дома 1А, 19.10.2026). Контура нет -
+    пусто, и тело ищет размыкание."""
+    if tree is None:
+        return []
+    points = shapely.points([(lb.x, lb.y) for lb in inside])
+    _, hit = tree.query(points, predicate="within")
+    if not len(hit):
+        return []
+    try:
+        body = _areal(part.intersection(shapely.union_all(drawn[np.unique(hit)])))
+    except shapely.errors.GEOSException:
+        return []
+    return [
+        g
+        for g in shapely.get_parts(body)
+        if g.geom_type == "Polygon"
+        and g.area >= SURFACE_MIN_PART_M2
+        and any(shapely.contains_xy(g, lb.x, lb.y) for lb in inside)
+    ]
+
+
+def _walks(kinds: list[str]) -> list[str]:
+    """Материал тротуара - целиком по части, а не по пикселю, и по подписи съёмки: «А» -
+    асфальт, «ПЛ», «Б» - плитка; без подписи - асфальт. 3D раньше делил покрытие по ширине
+    попиксельно, и граница плитки и асфальта шла пятнами («то, что идёт с бордюром, меняется
+    с асфальта на тротуар», 19.10.2026); потом узкий асфальт у борта стал плиткой, а на
+    панорамах Харьковской он асфальт («пофикси везде траблы с асфальтом», 19.10.2026). Плитку
+    съёмка подписывает всегда, поэтому без подписи - асфальт."""
+    return [PAVED_ASPHALT if kind == PAVED_UNKNOWN else kind for kind in kinds]
+
+
+def _drawn_edges(raw: BaseGeometry, exact: BaseGeometry | None) -> BaseGeometry:
+    """Часть покрытия после сглаживания, но с краем по контуру чертежа там, где он есть.
+
+    _smoothed выпрямляет пилу растра упрощением на полметра, и скругления углов из чертежа
+    становились срезами и острыми углами (Харьковская, площадка у дома 1А, пользователь
+    19.10.2026: «странные и кривые углы у площадки»). Внутри контуров чертежа часть идёт по
+    чертежу, выемки и щели уже 2 x DRAWN_JOG_M заливаются; дуги остаются. Снаружи -
+    сглаженный растр без щепок уже 2 x DRAWN_SLIVER_M."""
+    smooth = _smoothed(raw)
+    if exact is None or exact.is_empty:
+        return smooth
+    try:
+        own = _areal(raw.intersection(exact))
+        if own.is_empty:
+            return smooth
+        # Контур чертежа берётся как есть: размыкание растра на полметра срезало у края
+        # площадки полосу за волосяной щелью (дом 1А), а выемки и щели заливает замыкание ниже.
+        kept = own
+        r = DRAWN_SLIVER_M
+        rest = _areal(smooth.difference(exact))
+        rest = _areal(rest.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+        merged = _areal(shapely.union_all([kept, rest]))
+        # Шов двух половин и снятые узкие места внутри контура оставляли в части волосяные
+        # щели и дырочки: размыкание площадки (_special_bodies) раздувало их в клинья.
+        e = DRAWN_SEAM_M
+        merged = _areal(merged.buffer(e, join_style="mitre").buffer(-e, join_style="mitre"))
+        # Зацепы контура чертежа внутрь в 10-30 см (площадка у дома 1А) ломали садовый борт
+        # ступенькой: выемки уже 2 x DRAWN_JOG_M заливаются, дуги остаются. Выступы наружу
+        # уже сняло размыкание в _smoothed.
+        j = DRAWN_JOG_M
+        merged = _areal(merged.buffer(j, quad_segs=8).buffer(-j, quad_segs=8))
+        # Шов и швы буфера оставляли на углах изломы по 1-2 см: 3D снимало вершины у таких
+        # звеньев и срезало узкий вырез газона у ограды дома 1А. Дуги чертежа допуск не трогает.
+        holes_free = _without_small_holes(merged, DRAWN_HOLE_M2)
+        return _simplified(holes_free, DRAWN_SIMPLIFY_M) or holes_free
+    except shapely.errors.GEOSException:
+        return smooth
+
+
+def _off_drawn_slivers(
+    simplified: BaseGeometry | None, raster: BaseGeometry | None, exact: BaseGeometry | None
+) -> BaseGeometry | None:
+    """Выпрямленный растр без клиньев, которые упрощение вынесло за контур чертежа.
+
+    Растр выпрямляется с допуском в полторы клетки, и у вогнутого угла контура чертежа хорда
+    упрощения выходила за контур клином до 0,8 м: угол площадки срезался наискось
+    (Харьковская, 19.10.2026). Клин - площадь, которой нет ни в растре, ни в контуре, и
+    которая касается контура: она снимается. Покрытие растра рядом с контуром остаётся."""
+    if simplified is None or simplified.is_empty or exact is None or exact.is_empty:
+        return simplified
+    try:
+        added = _areal(simplified.difference(shapely.union_all([raster, exact])))
+        pieces = shapely.get_parts(added)
+        if not len(pieces):
+            return simplified
+        drawn = shapely.get_parts(exact)
+        touching, _ = shapely.STRtree(drawn).query(pieces, predicate="dwithin", distance=1e-3)
+        if not len(touching):
+            return simplified
+        return _without(simplified, shapely.union_all(pieces[np.unique(touching)]))
+    except shapely.errors.GEOSException:
+        return simplified
+
+
+def _without_small_holes(area: BaseGeometry, limit_m2: float) -> BaseGeometry:
+    """Площадь без дыр меньше limit_m2 (острова газона больше: клумба - десятки м²)."""
+    polygons = []
+    for polygon in shapely.get_parts(area):
+        if polygon.geom_type != "Polygon":
+            continue
+        holes = [h for h in polygon.interiors if shapely.Polygon(h).area >= limit_m2]
+        polygons.append(shapely.Polygon(polygon.exterior, holes))
+    return shapely.union_all(polygons) if polygons else area
+
+
+def _smoothed(area: BaseGeometry, *, simplify: bool = True) -> BaseGeometry:
     """Снять зубцы и закрыть выемки уже PAVED_SMOOTH_M x 2 (размыкание и замыкание с
     прямыми углами), выпрямить пилу с тем же допуском: лесенка разлива давала на краю проезда
     рваный борт, углы остаются. Радиус больше полуметра нельзя: он стирает узкий тротуар;
@@ -949,7 +1508,8 @@ def _smoothed(area: BaseGeometry) -> BaseGeometry:
     # прямыми углами: она выпрямляется упрощением с тем же допуском, дуги потом скругляет
     # _round_turns. Буфер с прямыми углами бывает самопересекающимся (Олимпийская деревня): GEOS
     # тогда роняет пересечение, поэтому оба контура сперва чинятся до площадных частей.
-    return _simplified(_areal(closed).intersection(_areal(notches)), r) or shapely.Polygon()
+    result = _areal(closed).intersection(_areal(notches))
+    return (_simplified(result, r) if simplify else result) or shapely.Polygon()
 
 
 def _areal(geometry: BaseGeometry) -> BaseGeometry:
@@ -963,8 +1523,8 @@ def _areal(geometry: BaseGeometry) -> BaseGeometry:
 
 def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry | None) -> str:
     material = _label_material(part, labels)
-    if material == PAVED_PAVERS:
-        return PAVED_PAVERS
+    if material in {PAVED_PAVERS, PAVED_SPECIAL}:
+        return material
     if walks is not None and part.intersection(walks).area >= part.area / 2:
         return material or PAVED_UNKNOWN
     width = 2 * shapely.maximum_inscribed_circle(part, 0.25).length
@@ -975,14 +1535,18 @@ def _paved_kind(part: BaseGeometry, labels: Sequence[Any], walks: BaseGeometry |
 
 def _label_material(part: BaseGeometry, labels: Sequence[Any]) -> str | None:
     """Материал части по подписям съёмки внутри неё: большинство решает."""
-    votes = {PAVED_ASPHALT: 0, PAVED_PAVERS: 0}
+    # Порядок - приоритет при равенстве голосов: подпись площадки говорит о самой части,
+    # а «А» в ней часто от соседних дорожек (площадка у дома 1А на Харьковской: 2 на 2).
+    votes = {PAVED_SPECIAL: 0, PAVED_PAVERS: 0, PAVED_ASPHALT: 0}
     if not labels:
         return None
     shapely.prepare(part)
     for label in labels:
         text = label.text.strip().upper().rstrip(".")
         kind = (
-            PAVED_PAVERS
+            PAVED_SPECIAL
+            if SPECIAL_PHRASE.search(text)
+            else PAVED_PAVERS
             if text in PAVERS_LABELS or PAVERS_PHRASE.search(text)
             else PAVED_ASPHALT
             if text in ASPHALT_LABELS or "АСФАЛЬТ" in text
@@ -1004,10 +1568,27 @@ def _class_area(features: Sequence[Any], object_class: ObjectClass) -> BaseGeome
 
 
 def _polygon_rings(polygon: BaseGeometry) -> list[list[list[float]]]:
-    return [
-        [[round(x, 2), round(y, 2)] for x, y in _round_turns(ring.coords)]
-        for ring in (polygon.exterior, *polygon.interiors)
-    ]
+    outer = _ring_points(_round_turns(polygon.exterior.coords))
+    holes = [_ring_points(_round_turns(ring.coords)) for ring in polygon.interiors]
+    # Дыра в несколько сантиметров после снятия коротких звеньев - уже не кольцо.
+    return [outer, *(h for h in holes if len(h) >= RING_MIN_POINTS)]
+
+
+def _ring_points(coords: Sequence[tuple[float, float]]) -> list[list[float]]:
+    """Вершины кольца в сантиметрах без звеньев короче RING_MIN_SEG_M: после округления и
+    пересечений соседние точки совпадали или стояли в 1-2 см, а 3D снимало вершины у таких
+    звеньев каскадом и срезало по ним узкий вырез газона у ограды дома 1А (19.10.2026)."""
+    out: list[list[float]] = []
+    for x, y in coords:
+        point = [round(x, 2), round(y, 2)]
+        if not out or math.dist(point, out[-1]) >= RING_MIN_SEG_M:
+            out.append(point)
+    # Кольцо замкнуто: последняя точка - первая, предпоследняя не ближе порога к ней.
+    while len(out) > 2 and math.dist(out[-1], out[0]) < RING_MIN_SEG_M:  # noqa: PLR2004
+        out.pop()
+    if out and out[-1] != out[0]:
+        out.append(list(out[0]))
+    return out
 
 
 def _simplified(area: BaseGeometry | None, tolerance: float) -> BaseGeometry | None:
@@ -1025,12 +1606,17 @@ def _without(area: BaseGeometry | None, cut: BaseGeometry | None) -> BaseGeometr
 def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
     """Скруглить повороты замкнутого кольца срезом углов (Чайкин, два прохода): излом от 5 до
     75° - поворот дороги или дуга, разбитая упрощением на отрезки, - срезается по четверти
-    соседних отрезков; прямой и острый угол (здание, площадка) остаётся углом."""
+    соседних отрезков; прямой и острый угол (здание, площадка) остаётся углом. Поворотом
+    считается излом, у которого оба звена не короче ROUND_MIN_SEG_M: пила края без линии
+    чертежа (звенья по полметра) скруглением становилась волной (пользователь, 19.10.2026).
+    Второй проход скругляет только точки, рождённые первым."""
     points = [(float(x), float(y)) for x, y in coords[:-1]]
-    for _ in range(SURFACE_ROUND_PASSES):
+    soft = [True] * len(points)
+    for pass_no in range(SURFACE_ROUND_PASSES):
         if len(points) < 3:  # noqa: PLR2004 - кольцо из трёх точек
             break
         out: list[tuple[float, float]] = []
+        out_soft: list[bool] = []
         for i, (vx, vy) in enumerate(points):
             px, py = points[i - 1]
             nx, ny = points[(i + 1) % len(points)]
@@ -1041,24 +1627,50 @@ def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, flo
                 if la and lb
                 else 0.0
             )
-            if SURFACE_ROUND_TURN_DEG[0] < turn < SURFACE_ROUND_TURN_DEG[1]:
-                out.append((vx - ax / 4, vy - ay / 4))
-                out.append((vx + bx / 4, vy + by / 4))
+            bend = (
+                min(la, lb) >= ROUND_MIN_SEG_M if pass_no == 0 else soft[i]
+            ) and SURFACE_ROUND_TURN_DEG[0] < turn < SURFACE_ROUND_TURN_DEG[1]
+            if bend:
+                # Срез - четверть стороны, но не длиннее ROUND_CUT_M: иначе у длинной стороны
+                # угол съедался на метры, и прямоугольник стоянки выглядел скошенным.
+                cap = ROUND_CUT_M * 0.5 ** (pass_no + 1)  # за все проходы - меньше ROUND_CUT_M
+                ka = min(0.25, cap / la)
+                kb = min(0.25, cap / lb)
+                out.append((vx - ax * ka, vy - ay * ka))
+                out.append((vx + bx * kb, vy + by * kb))
+                out_soft += [True, True]
             else:
                 out.append((vx, vy))
-        points = out
+                out_soft.append(False)
+        points, soft = out, out_soft
     return [*points, points[0]] if points else []
+
+
+def _export_parts(
+    parts: Sequence[BaseGeometry], kinds: Sequence[str]
+) -> tuple[list[list[list[list[float]]]], list[str]]:
+    """Части покрытия в выгрузку вместе с видами; часть, от которой после снятия коротких
+    звеньев не осталось кольца, выпадает вместе со своим видом."""
+    rings: list[list[list[list[float]]]] = []
+    out_kinds: list[str] = []
+    for part, kind in zip(parts, kinds, strict=True):
+        polygon = _polygon_rings(part)
+        if polygon and len(polygon[0]) >= RING_MIN_POINTS:
+            rings.append(polygon)
+            out_kinds.append(kind)
+    return rings, out_kinds
 
 
 def _rings(area: BaseGeometry | None) -> list[list[list[list[float]]]]:
     if area is None or area.is_empty:
         return []
     simple = shapely.simplify(area, SURFACE_AREA_TOLERANCE_M, preserve_topology=True)
-    return [
+    polygons = [
         _polygon_rings(polygon)
         for polygon in shapely.get_parts(simple)
         if polygon.geom_type == "Polygon" and not polygon.is_empty
     ]
+    return [p for p in polygons if p and len(p[0]) >= RING_MIN_POINTS]
 
 
 def _zones(plan: Plan) -> dict[str, Any]:

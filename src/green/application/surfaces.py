@@ -20,6 +20,8 @@ from scipy.ndimage import label as connected_components
 from scipy.sparse.csgraph import dijkstra
 
 from green.application.approximation import error_bound, inner_area, outer_area, reserved_buffer
+from green.application.line_gaps import GAP_M as LINE_GAP_M
+from green.application.line_gaps import bridges
 from green.application.surface_faces import FaceMaterials, closed_face_materials
 from green.application.wording import counted
 from green.domain.objects import ObjectClass
@@ -33,13 +35,13 @@ if TYPE_CHECKING:
     from green.domain.objects import Feature, TextLabel
 
 PAVED_LABELS = frozenset({"А", "Ц", "ПЛ", "БР", "Б", "Щ", "ГР", "АСФ", "ПЛИТКА"})
-SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК"})
+SOIL_LABELS = frozenset({"ГАЗОН", "ГРУНТ", "ЦВЕТНИК", "КЛУМБА"})
 # Подписи-фразы площадок и покрытий: «ДЕТ.ПЛ.», «СПОРТ ПЛ.», «СПЕЦ.ПОКРЫТИЕ», «ПЛИТКА БЕТОННАЯ».
 # Короткие обозначения («А», «Б») фразами не ищутся: «ж.б.» у трубы - не бетонное покрытие.
 PAVED_PHRASE = re.compile(r"ПОКР|^(ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК|АСФАЛЬТ|БРУСЧ|ПЛИТК|ТЕРРАВЕЙ")
 FUNCTIONAL_PHRASE = re.compile(r"^(?:ДЕТ|СПОРТ|ХОЗ|ИГР)\W*ПЛ|ПЛОЩАДК")
 FUNCTIONAL_MAX_AREA_M2 = 3000.0
-SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК")
+SOIL_PHRASE = re.compile(r"ГАЗОН|ЦВЕТНИК|КЛУМБ")
 # Полигоны, чья середина - известный материал: штриховки газонов, тротуаров, проезжей части.
 SOIL_AREAS = frozenset({ObjectClass.LAWN})
 PAVED_AREAS = frozenset({ObjectClass.SIDEWALK, ObjectClass.ROAD})
@@ -109,6 +111,9 @@ class SurfaceMap:
     # Display raster and exact polygon evidence are kept separate: painting a
     # polygon into a cell must not expand it or erase a sub-cell hole.
     inferred_grid: NDArray[np.int8] | None = field(default=None, repr=False)
+    # Растр для показа (3D, бумажная подоснова): грань между линиями чертежа - одним
+    # материалом (display_grid). Проверка посадок его не читает.
+    display_grid: NDArray[np.int8] | None = field(default=None, repr=False)
     soil_area: BaseGeometry | None = None
     paved_area: BaseGeometry | None = None
     uncertainty_area: BaseGeometry | None = None
@@ -409,6 +414,22 @@ class SurfaceMap:
         return rows, cols
 
 
+# Карта покрытий для 3D шире границы работ на столько, м: дорожки, площадки и тротуары съёмки
+# за границей иначе стояли газоном, и дорожка от калитки обрывалась в траву (Харьковская,
+# 19.10.2026). Посадки и проверка читают карту в границе работ, как раньше.
+DISPLAY_MARGIN_M = 40.0
+# Разрыв между штрихами пунктира съёмки (борт, край покрытия) не шире этого закрывается в
+# карте для посадок, м: штрих около метра, просвет 0,3-0,6 м, проход и въезд - от 1,5 м.
+STROKE_GAP_M = 1.0
+
+
+def display_extent(extent: BaseGeometry | None) -> BaseGeometry | None:
+    """Граница карты покрытий для показа: граница работ с запасом DISPLAY_MARGIN_M."""
+    if extent is None or extent.is_empty:
+        return extent
+    return extent.buffer(DISPLAY_MARGIN_M, join_style="mitre")
+
+
 def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stages
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
@@ -420,11 +441,17 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     tree_distance_m: float = 2.0,
     inference_mode: str = "closed_faces",
     open_ground: bool = True,
+    display_around: BaseGeometry | None = None,
 ) -> SurfaceMap | None:
     """Use explicit polygons or bounded, competing material evidence; preserve unknowns.
 
     open_ground: a drawing with a work boundary and no soil evidence at all (no lawn
     polygon, no soil label) gets its free ground inside the boundary as inferred soil.
+    display_around: the work boundary when this is the map for the 3D view past it (extent is
+    display_extent of it). Inside the boundary the rules are those of planting (a street drawn
+    without material polygons lives on label spread). Past it the survey is often cut by the
+    sheet edge, so only drawn evidence decides: labels do not spread there, and a playground
+    label does not fill a region that only the map frame closes.
     """
     if not np.isfinite([cell_m, max_distance_m, ambiguity_m, tree_distance_m]).all():
         raise ValueError("Surface distances must be finite")
@@ -470,6 +497,14 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     origin = (float(bounds[0]) - cell, float(bounds[1]) - cell)
     shape = (int((bounds[3] - bounds[1]) / cell) + 3, int((bounds[2] - bounds[0]) / cell) + 3)
     uncertain = _uncertainty_area(features)
+    # Борт и край покрытия съёмки часто пунктиром из отдельных штрихов: разлив подписи «А»
+    # уходил сквозь разрывы за борт, и край проезда шёл зубцами и лесенкой (Кустанайская,
+    # 19.10.2026: «асфальт прям грустно», «нужно уметь распознавать штрихи»). Разрывы
+    # закрываются перемычками ещё до разлива: в карте для посадок - разрывы пунктира до
+    # STROKE_GAP_M (въезд и калитка шире остаются открытыми), в карте для показа - до
+    # line_gaps.GAP_M, как в гранях для показа.
+    gap = STROKE_GAP_M if display_around is None else LINE_GAP_M
+    barriers = np.concatenate([barriers, np.array(bridges(list(barriers), gap), dtype=object)])
     barrier = _rasterize(barriers, origin, cell, shape, uncertain=uncertain)
     free = ~barrier
     if extent is not None:
@@ -498,6 +533,9 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
             cell=cell,
             limit=max_distance_m if inference_mode == "hybrid" else 0.0,
             ambiguity=ambiguity_m,
+            spread=None
+            if display_around is None
+            else _inside(display_around, origin, cell, free.shape),
         )
         grid = fallback.grid
     else:
@@ -519,7 +557,14 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         paved_area = _merge_material_area(paved_area, functional_area, extent)
     soil_area = _soil_polygons(soil_area)
     functional_grid = (
-        _functional_cells(free, grid, functional_labels, origin, cell)
+        _functional_cells(
+            free,
+            grid,
+            functional_labels,
+            origin,
+            cell,
+            frame=None if display_around is None else _frame_cells(extent, origin, cell, shape),
+        )
         if functional_labels
         else None
     )
@@ -553,6 +598,7 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         ambiguity_m=ambiguity_m,
         tree_distance_m=tree_distance_m,
         inferred_grid=inferred_grid,
+        display_grid=_display_grid(grid, barrier, barriers, origin, cell),
         soil_area=soil_area,
         paved_area=paved_area,
         uncertainty_area=uncertain,
@@ -761,6 +807,7 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     cell: float,
     limit: float,
     ambiguity: float,
+    spread: NDArray[np.bool_] | None = None,
 ) -> _Fallback:
     """Подписи вне решённых граней разливают материал по расстоянию (вопрос 3 пользователя).
 
@@ -768,7 +815,8 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     переписывается и разливу закрыта. Разлив идёт только по свободным ячейкам (границы
     покрытий - барьер), не дальше limit, а «ГАЗОН» и «А» конкурируют: ячейка, где разница
     расстояний меньше ambiguity, остаётся неизвестной. Подпись в полосе погрешности границы
-    сторону не выбирает; деревья затравкой не служат.
+    сторону не выбирает; деревья затравкой не служат. spread - клетки, где разлив разрешён
+    (карта для 3D: только граница работ, за ней подписи не разливаются).
     """
     unknown = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
     decided = shapely.union_all([faces.soil, faces.paved])
@@ -781,7 +829,7 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     # limit 0 - строгий режим тиммейта: без разлива, растр граней пуст.
     if limit <= 0 or not labels.any():
         return _Fallback(grid=unknown)
-    open_cells = free.copy()
+    open_cells = free.copy() if spread is None else free & spread
     if not decided.is_empty:
         open_cells &= ~_inside(decided, origin, cell, free.shape)
     xy = seed_xy[labels]
@@ -1013,19 +1061,25 @@ def _functional_label(label: TextLabel) -> bool:
     return not explicit_ignore and bool(FUNCTIONAL_PHRASE.search(label.text.strip().upper()))
 
 
-def _functional_cells(
+def _functional_cells(  # noqa: PLR0913 - рамка карты для показа
     free: NDArray[np.bool_],
     grid: NDArray[np.int8],
     labels: tuple[tuple[float, float, str], ...],
     origin: tuple[float, float],
     cell: float,
+    *,
+    frame: NDArray[np.bool_] | None = None,
 ) -> NDArray[np.bool_]:
-    """Закрыть малую область за контуром или компонент выведенного грунта."""
+    """Закрыть малую область за контуром или компонент выведенного грунта. frame - клетки края
+    рамки карты: область, которую замыкает только рамка, не заливается (карта для показа)."""
     result = np.zeros(free.shape, dtype=bool)
     if not labels:
         return result
     components, count = connected_components(free)
     sizes = np.bincount(components.ravel(), minlength=count + 1)
+    if frame is not None:
+        # Область, дошедшая до рамки, не замкнута чертежом: размер ей ставится выше предела.
+        sizes[np.unique(components[frame & free])] = np.iinfo(sizes.dtype).max // 4
     soil_components, soil_count = connected_components(free & (grid == Material.SOIL))
     soil_sizes = np.bincount(soil_components.ravel(), minlength=soil_count + 1)
     for x, y, _ in labels:
@@ -1120,6 +1174,21 @@ def _rasterize(
     return barrier
 
 
+def _frame_cells(
+    extent: BaseGeometry | None,
+    origin: tuple[float, float],
+    cell: float,
+    shape: tuple[int, int],
+) -> NDArray[np.bool_] | None:
+    """Клетки края карты: внутри рамки, но с соседом снаружи (или у края растра)."""
+    if extent is None or extent.is_empty:
+        return None
+    inside = _inside(extent, origin, cell, shape)
+    padded = np.pad(inside, 1, constant_values=False)
+    inner = padded[:-2, 1:-1] & padded[2:, 1:-1] & padded[1:-1, :-2] & padded[1:-1, 2:]
+    return inside & ~inner
+
+
 def _inside(
     extent: BaseGeometry, origin: tuple[float, float], cell: float, shape: tuple[int, int]
 ) -> NDArray[np.bool_]:
@@ -1177,3 +1246,57 @@ def _assign(
     material[soil + ambiguity < paved] = int(Material.SOIL)
     grid[free] = material
     return grid
+
+
+# Грань для показа отдаётся материалу, если другого в ней не больше этой доли известного:
+# пятно, протёкшее через разрыв, мало, а газон и асфальт одной большой незамкнутой грани -
+# соизмеримы, и такая грань остаётся как есть.
+DISPLAY_MINORITY = 0.25
+# Неизвестное в грани для показа заполняется материалом грани, если известно не меньше этой доли
+# грани и грань не больше DISPLAY_FILL_MAX_M2: большая грань - это двор, а не проезд.
+DISPLAY_FILL_KNOWN = 0.5
+DISPLAY_FILL_MAX_M2 = 3000.0
+
+
+def _display_grid(
+    grid: NDArray[np.int8],
+    barrier: NDArray[np.bool_],
+    lines: NDArray[np.object_],
+    origin: tuple[float, float],
+    cell: float,
+) -> NDArray[np.int8]:
+    """Растр для показа: материал грани между линиями чертежа.
+
+    Разлив подписей идёт по клеткам и проходит через разрывы линий; в 3D это давало пятна,
+    пересекающие нарисованный борт (Харьковская, 18-19.10.2026). Здесь разрывы до
+    line_gaps.GAP_M закрываются перемычками, земля делится на грани между линиями, и в каждой
+    грани известные клетки меньшинства (не больше DISPLAY_MINORITY) получают материал
+    большинства. Неизвестное не заполняется, клетки линий остаются линиями."""
+    walls = barrier | _rasterize(
+        np.array(bridges(list(lines)), dtype=object), origin, cell, grid.shape
+    )
+    faces, count = connected_components(~walls)
+    paved = grid == Material.PAVED
+    soil = grid == Material.SOIL
+    flat = faces.ravel()
+    n_paved = np.bincount(flat, weights=paved.ravel(), minlength=count + 1)
+    n_soil = np.bincount(flat, weights=soil.ravel(), minlength=count + 1)
+    known = n_paved + n_soil
+    majority = np.full(count + 1, int(Material.UNKNOWN), dtype=np.int8)
+    majority[(known > 0) & (n_soil <= DISPLAY_MINORITY * known)] = int(Material.PAVED)
+    majority[(known > 0) & (n_paved <= DISPLAY_MINORITY * known)] = int(Material.SOIL)
+    majority[0] = int(Material.UNKNOWN)
+    # Неизвестное заполняется только в грани, замкнутой линиями и в основном известной: проезд
+    # между двумя бортами, куда подпись «А» дотекала ромбом на пределе разлива, выходил с
+    # зубцами по краю этого ромба (Кустанайская, 19.10.2026: «асфальт прям грустно»).
+    size = np.bincount(flat, minlength=count + 1)
+    edge = np.unique(np.concatenate([faces[0], faces[-1], faces[:, 0], faces[:, -1]]))
+    fill = (known >= DISPLAY_FILL_KNOWN * size) & (size * cell * cell <= DISPLAY_FILL_MAX_M2)
+    fill[edge] = False
+    fill[0] = False
+    out = grid.copy()
+    decided = majority[faces]
+    fix = (paved | soil) & (decided != Material.UNKNOWN)
+    fix |= (grid == Material.UNKNOWN) & fill[faces] & (decided != Material.UNKNOWN)
+    out[fix] = decided[fix]
+    return out

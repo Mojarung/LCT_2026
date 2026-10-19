@@ -84,3 +84,42 @@ describe('скамейки', () => {
     expect(bins).toHaveLength(2);
   });
 });
+
+describe('люки по колодцам съёмки', () => {
+  it('штрихи одного знака - один люк в центре; на газоне люка нет', () => {
+    const circle = (x: number, z: number) => ({
+      points: Array.from({ length: 9 }, (_, k) => ({
+        x: x + 0.35 * Math.cos((k * Math.PI) / 4),
+        z: z + 0.35 * Math.sin((k * Math.PI) / 4),
+      })),
+    });
+    const mark = (x: number, z: number) => ({
+      points: [
+        { x: x - 0.2, z },
+        { x: x + 0.2, z },
+      ],
+    });
+    const utilities = [
+      {
+        kind: 'utility.access',
+        lines: [circle(10, 10), mark(10, 10.1), circle(30, 10), mark(50, 10)],
+      },
+      {
+        kind: 'utility.water',
+        lines: [
+          {
+            points: [
+              { x: 0, z: 0 },
+              { x: 200, z: 0 },
+            ],
+          },
+        ],
+      },
+    ];
+    const ground = (x: number): Ground => (x > 40 ? 'grass' : 'asphalt');
+    const spots = manholeSpots(utilities, ground);
+    expect(spots).toHaveLength(2);
+    expect(Math.hypot((spots[0]?.x ?? 0) - 10, (spots[0]?.z ?? 0) - 10)).toBeLessThan(0.1);
+    expect(Math.hypot((spots[1]?.x ?? 0) - 30, (spots[1]?.z ?? 0) - 10)).toBeLessThan(0.1);
+  });
+});
