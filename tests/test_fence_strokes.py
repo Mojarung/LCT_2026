@@ -6,11 +6,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import shapely
 import shapely.ops
 from shapely.geometry import LineString, Point
 
-from green.application.fences import JOIN_M, bridge_fence_gaps, fence_axes
+from green.application import fences as fences_module
+from green.application.fences import JOIN_M, _medial_axis, bridge_fence_gaps, fence_axes
 from green.domain.objects import Feature, ObjectClass, SourceRef
 
 
@@ -133,3 +136,27 @@ def test_fence_axis_gaps_up_to_join_m_are_closed() -> None:
     axes = fence_axes([a, b, far])
     assert len(axes) == 2
     assert max(axis.length for axis in axes) > 19
+
+
+def test_fence_band_that_broke_voronoi_still_gets_an_axis() -> None:
+    """Старый Гай, 19.10.2026: полоса ограды с повторами точек контура в координатах около
+    20 850 м - диаграмма Вороного GEOS падала («point array must contain 0 or >1 elements»),
+    и с ней весь прогон улицы."""
+    data = Path(__file__).parent / "data" / "fence_band_voronoi_failure.wkt"
+    band = shapely.from_wkt(data.read_text(encoding="utf-8"))
+    axes = _medial_axis(band)
+    assert axes
+    assert sum(a.length for a in axes) > 0.3 * band.length
+    assert all(band.buffer(0.05).contains(a) for a in axes)
+
+
+def test_geos_failure_on_one_band_keeps_its_strokes(monkeypatch) -> None:  # noqa: ANN001
+    """Сбой GEOS на одной полосе не роняет прогон: её штрихи идут в 3D как есть."""
+
+    def broken(_polygon: object) -> list:
+        raise shapely.errors.GEOSException("boom")
+
+    monkeypatch.setattr(fences_module, "_medial_axis", broken)
+    axes = fence_axes([LineString([(0, 0), (10, 0)])])
+    assert len(axes) == 1
+    assert axes[0].length == 10

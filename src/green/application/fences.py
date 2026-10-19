@@ -153,7 +153,11 @@ def fence_axes(lines: Sequence[BaseGeometry]) -> list[shapely.LineString]:
     band = shapely.union_all(shapely.buffer(np.array(parts, dtype=object), BAND_M, quad_segs=2))
     axes: list[shapely.LineString] = []
     for polygon in shapely.get_parts(band):
-        axes.extend(_medial_axis(polygon))
+        try:
+            axes.extend(_medial_axis(polygon))
+        except shapely.errors.GEOSException:
+            # Ось этой полосы не построилась - её штрихи идут в 3D как есть, прогон не падает.
+            axes.extend(part for part in parts if polygon.contains(part))
     return _join_ends(axes)
 
 
@@ -183,9 +187,14 @@ def _join_ends(axes: list[shapely.LineString]) -> list[shapely.LineString]:
 
 
 def _medial_axis(polygon: BaseGeometry) -> list[shapely.LineString]:
-    dense = shapely.segmentize(polygon.boundary, _STEP_M)
-    points = shapely.multipoints(shapely.get_coordinates(dense))
+    # Диаграмма Вороного GEOS падает на повторах точек в больших координатах (Старый Гай,
+    # 20 850 м): точки сдвигаются к началу у угла полосы и берутся без повторов.
+    offset = np.asarray(polygon.bounds[:2])
+    local = shapely.transform(polygon, lambda xy: xy - offset)
+    dense = shapely.get_coordinates(shapely.segmentize(local.boundary, _STEP_M))
+    points = shapely.multipoints(np.unique(np.round(dense, 6), axis=0))
     edges = shapely.get_parts(shapely.voronoi_polygons(points, only_edges=True))
+    edges = shapely.transform(edges, lambda xy: xy + offset)
     shapely.prepare(polygon)
     inside = edges[shapely.contains_properly(polygon, edges)]
     # Рёбра Вороного сходятся с расхождением в 1e-16: без сетки они не склеиваются в линию.

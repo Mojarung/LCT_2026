@@ -17,7 +17,13 @@ from shapely.geometry import Point, Polygon, box
 from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
 from green.application.surfaces import build_surface_map
 from green.domain.objects import Feature, ObjectClass, SourceRef
-from green.infrastructure.reports.artifacts import _round_turns, _smoothed, _surface, _tidy
+from green.infrastructure.reports.artifacts import (
+    _round_turns,
+    _share_paved,
+    _smoothed,
+    _surface,
+    _tidy,
+)
 
 REF = SourceRef("f", "x", "1")
 SITE = box(0, 0, 60, 40)
@@ -469,3 +475,23 @@ def test_flowerbed_label_picks_the_small_island_not_the_big_lawn(tmp_path: Path)
     beds = _union(areas["flowerbeds"])
     assert beds.intersection(bed).area > 0.9 * bed.area
     assert beds.intersection(lawn).area < 1
+
+
+def test_lawn_island_survives_a_geos_topology_failure(monkeypatch) -> None:  # noqa: ANN001
+    """Харьковский проезд, 19.10.2026: пересечение кольца газона с покрытием в GEOS упало
+    («Ring edge missing»), и с ним весь прогон. Сбой повторяется на сетке 1 мм, а не роняет
+    выгрузку."""
+    real = shapely.intersection
+    calls = {"n": 0}
+
+    def flaky(a, b, **kwargs):  # noqa: ANN001, ANN003, ANN202
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise shapely.errors.GEOSException("TopologyException: Ring edge missing")
+        return real(a, b, **kwargs)
+
+    plaza = box(10, 5, 40, 30)
+    bed = Point(25, 17).buffer(3, quad_segs=2)
+    monkeypatch.setattr(shapely, "intersection", flaky)
+    share = _share_paved(bed.buffer(1).difference(bed), plaza)
+    assert share > 0.99

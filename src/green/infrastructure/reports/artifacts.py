@@ -856,6 +856,7 @@ ISLAND_MAX_M2 = 400.0
 ISLAND_RING_M = 1.0
 ISLAND_PAVED_SHARE = 0.6
 FLOWERBED_LABEL_M = 8.0
+ISLAND_GRID_M = 1e-3
 # Клумба - малый остров: большой газон в кольце дорожек цветником не становится.
 FLOWERBED_MAX_M2 = 120.0
 FLOWERBED_PHRASE = re.compile(r"КЛУМБ|ЦВЕТН")
@@ -974,7 +975,7 @@ def _lawn_islands(
             if not 0 < lawn.area <= ISLAND_MAX_M2:
                 continue
             ring = lawn.buffer(ISLAND_RING_M).difference(lawn)
-            if ring.area and ring.intersection(paved).area >= ISLAND_PAVED_SHARE * ring.area:
+            if ring.area and _share_paved(ring, paved) >= ISLAND_PAVED_SHARE:
                 islands.append(lawn)
     if not islands:
         return None, None
@@ -988,6 +989,19 @@ def _lawn_islands(
         if point.distance(nearest) <= FLOWERBED_LABEL_M and nearest not in beds:
             beds.append(nearest)
     return shapely.union_all(islands), (shapely.union_all(beds) if beds else None)
+
+
+def _share_paved(ring: BaseGeometry, paved: BaseGeometry) -> float:
+    """Доля кольца вокруг газона под покрытием. Пересечение GEOS на сложном покрытии улицы
+    бывает падает («Ring edge missing», Харьковский проезд 19.10.2026): тогда - на сетке 1 мм,
+    а если и там нет - газон не остров (0)."""
+    for grid in (0.0, ISLAND_GRID_M):
+        try:
+            a, b = (shapely.set_precision(g, grid) if grid else g for g in (ring, paved))
+            return float(shapely.area(shapely.intersection(a, b))) / ring.area
+        except shapely.errors.GEOSException:
+            continue
+    return 0.0
 
 
 def _tidy(area: BaseGeometry | None) -> BaseGeometry | None:
