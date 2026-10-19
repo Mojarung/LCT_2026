@@ -29,7 +29,8 @@ export function seriesOf(b: Building): Series {
   if (b.kind !== 'building') return 'porch';
   if (b.wall === 'metal') return 'metal';
   const residential = b.use !== 'non_residential';
-  if (!residential) return b.floors <= 3 ? 'pavilion' : 'slab';
+  // Нежилой дом с подписью кирпича («К-») - кирпичный, а не стеклянный павильон.
+  if (!residential) return b.floors <= 3 ? (b.wall === 'brick' ? 'brick' : 'pavilion') : 'slab';
   if (b.floors >= 12) return 'tower';
   if (b.floors >= 6) return 'slab';
   if (b.floors >= 4) return 'khrushchev';
