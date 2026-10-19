@@ -164,11 +164,11 @@ def test_portfolio_variants_keep_the_surface_params(site: dict[str, object]) -> 
 def test_run_builds_the_surface_map_once(
     site: dict[str, object], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[int] = []
+    calls: list[bool] = []
     original = surfaces.build_surface_map
 
     def counted(*args: object, **kwargs: object) -> object:
-        calls.append(1)
+        calls.append(kwargs.get("display_around") is not None)
         return original(*args, **kwargs)  # type: ignore[arg-type]
 
     _patch_builders(monkeypatch, counted)
@@ -179,4 +179,6 @@ def test_run_builds_the_surface_map_once(
     )
     assert report.plan.portfolio is not None
     assert len(report.plan.portfolio.variants) > 2
-    assert len(calls) == 1
+    # Карта для посадок - одна на прогон; вторая, шире границы работ, - только для 3D.
+    assert calls.count(False) == 1
+    assert calls.count(True) == 1

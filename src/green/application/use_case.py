@@ -51,7 +51,7 @@ from green.application.shrub_fill import fill_shrub_gaps
 from green.application.shrub_groups import fill_shrub_groups
 from green.application.shrub_rows import fill_shrub_rows
 from green.application.species_traces import with_species_traces
-from green.application.surfaces import build_surface_map
+from green.application.surfaces import build_surface_map, display_extent
 from green.application.understory import fill_understory
 from green.application.validation import (
     PlanValidation,
@@ -349,6 +349,26 @@ class PlanSite:
                 if params.require_soil
                 else None
             )
+        # Для 3D карта покрытий шире границы работ: за границей съёмка тоже нарисована, а без
+        # карты там был газон. В границе - те же правила, за ней решает только нарисованное.
+        with watch.stage("surface_display"):
+            boundary = work_boundary(features)
+            display_surface = (
+                build_surface_map(
+                    features,
+                    scene.labels,
+                    display_extent(boundary),
+                    params.surface_cell_m,
+                    max_distance_m=params.surface_max_distance_m,
+                    ambiguity_m=params.surface_ambiguity_m,
+                    tree_distance_m=params.tree_seed_distance_m,
+                    inference_mode=params.surface_inference_mode,
+                    open_ground=params.open_ground,
+                    display_around=boundary,
+                )
+                if surface is not None
+                else None
+            )
         site = site_of(features, surface, crown_m=params.existing_crown_m)
         places = place_map(features)
         inventory = request.inventory
@@ -553,6 +573,7 @@ class PlanSite:
             load_notes=(*merge_notes, *gis_notes),
             basemap=basemap,
             surface=surface,
+            display_surface=display_surface,
             volumes=volumes,
             read_diagnostics=scene.read_diagnostics,
             validation=validation,

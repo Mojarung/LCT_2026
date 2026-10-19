@@ -413,6 +413,19 @@ class SurfaceMap:
         return rows, cols
 
 
+# Карта покрытий для 3D шире границы работ на столько, м: дорожки, площадки и тротуары съёмки
+# за границей иначе стояли газоном, и дорожка от калитки обрывалась в траву (Харьковская,
+# 19.10.2026). Посадки и проверка читают карту в границе работ, как раньше.
+DISPLAY_MARGIN_M = 40.0
+
+
+def display_extent(extent: BaseGeometry | None) -> BaseGeometry | None:
+    """Граница карты покрытий для показа: граница работ с запасом DISPLAY_MARGIN_M."""
+    if extent is None or extent.is_empty:
+        return extent
+    return extent.buffer(DISPLAY_MARGIN_M, join_style="mitre")
+
+
 def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stages
     features: Sequence[Feature],
     labels: Sequence[TextLabel],
@@ -424,11 +437,17 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
     tree_distance_m: float = 2.0,
     inference_mode: str = "closed_faces",
     open_ground: bool = True,
+    display_around: BaseGeometry | None = None,
 ) -> SurfaceMap | None:
     """Use explicit polygons or bounded, competing material evidence; preserve unknowns.
 
     open_ground: a drawing with a work boundary and no soil evidence at all (no lawn
     polygon, no soil label) gets its free ground inside the boundary as inferred soil.
+    display_around: the work boundary when this is the map for the 3D view past it (extent is
+    display_extent of it). Inside the boundary the rules are those of planting (a street drawn
+    without material polygons lives on label spread). Past it the survey is often cut by the
+    sheet edge, so only drawn evidence decides: labels do not spread there, and a playground
+    label does not fill a region that only the map frame closes.
     """
     if not np.isfinite([cell_m, max_distance_m, ambiguity_m, tree_distance_m]).all():
         raise ValueError("Surface distances must be finite")
@@ -502,6 +521,9 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
             cell=cell,
             limit=max_distance_m if inference_mode == "hybrid" else 0.0,
             ambiguity=ambiguity_m,
+            spread=None
+            if display_around is None
+            else _inside(display_around, origin, cell, free.shape),
         )
         grid = fallback.grid
     else:
@@ -523,7 +545,14 @@ def build_surface_map(  # noqa: PLR0913, PLR0915, PLR0912, C901 - evidence stage
         paved_area = _merge_material_area(paved_area, functional_area, extent)
     soil_area = _soil_polygons(soil_area)
     functional_grid = (
-        _functional_cells(free, grid, functional_labels, origin, cell)
+        _functional_cells(
+            free,
+            grid,
+            functional_labels,
+            origin,
+            cell,
+            frame=None if display_around is None else _frame_cells(extent, origin, cell, shape),
+        )
         if functional_labels
         else None
     )
@@ -766,6 +795,7 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     cell: float,
     limit: float,
     ambiguity: float,
+    spread: NDArray[np.bool_] | None = None,
 ) -> _Fallback:
     """Подписи вне решённых граней разливают материал по расстоянию (вопрос 3 пользователя).
 
@@ -773,7 +803,8 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     переписывается и разливу закрыта. Разлив идёт только по свободным ячейкам (границы
     покрытий - барьер), не дальше limit, а «ГАЗОН» и «А» конкурируют: ячейка, где разница
     расстояний меньше ambiguity, остаётся неизвестной. Подпись в полосе погрешности границы
-    сторону не выбирает; деревья затравкой не служат.
+    сторону не выбирает; деревья затравкой не служат. spread - клетки, где разлив разрешён
+    (карта для 3D: только граница работ, за ней подписи не разливаются).
     """
     unknown = np.full(free.shape, int(Material.UNKNOWN), dtype=np.int8)
     decided = shapely.union_all([faces.soil, faces.paved])
@@ -786,7 +817,7 @@ def _label_fallback(  # noqa: PLR0913 - именованные пределы р
     # limit 0 - строгий режим тиммейта: без разлива, растр граней пуст.
     if limit <= 0 or not labels.any():
         return _Fallback(grid=unknown)
-    open_cells = free.copy()
+    open_cells = free.copy() if spread is None else free & spread
     if not decided.is_empty:
         open_cells &= ~_inside(decided, origin, cell, free.shape)
     xy = seed_xy[labels]
@@ -1018,19 +1049,25 @@ def _functional_label(label: TextLabel) -> bool:
     return not explicit_ignore and bool(FUNCTIONAL_PHRASE.search(label.text.strip().upper()))
 
 
-def _functional_cells(
+def _functional_cells(  # noqa: PLR0913 - рамка карты для показа
     free: NDArray[np.bool_],
     grid: NDArray[np.int8],
     labels: tuple[tuple[float, float, str], ...],
     origin: tuple[float, float],
     cell: float,
+    *,
+    frame: NDArray[np.bool_] | None = None,
 ) -> NDArray[np.bool_]:
-    """Закрыть малую область за контуром или компонент выведенного грунта."""
+    """Закрыть малую область за контуром или компонент выведенного грунта. frame - клетки края
+    рамки карты: область, которую замыкает только рамка, не заливается (карта для показа)."""
     result = np.zeros(free.shape, dtype=bool)
     if not labels:
         return result
     components, count = connected_components(free)
     sizes = np.bincount(components.ravel(), minlength=count + 1)
+    if frame is not None:
+        # Область, дошедшая до рамки, не замкнута чертежом: размер ей ставится выше предела.
+        sizes[np.unique(components[frame & free])] = np.iinfo(sizes.dtype).max // 4
     soil_components, soil_count = connected_components(free & (grid == Material.SOIL))
     soil_sizes = np.bincount(soil_components.ravel(), minlength=soil_count + 1)
     for x, y, _ in labels:
@@ -1123,6 +1160,21 @@ def _rasterize(
     keep = (rows >= 0) & (rows < shape[0]) & (cols >= 0) & (cols < shape[1])
     barrier[rows[keep], cols[keep]] = True
     return barrier
+
+
+def _frame_cells(
+    extent: BaseGeometry | None,
+    origin: tuple[float, float],
+    cell: float,
+    shape: tuple[int, int],
+) -> NDArray[np.bool_] | None:
+    """Клетки края карты: внутри рамки, но с соседом снаружи (или у края растра)."""
+    if extent is None or extent.is_empty:
+        return None
+    inside = _inside(extent, origin, cell, shape)
+    padded = np.pad(inside, 1, constant_values=False)
+    inner = padded[:-2, 1:-1] & padded[2:, 1:-1] & padded[1:-1, :-2] & padded[1:-1, 2:]
+    return inside & ~inner
 
 
 def _inside(

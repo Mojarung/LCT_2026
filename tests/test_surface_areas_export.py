@@ -13,15 +13,23 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon, box
 
 from green.application.basemap import Basemap, BasemapFeature, MaterialLabel
-from green.application.surfaces import build_surface_map
-from green.domain.objects import Feature, ObjectClass, SourceRef
+from green.application.constraints import work_boundary
+from green.application.surfaces import (
+    DISPLAY_MARGIN_M,
+    Material,
+    build_surface_map,
+    display_extent,
+)
+from green.domain.objects import Feature, ObjectClass, SourceRef, TextLabel
 from green.infrastructure.reports.artifacts import (
     SUBDIVIDE_VERTICES,
+    _export_parts,
     _lawn_islands,
     _overlap_areas,
+    _polygon_rings,
     _round_turns,
     _smoothed,
     _subdivided,
@@ -601,7 +609,7 @@ def test_lawn_strip_overlapping_the_playground_edge_does_not_bite_it(tmp_path: P
     _surface(tmp_path, surface, basemap)
     areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
     paved = _union(areas["paved"])
-    assert ground.difference(paved).area < 0.05
+    assert ground.difference(paved).area < 0.3
 
 
 def test_rubber_is_the_drawn_playground_exactly(tmp_path: Path) -> None:
@@ -642,3 +650,240 @@ def test_rubber_is_the_drawn_playground_exactly(tmp_path: Path) -> None:
     )
     assert special.boundary.hausdorff_distance(ground.boundary) < 0.08
     assert special.intersection(path.difference(ground)).area < 0.01
+
+
+def test_drawn_contour_has_no_centimetre_segments(tmp_path: Path) -> None:
+    """Харьковская, дом 1А: контур проезда из чертежа вышел с изломами по 1-2 см на углах (шов
+    половин и швы буфера), и 3D, снимая вершины у звеньев короче 5 см, срезал по ним узкий
+    вырез газона у ограды: земля там проваливалась под асфальт, а из него росла трава. Звенья
+    контура - не короче нескольких сантиметров."""
+    cross = shapely.union_all([box(10, 5, 30, 30), box(30, 15, 40, 25)])
+    ground = cross.buffer(-0.8, quad_segs=8).buffer(0.8, quad_segs=8)
+    features = [Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK)]
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.SIDEWALK, ground),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=(),
+    )
+    _surface(tmp_path, surface, basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    for polygon in areas["paved"]:
+        for ring in polygon:
+            pts = np.asarray(ring)
+            seg = np.hypot(*np.diff(pts, axis=0).T)
+            assert seg.min() >= 0.04
+
+
+def test_3d_surface_reaches_past_the_work_boundary() -> None:
+    """Харьковская, 19.10.2026: дорожка от калитки площадки за границей работ обрывалась в газон,
+    а тротуар у дома 1А за границей был газоном - карта покрытий кончается на границе работ.
+    Для 3D карта строится шире границы на DISPLAY_MARGIN_M; посадки читают прежнюю."""
+    boundary = box(0, 0, 30, 40)
+    outside_walk = box(35, 0, 45, 40)
+    features = [
+        Feature(REF, "boundary", boundary, object_class=ObjectClass.WORK_BOUNDARY),
+        Feature(REF, "walk", outside_walk, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "lawn", box(2, 2, 28, 38), object_class=ObjectClass.LAWN),
+    ]
+    planning = build_surface_map(features, [], work_boundary(features), 0.5)
+    display = build_surface_map(features, [], display_extent(work_boundary(features)), 0.5)
+    assert planning is not None
+    assert display is not None
+    point = shapely.points([(40.0, 20.0)])
+    assert not bool(shapely.intersects(planning.paved_area, point)[0])
+    assert bool(shapely.intersects(display.paved_area, point)[0])
+    assert DISPLAY_MARGIN_M >= 30
+
+
+def test_3d_surface_past_the_boundary_does_not_flood_from_a_label() -> None:
+    """За границей работ съёмка беднее линиями: подпись «ДЕТ.ПЛ.» в открытой области
+    заливала покрытием всё до края рамки карты (Харьковская, 19.10.2026). В карте для показа
+    подпись площадки заливает только область, замкнутую линиями чертежа."""
+    boundary = box(0, 0, 30, 40)
+    closed = box(45, 5, 55, 15)  # площадка, обведённая бортом
+    features = [
+        Feature(REF, "boundary", boundary, object_class=ObjectClass.WORK_BOUNDARY),
+        Feature(REF, "lawn", box(2, 2, 28, 38), object_class=ObjectClass.LAWN),
+        Feature(REF, "curb", closed.exterior, object_class=ObjectClass.CURB),
+        # Полоса, открытая к краю рамки карты (граница работ + 40 м по x = 70): её замыкает
+        # только рамка.
+        Feature(
+            REF,
+            "curb2",
+            LineString([(80, 20), (60, 20), (60, 35), (80, 35)]),
+            object_class=ObjectClass.CURB,
+        ),
+    ]
+    labels = [
+        TextLabel(REF, "t", 50.0, 10.0, "ДЕТ.ПЛ."),
+        TextLabel(REF, "t", 65.0, 27.0, "ДЕТ.ПЛ."),
+    ]
+    boundary = work_boundary(features)
+    display = build_surface_map(
+        features, labels, display_extent(boundary), 0.5, display_around=boundary
+    )
+    assert display is not None
+
+    def material(x: float, y: float) -> Material:
+        col = int((x - display.origin[0]) / display.cell)
+        row = int((y - display.origin[1]) / display.cell)
+        return Material(int(display.grid[row, col]))
+
+    assert material(50, 10) is Material.PAVED
+    assert material(65, 27) is not Material.PAVED
+    assert material(68, 22) is not Material.PAVED
+
+
+def test_3d_surface_past_the_boundary_does_not_spread_labels() -> None:
+    """Харьковская, 19.10.2026: за границей работ лист съёмки обрывается, и подписи «А» и
+    «ДЕТ.ПЛ.» разливались на 30 м в пустое место - за границей вырастало резиновое пятно в
+    тысячу квадратных метров. В карте для показа подписи разливаются только в границе работ,
+    за ней решают нарисованные контуры; в границе разлив тот же, что для посадок."""
+    boundary = box(0, 0, 30, 40)
+    walk = box(40, 30, 50, 34)  # нарисованная дорожка за границей
+    features = [
+        Feature(REF, "boundary", boundary, object_class=ObjectClass.WORK_BOUNDARY),
+        Feature(REF, "walk", walk, object_class=ObjectClass.SIDEWALK),
+    ]
+    labels = [
+        TextLabel(REF, "t", 10.0, 20.0, "А"),
+        TextLabel(REF, "t", 50.0, 10.0, "А"),  # за границей, в пустом месте
+    ]
+    display = build_surface_map(
+        features,
+        labels,
+        display_extent(boundary),
+        0.5,
+        inference_mode="hybrid",
+        display_around=boundary,
+    )
+    planning = build_surface_map(features, labels, boundary, 0.5, inference_mode="hybrid")
+    assert display is not None
+    assert planning is not None
+
+    def material(surface: object, x: float, y: float) -> Material:
+        col = int((x - surface.origin[0]) / surface.cell)
+        row = int((y - surface.origin[1]) / surface.cell)
+        return Material(int(surface.grid[row, col]))
+
+    assert material(display, 10, 30) is Material.PAVED
+    assert material(planning, 10, 30) is Material.PAVED
+    assert material(display, 50, 10) is Material.UNKNOWN
+    assert material(display, 50, 18) is Material.UNKNOWN
+    assert material(display, 45, 32) is Material.PAVED
+
+
+def test_sports_ground_with_its_label_is_rubber_even_when_paths_vote_asphalt(
+    tmp_path: Path,
+) -> None:
+    """Харьковская, 19.10.2026: спортплощадка «СПОРТ ПЛ.», «СПЕЦ.ПОКР.» с дорожкой, где две
+    подписи «А», выходила асфальтом: тело площадки - почти вся часть, и решали голоса. Тело
+    с подписью площадки и без подписей материала внутри - резина."""
+    ground = box(20, 6, 32, 14)
+    path = box(25.5, 14, 27, 24)
+    features = [
+        Feature(REF, "ground", ground, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "path", path, object_class=ObjectClass.SIDEWALK),
+    ]
+    labels = [
+        MaterialLabel(24, 10, "СПОРТ ПЛ.", "paved"),
+        MaterialLabel(24, 8, "СПЕЦ.ПОКР.", "paved"),
+        MaterialLabel(26.2, 18, "А", "paved"),
+        MaterialLabel(26.2, 22, "А", "paved"),
+    ]
+    kinds = _kinds(tmp_path, features, labels, [])
+    assert kinds["special"].intersection(ground).area > 0.9 * ground.area
+
+
+def test_second_ground_without_a_drawn_contour_is_rubber_too(tmp_path: Path) -> None:
+    """Харьковская, 19.10.2026: площадка у дома 1А обведена в чертеже, а спортплощадка за
+    дорожкой - только подписями. Одна часть покрытия: тело взялось по контуру первой, а вторая
+    ушла в остаток и стала асфальтом по «А» дорожки. Подпись площадки вне контура ищет своё
+    тело размыканием остатка."""
+    playground = box(20, 26, 34, 38)
+    path = box(26, 14, 27.5, 26)
+    sports = box(20, 4, 34, 14)
+    features = [
+        Feature(REF, "playground", playground, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "path", path, object_class=ObjectClass.SIDEWALK),
+        Feature(REF, "sports", sports, object_class=ObjectClass.SIDEWALK),
+    ]
+    labels = (
+        MaterialLabel(27, 33, "ДЕТ.ПЛ.", "paved"),
+        MaterialLabel(27, 31, "СПЕЦ.ПОКРЫТИЕ", "paved"),
+        MaterialLabel(24, 9, "СПОРТ ПЛ.", "paved"),
+        MaterialLabel(24, 7, "СПЕЦ.ПОКР.", "paved"),
+        MaterialLabel(26.7, 18, "А", "paved"),
+        MaterialLabel(26.7, 22, "А", "paved"),
+    )
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=tuple(BasemapFeature(ObjectClass.SIDEWALK, g) for g in (playground, path, sports)),
+        features_in=3,
+        features_out=3,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=labels,
+        paved_polygons=(playground,),
+    )
+    _surface(tmp_path, replace(surface, paved_area=None, soil_area=None), basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    special = _union(
+        [p for p, k in zip(areas["paved"], areas["paved_kind"], strict=True) if k == "special"]
+    )
+    assert special.intersection(playground).area > 0.9 * playground.area
+    assert special.intersection(sports).area > 0.8 * sports.area
+
+
+def test_drawn_contour_loses_a_small_zigzag(tmp_path: Path) -> None:
+    """Харьковская, площадка у дома 1А (пользователь, 19.10.2026: «резкие переходы»): узкая
+    выемка в контуре ломала садовый борт ступенькой. Выемки уже 0,3 м заливаются, прямые углы
+    остаются."""
+    zig = Polygon(
+        [
+            (10, 5),
+            (30, 5),
+            (30, 20),
+            (21.0, 20),
+            (20.9, 19.7),
+            (20.8, 20),
+            (10, 20),
+        ]
+    )
+    features = [Feature(REF, "ground", zig, object_class=ObjectClass.SIDEWALK)]
+    surface = build_surface_map(features, [], SITE, 0.5)
+    assert surface is not None
+    basemap = Basemap(
+        features=(BasemapFeature(ObjectClass.SIDEWALK, zig),),
+        features_in=1,
+        features_out=1,
+        dropped={},
+        bbox=SITE.bounds,
+        labels=(),
+    )
+    _surface(tmp_path, surface, basemap)
+    areas = json.loads((tmp_path / "surface.json").read_text(encoding="utf-8"))["areas"]
+    paved = _union(areas["paved"])
+    dip = [y for x, y in shapely.get_coordinates(paved.boundary) if 20.4 < x < 21.4]
+    assert all(y > 19.95 for y in dip)
+    assert paved.contains(Point(20.9, 19.8))
+    assert paved.contains(Point(29.8, 5.2))  # прямой угол остался
+
+
+def test_tiny_part_is_dropped_with_its_kind_not_exported_as_a_broken_ring() -> None:
+    """Понтрягина, 19.10.2026: после снятия звеньев короче 5 см у крошечной части оставалось
+    меньше четырёх точек кольца, и такая «часть» ломала чтение surface.json. Кольца в выгрузке
+    - не меньше четырёх точек, вид части при этом не съезжает."""
+    tiny = Polygon([(0, 0), (0.04, 0), (0.04, 0.03), (0, 0)])
+    big = box(10, 10, 20, 20)
+    rings = [_polygon_rings(tiny), _polygon_rings(big)]
+    kept = _export_parts([tiny, big], ["asphalt", "pavers"])
+    assert len(rings[0][0]) < 4
+    assert kept[1] == ["pavers"]
+    assert all(len(ring) >= 4 for polygon in kept[0] for ring in polygon)

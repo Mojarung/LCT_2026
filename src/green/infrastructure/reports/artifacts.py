@@ -189,7 +189,7 @@ class FileArtifactSink:
                 directory / "portfolio.json",
                 asdict(report.plan.portfolio) if report.plan.portfolio is not None else None,
             ),
-            **_surface(directory, report.surface, report.basemap),
+            **_surface(directory, report.display_surface or report.surface, report.basemap),
             # Исходник сверки комплекта (склеенный чертёж): с ним `green verify` повторяет
             # сверку результата. У одиночного файла исходник - сам входной файл, ссылки нет.
             **({report.merged_dxf.name: report.merged_dxf} if report.merged_dxf else {}),
@@ -870,9 +870,12 @@ PAVED_SMOOTH_M = 0.5
 # хорды упрощения у вогнутых скруглений, а не покрытие.
 DRAWN_SLIVER_M = 0.3
 DRAWN_SEAM_M = 0.02
+DRAWN_JOG_M = 0.15
 DRAWN_HOLE_M2 = 1.0
-# Неопределённость уже 2 x UNCERTAIN_BAND_M - полоса погрешности линии, а не спорная грань.
-UNCERTAIN_BAND_M = 0.3
+DRAWN_SIMPLIFY_M = 0.04
+# Звено кольца в surface.json не короче этого, м.
+RING_MIN_SEG_M = 0.05
+RING_MIN_POINTS = 4
 # Подписи материала съёмки Мосгеотреста: «А» - асфальт, «Ц» - цементобетон, «ПЛ» - плитка,
 # «Б», «БР» - брусчатка.
 ASPHALT_LABELS = frozenset({"А", "АСФ", "Ц"})
@@ -918,19 +921,11 @@ def _surface_areas(
     запасной грунт) - растр в контурах, выпрямленный с допуском в полторы клетки. Полигон -
     список колец: внешнее, затем дыры."""
     uncertain = surface.uncertainty_area
-    # Полоса погрешности линии (по 0,1 м вдоль края площадки на Харьковской) с контуром не
-    # спорит: край покрытия идёт по чертежу. Растру остаются только спорные грани целиком,
-    # иначе край отдавался растру и после выпрямления углы площадки срезались.
-    disputed = (
-        _areal(
-            uncertain.buffer(-UNCERTAIN_BAND_M, join_style="mitre").buffer(
-                UNCERTAIN_BAND_M, join_style="mitre"
-            )
-        )
-        if uncertain is not None and not uncertain.is_empty
-        else None
-    )
-    exact_paved = _without(surface.paved_area, disputed)
+    # Для показа покрытие, заданное контуром чертежа, не отдаётся растру ни в полосе
+    # погрешности линии, ни в спорной грани: растр там выпрямлялся и давал на краю площадки
+    # срезанные углы и зацепы, по которым ломался борт (Харьковская, 19.10.2026). Проверка
+    # посадок читает неопределённость по-прежнему.
+    exact_paved = surface.paved_area
     exact_soil = _without(surface.soil_area, shapely.union_all([exact_paved, uncertain]))
     tolerance = cell * SURFACE_RASTER_TOLERANCE_CELLS
     raster_paved = cells_area(grid == int(Material.PAVED), surface.origin, cell)
@@ -965,10 +960,11 @@ def _surface_areas(
     mesh = (
         shapely.union_all(roads).buffer(ROAD_MESH_MARGIN_M, join_style="mitre") if roads else None
     )
+    exported = _export_parts(parts, kinds)
     return {
         "soil": _rings(soil),
-        "paved": [_polygon_rings(part) for part in parts],
-        "paved_kind": kinds,
+        "paved": exported[0],
+        "paved_kind": exported[1],
         "road_mesh": _rings(mesh),
         "flowerbeds": _rings(flowerbeds),
     }
@@ -1232,18 +1228,27 @@ def _special_bodies(
             out_kinds.append(kind)
             continue
         bodies = _drawn_bodies(part, inside, drawn_arr, drawn_tree)
-        if not bodies:
-            opened = _areal(part.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
-            bodies = [
+        # Подписи площадок вне контуров чертежа (спортплощадка за дорожкой от обведённой
+        # площадки, Харьковская) ищут тело размыканием остатка части.
+        left = [lb for lb in inside if not any(shapely.contains_xy(b, lb.x, lb.y) for b in bodies)]
+        if left:
+            rest_part = _areal(part.difference(shapely.union_all(bodies))) if bodies else part
+            opened = _areal(rest_part.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
+            bodies += [
                 body
-                for body in shapely.get_parts(_areal(opened.intersection(part)))
+                for body in shapely.get_parts(_areal(opened.intersection(rest_part)))
                 if body.geom_type == "Polygon"
-                and any(shapely.contains_xy(body, lb.x, lb.y) for lb in inside)
+                and any(shapely.contains_xy(body, lb.x, lb.y) for lb in left)
             ]
         body = shapely.union_all(bodies) if bodies else None
         # Площадка в большой сети тротуаров голосованием проигрывает «А» дорожек; её тело с
-        # подписью площадки - резина. Не отделилось (тело - почти вся часть) - решили голоса.
-        if body is None or (kind != PAVED_SPECIAL and body.area > SPECIAL_BODY_SHARE * part.area):
+        # подписью площадки - резина. Не отделилось (тело - почти вся часть) - решили голоса,
+        # но только если в самом теле есть подпись материала: «А» на дорожке к спортплощадке
+        # не делает её асфальтом (Харьковская, 19.10.2026).
+        contested = body is not None and _label_material(body, plain) is not None
+        if body is None or (
+            kind != PAVED_SPECIAL and contested and body.area > SPECIAL_BODY_SHARE * part.area
+        ):
             out_parts.append(part)
             out_kinds.append(kind)
             continue
@@ -1319,8 +1324,8 @@ def _drawn_edges(raw: BaseGeometry, exact: BaseGeometry | None) -> BaseGeometry:
 
     _smoothed выпрямляет пилу растра упрощением на полметра, и скругления углов из чертежа
     становились срезами и острыми углами (Харьковская, площадка у дома 1А, пользователь
-    19.10.2026: «странные и кривые углы у площадки»). Внутри контуров чертежа часть
-    сглаживается без упрощения: зубцы и выемки уже метра снимаются, дуги остаются. Снаружи -
+    19.10.2026: «странные и кривые углы у площадки»). Внутри контуров чертежа часть идёт по
+    чертежу, выемки и щели уже 2 x DRAWN_JOG_M заливаются; дуги остаются. Снаружи -
     сглаженный растр без щепок уже 2 x DRAWN_SLIVER_M."""
     smooth = _smoothed(raw)
     if exact is None or exact.is_empty:
@@ -1329,7 +1334,9 @@ def _drawn_edges(raw: BaseGeometry, exact: BaseGeometry | None) -> BaseGeometry:
         own = _areal(raw.intersection(exact))
         if own.is_empty:
             return smooth
-        kept = _areal(_smoothed(raw, simplify=False).intersection(own))
+        # Контур чертежа берётся как есть: размыкание растра на полметра срезало у края
+        # площадки полосу за волосяной щелью (дом 1А), а выемки и щели заливает замыкание ниже.
+        kept = own
         r = DRAWN_SLIVER_M
         rest = _areal(smooth.difference(exact))
         rest = _areal(rest.buffer(-r, join_style="mitre").buffer(r, join_style="mitre"))
@@ -1338,7 +1345,15 @@ def _drawn_edges(raw: BaseGeometry, exact: BaseGeometry | None) -> BaseGeometry:
         # щели и дырочки: размыкание площадки (_special_bodies) раздувало их в клинья.
         e = DRAWN_SEAM_M
         merged = _areal(merged.buffer(e, join_style="mitre").buffer(-e, join_style="mitre"))
-        return _without_small_holes(merged, DRAWN_HOLE_M2)
+        # Зацепы контура чертежа внутрь в 10-30 см (площадка у дома 1А) ломали садовый борт
+        # ступенькой: выемки уже 2 x DRAWN_JOG_M заливаются, дуги остаются. Выступы наружу
+        # уже сняло размыкание в _smoothed.
+        j = DRAWN_JOG_M
+        merged = _areal(merged.buffer(j, quad_segs=8).buffer(-j, quad_segs=8))
+        # Шов и швы буфера оставляли на углах изломы по 1-2 см: 3D снимало вершины у таких
+        # звеньев и срезало узкий вырез газона у ограды дома 1А. Дуги чертежа допуск не трогает.
+        holes_free = _without_small_holes(merged, DRAWN_HOLE_M2)
+        return _simplified(holes_free, DRAWN_SIMPLIFY_M) or holes_free
     except shapely.errors.GEOSException:
         return smooth
 
@@ -1453,10 +1468,27 @@ def _class_area(features: Sequence[Any], object_class: ObjectClass) -> BaseGeome
 
 
 def _polygon_rings(polygon: BaseGeometry) -> list[list[list[float]]]:
-    return [
-        [[round(x, 2), round(y, 2)] for x, y in _round_turns(ring.coords)]
-        for ring in (polygon.exterior, *polygon.interiors)
-    ]
+    outer = _ring_points(_round_turns(polygon.exterior.coords))
+    holes = [_ring_points(_round_turns(ring.coords)) for ring in polygon.interiors]
+    # Дыра в несколько сантиметров после снятия коротких звеньев - уже не кольцо.
+    return [outer, *(h for h in holes if len(h) >= RING_MIN_POINTS)]
+
+
+def _ring_points(coords: Sequence[tuple[float, float]]) -> list[list[float]]:
+    """Вершины кольца в сантиметрах без звеньев короче RING_MIN_SEG_M: после округления и
+    пересечений соседние точки совпадали или стояли в 1-2 см, а 3D снимало вершины у таких
+    звеньев каскадом и срезало по ним узкий вырез газона у ограды дома 1А (19.10.2026)."""
+    out: list[list[float]] = []
+    for x, y in coords:
+        point = [round(x, 2), round(y, 2)]
+        if not out or math.dist(point, out[-1]) >= RING_MIN_SEG_M:
+            out.append(point)
+    # Кольцо замкнуто: последняя точка - первая, предпоследняя не ближе порога к ней.
+    while len(out) > 2 and math.dist(out[-1], out[0]) < RING_MIN_SEG_M:  # noqa: PLR2004
+        out.pop()
+    if out and out[-1] != out[0]:
+        out.append(list(out[0]))
+    return out
 
 
 def _simplified(area: BaseGeometry | None, tolerance: float) -> BaseGeometry | None:
@@ -1514,15 +1546,31 @@ def _round_turns(coords: Sequence[tuple[float, float]]) -> list[tuple[float, flo
     return [*points, points[0]] if points else []
 
 
+def _export_parts(
+    parts: Sequence[BaseGeometry], kinds: Sequence[str]
+) -> tuple[list[list[list[list[float]]]], list[str]]:
+    """Части покрытия в выгрузку вместе с видами; часть, от которой после снятия коротких
+    звеньев не осталось кольца, выпадает вместе со своим видом."""
+    rings: list[list[list[list[float]]]] = []
+    out_kinds: list[str] = []
+    for part, kind in zip(parts, kinds, strict=True):
+        polygon = _polygon_rings(part)
+        if polygon and len(polygon[0]) >= RING_MIN_POINTS:
+            rings.append(polygon)
+            out_kinds.append(kind)
+    return rings, out_kinds
+
+
 def _rings(area: BaseGeometry | None) -> list[list[list[list[float]]]]:
     if area is None or area.is_empty:
         return []
     simple = shapely.simplify(area, SURFACE_AREA_TOLERANCE_M, preserve_topology=True)
-    return [
+    polygons = [
         _polygon_rings(polygon)
         for polygon in shapely.get_parts(simple)
         if polygon.geom_type == "Polygon" and not polygon.is_empty
     ]
+    return [p for p in polygons if p and len(p[0]) >= RING_MIN_POINTS]
 
 
 def _zones(plan: Plan) -> dict[str, Any]:
