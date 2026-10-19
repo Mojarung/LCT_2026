@@ -179,3 +179,13 @@ def test_wall_pieces_with_one_doorway_gap_are_not_a_dashed_line() -> None:
     разрыв - проём или стык, а не пунктир: такая стена остаётся сплошной и даёт объём."""
     pieces = [_piece(0, [(0, 0), (1.5, 0)]), _piece(1, [(2.0, 0), (3.2, 0)])]
     assert chain_dashes(pieces, parent=PARENT) == pieces
+
+
+def test_dashes_of_a_small_circle_close_into_a_ring() -> None:
+    """Харьковская: круг клумбы радиусом 2,2 м с разрывами 0,74 м. Штрих - хорда круга, и
+    разрыв расходится с ним на 22°; круг должен замкнуться, а не остаться дугами."""
+    circle = list(Point(0, 0).buffer(2.2, quad_segs=32).exterior.coords)
+    pieces = [_piece(i, c) for i, c in enumerate(_dashes(circle, dash=0.75, gap=0.74))]
+    out = chain_dashes(pieces, parent=PARENT)
+    assert len(out) == 1
+    assert out[0].geometry.is_closed
