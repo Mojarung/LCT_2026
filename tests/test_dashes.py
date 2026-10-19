@@ -165,3 +165,17 @@ def test_dashes_written_out_of_order_still_join() -> None:
     assert len(out) == 1
     assert (10.5, 0) in out[0].geometry.coords
     assert out[0].geometry.length == pytest.approx(LineString(path).length, abs=1.3)
+
+
+def test_a_long_wall_is_not_a_dash_even_beside_a_gap() -> None:
+    """Харьковская: стены школы - длинные отрезки, между двумя из них разрыв 0,5 м по прямой.
+    Сшитые как штрихи, они получали признак пунктира и пропадали из объёмов."""
+    walls = [_piece(0, [(0, 0), (11.4, 0)]), _piece(1, [(11.9, 0), (30, 0)])]
+    assert chain_dashes(walls, parent=PARENT) == walls
+
+
+def test_wall_pieces_with_one_doorway_gap_are_not_a_dashed_line() -> None:
+    """Харьковская: у входа стена школы нарисована короткими кусками с одним разрывом. Один
+    разрыв - проём или стык, а не пунктир: такая стена остаётся сплошной и даёт объём."""
+    pieces = [_piece(0, [(0, 0), (1.5, 0)]), _piece(1, [(2.0, 0), (3.2, 0)])]
+    assert chain_dashes(pieces, parent=PARENT) == pieces

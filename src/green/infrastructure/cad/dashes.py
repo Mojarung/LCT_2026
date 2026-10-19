@@ -37,6 +37,14 @@ GAP_MAX_M = 0.8
 ALONG_DEG = 20.0
 # Концы ближе этого - один узел: так сходятся отрезки разобранной сплошной ломаной.
 TOUCH_M = 1e-4
+# Штрих не длиннее этого (у Мосгеотреста 0,71-0,75 м, в паспорте ОГХ 0,75 м). Длинный отрезок -
+# стена или борт, а не штрих: стены школы на Харьковской, сшитые с соседними кусками через
+# разрыв, получали признак пунктира и пропадали из объёмов (19.10.2026).
+DASH_MAX_M = 2.0
+# Пунктир - это ряд штрихов: цепочка с одним разрывом скорее стена с дверным проёмом или
+# стыком листов, чем пунктир (Харьковская: кусок стены школы у входа получал признак пунктира,
+# и школа пропадала из объёмов). Пунктиром считается цепочка хотя бы с тремя разрывами.
+MIN_GAPS = 3
 # Продолжения штрихов почти параллельны - вершины между ними нет.
 _PARALLEL_SIN = math.sin(math.radians(5.0))
 _COS_ALONG = math.cos(math.radians(ALONG_DEG))
@@ -52,7 +60,7 @@ def chain_dashes(features: Sequence[Feature], *, parent: str, unit_m: float = 1.
     Цепочка встаёт на место первого штриха, с его ссылкой и флагом dashed; цепочка без единого
     разрыва (разобранная сплошная ломаная) остаётся как была. Прочие объекты не трогаются, и
     порядок сохраняется. Пороги - метры, unit_m - размер единицы чертежа."""
-    gap_max, touch = GAP_MAX_M / unit_m, TOUCH_M / unit_m
+    gap_max, touch, longest = GAP_MAX_M / unit_m, TOUCH_M / unit_m, DASH_MAX_M / unit_m
     out: list[Feature] = []
     run: list[Feature] = []
     path: list[_Point] = []
@@ -60,14 +68,14 @@ def chain_dashes(features: Sequence[Feature], *, parent: str, unit_m: float = 1.
 
     def flush() -> None:
         nonlocal run, path, gaps
-        if len(run) > 1 and gaps:
+        if len(run) > 1 and gaps >= MIN_GAPS:
             out.append(_merged(run, path))
         else:
             out.extend(run)
         run, path, gaps = [], [], 0
 
     for feature in features:
-        if not _dash(feature, parent):
+        if not _dash(feature, parent, longest):
             flush()
             out.append(feature)
             continue
@@ -89,7 +97,7 @@ def chain_dashes(features: Sequence[Feature], *, parent: str, unit_m: float = 1.
         path.extend(points)
         gaps += gap
     flush()
-    return _stitched(out, parent, gap_max, touch)
+    return _stitched(out, parent, (gap_max, touch, longest))
 
 
 @dataclass(slots=True)
@@ -97,10 +105,17 @@ class _Path:
     coords: list[_Point]
     # Места штрихов и цепочек пути в списке объектов вставки.
     members: list[int]
-    dashed: bool
+    # Разрывы пути: у готовой пунктирной цепочки их заведомо не меньше MIN_GAPS.
+    gaps: int
+
+    @property
+    def dashed(self) -> bool:
+        return self.gaps >= MIN_GAPS
 
 
-def _stitched(features: list[Feature], parent: str, gap_max: float, touch: float) -> list[Feature]:
+def _stitched(
+    features: list[Feature], parent: str, limits: tuple[float, float, float]
+) -> list[Feature]:
     """Цепочки одной линии, разорванные порядком записи, сшиваются концами.
 
     На Харьковской лист пишет штрих, в который попала вершина, кусками далеко от соседних
@@ -108,9 +123,10 @@ def _stitched(features: list[Feature], parent: str, gap_max: float, touch: float
     этот кусок и лежит. Концы цепочек и штрихов одного слоя ищутся рядом друг с другом и
     сшиваются по тому же признаку, что подряд; две сплошные части концами не сшиваются.
     Замкнутые контуры замыкаются здесь же."""
+    gap_max, touch, longest = limits
     groups: dict[tuple[str, str | None], list[int]] = {}
     for i, feature in enumerate(features):
-        if _dash(feature, parent):
+        if _dash(feature, parent, longest):
             groups.setdefault((feature.layer, feature.block), []).append(i)
     placed: dict[int, Feature] = {}
     dropped: set[int] = set()
@@ -119,7 +135,7 @@ def _stitched(features: list[Feature], parent: str, gap_max: float, touch: float
             _Path(
                 [(float(x), float(y)) for x, y, *_ in features[i].geometry.coords],
                 [i],
-                features[i].dashed,
+                MIN_GAPS if features[i].dashed else 0,
             )
             for i in indices
         ]
@@ -163,7 +179,11 @@ def _joined(paths: list[_Path], gap_max: float, touch: float) -> list[_Path]:
                 continue
             used.update((pa, pb))
             merged.append(
-                _Path([*first, *points], [*paths[pa].members, *paths[pb].members], dashed=True)
+                _Path(
+                    [*first, *points],
+                    [*paths[pa].members, *paths[pb].members],
+                    paths[pa].gaps + paths[pb].gaps + gap,
+                )
             )
         if not merged:
             break
@@ -171,8 +191,9 @@ def _joined(paths: list[_Path], gap_max: float, touch: float) -> list[_Path]:
     return paths
 
 
-def _dash(feature: Feature, parent: str) -> bool:
-    """Открытый отрезок или ломаная - прямой потомок вставки, не часть знака."""
+def _dash(feature: Feature, parent: str, longest: float) -> bool:
+    """Штрих или уже сшитая пунктирная цепочка: открытая линия - прямой потомок вставки, не
+    часть знака, короче longest, если сама не пунктир."""
     geometry = feature.geometry
     handle = feature.ref.handle
     prefix = f"{parent}~"
@@ -182,6 +203,7 @@ def _dash(feature: Feature, parent: str) -> bool:
         and geometry.geom_type == "LineString"
         and not geometry.is_closed
         and geometry.length > 0
+        and (feature.dashed or geometry.length <= longest)
         and feature.symbol is None
         and feature.circle_radius_m is None
         and feature.uncertainty_footprint is None
