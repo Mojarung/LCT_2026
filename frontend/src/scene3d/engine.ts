@@ -603,7 +603,8 @@ export class SceneEngine {
     pickets.computeBoundingSphere();
     const frame = new THREE.Mesh(fenceFrame(lines), wood);
     for (const mesh of [pickets, frame] as THREE.Mesh[]) {
-      mesh.castShadow = true;
+      // Тень досок и перил в несколько сантиметров карта теней рассыпала в точки на асфальте.
+      mesh.castShadow = false;
       mesh.name = 'playground-fences';
       this.add(mesh);
     }
@@ -764,7 +765,9 @@ export class SceneEngine {
       lattice.computeBoundingSphere();
       const frame = new THREE.Mesh(fenceFrame(fenceLines), metal);
       for (const mesh of [lattice, frame] as THREE.Mesh[]) {
-        mesh.castShadow = true;
+        // Тень прутьев и перил в 2-5 см карта теней рассыпала в точки вокруг ограды
+        // («мусор» на асфальте у дома 1А): ограда без тени.
+        mesh.castShadow = false;
         mesh.name = 'fences';
         this.add(mesh);
       }

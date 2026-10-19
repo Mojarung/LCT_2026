@@ -518,6 +518,8 @@ export interface MaskInfo {
   /** Полные контуры итоговой проезжей части до отсечения борта у рамки сцены. */
   roadContours?: Line[];
   texture: THREE.DataTexture;
+  /** Газон для травинок (красный канал): без пикселей, где контур surface.json - покрытие. */
+  grass?: THREE.DataTexture;
   /** minX, minZ и размер растра (w и h пикселей по metresPerPx) в координатах сцены. */
   rect: [number, number, number, number];
   /** Покрытие каждого пикселя (surfaceMask.ts) до размытия: по нему расставляются люди. */
@@ -693,6 +695,15 @@ export function pavingWins(
 ): void {
   for (let i = 0; i < contour.length; i++) {
     const k = contour[i];
+    // Проезд контура - тоже не газон: у оград дома 1А травинки маски росли сквозь асфальт
+    // проезда россыпью точек (19.10.2026).
+    if (k === ROAD) {
+      if ((final[i * 4] ?? 0) > 0) {
+        final[i * 4] = 0;
+        kinds[i] = ROAD;
+      }
+      continue;
+    }
     if (k !== PAVERS && k !== ASPHALT) continue;
     // Пиксель края контура не трогается: край даёт сетка тротуара, а лесенка пикселей маски
     // за ним торчала бы зубцами плитки на газоне.
@@ -708,6 +719,41 @@ export function pavingWins(
     final[i * 4 + 1] = k === PAVERS ? 255 : 0;
     kinds[i] = k;
   }
+}
+
+/** Газон маски для травинок: под сеткой покрытия контура (плитка, асфальт, проезд) травы нет
+ *  даже там, где размытая маска газона заходит под край сетки. */
+export function grassLawn(final: Uint8Array | Uint8ClampedArray, contour: Uint8Array): Uint8Array {
+  const out = new Uint8Array(contour.length);
+  for (let i = 0; i < out.length; i++) {
+    const k = contour[i];
+    out[i] = k === PAVERS || k === ASPHALT || k === ROAD ? 0 : (final[i * 4] ?? 0);
+  }
+  return out;
+}
+
+function grassTexture(
+  final: Uint8Array | Uint8ClampedArray,
+  contour: Uint8Array,
+  w: number,
+  h: number,
+): THREE.DataTexture {
+  const t = new THREE.DataTexture(
+    grassLawn(final, contour),
+    w,
+    h,
+    THREE.RedFormat,
+    THREE.UnsignedByteType,
+  );
+  t.unpackAlignment = 1;
+  t.generateMipmaps = false;
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
 }
 
 export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo {
@@ -932,8 +978,10 @@ export function buildMask(world: World, surface: SurfaceImage | null): MaskInfo 
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
+  const grass = contourKinds ? grassTexture(final, contourKinds, w, h) : undefined;
   return {
     texture,
+    grass,
     rect,
     kinds,
     known,

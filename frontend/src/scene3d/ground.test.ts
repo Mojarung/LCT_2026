@@ -8,6 +8,7 @@ import {
   GROUND_MAP,
   ROAD_DROP_M,
   roadGeometry,
+  grassLawn,
   pavingWins,
   CONTEXT_CLEAR_M,
   contextPaintable,
@@ -19,7 +20,7 @@ import {
   pavedOnLeft,
   smoothSurfaceAreas,
 } from './ground';
-import { ASPHALT, GRASS, PAVERS } from './surfaceMask';
+import { ASPHALT, GRASS, PAVERS, ROAD } from './surfaceMask';
 import { groundCutRings, roadEdges } from './edges';
 
 /* Контуры карты покрытий поверх растра: край проезда - прямая, а не лесенка клеток
@@ -193,6 +194,24 @@ describe('покрытие контура сильнее газона маски
     check(PAVERS, [0, 255, 0]);
     check(ASPHALT, [0, 0, 0]);
     check(GRASS, [255, 0, 0]);
+  });
+
+  it('проезд контура - не газон: травинки не растут сквозь асфальт у оград', () => {
+    const final = new Uint8Array(12);
+    for (let i = 0; i < 3; i++) final[i * 4] = 200;
+    const kinds = new Uint8Array(3).fill(GRASS);
+    pavingWins(final, kinds, new Uint8Array(3).fill(ROAD), 3);
+    expect([final[0], final[4], final[8]]).toEqual([0, 0, 0]);
+    expect([...kinds]).toEqual([ROAD, ROAD, ROAD]);
+  });
+});
+
+describe('травинки', () => {
+  it('не растут под сеткой покрытия контура, даже на краю, где маска ещё газон', () => {
+    const final = new Uint8Array(16);
+    for (let i = 0; i < 4; i++) final[i * 4] = 200;
+    const lawn = grassLawn(final, new Uint8Array([GRASS, ROAD, ASPHALT, PAVERS]));
+    expect([...lawn]).toEqual([200, 0, 0, 0]);
   });
 });
 
