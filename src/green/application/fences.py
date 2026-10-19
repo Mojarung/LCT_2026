@@ -123,8 +123,10 @@ def _continues(
 # её срединная линия - ось. Кольца короче POST_RING_M - знаки столбов, не ограда.
 BAND_M = 0.35
 POST_RING_M = 3.0
-# Разрыв между осями короче этого - не проход, ось сшивается, м.
-JOIN_M = 1.6
+# Разрыв между осями короче этого - не проход, ось сшивается, м. Оси строятся по полной
+# ограде (штрихи до 1 м уже сшиты bridge_fence_gaps): на Харьковской разрывов 0,6-1 м нет,
+# а от 1,02 м и шире - калитки и проходы дорожек, их сшивать нельзя.
+JOIN_M = 0.8
 _STEP_M = 0.2
 _SPUR_M = 1.2
 _AXIS_TOLERANCE_M = 0.12
@@ -162,8 +164,8 @@ def fence_axes(lines: Sequence[BaseGeometry]) -> list[shapely.LineString]:
 
 
 def _join_ends(axes: list[shapely.LineString]) -> list[shapely.LineString]:
-    """Сшить оси, концы которых ближе JOIN_M: разрывы штрихов шире полосы (у дома 1А на
-    Харьковской 0,7-1,5 м) - не проходы. Проход шире JOIN_M остаётся."""
+    """Сшить оси, концы которых ближе JOIN_M: развилки и углы, где полоса разошлась. Проход
+    шире JOIN_M остаётся."""
     if len(axes) < _MIN_POINTS:
         return axes
     ends = np.array([c for a in axes for c in (a.coords[0][:2], a.coords[-1][:2])])

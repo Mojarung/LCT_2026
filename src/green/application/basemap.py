@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import shapely
 from shapely.errors import GEOSException
 
+from green.application.fences import fence_axes
 from green.application.semantic_names import base_name
 from green.application.shrub_strips import SHRUB_STRIP_SOURCE
 from green.application.source_conflicts import SourceConflicts, find_source_conflicts
@@ -25,6 +26,7 @@ from green.domain.objects import ObjectClass
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from shapely import LineString
     from shapely.geometry.base import BaseGeometry
 
     from green.domain.objects import Feature, TextLabel
@@ -100,6 +102,9 @@ class Basemap:
     # что прямоугольник - это детская площадка со спецпокрытием, а не газон.
     labels: tuple[MaterialLabel, ...] = ()
     source_conflicts: SourceConflicts | None = None
+    # Оси оград для 3D (fences.fence_axes) - по полной ограде чертежа: облегчённая карта
+    # теряет штрихи на углах, и ось рвалась на углу (Харьковская, 19.10.2026).
+    fence_axes: tuple[LineString, ...] = ()
 
 
 def material_labels(labels: Sequence[TextLabel]) -> tuple[MaterialLabel, ...]:
@@ -185,6 +190,15 @@ def build_basemap(
         min_span_m=round(min_span_m, 3),
         labels=material_labels(labels),
         source_conflicts=find_source_conflicts(features),
+        fence_axes=tuple(
+            fence_axes(
+                [
+                    f.geometry
+                    for f in features
+                    if f.object_class is ObjectClass.FENCE and f.geometry is not None
+                ]
+            )
+        ),
     )
 
 

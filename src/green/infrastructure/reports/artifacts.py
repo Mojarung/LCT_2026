@@ -19,7 +19,6 @@ from openpyxl import Workbook
 
 from green.application.classification import recognition_summary
 from green.application.explain import LAWN_LABELS
-from green.application.fences import fence_axes
 from green.application.name_model import name_key
 from green.application.schedule import PIT_SOURCE, SECTIONS, build_schedule
 from green.application.surfaces import Material, cells_area
@@ -780,10 +779,7 @@ def _basemap(basemap: Basemap | None) -> dict[str, Any]:
         ],
         # Оси оград для 3D: двойная линия знака, штрихи и углы - одной линией (fences.py).
         "fence_axes": [
-            [[round(x, 2), round(y, 2)] for x, y in axis.coords]
-            for axis in fence_axes(
-                [f.geometry for f in basemap.features if f.object_class is ObjectClass.FENCE]
-            )
+            [[round(x, 2), round(y, 2)] for x, y in axis.coords] for axis in basemap.fence_axes
         ],
         "features": [
             {

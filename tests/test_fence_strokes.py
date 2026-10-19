@@ -129,13 +129,21 @@ def test_separate_fences_stay_separate() -> None:
 
 
 def test_fence_axis_gaps_up_to_join_m_are_closed() -> None:
-    """Штрихи ограды у дома 1А идут с разрывами 0,7-1,5 м: в 3D ограда стояла кусками."""
+    """Ось, разошедшаяся у развилки полосы, сшивается; проход 3 м остаётся."""
     a = LineString([(0, 0), (10, 0)])
-    b = LineString([(10 + JOIN_M - 0.3, 0), (20, 0)])
+    b = LineString([(10 + JOIN_M - 0.1, 0), (20, 0)])
     far = LineString([(23, 0), (30, 0)])  # проход 3 м
     axes = fence_axes([a, b, far])
     assert len(axes) == 2
     assert max(axis.length for axis in axes) > 19
+
+
+def test_gate_a_metre_wide_stays_open() -> None:
+    """Калитка площадки у дома 1А на Харьковской - разрыв ограды 1,37 м под дорожкой, на
+    улице такие разрывы от 1,02 м, и все - проходы. Сшивка до 1,6 м закрывала их решёткой."""
+    a = LineString([(0, 0), (10, 0)])
+    b = LineString([(11.02, 0), (20, 0)])
+    assert len(fence_axes([a, b])) == 2
 
 
 def test_fence_band_that_broke_voronoi_still_gets_an_axis() -> None:

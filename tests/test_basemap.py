@@ -250,3 +250,21 @@ def test_basemap_export_carries_fence_axes_for_3d() -> None:
     axes = payload["fence_axes"]
     assert len(axes) == 1
     assert all(abs(y) < 0.1 for _, y in axes[0])
+
+
+def test_fence_axis_keeps_the_corner_strokes_the_light_map_drops() -> None:
+    """Харьковская, площадка у дома 1А: тяжёлый чертёж теряет на карте штрихи короче порога, а
+    штрихи на углу ограды - 0,5-0,76 м. Ось ограды в 3D рвалась на углу на 1,7 м
+    (пользователь, 19.10.2026: «должен нормально стыковаться забор»). Ось строится по полной
+    ограде чертежа, а не по облегчённой карте."""
+    down = [LineString([(0, y), (0, y - 1.4)]) for y in (9.4, 7.7, 6.0, 4.3, 2.6)]
+    corner = LineString([(0, 0.9), (0, 0), (0.9, 0)])
+    along = [LineString([(x, 0), (x + 1.4, 0)]) for x in (1.2, 2.9, 4.6, 6.3, 8.0)]
+    features = [
+        _feature(str(i), ObjectClass.FENCE, g) for i, g in enumerate([*down, corner, *along])
+    ]
+    basemap = build_basemap(features, feature_budget=1)
+    assert basemap.features_out < basemap.features_in  # угол на карте не виден
+    axes = _basemap(basemap)["fence_axes"]
+    assert len(axes) == 1
+    assert LineString(axes[0]).distance(Point(0, 0)) < 0.2
