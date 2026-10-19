@@ -488,7 +488,25 @@ export class SceneEngine {
       ...this.world.poles,
       ...this.world.plants.filter((p) => p.type === 'tree').map((p) => ({ x: p.x, z: p.z })),
     ];
-    const { benches, bins } = benchSpots(mask.edges.garden, at, obstacles);
+    // Скамейки съёмки - туда, где нарисованы, сиденьем к покрытию; без них - по правилу у
+    // края газона.
+    const drawn = (this.world.benches ?? []).map((b) => {
+      const paved = (k: number) => {
+        const g = at(b.x + Math.sin(b.angle) * k, b.z + Math.cos(b.angle) * k);
+        return g === 'pavers' || g === 'asphalt';
+      };
+      return !paved(1) && paved(-1) ? { ...b, angle: b.angle + Math.PI } : b;
+    });
+    const { benches, bins } = drawn.length
+      ? {
+          benches: drawn,
+          bins: drawn.map((b) => ({
+            x: b.x + Math.cos(b.angle) * 1.4,
+            z: b.z - Math.sin(b.angle) * 1.4,
+            angle: b.angle,
+          })),
+        }
+      : benchSpots(mask.edges.garden, at, obstacles);
     const group = streetDetails({
       grates,
       mulch,

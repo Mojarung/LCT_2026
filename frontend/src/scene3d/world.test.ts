@@ -454,3 +454,51 @@ it('takes fence axes from the basemap instead of the raw double lines', () => {
   const [ox, oy] = world.origin;
   expect(world.fences[0]?.points[0]).toEqual({ x: 1100 - ox, z: -(2100 - oy) });
 });
+
+it('takes benches drawn in the survey (1.9 x 0.6 m rectangles) as bench spots along their axis', () => {
+  const bench = (x: number, y: number) => ({
+    type: 'Feature',
+    properties: { class: 'obstacle' },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [x, y],
+          [x + 1.9, y],
+          [x + 1.9, y + 0.6],
+          [x, y + 0.6],
+          [x, y],
+        ],
+      ],
+    },
+  });
+  const pit = {
+    type: 'Feature',
+    properties: { class: 'obstacle' },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [1150, 2150],
+          [1156, 2150],
+          [1156, 2152],
+          [1150, 2152],
+          [1150, 2150],
+        ],
+      ],
+    },
+  };
+  const basemap = {
+    type: 'FeatureCollection',
+    bbox: [900, 1900, 1300, 2300],
+    features: [bench(1100, 2100), pit],
+  } as unknown as BasemapJson;
+  const world = buildWorld({ scene: scene(), plan: null, basemap });
+  expect(world.benches).toHaveLength(1);
+  const b = world.benches?.[0];
+  const [ox, oy] = world.origin;
+  expect(b?.x).toBeCloseTo(1100.95 - ox);
+  expect(b?.z).toBeCloseTo(-(2100.3 - oy));
+  // Ось x модели - вдоль длинной стороны (x чертежа): угол 0 или пи.
+  expect(Math.abs(Math.sin(b?.angle ?? 1))).toBeLessThan(1e-6);
+});

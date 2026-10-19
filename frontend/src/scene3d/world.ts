@@ -312,6 +312,49 @@ function stripCrowns(strips: readonly Flat[][]): Plant[] {
   return out;
 }
 
+/** Скамейка в съёмке - прямоугольник МАФ: длина и ширина в этих пределах, м. */
+const BENCH_LENGTH_M: [number, number] = [1.5, 2.3];
+const BENCH_WIDTH_M: [number, number] = [0.45, 0.85];
+
+/** Скамейки, нарисованные в съёмке (слой МАФ, класс obstacle): прямоугольник 1,9 x 0,6 м.
+ *  В 3D они встают туда, где нарисованы, а не по правилу вдоль края газона (пользователь,
+ *  19.10.2026: «как на картах, а не как будто человек раскидал объекты»). */
+function drawnBenches(
+  features: readonly BasemapFeature[],
+  box: Box,
+  frame: Frame,
+): { x: number; z: number; angle: number }[] {
+  const out: { x: number; z: number; angle: number }[] = [];
+  for (const feature of features) {
+    if (feature.properties.class !== 'obstacle') continue;
+    for (const polygon of polygons(feature.geometry)) {
+      const ring = polygon[0];
+      if (!ring || ring.length < 4 || !inBox(ring, box)) continue;
+      const pts = ring.slice(0, -1).map(([x, y]) => frame.toFlat(x, y));
+      if (pts.length !== 4) continue;
+      const side = (i: number) => {
+        const a = pts[i] as Flat;
+        const b = pts[(i + 1) % 4] as Flat;
+        return Math.hypot(b.x - a.x, b.z - a.z);
+      };
+      const long = side(0) >= side(1) ? 0 : 1;
+      const length = side(long);
+      const width = side(1 - long);
+      if (length < BENCH_LENGTH_M[0] || length > BENCH_LENGTH_M[1]) continue;
+      if (width < BENCH_WIDTH_M[0] || width > BENCH_WIDTH_M[1]) continue;
+      const a = pts[long] as Flat;
+      const b = pts[long + 1] as Flat;
+      out.push({
+        x: pts.reduce((s, p) => s + p.x, 0) / 4,
+        z: pts.reduce((s, p) => s + p.z, 0) / 4,
+        // Ось x модели (cos, -sin) - вдоль длинной стороны.
+        angle: Math.atan2(-(b.z - a.z), b.x - a.x),
+      });
+    }
+  }
+  return out;
+}
+
 /** Шаг кустов в ряду кустарниковой полосы, м: кроны около 0,9 м смыкаются в живую изгородь. */
 export const STRIP_SHRUB_STEP_M = 0.7;
 
@@ -542,6 +585,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
       .map((line) => ({ points: line.map(([x, y]) => frame.toFlat(x, y)) }));
   }
   plants.push(...existingPlants(features, box, frame));
+  const benches = drawnBenches(features, box, frame);
   plants.push(...stripCrowns(linework.treeStrips));
   const buildings = scene
     ? sceneBuildings(scene, box, frame)
@@ -561,6 +605,7 @@ export function buildWorld({ scene, plan, basemap }: WorldInput): World {
     bounds: [a.x, a.z, b.x, b.z],
     flowerbeds,
     fenceAxes: !!axes?.length,
+    benches,
     buildings,
     plants,
     ...linework,
