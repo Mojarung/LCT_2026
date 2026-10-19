@@ -136,7 +136,7 @@ def test_paved_parts_are_road_sidewalk_or_tiles(tmp_path: Path) -> None:
         "tiles": box(0, 30, 60, 38),  # 8 м, подпись ПЛ - плиточная площадка, не проезд
         "road": box(0, 0, 60, 8),  # 8 м без подписи - проезд
         "walk": box(0, 10, 60, 12),  # 2 м с подписью А - асфальтовый тротуар
-        "path": box(0, 20, 60, 21.5),  # 1,5 м без подписи - покрытие неизвестно
+        "path": box(0, 20, 60, 21.5),  # 1,5 м без подписи - асфальт
     }
     features = [
         Feature(REF, name, g, object_class=ObjectClass.SIDEWALK) for name, g in strips.items()
@@ -149,9 +149,9 @@ def test_paved_parts_are_road_sidewalk_or_tiles(tmp_path: Path) -> None:
     assert kinds["pavers"].intersection(strips["tiles"]).area > 0.9 * strips["tiles"].area
     assert kinds["road"].intersection(strips["road"]).area > 0.9 * strips["road"].area
     assert kinds["asphalt"].intersection(strips["walk"]).area > 0.8 * strips["walk"].area
-    # Узкая полоса без подписи - тротуар плиткой целиком: раньше 3D делил её по ширине
-    # попиксельно, и граница плитки и асфальта шла пятнами (пользователь, 19.10.2026).
-    assert kinds["pavers"].intersection(strips["path"]).area > 0.8 * strips["path"].area
+    # Узкая полоса без подписи - асфальт целиком: плитку съёмка подписывает, а раньше 3D
+    # делил полосу по ширине попиксельно, и граница плитки и асфальта шла пятнами.
+    assert kinds["asphalt"].intersection(strips["path"]).area > 0.8 * strips["path"].area
     assert kinds["road"].intersection(strips["walk"]).area < 0.01
     # Проезжая часть приходит и сеткой для 3D с запасом под край тротуара.
     assert kinds["road_mesh"].contains(strips["road"].buffer(0.2))
@@ -281,10 +281,10 @@ def test_playground_special_cover_is_its_own_kind(tmp_path: Path) -> None:
     assert kinds["special"].intersection(walk).area < 0.01
 
 
-def test_narrow_asphalt_across_the_curb_is_a_tiled_sidewalk(tmp_path: Path) -> None:
-    """Пользователь 19.10.2026: «то, что идёт с бордюром, меняется с асфальта на тротуар».
-    Узкий асфальт в метре от проезжей части - тротуар плиткой; широкий (стоянка) плиткой не
-    становится, дорожка вдали от проезда - асфальт. Решается целиком по части, а не по пикселю."""
+def test_asphalt_walk_by_the_curb_stays_asphalt(tmp_path: Path) -> None:
+    """Пользователь 19.10.2026: тротуар у борта Харьковской на панораме - асфальт, а 3D делал
+    его плиткой («пофикси везде траблы с асфальтом»). Подпись «А» решает за всю часть: и у
+    борта, и вдали от проезда - асфальт, без смены материала по длине; стоянка - не плитка."""
     strips = {
         "road": box(0, 0, 60, 8),
         "walk": box(0, 8.5, 30, 11.5),  # 3 м за бортом, подпись А
@@ -300,9 +300,10 @@ def test_narrow_asphalt_across_the_curb_is_a_tiled_sidewalk(tmp_path: Path) -> N
         MaterialLabel(15, 26, "А", "paved"),
     ]
     kinds = _kinds(tmp_path, features, labels, [])
-    assert kinds["pavers"].intersection(strips["walk"]).area > 0.8 * strips["walk"].area
-    assert kinds["pavers"].intersection(strips["parking"]).area < 0.01
-    assert kinds["asphalt"].intersection(strips["path"]).area > 0.8 * strips["path"].area
+    for name in ("walk", "path"):
+        assert kinds["asphalt"].intersection(strips[name]).area > 0.8 * strips[name].area
+    for name in ("walk", "parking", "path"):
+        assert kinds["pavers"].intersection(strips[name]).area < 0.01
 
 
 def test_playground_wins_a_tie_with_asphalt_labels(tmp_path: Path) -> None:

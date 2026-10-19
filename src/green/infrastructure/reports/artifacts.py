@@ -834,13 +834,10 @@ PAVED_ROAD, PAVED_ASPHALT, PAVED_PAVERS, PAVED_UNKNOWN = "road", "asphalt", "pav
 PAVED_SPECIAL = "special"
 # Полоса покрытия от этой ширины без плитки - проезд: тротуары дворов 1,5-3 м, проезды от 3,5 м.
 ROAD_MIN_WIDTH_M = 3.5
-# Тротуар - покрытие уже этого в среднем; асфальт ближе CURB_REACH_M к проезду - за бортом.
-WALK_MAX_WIDTH_M = 4.6
 # Дорожка уже 2 x SPECIAL_PATH_M, вошедшая в площадку, - не резина, м.
 SPECIAL_PATH_M = 1.5
 # Тело площадки, отделённое от сети, - не больше этой доли части; больше - решают голоса.
 SPECIAL_BODY_SHARE = 0.8
-CURB_REACH_M = 1.0
 # Сетка проезжей части шире её контура: край маски на 3D не точнее пикселя, дыра в земле
 # у борта должна попадать на асфальт, а не в пустоту.
 ROAD_MESH_MARGIN_M = 0.5
@@ -1201,7 +1198,7 @@ def _paved_parts(
                 kinds.append(fixed or _paved_kind(part, labels, drawn_walks))
     drawn = basemap.paved_polygons if basemap is not None else ()
     parts, kinds = _special_bodies(parts, kinds, labels, drawn)
-    return parts, _walks(parts, kinds)
+    return parts, _walks(kinds)
 
 
 def _special_bodies(
@@ -1291,32 +1288,14 @@ def _drawn_bodies(
     ]
 
 
-def _walks(parts: list[BaseGeometry], kinds: list[str]) -> list[str]:
-    """Тротуар целиком по части, а не по пикселю: узкое покрытие без подписи и узкий асфальт
-    за бортом проезжей части (не дальше CURB_REACH_M) - тротуар плиткой; широкое без подписи -
-    асфальт. Ширина части - средняя (2 x площадь / периметр): у сети дорожек это ширина
-    дорожки. 3D раньше делил покрытие по ширине попиксельно, и граница плитки и асфальта
-    шла пятнами (пользователь, 19.10.2026: «то, что идёт с бордюром, меняется с асфальта на
-    тротуар»; «меня бесит волнистость»)."""
-    roads = [p for p, k in zip(parts, kinds, strict=True) if k == PAVED_ROAD]
-    near_road = shapely.union_all(roads).buffer(CURB_REACH_M) if roads else None
-    if near_road is not None:
-        shapely.prepare(near_road)
-    out = []
-    for part, kind in zip(parts, kinds, strict=True):
-        narrow = 2 * part.area / part.length < WALK_MAX_WIDTH_M if part.length else False
-        if kind == PAVED_UNKNOWN:
-            out.append(PAVED_PAVERS if narrow else PAVED_ASPHALT)
-        elif (
-            kind == PAVED_ASPHALT
-            and narrow
-            and near_road is not None
-            and near_road.intersects(part)
-        ):
-            out.append(PAVED_PAVERS)
-        else:
-            out.append(kind)
-    return out
+def _walks(kinds: list[str]) -> list[str]:
+    """Материал тротуара - целиком по части, а не по пикселю, и по подписи съёмки: «А» -
+    асфальт, «ПЛ», «Б» - плитка; без подписи - асфальт. 3D раньше делил покрытие по ширине
+    попиксельно, и граница плитки и асфальта шла пятнами («то, что идёт с бордюром, меняется
+    с асфальта на тротуар», 19.10.2026); потом узкий асфальт у борта стал плиткой, а на
+    панорамах Харьковской он асфальт («пофикси везде траблы с асфальтом», 19.10.2026). Плитку
+    съёмка подписывает всегда, поэтому без подписи - асфальт."""
+    return [PAVED_ASPHALT if kind == PAVED_UNKNOWN else kind for kind in kinds]
 
 
 def _drawn_edges(raw: BaseGeometry, exact: BaseGeometry | None) -> BaseGeometry:
