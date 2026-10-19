@@ -90,28 +90,42 @@ function placed(
   return mesh;
 }
 
-/** Парковая скамейка: чугунные боковины, пять реек сиденья и спинки. Сиденьем в +z. */
-function benchGeometry(): { wood: THREE.BufferGeometry; metal: THREE.BufferGeometry } {
+/** Парковая скамейка: чугунные боковины, рейки сиденья и спинки. Сиденьем в +z. Без
+ *  спинки - лавка из пяти реек на двух опорах (benchBack: спинка только у ограды). */
+function benchGeometry(back = true): { wood: THREE.BufferGeometry; metal: THREE.BufferGeometry } {
   const slats: THREE.BufferGeometry[] = [];
-  for (let k = 0; k < 3; k++) {
-    const g = new THREE.BoxGeometry(1.8, 0.035, 0.11);
-    g.translate(0, 0.45, -0.16 + k * 0.14);
-    slats.push(g);
-  }
-  for (let k = 0; k < 2; k++) {
-    const g = new THREE.BoxGeometry(1.8, 0.1, 0.03);
-    g.rotateX(-0.25);
-    g.translate(0, 0.62 + k * 0.15, -0.27 - k * 0.04);
-    slats.push(g);
-  }
   const legs: THREE.BufferGeometry[] = [];
-  for (const x of [-0.75, 0.75]) {
-    const side = new THREE.BoxGeometry(0.06, 0.45, 0.5);
-    side.translate(x, 0.225, -0.02);
-    const back = new THREE.BoxGeometry(0.06, 0.45, 0.06);
-    back.rotateX(-0.25);
-    back.translate(x, 0.66, -0.29);
-    legs.push(side, back);
+  if (back) {
+    for (let k = 0; k < 3; k++) {
+      const g = new THREE.BoxGeometry(1.8, 0.035, 0.11);
+      g.translate(0, 0.45, -0.16 + k * 0.14);
+      slats.push(g);
+    }
+    for (let k = 0; k < 2; k++) {
+      const g = new THREE.BoxGeometry(1.8, 0.1, 0.03);
+      g.rotateX(-0.25);
+      g.translate(0, 0.62 + k * 0.15, -0.27 - k * 0.04);
+      slats.push(g);
+    }
+    for (const x of [-0.75, 0.75]) {
+      const side = new THREE.BoxGeometry(0.06, 0.45, 0.5);
+      side.translate(x, 0.225, -0.02);
+      const rest = new THREE.BoxGeometry(0.06, 0.45, 0.06);
+      rest.rotateX(-0.25);
+      rest.translate(x, 0.66, -0.29);
+      legs.push(side, rest);
+    }
+  } else {
+    for (let k = 0; k < 5; k++) {
+      const g = new THREE.BoxGeometry(1.8, 0.035, 0.085);
+      g.translate(0, 0.45, -0.2 + k * 0.1);
+      slats.push(g);
+    }
+    for (const x of [-0.7, 0.7]) {
+      const side = new THREE.BoxGeometry(0.07, 0.43, 0.42);
+      side.translate(x, 0.215, 0);
+      legs.push(side);
+    }
   }
   const wood = mergeGeometries(slats);
   const metal = mergeGeometries(legs);
@@ -125,6 +139,8 @@ export interface StreetDetailInput {
   manholes: Spot[];
   benches: Spot[];
   bins: Spot[];
+  /** Скамейки нарисованы в съёмке: они не условные (переключатель «добавленные объекты»). */
+  benchesDrawn?: boolean;
   /** Высота земли в точке: проезд ниже тротуара на высоту борта. */
   levelAt: (x: number, z: number) => number;
 }
@@ -175,24 +191,28 @@ export function streetDetails(input: StreetDetailInput): THREE.Group {
       ),
     );
   }
-  if (input.benches.length) {
-    const { wood, metal } = benchGeometry();
+  for (const back of [true, false]) {
+    const benches = input.benches.filter((b) => (b.back ?? true) === back);
+    if (!benches.length) continue;
+    const { wood, metal } = benchGeometry(back);
     const woodMesh = placed(
       wood,
       new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.8 }),
-      input.benches,
+      benches,
       lift,
-      'benches',
+      back ? 'benches' : 'benches-flat',
     );
     const metalMesh = placed(
       metal,
       new THREE.MeshStandardMaterial({ color: 0x1f2222, roughness: 0.5, metalness: 0.6 }),
-      input.benches,
+      benches,
       lift,
-      'bench-legs',
+      back ? 'bench-legs' : 'bench-flat-legs',
     );
     woodMesh.castShadow = true;
     metalMesh.castShadow = true;
+    woodMesh.userData.extra = !input.benchesDrawn;
+    metalMesh.userData.extra = !input.benchesDrawn;
     group.add(woodMesh, metalMesh);
   }
   if (input.bins.length) {
@@ -207,6 +227,12 @@ export function streetDetails(input: StreetDetailInput): THREE.Group {
     );
     bins.castShadow = true;
     group.add(bins);
+  }
+  // Решётки, мульча, люки и урны в чертеже не нарисованы: они условные, их можно скрыть.
+  for (const child of group.children) {
+    if (['tree-grates', 'tree-mulch', 'manholes', 'bins'].includes(child.name)) {
+      child.userData.extra = true;
+    }
   }
   return group;
 }

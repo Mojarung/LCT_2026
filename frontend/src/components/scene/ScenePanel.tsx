@@ -217,6 +217,7 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
     [
       settings.people > 0 ? `люди ${pct(settings.people)}` : '',
       settings.cars ? 'машины' : '',
+      settings.extras ? 'обстановка' : '',
       settings.city ? 'город' : '',
     ]
       .filter(Boolean)
@@ -414,6 +415,16 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
                 }}
               />
               Машины у бортов (условно: в подоснове их нет)
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.extras}
+                onChange={(e) => {
+                  onChange({ extras: e.target.checked });
+                }}
+              />
+              Скамейки, урны, оборудование площадок, люки, лунки (условно: в чертеже их нет)
             </label>
             <label className="check">
               <input

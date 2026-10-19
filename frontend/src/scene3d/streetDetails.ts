@@ -17,6 +17,53 @@ export interface Spot {
   z: number;
   /** Поворот вокруг вертикали, рад: ось x модели - вдоль края. */
   angle: number;
+  /** Скамейка со спинкой (только спиной к ограде, benchBack). */
+  back?: boolean;
+}
+
+/** Ограда дальше этого за скамейкой - не опора для спинки, м. */
+export const BENCH_FENCE_M = 1.3;
+/** Участок ограды круче этого к скамейке - не за её спиной. */
+const BENCH_FENCE_COS = Math.cos((35 * Math.PI) / 180);
+
+/** Спинка у скамейки - только у ограды: скамейка встаёт спиной к ней. Без ограды рядом -
+ *  скамейка без спинки, как длинные лавки вдоль живой изгороди на панорамах (пользователь,
+ *  19.10.2026: «если рядом есть забор, ставить спинкой к забору, а где нет - без спинки»).
+ *  Ограда считается, если её участок ближе reach и почти параллелен скамейке. */
+export function benchBack(
+  bench: Spot,
+  fences: readonly Line[],
+  reach = BENCH_FENCE_M,
+): { angle: number; back: boolean } {
+  const ax = Math.cos(bench.angle);
+  const az = -Math.sin(bench.angle);
+  let best = reach;
+  let normal: Flat | null = null;
+  for (const line of fences) {
+    for (let i = 0; i + 1 < line.points.length; i++) {
+      const a = line.points[i];
+      const c = line.points[i + 1];
+      if (!a || !c) continue;
+      const vx = c.x - a.x;
+      const vz = c.z - a.z;
+      const len = Math.hypot(vx, vz);
+      if (len < 1e-6) continue;
+      const t = Math.max(
+        0,
+        Math.min(1, ((bench.x - a.x) * vx + (bench.z - a.z) * vz) / (len * len)),
+      );
+      const qx = a.x + vx * t;
+      const qz = a.z + vz * t;
+      const d = Math.hypot(bench.x - qx, bench.z - qz);
+      if (d >= best || d < 1e-6) continue;
+      if (Math.abs((vx * ax + vz * az) / len) < BENCH_FENCE_COS) continue;
+      best = d;
+      normal = { x: (bench.x - qx) / d, z: (bench.z - qz) / d };
+    }
+  }
+  if (!normal) return { angle: bench.angle, back: false };
+  // Сиденье смотрит от ограды: +z модели - по нормали от ограды к скамейке.
+  return { angle: Math.atan2(normal.x, normal.z), back: true };
 }
 
 export const MANHOLE_STEP_M = 40;
@@ -103,10 +150,12 @@ export function benchSpots(
       // Нормаль к краю (влево по ходу линии) и её сторона с плиткой.
       const nx = -Math.sin(s.angle);
       const nz = -Math.cos(s.angle);
+      // Тротуар - плитка или асфальт: с подписью «А» тротуары съёмки асфальтовые.
+      const walk = (g: Ground) => g === 'pavers' || g === 'asphalt';
       const side = [1, -1].find(
         (k) =>
-          groundAt(s.x + nx * k * 0.9, s.z + nz * k * 0.9) === 'pavers' &&
-          groundAt(s.x + nx * k * 2.2, s.z + nz * k * 2.2) === 'pavers' &&
+          walk(groundAt(s.x + nx * k * 0.9, s.z + nz * k * 0.9)) &&
+          walk(groundAt(s.x + nx * k * 2.2, s.z + nz * k * 2.2)) &&
           groundAt(s.x - nx * k * 0.9, s.z - nz * k * 0.9) === 'grass',
       );
       if (side === undefined) continue;

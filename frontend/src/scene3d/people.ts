@@ -1,7 +1,10 @@
-/* Люди на тротуарах: случайная расстановка, часть гуляет туда и обратно вдоль тротуара.
+/* Люди на тротуарах и дети на площадках: случайная расстановка, часть гуляет туда и обратно.
  *
- * Места - пиксели маски, где покрытие - плитка тротуара (surfaceMask.ts): люди стоят там,
- * где ходят, а не посреди проезда и не на газоне. Направление прогулки - то из восьми, вдоль
+ * Места - пиксели сетки ходьбы, которую собирает сцена: тротуар (плитка и асфальт), не ближе
+ * тела к ограде, стволу, опоре, скамейке и машине, без резины площадок - там дети
+ * (пользователь, 19.10.2026: «чтобы они чувствовали забор, площадку и т. д., не ходили по
+ * газону, только по тротуарам и площадкам, а на площадках пусть дети будут»). Путь прогулки
+ * идёт только по своим клеткам: сквозь ограду и газон никто не проходит. Направление прогулки - то из восьми, вдоль
  * которого плитки дальше всего: так человек идёт по тротуару, а не поперёк. Фигура собрана
  * из капсул (ноги, туловище, руки, голова), одежда - своя у каждого. Шаг, взмах рук и
  * разворот на конце пути считает вершинный шейдер от времени: на процессоре люди не стоят
@@ -18,6 +21,10 @@ const WALKING = 0.55;
 const WALK_MS = 1.3;
 /** Путь прогулки, метры: не длиннее, чтобы человек не уходил с тротуара. */
 const MAX_WALK_M = 14;
+/** Путь ребёнка по площадке: от горки до качелей. */
+export const CHILD_WALK_M = 6;
+/** Квадратных метров резины площадки на ребёнка при ползунке 100%. */
+export const AREA_PER_CHILD_M2 = 14;
 
 export interface MaskGrid {
   kinds: Uint8Array;
@@ -53,10 +60,11 @@ function runLength(
   dx: number,
   dy: number,
   allowed: ReadonlySet<number>,
+  limit = MAX_WALK_M,
 ): number {
   const step = 0.5 / grid.metresPerPx;
   let run = 0;
-  for (let k = 1; k * step * grid.metresPerPx <= MAX_WALK_M; k++) {
+  for (let k = 1; k * step * grid.metresPerPx <= limit; k++) {
     const x = Math.round(px + dx * step * k);
     const y = Math.round(py + dy * step * k);
     if (x < 0 || y < 0 || x >= grid.width || y >= grid.height) break;
@@ -75,11 +83,24 @@ export const MIN_GAP_M = 1.6;
 /** Попыток найти свободное место на человека: дальше тротуар считается заполненным. */
 const TRIES = 12;
 
-export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Person[] {
+/** Где и сколько: allowed - коды клеток сетки, по которым можно стоять и идти. */
+export interface Crowd {
+  allowed?: readonly number[];
+  areaPerPerson?: number;
+  maxWalk?: number;
+}
+
+export function placePeople(
+  grid: MaskGrid,
+  count: number,
+  seed = 20260926,
+  crowd: Crowd = {},
+): Person[] {
   const random = rng(seed);
+  const limit = crowd.maxWalk ?? MAX_WALK_M;
   let allowed: ReadonlySet<number> = new Set([PAVERS]);
   let cells: number[] = [];
-  for (const kinds of [[PAVERS], [PAVERS, ASPHALT]]) {
+  for (const kinds of crowd.allowed ? [crowd.allowed] : [[PAVERS], [PAVERS, ASPHALT]]) {
     allowed = new Set(kinds);
     cells = [];
     for (let i = 0; i < grid.kinds.length; i++) if (allowed.has(grid.kinds[i] ?? -1)) cells.push(i);
@@ -88,7 +109,7 @@ export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Per
   }
   if (!cells.length) return [];
   const area = cells.length * grid.metresPerPx * grid.metresPerPx;
-  const target = Math.min(count, Math.floor(area / AREA_PER_PERSON_M2));
+  const target = Math.min(count, Math.floor(area / (crowd.areaPerPerson ?? AREA_PER_PERSON_M2)));
   const people: Person[] = [];
   // Занятые места - по сетке с шагом в зазор: сосед ищется в девяти клетках, а не во всех.
   const taken = new Map<string, { x: number; z: number }[]>();
@@ -116,27 +137,32 @@ export function placePeople(grid: MaskGrid, count: number, seed = 20260926): Per
     const py = Math.floor(cell / grid.width);
     const x = grid.rect[0] + (px + 0.5) * grid.metresPerPx;
     const z = grid.rect[1] + (py + 0.5) * grid.metresPerPx;
-    if (crowded(x, z)) {
-      misses += 1;
-      continue;
-    }
     let best = 0;
     let dir: readonly [number, number] = [1, 0];
     for (const d of dirs) {
-      const run = runLength(grid, px, py, d[0], d[1], allowed);
+      const run = runLength(grid, px, py, d[0], d[1], allowed, limit);
       if (run > best) {
         best = run;
         dir = d;
       }
     }
-    const walking = random() < WALKING && best > 3;
+    const walking = random() < WALKING && best > Math.min(3, limit / 2);
+    // Шейдер водит человека от середины пути на полпути в обе стороны, а проверен путь от
+    // клетки вперёд: середина - в половине проверенного пути, иначе обратная половина шла
+    // сквозь ограду и по газону.
+    const mx = walking ? x + dir[0] * (best / 2) : x;
+    const mz = walking ? z + dir[1] * (best / 2) : z;
+    if (crowded(mx, mz)) {
+      misses += 1;
+      continue;
+    }
     // Модель смотрит в +z; курс поворачивает её лицом вдоль направления прогулки.
     const heading = walking ? Math.atan2(dir[0], dir[1]) : random() * Math.PI * 2;
-    people.push({ x, z, heading, span: walking ? best : 0, seed: random() });
-    const key = keyOf(x, z);
+    people.push({ x: mx, z: mz, heading, span: walking ? best : 0, seed: random() });
+    const key = keyOf(mx, mz);
     const list = taken.get(key);
-    if (list) list.push({ x, z });
-    else taken.set(key, [{ x, z }]);
+    if (list) list.push({ x: mx, z: mz });
+    else taken.set(key, [{ x: mx, z: mz }]);
   }
   return people;
 }
@@ -172,25 +198,33 @@ function piece(
   return g;
 }
 
-/** Фигура ростом 1,75 м, лицом в +z, ступни на нуле. */
-export function personGeometry(): THREE.BufferGeometry {
-  const parts = [
-    piece(new THREE.CapsuleGeometry(0.075, 0.72, 3, 8), [-0.1, 0.46, 0], 'legL', BOTTOM, '#000'),
-    piece(new THREE.CapsuleGeometry(0.075, 0.72, 3, 8), [0.1, 0.46, 0], 'legR', BOTTOM, '#000'),
-    piece(new THREE.BoxGeometry(0.12, 0.07, 0.24), [-0.1, 0.035, 0.04], 'legL', OWN, '#2a2622'),
-    piece(new THREE.BoxGeometry(0.12, 0.07, 0.24), [0.1, 0.035, 0.04], 'legR', OWN, '#2a2622'),
-    piece(new THREE.CapsuleGeometry(0.16, 0.42, 4, 10), [0, 1.2, 0], 'body', TOP, '#000'),
-    piece(new THREE.CapsuleGeometry(0.045, 0.56, 3, 8), [-0.215, 1.16, 0], 'armL', TOP, '#000'),
-    piece(new THREE.CapsuleGeometry(0.045, 0.56, 3, 8), [0.215, 1.16, 0], 'armR', TOP, '#000'),
-    piece(new THREE.SphereGeometry(0.105, 12, 10), [0, 1.62, 0], 'body', OWN, '#e0b08f'),
-    piece(
-      new THREE.SphereGeometry(0.11, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      [0, 1.645, -0.01],
-      'body',
-      OWN,
-      '#3a2a1c',
-    ),
-  ];
+/** Фигура ростом 1,75 м (ребёнок - 1,15 м, голова крупнее), лицом в +z, ступни на нуле. */
+export function personGeometry(child = false): THREE.BufferGeometry {
+  const parts = child
+    ? childParts()
+    : [
+        piece(
+          new THREE.CapsuleGeometry(0.075, 0.72, 3, 8),
+          [-0.1, 0.46, 0],
+          'legL',
+          BOTTOM,
+          '#000',
+        ),
+        piece(new THREE.CapsuleGeometry(0.075, 0.72, 3, 8), [0.1, 0.46, 0], 'legR', BOTTOM, '#000'),
+        piece(new THREE.BoxGeometry(0.12, 0.07, 0.24), [-0.1, 0.035, 0.04], 'legL', OWN, '#2a2622'),
+        piece(new THREE.BoxGeometry(0.12, 0.07, 0.24), [0.1, 0.035, 0.04], 'legR', OWN, '#2a2622'),
+        piece(new THREE.CapsuleGeometry(0.16, 0.42, 4, 10), [0, 1.2, 0], 'body', TOP, '#000'),
+        piece(new THREE.CapsuleGeometry(0.045, 0.56, 3, 8), [-0.215, 1.16, 0], 'armL', TOP, '#000'),
+        piece(new THREE.CapsuleGeometry(0.045, 0.56, 3, 8), [0.215, 1.16, 0], 'armR', TOP, '#000'),
+        piece(new THREE.SphereGeometry(0.105, 12, 10), [0, 1.62, 0], 'body', OWN, '#e0b08f'),
+        piece(
+          new THREE.SphereGeometry(0.11, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+          [0, 1.645, -0.01],
+          'body',
+          OWN,
+          '#3a2a1c',
+        ),
+      ];
   const merged = new THREE.BufferGeometry();
   for (const name of ['position', 'normal', 'aPart', 'aTint', 'aBase']) {
     const size = parts[0]?.getAttribute(name).itemSize ?? 1;
@@ -200,6 +234,33 @@ export function personGeometry(): THREE.BufferGeometry {
   merged.computeBoundingSphere();
   return merged;
 }
+
+function childParts(): THREE.BufferGeometry[] {
+  return [
+    piece(new THREE.CapsuleGeometry(0.058, 0.38, 3, 8), [-0.07, 0.27, 0], 'legL', BOTTOM, '#000'),
+    piece(new THREE.CapsuleGeometry(0.058, 0.38, 3, 8), [0.07, 0.27, 0], 'legR', BOTTOM, '#000'),
+    piece(new THREE.BoxGeometry(0.09, 0.05, 0.17), [-0.07, 0.025, 0.03], 'legL', OWN, '#3a3530'),
+    piece(new THREE.BoxGeometry(0.09, 0.05, 0.17), [0.07, 0.025, 0.03], 'legR', OWN, '#3a3530'),
+    piece(new THREE.CapsuleGeometry(0.125, 0.24, 4, 10), [0, 0.7, 0], 'body', TOP, '#000'),
+    piece(new THREE.CapsuleGeometry(0.034, 0.32, 3, 8), [-0.165, 0.68, 0], 'armL', TOP, '#000'),
+    piece(new THREE.CapsuleGeometry(0.034, 0.32, 3, 8), [0.165, 0.68, 0], 'armR', TOP, '#000'),
+    piece(new THREE.SphereGeometry(0.1, 12, 10), [0, 1.04, 0], 'body', OWN, '#e6b996'),
+    piece(
+      new THREE.SphereGeometry(0.105, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      [0, 1.065, -0.01],
+      'body',
+      OWN,
+      '#6b4a2a',
+    ),
+  ];
+}
+
+/** Суставы для шага: бедро и плечо над землёй, м. */
+const ADULT_JOINTS = { hip: 0.9, shoulder: 1.45 };
+const CHILD_JOINTS = { hip: 0.53, shoulder: 0.9 };
+/** Детская одежда - ярче взрослой. */
+const KID_TOPS = ['#d9443a', '#f0b42c', '#3b8fd6', '#e877a8', '#4caf50', '#7e57c2', '#ff8a3d'];
+const KID_BOTTOMS = ['#1f3a68', '#3b3f4a', '#5a4a3a', '#2e5d3a', '#20262f'];
 
 /** Одежда: неяркая городская палитра, изредка яркая куртка. */
 const TOPS = [
@@ -222,6 +283,8 @@ const WALK_VERTEX_HEAD = /* glsl */ `
 attribute float aPart;
 attribute vec4 aWalk;
 uniform float uTime;
+uniform float uHip;
+uniform float uShoulder;
 vec3 walkPose(vec3 p) {
   float span = aWalk.x;
   float speed = aWalk.y;
@@ -229,7 +292,7 @@ vec3 walkPose(vec3 p) {
   if (span <= 0.0) {
     // Стоящий чуть переминается: руки качаются едва заметно.
     float idle = sin(uTime * 0.8 + phase * 6.28) * 0.04;
-    if (aPart > 2.5) p.z += idle * (p.y - 1.45);
+    if (aPart > 2.5) p.z += idle * (p.y - uShoulder);
     return p;
   }
   float period = 2.0 * span / speed;
@@ -237,8 +300,8 @@ vec3 walkPose(vec3 p) {
   float along = t < 0.5 ? t * 2.0 : 2.0 - t * 2.0;
   float back = step(0.5, t);
   float swing = sin(uTime * speed * 5.2 + phase * 20.0) * 0.45;
-  float hip = 0.9;
-  float shoulder = 1.45;
+  float hip = uHip;
+  float shoulder = uShoulder;
   if (aPart > 0.5 && aPart < 2.5) {
     float a = aPart < 1.5 ? swing : -swing;
     float dy = p.y - hip;
@@ -263,19 +326,27 @@ export class People {
   private readonly mesh: THREE.InstancedMesh;
   private readonly time = { value: 0 };
 
-  constructor(people: readonly Person[]) {
-    this.root.name = 'people';
-    const geometry = personGeometry();
+  constructor(people: readonly Person[], child = false) {
+    this.root.name = child ? 'children' : 'people';
+    const geometry = personGeometry(child);
+    const joints = child ? CHILD_JOINTS : ADULT_JOINTS;
+    const topsPalette = child ? KID_TOPS : TOPS;
+    const bottomsPalette = child ? KID_BOTTOMS : BOTTOMS;
+    const uniforms = {
+      uTime: this.time,
+      uHip: { value: joints.hip },
+      uShoulder: { value: joints.shoulder },
+    };
     const walk = new Float32Array(Math.max(1, people.length) * 4);
     const tops = new Float32Array(Math.max(1, people.length) * 3);
     const bottoms = new Float32Array(Math.max(1, people.length) * 3);
     people.forEach((p, i) => {
-      walk.set([p.span, WALK_MS * (0.8 + p.seed * 0.5), p.seed, 0], i * 4);
+      walk.set([p.span, WALK_MS * (child ? 0.7 : 1) * (0.8 + p.seed * 0.5), p.seed, 0], i * 4);
       const top = new THREE.Color(
-        TOPS[Math.floor(p.seed * 997) % TOPS.length],
+        topsPalette[Math.floor(p.seed * 997) % topsPalette.length],
       ).convertSRGBToLinear();
       const bottom = new THREE.Color(
-        BOTTOMS[Math.floor(p.seed * 7919) % BOTTOMS.length],
+        bottomsPalette[Math.floor(p.seed * 7919) % bottomsPalette.length],
       ).convertSRGBToLinear();
       tops.set([top.r, top.g, top.b], i * 3);
       bottoms.set([bottom.r, bottom.g, bottom.b], i * 3);
@@ -285,7 +356,7 @@ export class People {
     geometry.setAttribute('aBottom', new THREE.InstancedBufferAttribute(bottoms, 3));
     const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 });
     material.onBeforeCompile = (shader) => {
-      shader.uniforms.uTime = this.time;
+      Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
@@ -302,7 +373,7 @@ export class People {
     material.customProgramCacheKey = () => 'green-people';
     const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     depth.onBeforeCompile = (shader) => {
-      shader.uniforms.uTime = this.time;
+      Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>\n${WALK_VERTEX_HEAD}`)
         .replace('#include <begin_vertex>', BEGIN);
@@ -312,7 +383,7 @@ export class People {
     this.mesh.customDepthMaterial = depth;
     const m = new THREE.Matrix4();
     people.forEach((p, i) => {
-      const s = 0.92 + p.seed * 0.16;
+      const s = child ? 0.82 + p.seed * 0.3 : 0.92 + p.seed * 0.16;
       m.makeRotationY(p.heading)
         .scale(new THREE.Vector3(s, s, s))
         .setPosition(p.x, 0, p.z);

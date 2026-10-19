@@ -28,9 +28,23 @@ interface Footprint {
   box: [number, number, number, number];
 }
 
+/** Сетка пикселей маски земли: прямоугольник x0, z0, ширина, высота и шаг. */
+export interface GridFrame {
+  width: number;
+  height: number;
+  metresPerPx: number;
+  rect: readonly [number, number, number, number];
+}
+
+/** Площадь контура, начиная с которой его внутренность не размечается клетками (дома: их
+ *  стены и так размечены, а внутри дома людей не ставят по маске). */
+const FILL_MAX_M2 = 200;
+
 export class Walls {
   private readonly cells = new Map<string, Segment[]>();
   private readonly roofs = new Map<string, Footprint[]>();
+  private readonly all: Segment[] = [];
+  private readonly footprints: Footprint[] = [];
   private count = 0;
 
   constructor(buildings: readonly Building[]) {
@@ -63,12 +77,62 @@ export class Walls {
         height: h,
         box: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)],
       };
+      this.footprints.push(fp);
       for (const key of this.keys(fp.box[0], fp.box[1], fp.box[2], fp.box[3])) {
         const list = this.roofs.get(key);
         if (list) list.push(fp);
         else this.roofs.set(key, [fp]);
       }
     });
+  }
+
+  /** Клетки сетки, где стоит препятствие или ближе radius к нему: людям туда не встать и не
+   *  пройти (пользователь, 19.10.2026: «чтобы они чувствовали забор, площадку и т. д.»). */
+  blockedCells(grid: GridFrame, radius: number): Uint8Array {
+    const { width, height, metresPerPx: m, rect } = grid;
+    const out = new Uint8Array(width * height);
+    const reach = Math.ceil(radius / m);
+    const mark = (x: number, z: number) => {
+      const cx = Math.floor((x - rect[0]) / m);
+      const cz = Math.floor((z - rect[1]) / m);
+      for (let dz = -reach; dz <= reach; dz++) {
+        const pz = cz + dz;
+        if (pz < 0 || pz >= height) continue;
+        for (let dx = -reach; dx <= reach; dx++) {
+          const px = cx + dx;
+          if (px < 0 || px >= width) continue;
+          const qx = rect[0] + (px + 0.5) * m;
+          const qz = rect[1] + (pz + 0.5) * m;
+          if (Math.hypot(qx - x, qz - z) <= radius + m * 0.5) out[pz * width + px] = 1;
+        }
+      }
+    };
+    for (const s of this.all) {
+      const len = Math.hypot(s.bx - s.ax, s.bz - s.az);
+      const steps = Math.max(1, Math.ceil(len / (m * 0.5)));
+      for (let k = 0; k <= steps; k++) {
+        mark(s.ax + ((s.bx - s.ax) * k) / steps, s.az + ((s.bz - s.az) * k) / steps);
+      }
+    }
+    for (const fp of this.footprints) {
+      const [x0, z0, x1, z1] = fp.box;
+      if ((x1 - x0) * (z1 - z0) > FILL_MAX_M2) continue;
+      for (
+        let pz = Math.max(0, Math.floor((z0 - rect[1]) / m));
+        pz * m + rect[1] <= z1 && pz < height;
+        pz++
+      ) {
+        for (
+          let px = Math.max(0, Math.floor((x0 - rect[0]) / m));
+          px * m + rect[0] <= x1 && px < width;
+          px++
+        ) {
+          const p = { x: rect[0] + (px + 0.5) * m, z: rect[1] + (pz + 0.5) * m };
+          if (insideRing(fp.ring, p)) out[pz * width + px] = 1;
+        }
+      }
+    }
+    return out;
   }
 
   /** Открытые линии высотой height: ограды. */
@@ -109,6 +173,7 @@ export class Walls {
   }
 
   private add(s: Segment): void {
+    this.all.push(s);
     for (const key of this.keys(
       Math.min(s.ax, s.bx) - BODY_M,
       Math.min(s.az, s.bz) - BODY_M,

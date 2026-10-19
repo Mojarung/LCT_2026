@@ -30,6 +30,7 @@ export type ItemKind =
   | 'hoop'
   | 'table'
   | 'bench'
+  | 'seat'
   | 'bin';
 
 export interface GroundLabel {
@@ -98,6 +99,7 @@ export const SPECS: Record<ItemKind, Spec> = {
   hoop: { len: 1.2, wid: 1.4, height: 3.4, zoneU: 0.5, zoneV: 0.5, edge: 0.3 },
   table: { len: 2.74, wid: 1.53, height: 0.76, zoneU: 1.5, zoneV: 1.0, edge: 0.4 },
   bench: { len: 1.8, wid: 0.6, height: 0.9, zoneU: 0.1, zoneV: 0.4, edge: 0.15 },
+  seat: { len: 1.8, wid: 0.5, height: 0.48, zoneU: 0.1, zoneV: 0.4, edge: 0.15 },
   bin: { len: 0.45, wid: 0.45, height: 0.8, zoneU: 0.05, zoneV: 0.05, edge: 0.1, round: true },
 };
 
@@ -138,6 +140,7 @@ const VALUE: Record<ItemKind, number> = {
   hoop: 2,
   table: 2,
   bench: 0,
+  seat: 0,
   bin: 0,
 };
 /** Поле с воротами - на площадке не короче и не уже этого, м. */

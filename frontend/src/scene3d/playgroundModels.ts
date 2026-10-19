@@ -399,6 +399,18 @@ function model(kind: ItemKind): Parts {
       );
       break;
     }
+    case 'seat': {
+      // Лавка без спинки: пять реек на двух опорах (спинка - только у ограды, benchBack).
+      for (let k = 0; k < 5; k++)
+        add(parts, 'wood', block(1.8, 0.035, 0.085, 0, 0.45, -0.2 + k * 0.1));
+      add(
+        parts,
+        'rubber',
+        block(0.07, 0.43, 0.42, -0.7, 0.215, 0),
+        block(0.07, 0.43, 0.42, 0.7, 0.215, 0),
+      );
+      break;
+    }
     case 'bin': {
       const can = new THREE.CylinderGeometry(0.19, 0.17, 0.6, 14, 1, true);
       can.translate(0, 0.4, 0);
