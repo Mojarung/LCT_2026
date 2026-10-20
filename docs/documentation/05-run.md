@@ -59,10 +59,10 @@ curl -s http://localhost:8000/api/v1/health
 
 Сборка с ODA File Converter вместо LibreDWG для DWG (лицензия ODA принимается при сборке,
 пакет скачивается с сайта ODA; в образе по умолчанию его нет):
-`docker compose build --build-arg WITH_ODA=true`. В образе по умолчанию DWG из архива пилота
-не проходит: LibreDWG теряет геометрию областей REGION, и прогон останавливается на сверке
-записанного DXF («не сохраняются N»). Такой DWG подаётся DXF после ODA File Converter 27.1
-(разд. 8.2, п. 1).
+`docker compose build --build-arg WITH_ODA=true`. В образе по умолчанию LibreDWG теряет
+геометрию областей REGION: прогон идёт по прочитанному с заметкой «сущностей без данных», а в
+строгом режиме (`strict_input=true`) останавливается на сверке записанного DXF («не сохраняются
+N»). Без потерь DWG подаётся DXF после ODA File Converter 27.1 (разд. 8.2, п. 1).
 
 Стенд с 16 ГБ памяти: `GREEN_MAX_PARALLEL_RUNS=1` в `compose.yaml` и `docker compose restart
 api` между сериями тяжёлых улиц, когда ни один прогон не идёт (разд. 8.2, п. 9).
