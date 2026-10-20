@@ -913,7 +913,8 @@ def test_small_hole_in_paving_is_filled_but_a_lawn_island_stays() -> None:
     well = box(10, 4, 11.5, 5)
     island = box(30, 4, 31.5, 5.5)
     road = box(0, 0, 40, 10).difference(well).difference(island)
-    out = _without_artifact_holes(road, island)
+    soil = shapely.get_parts(island)
+    out = _without_artifact_holes(road, soil, shapely.STRtree(soil))
     assert len(out.interiors) == 1
     assert out.contains(Point(10.7, 4.5))
     assert not out.contains(Point(30.7, 4.7))

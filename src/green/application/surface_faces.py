@@ -170,15 +170,19 @@ def _covered(rings: NDArray[np.object_], lines: NDArray[np.object_]) -> NDArray[
        всем объединением;
     2. кольцо, не подтверждённое и с округлением до 1 мкм, не подтверждено и всем
        объединением;
-    3. остальные спорные кольца (353 на Куликовской) - разностью со всем объединением,
-       как прежде.
+    3. остальные спорные кольца (353 на Куликовской) - разностью с кусками общего
+       объединения не дальше WIDE_M от кольца. Разность со всем объединением сразу на каждое
+       кольцо шла 264 с на 137 тыс. колец Олимпийской деревни (стены и ограды дали много
+       спорных колец, 20.10.2026), кусками рядом - 44 с; ответ осторожнее: из 132 тыс.
+       подтверждённых не подтверждено 38 колец, лишних подтверждений нет.
     """
     covered = np.zeros(len(rings), dtype=bool)
     whole = shapely.union_all(np.asarray(lines, dtype=object))
     parts = shapely.get_parts(whole)
     if not len(rings) or not len(parts):
         return covered
-    ring_ids, part_ids = STRtree(parts).query(rings, predicate="dwithin", distance=_NEAR_M)
+    tree = STRtree(parts)
+    ring_ids, part_ids = tree.query(rings, predicate="dwithin", distance=_NEAR_M)
     if not len(ring_ids):
         return covered
     order = np.argsort(ring_ids, kind="stable")
@@ -198,6 +202,27 @@ def _covered(rings: NDArray[np.object_], lines: NDArray[np.object_]) -> NDArray[
     disputed[disputed] = shapely.is_empty(
         shapely.difference(near[disputed], local[disputed], grid_size=_GRID_M)
     )
-    exact[disputed] = shapely.is_empty(shapely.difference(near[disputed], whole))
+    wide = _around(near[disputed], tree, parts)
+    exact[disputed] = shapely.is_empty(shapely.difference(near[disputed], wide))
     covered[touched] = exact
     return covered
+
+
+WIDE_M = 1.0  # куски общего объединения не дальше этого от спорного кольца, м
+
+
+def _around(
+    rings: NDArray[np.object_], tree: STRtree, parts: NDArray[np.object_]
+) -> NDArray[np.object_]:
+    """Куски общего объединения у каждого кольца (без нового объединения: узлы те же)."""
+    out = np.full(len(rings), shapely.MultiLineString(), dtype=object)
+    if not len(rings):
+        return out
+    ring_ids, part_ids = tree.query(rings, predicate="dwithin", distance=WIDE_M)
+    order = np.argsort(ring_ids, kind="stable")
+    ring_ids, part_ids = ring_ids[order], part_ids[order]
+    starts = np.flatnonzero(np.r_[True, ring_ids[1:] != ring_ids[:-1]])
+    ends = np.r_[starts[1:], len(ring_ids)]
+    for a, b in zip(starts, ends, strict=True):
+        out[ring_ids[a]] = shapely.multilinestrings(parts[part_ids[a:b]])
+    return out

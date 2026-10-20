@@ -643,7 +643,7 @@ export interface components {
          * @description Класс объекта подосновы, от которого считаются нормативные отступы.
          * @enum {string}
          */
-        ObjectClass: "utility.water" | "utility.sewer" | "utility.storm" | "utility.drain" | "utility.heat" | "utility.gas" | "utility.power_cable" | "utility.telecom" | "utility.unknown" | "utility.access" | "power_line_overhead" | "pole" | "curb" | "pavement_edge" | "fence" | "road" | "sidewalk" | "tram" | "railway" | "building" | "school" | "structure" | "slope" | "work_boundary" | "existing_tree" | "existing_shrub" | "existing_woodland" | "obstacle" | "zone.power_line" | "zone.gas" | "territory.street" | "territory.yard" | "territory.square" | "territory.park" | "territory.protected_green" | "territory.natural" | "lawn" | "contour" | "ignore" | "unknown";
+        ObjectClass: "utility.water" | "utility.sewer" | "utility.storm" | "utility.drain" | "utility.heat" | "utility.gas" | "utility.power_cable" | "utility.telecom" | "utility.unknown" | "utility.access" | "power_line_overhead" | "pole" | "curb" | "pavement_edge" | "fence" | "road" | "sidewalk" | "tram" | "railway" | "building" | "school" | "structure" | "slope" | "work_boundary" | "existing_tree" | "existing_shrub" | "existing_woodland" | "obstacle" | "zone.power_line" | "zone.gas" | "parcel.private" | "parcel.residential" | "territory.street" | "territory.yard" | "territory.square" | "territory.park" | "territory.protected_green" | "territory.natural" | "lawn" | "contour" | "ignore" | "unknown";
         /** PhotoListOut */
         PhotoListOut: {
             /** Available */

@@ -526,6 +526,8 @@
           "obstacle",
           "zone.power_line",
           "zone.gas",
+          "parcel.private",
+          "parcel.residential",
           "territory.street",
           "territory.yard",
           "territory.square",

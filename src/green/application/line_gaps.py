@@ -33,6 +33,7 @@ NEIGHBOURS = 8  # ближайших концов на каждый конец
 LOOP_MIN = 4  # своя линия замыкается, если она длиннее стольких разрывов
 _TOUCH_M = 1e-6
 _MIN_POINTS = 2
+_LINE_TYPE_IDS = (1, 2)  # LineString, LinearRing
 
 
 def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeometry]:
@@ -41,15 +42,15 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
     Каждый конец смотрит только на NEIGHBOURS ближайших концов: на чертеже с тысячами коротких
     штрихов (разобранная штриховка, частый пунктир) все пары в радиусе gap - десятки миллионов,
     а перемычка всё равно идёт к ближайшему свободному концу."""
-    drawn = [
-        p
-        for g in lines
-        for p in shapely.get_parts(g)
-        if p.geom_type in {"LineString", "LinearRing"} and len(p.coords) >= _MIN_POINTS
+    drawn = shapely.get_parts(np.asarray(lines, dtype=object))
+    drawn = drawn[
+        np.isin(shapely.get_type_id(drawn), _LINE_TYPE_IDS)
+        & (shapely.get_num_points(drawn) >= _MIN_POINTS)
     ]
-    parts = [p for p in drawn if not p.is_ring]
+    closed = shapely.is_ring(drawn)
+    parts = list(drawn[~closed])
     # Замкнутый контур (стена здания) концов не имеет, но конец борта до него продлевается.
-    rings = [p for p in drawn if p.is_ring]
+    rings = list(drawn[closed])
     if not parts:
         return []
     ends, outward = _ends(parts)
@@ -106,13 +107,16 @@ def _nearest_pairs(
 
 def _ends(parts: Sequence[BaseGeometry]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Концы (2k - начало линии k, 2k + 1 - конец) и единичные направления наружу."""
-    ends = []
-    outward = []
-    for p in parts:
-        coords = np.asarray(p.coords, dtype=np.float64)[:, :2]
-        ends.extend((coords[0], coords[-1]))
-        outward.extend((_unit(coords[0] - coords[1]), _unit(coords[-1] - coords[-2])))
-    return np.array(ends), np.array(outward)
+    xy, owner = shapely.get_coordinates(np.asarray(parts, dtype=object), return_index=True)
+    first = np.flatnonzero(np.r_[True, owner[1:] != owner[:-1]])
+    last = np.r_[first[1:], len(owner)] - 1
+    ends = np.empty((2 * len(first), 2))
+    ends[0::2], ends[1::2] = xy[first], xy[last]
+    outward = np.empty_like(ends)
+    outward[0::2] = xy[first] - xy[first + 1]
+    outward[1::2] = xy[last] - xy[last - 1]
+    norm = np.linalg.norm(outward, axis=1, keepdims=True)
+    return ends, np.divide(outward, norm, out=np.zeros_like(outward), where=norm > 0)
 
 
 def _extensions(
@@ -150,11 +154,6 @@ def _extensions(
         shapely.LineString([ends[i], ends[i] + outward[i] * distance])
         for i, distance in best.items()
     ]
-
-
-def _unit(v: NDArray[np.float64]) -> NDArray[np.float64]:
-    n = float(np.linalg.norm(v))
-    return v / n if n else v
 
 
 __all__ = ["GAP_M", "bridges"]
