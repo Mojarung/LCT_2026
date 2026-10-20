@@ -23,6 +23,16 @@ const FORM_RU: Record<Form, string> = {
   creeper: 'стелющееся хвойное',
 };
 
+const ROMAN = ['', 'I', 'II', 'III'];
+
+/** Инвазивный вид по перечню 369-ПП: сервис его не сажает (I, II) или сажает с условием (III). */
+function invasiveNote(group: number): string {
+  const roman = ROMAN[group] ?? String(group);
+  return group <= 2
+    ? `инвазивный, группа ${roman} (369-ПП): не сажается`
+    : `инвазивный, группа ${roman} (369-ПП): с условиями`;
+}
+
 const metres = (value: number) => value.toFixed(1).replace('.', ',');
 
 /** Каталог моделей: чем каждый вид нарисован на плане. Тот же спрайт, что на карте, поэтому
@@ -59,6 +69,11 @@ export default function ModelsCatalog() {
                         {FORM_RU[model.form]}
                         {known ? <>, крона {metres(known.crown_diameter_m)}&nbsp;м</> : null}
                       </span>
+                      {known?.invasive_group ? (
+                        <span className="models-invasive">
+                          {invasiveNote(known.invasive_group)}
+                        </span>
+                      ) : null}
                     </div>
                   </li>
                 );

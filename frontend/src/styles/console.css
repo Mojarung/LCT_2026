@@ -631,6 +631,10 @@ body.shell-home .footer {
   font-size: var(--fs-small);
   line-height: 1.35;
 }
+.models-grid .models-invasive {
+  color: var(--bad);
+  font-weight: 500;
+}
 .models-grid b {
   font-size: var(--fs-body);
   font-weight: 600;

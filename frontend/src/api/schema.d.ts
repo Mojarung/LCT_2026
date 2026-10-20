@@ -982,6 +982,8 @@ export interface components {
             code: string;
             /** Crown Diameter M */
             crown_diameter_m: number;
+            /** Invasive Group */
+            invasive_group?: number | null;
             /** Name Lat */
             name_lat: string;
             /** Name Ru */

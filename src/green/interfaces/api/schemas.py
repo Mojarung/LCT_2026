@@ -24,6 +24,9 @@ class SpeciesOut(BaseModel):
     name_ru: str
     name_lat: str
     crown_diameter_m: float
+    # Группа инвазивного вида по перечню 369-ПП (приложение 1): I и II - высадка запрещена,
+    # III - с условиями по типу территории. Нет - вид не инвазивный.
+    invasive_group: int | None = None
 
 
 class StreetOut(BaseModel):

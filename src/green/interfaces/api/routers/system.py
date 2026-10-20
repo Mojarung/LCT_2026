@@ -69,6 +69,7 @@ def meta(container: ContainerDep) -> MetaOut:
                 name_ru=s.name_ru,
                 name_lat=s.name_lat,
                 crown_diameter_m=s.crown_diameter_m,
+                invasive_group=s.invasive_group,
             )
             for s in container.species.all()
         ],

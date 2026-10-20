@@ -1278,6 +1278,17 @@
             "title": "Crown Diameter M",
             "type": "number"
           },
+          "invasive_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invasive Group"
+          },
           "name_lat": {
             "title": "Name Lat",
             "type": "string"
