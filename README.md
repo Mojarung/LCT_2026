@@ -375,15 +375,17 @@ curl -s -o result.dxf http://localhost:8000/api/v1/runs/<id>/artifacts/result.dx
 | Что | Тестов | Итог | Покрытие строк |
 |---|---|---|---|
 | Бэкенд, pytest: правила, чтение и запись DXF, геометрия, размещение, подбор, API, правка, отчёты, слои ГИС | 2 623 | 2 619 прошли, 4 пропущены | 95 % (19 354 строки `src/green`, не покрыто 926) |
-| Фронтенд, vitest 5.0.1: карта, знаки видов, правка, 3D, снимки и фото, клиент API | 574 в 79 файлах | все прошли | 55 % (6 665 из 12 045 строк в файлах, которые загружают тесты) |
+| Фронтенд, vitest 5.0.1: карта и её отрисовка, знаки видов, правка, движок и сцена 3D, страницы, снимки и фото, клиент API | 1 082 в 121 файле | все прошли | 96,4 % (11 802 из 12 238 строк `src/`); ветки 82,0 %, функции 94,3 % |
 | `ruff check src`, `ruff format --check src` | | чисто (ruff 0.16.7) | |
 | `ty check src` | | чисто (ty 0.0.81) | |
 | `lint-imports` | 2 контракта | оба соблюдены | |
 
 Пропущенные тесты ждут локальных данных, которых нет в репозитории: распакованного датасета,
 чертежей других команд, текстов актов заказчика (`GREEN_LAWS_DIR`). Покрытие фронтенда считается
-по файлам, которые импортирует хотя бы один тест (так vitest считает без `coverage.include`):
-файл, который не загружает ни один тест, в знаменатель не попадает.
+по всем файлам `src/`, включая те, что не загружает ни один тест (`coverage.include` в
+`vite.config.ts`). Холст карты и WebGL в jsdom нет: тесты рисуют в записывающий фейк контекста
+2D (`src/test/canvas.ts`), а движок 3D собирается с фейковым `WebGLRenderer` и настоящими
+модулями сцены.
 
 Повторить:
 
@@ -393,8 +395,7 @@ uv run --with pytest-cov pytest --cov=src/green --cov-report=term -q -p no:cache
 uv run ruff check src && uv run ruff format --check src
 uv run ty check src && uv run lint-imports
 cd frontend && npm test
-npm i --no-save @vitest/coverage-v8@5.0.1
-npx vitest run --coverage --coverage.provider=v8 --coverage.reporter=text-summary
+npm run test:coverage                                     # с замером покрытия
 ```
 
 Реальные чертежи пилота проверяют инструменты, а не pytest: `tools/reader_check.py` читает все
