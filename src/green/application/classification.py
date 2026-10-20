@@ -633,6 +633,7 @@ class ClassificationReport:
 # Как решён класс объекта: по виду основания (часть ClassificationEvidence.method до «:»).
 _RECOGNITION_KINDS = {
     "name_rule": "by_name_rule",
+    "inferred_classifier": "by_name_rule",  # код классификатора Москвы - правило, а не догадка
     "inferred_name": "by_words",
     "inferred_annotation": "by_words",
     "inferred_removed": "by_words",

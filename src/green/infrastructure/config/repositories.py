@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import re
@@ -261,6 +262,16 @@ class YamlLayerMapSource:
             parsed_words = _validate(VocabularyFile, words_data, self._vocabulary)
             vocabulary = build_vocabulary(parsed_words.model_dump(mode="json"), words_digest)
             digest = hashlib.sha256(f"{digest}:{words_digest}".encode()).hexdigest()
+        classifier = self._path.with_name("im_classifier.yaml")
+        if classifier.exists():
+            # Коды «Классификаторов для информационного моделирования» (Москва, 2024).
+            codes_data, codes_digest = _read(classifier)
+            codes = {
+                str(code): ObjectClass(entry["class"])
+                for code, entry in (codes_data.get("codes") or {}).items()
+            }
+            vocabulary = dataclasses.replace(vocabulary, codes=codes)
+            digest = hashlib.sha256(f"{digest}:{codes_digest}".encode()).hexdigest()
         names = NameModel()
         model_path = self._path.with_name("name_model.json")
         if model_path.exists():

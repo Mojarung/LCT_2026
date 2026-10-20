@@ -86,9 +86,12 @@ class Vocabulary:
     annotation_phrases: Sequence[str] = ()
     annotation_patterns: Sequence[re.Pattern[str]] = ()
     fingerprint: str = ""
+    # Коды «Классификаторов для информационного моделирования» (Москва, 2024), часть 1 «ТС» и
+    # часть 2 «ПО ЗУ»: код -> класс (config/im_classifier.yaml). Код в имени решает раньше слов.
+    codes: Mapping[str, ObjectClass] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
-        return bool(self.words or self.phrases)
+        return bool(self.words or self.phrases or self.codes)
 
     def infer(self, *names: str | None) -> Inference | None:
         """Первое имя, по словам которого есть вывод (блок конкретнее слоя).
@@ -96,12 +99,37 @@ class Vocabulary:
         Слабый намёк решает, только если ни в одном имени нет сильного слова: «Покрытия» в имени
         контейнерного блока не перебивает «Газон» в имени слоя (аудит Берзарина 16.10.2026).
         """
+        for name in names:
+            if name and (coded := self.coded(local_name(name))) is not None:
+                return coded
         found = [self._infer(local_name(name)) for name in names if name]
         strong = next((item for item in found if item and item.kind != "weak"), None)
         removed = next((item for item in found if item and item.kind == "removed"), None)
         if strong is not None and strong.object_class is ObjectClass.LAWN and removed is not None:
             return removed  # снос в одном имени сильнее газона в другом
         return strong or next((item for item in found if item), None)
+
+    def coded(self, name: str) -> Inference | None:
+        """Класс по коду классификатора в имени: «ТС 22 00 01», «ТС_22_00_01», «ТС22000101»,
+        «ПО ЗУ 25 10 01», «ПОЗУ-25-10-01». Решает самый длинный код, который есть в словаре."""
+        if not self.codes:
+            return None
+        for match in _CODE.finditer(name.upper()):
+            part = "ПО ЗУ" if match.group(1).startswith("П") else "ТС"
+            digits = match.group(2)
+            groups = re.findall(r"\d+", digits)
+            if len(groups) == 1:  # слитно: пары цифр, последняя группа может быть из трёх
+                run = groups[0]
+                groups = [run[i : i + 2] for i in range(0, len(run) - len(run) % 2, 2)]
+                if len(run) % 2:
+                    groups[-1] += run[-1]
+            # Код не короче трёх групп (раздел, группа, объект): «ТС-16» в чертеже теплосети -
+            # номер камеры, а не раздел «Канализация ливневая».
+            for size in range(len(groups), _CODE_MIN_GROUPS - 1, -1):
+                code = " ".join([part, *groups[:size]])
+                if code in self.codes:
+                    return Inference(self.codes[code], code, "classifier")
+        return None
 
     def _infer(self, name: str) -> Inference | None:
         text = normalize(name)
@@ -223,6 +251,10 @@ class Vocabulary:
             if proposed and not existing:
                 return Inference(ObjectClass.IGNORE, proposed, "proposed")
         return Inference(chosen.object_class, chosen.word)
+
+
+_CODE_MIN_GROUPS = 3
+_CODE = re.compile(r"(?<![А-ЯA-Z])(ТС|ПО[\s_.\-]*ЗУ)[\s_.\-]*(\d{2}[\d\s_.\-]*)")
 
 
 def normalize(name: str) -> str:

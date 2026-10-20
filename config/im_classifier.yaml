@@ -1,0 +1,2009 @@
+# Классификаторы для информационного моделирования (Москва, 2024): часть 1 «Топографическая
+# ситуация» (ТС) и часть 2 «Планировочная организация земельного участка» (ПО ЗУ). Все строки
+# таблиц обеих частей разобраны; класс сервиса - по разделу (сети, опоры, служебное) или по
+# словарю имён config/vocabulary.yaml для наименования объекта. Строки без вывода не включены:
+# такой слой классифицируется обычным порядком. Слой, в имени которого стоит код (с пробелами,
+# «_», «-», «.» или слитно), получает класс самого длинного совпавшего кода.
+# Строк классификатора: 1998, кодов с классом: 1278, без класса - в unmapped.
+codes:
+  'ТС 01 10': {class: ignore, geometry: LIN, name: 'Координатная сетка - линии'}
+  'ТС 01 10 01': {class: ignore, geometry: LIN, name: 'Параллели географические'}
+  'ТС 01 10 02': {class: ignore, geometry: LIN, name: 'Меридианы географические'}
+  'ТС 01 10 03': {class: ignore, geometry: LIN, name: 'Полярные круги'}
+  'ТС 01 20': {class: ignore, geometry: POL, name: 'Координатная сетка - полигоны'}
+  'ТС 01 20 01': {class: ignore, geometry: POL, name: 'Номенклатурные листы'}
+  'ТС 01 30': {class: ignore, geometry: LAB, name: 'Координатная сетка - надписи'}
+  'ТС 02 00': {class: ignore, geometry: PNT, name: 'Геодезические пункты - точечные объекты'}
+  'ТС 02 00 01': {class: ignore, geometry: PNT, name: 'Астрономические пункты'}
+  'ТС 02 00 02': {class: ignore, geometry: PNT, name: 'Пункты государственной геодезической сети (ГГС)'}
+  'ТС 02 00 02 01': {class: ignore, geometry: PNT, name: 'Пункт ГГС на кургане'}
+  'ТС 02 00 02 02': {class: ignore, geometry: PNT, name: 'Пункт ГГС на скалах-останцах'}
+  'ТС 02 00 02 03': {class: ignore, geometry: PNT, name: 'Пункт ГГС на здании'}
+  'ТС 02 00 02 04': {class: ignore, geometry: PNT, name: 'Пункт ГГС на церкви'}
+  'ТС 02 00 02 05': {class: ignore, geometry: PNT, name: 'Пункт ГГС на естественных буграх'}
+  'ТС 02 00 03': {class: ignore, geometry: PNT, name: 'Точки съемочной сети (СС), закрепленные на местности центрами'}
+  'ТС 02 00 03 01': {class: ignore, geometry: PNT, name: 'Точка СС на курганах'}
+  'ТС 02 00 03 02': {class: ignore, geometry: PNT, name: 'Точка плановой СС'}
+  'ТС 02 00 03 03': {class: ignore, geometry: PNT, name: 'Точка плановой СС долговременного закрепления на местности'}
+  'ТС 02 00 03 04': {class: ignore, geometry: PNT, name: 'Точка плановой СС временного закрепления на местности'}
+  'ТС 02 00 03 05': {class: ignore, geometry: PNT, name: 'Точка плановой СС в стене здания'}
+  'ТС 02 00 03 06': {class: ignore, geometry: PNT, name: 'Точка плановой СС на углах капитальных зданий'}
+  'ТС 02 00 04': {class: ignore, geometry: PNT, name: 'Пункты геодезических сетей сгущения (ГСС)'}
+  'ТС 02 00 04 01': {class: ignore, geometry: PNT, name: 'Пункт ГСС на кургане'}
+  'ТС 02 00 04 02': {class: ignore, geometry: PNT, name: 'Пункт ГСС на буграх'}
+  'ТС 02 00 04 03': {class: ignore, geometry: PNT, name: 'Пункт ГСС на скалах-останцах'}
+  'ТС 02 00 04 04': {class: ignore, geometry: PNT, name: 'Пункт ГСС на здании (стенах зданий)'}
+  'ТС 02 00 04 05': {class: ignore, geometry: PNT, name: 'Пункт ГСС и точка СС (без разделения)'}
+  'ТС 02 00 04 06': {class: ignore, geometry: PNT, name: 'Пункт ГСС и точка СС (без разделения) на кургане'}
+  'ТС 02 00 04 07': {class: ignore, geometry: PNT, name: 'Пункт ГСС и точка СС (без разделения) на скалах-останцах'}
+  'ТС 02 00 04 08': {class: ignore, geometry: PNT, name: 'Пункт ГСС и точка СС (без разделения) на церкви'}
+  'ТС 02 00 05': {class: ignore, geometry: PNT, name: 'Реперы, марки ГНС, знаки нивелирные'}
+  'ТС 02 00 05 01': {class: ignore, geometry: PNT, name: 'Репер фундаментальный'}
+  'ТС 02 00 05 02': {class: ignore, geometry: PNT, name: 'Репер грунтовой'}
+  'ТС 02 00 05 03': {class: ignore, geometry: PNT, name: 'Репер грунтовой координированный'}
+  'ТС 02 00 05 04': {class: ignore, geometry: PNT, name: 'Репер грунтовой строительный долговременного закрепления'}
+  'ТС 02 00 05 05': {class: ignore, geometry: PNT, name: 'Репер скальный'}
+  'ТС 02 00 05 06': {class: ignore, geometry: PNT, name: 'Марка скальная'}
+  'ТС 02 00 05 07': {class: ignore, geometry: PNT, name: 'Репер стенный'}
+  'ТС 02 00 05 08': {class: ignore, geometry: PNT, name: 'Марка стенная'}
+  'ТС 02 00 05 09': {class: ignore, geometry: PNT, name: 'Репер временный'}
+  'ТС 02 00 05 10': {class: ignore, geometry: PNT, name: 'Репер'}
+  'ТС 02 00 05 11': {class: ignore, geometry: PNT, name: 'Марка'}
+  'ТС 02 00 05 12': {class: ignore, geometry: PNT, name: 'Репер ГНС'}
+  'ТС 02 00 05 13': {class: ignore, geometry: PNT, name: 'Знак нивелирный на кургане'}
+  'ТС 02 00 05 14': {class: ignore, geometry: PNT, name: 'Знак нивелирный'}
+  'ТС 02 00 06': {class: ignore, geometry: PNT, name: 'Пункты ориентирные'}
+  'ТС 02 00 07': {class: ignore, geometry: PNT, name: 'Столбы граничные (знаки межевые)'}
+  'ТС 02 00 07 01': {class: ignore, geometry: PNT, name: 'Пункт закрепления'}
+  'ТС 02 00 07 02': {class: ignore, geometry: PNT, name: 'Столб закрепления'}
+  'ТС 02 00 07 03': {class: ignore, geometry: PNT, name: 'Столб закрепления проекта планировки'}
+  'ТС 02 00 08': {class: ignore, geometry: PNT, name: 'Пункты закрепления разбивочной сетки для строительства'}
+  'ТС 02 30': {class: ignore, geometry: LAB, name: 'Геодезические пункты - надписи'}
+  'ТС 03 00': {class: ignore, geometry: PNT, name: 'Рельеф суши - точечные объекты'}
+  'ТС 03 00 00': {class: ignore, geometry: PNT, name: 'Отметки высот'}
+  'ТС 03 00 00 01': {class: ignore, geometry: PNT, name: 'Отметка высоты поверхности земли'}
+  'ТС 03 00 00 02': {class: ignore, geometry: PNT, name: 'Отметка высоты командная (главная)'}
+  'ТС 03 00 00 03': {class: ignore, geometry: PNT, name: 'Отметка высоты перевала'}
+  'ТС 03 00 00 04': {class: ignore, geometry: PNT, name: 'Отметка высоты перевала главная'}
+  'ТС 03 00 00 05': {class: ignore, geometry: PNT, name: 'Отметка высоты у ориентира'}
+  'ТС 03 00 00 06': {class: ignore, geometry: PNT, name: 'Отметка высоты у источника'}
+  'ТС 03 00 00 07': {class: ignore, geometry: PNT, name: 'Отметка высоты уреза воды'}
+  'ТС 03 00 00 08': {class: ignore, geometry: PNT, name: 'Отметка высоты точки ниже у.м.'}
+  'ТС 03 00 00 09': {class: ignore, geometry: PNT, name: 'Отметка высоты у шурфа'}
+  'ТС 03 00 00 10': {class: ignore, geometry: PNT, name: 'Отметка высоты непостоянных береговых линий'}
+  'ТС 03 00 00 11': {class: ignore, geometry: PNT, name: 'Отметка высоты на искусственных объектах'}
+  'ТС 03 00 00 12': {class: ignore, geometry: PNT, name: 'Отметка высоты прочая'}
+  'ТС 03 10': {class: ignore, geometry: LIN, name: 'Рельеф суши - линии'}
+  'ТС 03 10 00': {class: ignore, geometry: LIN, name: 'Горизонтали'}
+  'ТС 03 10 00 01': {class: ignore, geometry: LIN, name: 'Горизонталь основная утолщенная'}
+  'ТС 03 10 00 02': {class: ignore, geometry: LIN, name: 'Горизонталь основная'}
+  'ТС 03 10 00 03': {class: ignore, geometry: LIN, name: 'Горизонталь дополнительная'}
+  'ТС 03 10 00 04': {class: ignore, geometry: LIN, name: 'Горизонталь вспомогательная'}
+  'ТС 03 10 00 05': {class: ignore, geometry: LIN, name: 'Горизонталь для изображения нависающих склонов'}
+  'ТС 03 30': {class: ignore, geometry: LAB, name: 'Рельеф суши - надписи'}
+  'ТС 04 00 01 01': {class: utility.access, geometry: PNT, name: 'Колодец ледниковый'}
+  'ТС 04 10 02 05': {class: road, geometry: LIN, name: 'Кромка оползня задернованная'}
+  'ТС 04 10 02 06': {class: road, geometry: LIN, name: 'Кромка оползня действующего'}
+  'ТС 04 10 02 07': {class: road, geometry: LIN, name: 'Кромка осыпи'}
+  'ТС 04 20 02 02': {class: obstacle, geometry: POL, name: 'Котловина высохшего озера'}
+  'ТС 04 20 02 14': {class: sidewalk, geometry: POL, name: 'Осыпь твердых пород каменисто-щебеночная'}
+  'ТС 04 30': {class: ignore, geometry: LAB, name: 'Формы рельефа - надписи'}
+  'ТС 04 30 01': {class: ignore, geometry: LAB, name: 'Надписи ледниковых, мерзлотных форм рельефа, эрозионных форм рельефа'}
+  'ТС 04 30 01 01': {class: ignore, geometry: LAB, name: 'Надписи отметок'}
+  'ТС 04 30 01 02': {class: ignore, geometry: LAB, name: 'Надписи горизонталей'}
+  'ТС 04 30 01 03': {class: ignore, geometry: LAB, name: 'Надписи форм рельефа'}
+  'ТС 05 30': {class: ignore, geometry: LAB, name: 'Объекты геологии - надписи'}
+  'ТС 06 00 00': {class: ignore, geometry: PNT, name: 'Отметки глубин'}
+  'ТС 06 00 01 03': {class: obstacle, geometry: PNT, name: 'Ключ, родник оборудованный с памятником'}
+  'ТС 06 00 02': {class: utility.unknown, geometry: PNT, name: 'Отверстия труб, водовыпуски'}
+  'ТС 06 00 02 01': {class: utility.unknown, geometry: PNT, name: 'Отверстие водопропускной трубы'}
+  'ТС 06 00 02 02': {class: utility.unknown, geometry: PNT, name: 'Водовыпуск трубчатый'}
+  'ТС 06 00 02 03': {class: structure, geometry: PNT, name: 'Водовыпуск шахтный'}
+  'ТС 06 00 03 01': {class: utility.storm, geometry: PNT, name: 'Узел подключения дождевальных машин'}
+  'ТС 06 00 04': {class: utility.access, geometry: PNT, name: 'Колодцы, скважины, колонки'}
+  'ТС 06 00 04 01': {class: utility.access, geometry: PNT, name: 'Колодец артезианский'}
+  'ТС 06 00 04 03': {class: utility.access, geometry: PNT, name: 'Колодец с ветряным двигателем'}
+  'ТС 06 00 04 04': {class: utility.access, geometry: PNT, name: 'Колодец с механическим подъемом воды'}
+  'ТС 06 00 04 08': {class: utility.access, geometry: PNT, name: 'Колодец с воротом на столбах'}
+  'ТС 06 00 04 09': {class: utility.access, geometry: PNT, name: 'Колодец с ручным насосом'}
+  'ТС 06 00 04 11': {class: utility.access, geometry: PNT, name: 'Колодец с журавлем'}
+  'ТС 06 00 04 18': {class: obstacle, geometry: PNT, name: 'Фонтан'}
+  'ТС 06 00 10': {class: obstacle, geometry: PNT, name: 'Место замера характеристик водоемов'}
+  'ТС 06 10 02': {class: ignore, geometry: LIN, name: 'Горизонтали для изображения дна водоемов'}
+  'ТС 06 10 08 09': {class: utility.drain, geometry: LIN, name: 'Подземная дренажная сеть'}
+  'ТС 06 10 12': {class: curb, geometry: LIN, name: 'Борта акведука'}
+  'ТС 06 10 12 02': {class: curb, geometry: LIN, name: 'Борт акведука металлического'}
+  'ТС 06 10 12 03': {class: curb, geometry: LIN, name: 'Борт акведука бетонного'}
+  'ТС 06 10 13 01': {class: utility.storm, geometry: LIN, name: 'Лоток, желоб водопропускной на опорах'}
+  'ТС 06 10 13 02': {class: utility.storm, geometry: LIN, name: 'Лоток, желоб водопропускной наземный'}
+  'ТС 06 10 13 03': {class: utility.storm, geometry: LIN, name: 'Лоток на железных дорогах'}
+  'ТС 06 10 13 04': {class: utility.unknown, geometry: LIN, name: 'Труба водопропускная'}
+  'ТС 06 10 13 07': {class: curb, geometry: LIN, name: 'Борт быстротока, перепада бетонированный'}
+  'ТС 06 10 13 10': {class: structure, geometry: LIN, name: 'Подпорно-регулирующее сооружение на каналах'}
+  'ТС 06 10 14 01': {class: structure, geometry: LIN, name: 'Стенка плотины отвесная'}
+  'ТС 06 10 14 15': {class: structure, geometry: LIN, name: 'Волнолом с отвесными стенками'}
+  'ТС 06 10 14 16': {class: structure, geometry: LIN, name: 'Бун с отвесными стенками'}
+  'ТС 06 10 15 03': {class: curb, geometry: LIN, name: 'Берег с бетонированными бортами'}
+  'ТС 06 10 15 10': {class: structure, geometry: LIN, name: 'Парапет'}
+  'ТС 06 10 15 11': {class: structure, geometry: LIN, name: 'Парапет каменный или бетонный'}
+  'ТС 06 10 15 12': {class: structure, geometry: LIN, name: 'Парапет металлический'}
+  'ТС 06 20 02': {class: obstacle, geometry: POL, name: 'Озера'}
+  'ТС 06 20 02 01': {class: obstacle, geometry: POL, name: 'Озеро'}
+  'ТС 06 20 02 02': {class: obstacle, geometry: POL, name: 'Озеро пересыхающее'}
+  'ТС 06 20 07 02': {class: obstacle, geometry: POL, name: 'Перепад ступенчатый'}
+  'ТС 06 20 07 04': {class: utility.storm, geometry: POL, name: 'Лоток быстротока'}
+  'ТС 06 20 07 05': {class: obstacle, geometry: POL, name: 'Ступень перепада'}
+  'ТС 06 20 09 01': {class: road, geometry: POL, name: 'Плотина проезжая'}
+  'ТС 06 20 09 02': {class: road, geometry: POL, name: 'Проезжая часть плотины'}
+  'ТС 06 20 09 06': {class: structure, geometry: POL, name: 'Стенка плотины наклонная'}
+  'ТС 06 20 10 03': {class: structure, geometry: POL, name: 'Мол с наклонными стенками'}
+  'ТС 06 20 10 04': {class: structure, geometry: POL, name: 'Причал с наклонными стенками'}
+  'ТС 06 20 10 05': {class: structure, geometry: POL, name: 'Пирс с наклонными стенками'}
+  'ТС 06 20 10 06': {class: structure, geometry: POL, name: 'Волнолом с наклонными стенками'}
+  'ТС 06 20 10 07': {class: structure, geometry: POL, name: 'Бун с наклонными стенками'}
+  'ТС 06 20 12 06': {class: sidewalk, geometry: POL, name: 'Берег осыхающий песчано-каменистый и галечно-гравийный'}
+  'ТС 06 20 12 10': {class: sidewalk, geometry: POL, name: 'Берег осыхающий галечно-гравийный'}
+  'ТС 06 20 12 16': {class: structure, geometry: POL, name: 'Парапет'}
+  'ТС 06 20 16': {class: utility.access, geometry: POL, name: 'Колодцы, скважины, колонки'}
+  'ТС 06 20 16 01': {class: utility.access, geometry: POL, name: 'Колодец артезианский'}
+  'ТС 06 20 16 06': {class: obstacle, geometry: POL, name: 'Фонтан'}
+  'ТС 06 30': {class: ignore, geometry: LAB, name: 'Объекты гидрографии - надписи'}
+  'ТС 07 20 02 01': {class: building, geometry: POL, name: 'Квартал плотнозастроенный с преобладанием огнестойких строений'}
+  'ТС 07 20 02 02': {class: building, geometry: POL, name: 'Квартал плотнозастроенный с преобладанием не огнестойких строений'}
+  'ТС 07 20 04 03': {class: lawn, geometry: POL, name: 'Газон'}
+  'ТС 07 20 04 06': {class: sidewalk, geometry: POL, name: 'Площадка строительная'}
+  'ТС 07 20 04 09': {class: structure, geometry: POL, name: 'Плоскостное сооружение'}
+  'ТС 07 30': {class: ignore, geometry: LAB, name: 'Назначение территории - надписи'}
+  'ТС 08 00': {class: building, geometry: PNT, name: 'Строения - точечные объекты'}
+  'ТС 08 00 00': {class: building, geometry: PNT, name: 'Строения'}
+  'ТС 08 00 00 01': {class: building, geometry: PNT, name: 'Строение огнестойкое жилое (прямоугольной формы)'}
+  'ТС 08 00 00 02': {class: building, geometry: PNT, name: 'Строение огнестойкое жилое (квадратной формы)'}
+  'ТС 08 00 00 03': {class: building, geometry: PNT, name: 'Строение огнестойкое нежилое (прямоугольной формы)'}
+  'ТС 08 00 00 04': {class: building, geometry: PNT, name: 'Строение огнестойкое нежилое (квадратной формы)'}
+  'ТС 08 00 00 05': {class: building, geometry: PNT, name: 'Строение огнестойкое прочее (прямоугольной формы)'}
+  'ТС 08 00 00 06': {class: building, geometry: PNT, name: 'Строение огнестойкое прочее (квадратной формы)'}
+  'ТС 08 00 00 07': {class: building, geometry: PNT, name: 'Строение не огнестойкое жилое (прямоугольной формы)'}
+  'ТС 08 00 00 08': {class: building, geometry: PNT, name: 'Строение не огнестойкое жилое (квадратной формы)'}
+  'ТС 08 00 00 09': {class: building, geometry: PNT, name: 'Строение не огнестойкое нежилое (прямоугольной формы)'}
+  'ТС 08 00 00 10': {class: building, geometry: PNT, name: 'Строение не огнестойкое нежилое (квадратной формы)'}
+  'ТС 08 00 00 11': {class: building, geometry: PNT, name: 'Строение не огнестойкое прочее (прямоугольной формы)'}
+  'ТС 08 00 00 12': {class: building, geometry: PNT, name: 'Строение не огнестойкое прочее (квадратной формы)'}
+  'ТС 08 00 00 13': {class: building, geometry: PNT, name: 'Строение смешанное жилое (прямоугольной формы)'}
+  'ТС 08 00 00 14': {class: building, geometry: PNT, name: 'Строение смешанное жилое (квадратной формы)'}
+  'ТС 08 00 00 15': {class: building, geometry: PNT, name: 'Строение смешанное нежилое (прямоугольной формы)'}
+  'ТС 08 00 00 16': {class: building, geometry: PNT, name: 'Строение смешанное нежилое (квадратной формы)'}
+  'ТС 08 00 00 17': {class: building, geometry: PNT, name: 'Строение в плотной застройке'}
+  'ТС 08 00 00 18': {class: building, geometry: PNT, name: 'Строение вне плотной застройки'}
+  'ТС 08 00 00 19': {class: building, geometry: PNT, name: 'Строение разрушенное и полуразрушенное'}
+  'ТС 08 00 00 20': {class: building, geometry: PNT, name: 'Строение-ориентир'}
+  'ТС 08 00 01': {class: building, geometry: PNT, name: 'Колонны, колоннады'}
+  'ТС 08 00 02': {class: utility.unknown, geometry: PNT, name: 'Трубы дымоходные'}
+  'ТС 08 00 03': {class: structure, geometry: PNT, name: 'Павильоны, беседки'}
+  'ТС 08 00 03 01': {class: structure, geometry: PNT, name: 'Павильон прямоугольный'}
+  'ТС 08 00 03 02': {class: building, geometry: PNT, name: 'Беседка прямоугольная'}
+  'ТС 08 00 03 03': {class: structure, geometry: PNT, name: 'Павильон круглый'}
+  'ТС 08 00 03 04': {class: building, geometry: PNT, name: 'Беседка круглая'}
+  'ТС 08 00 04': {class: building, geometry: PNT, name: 'Открытые разработки, карьеры'}
+  'ТС 08 00 05': {class: building, geometry: PNT, name: 'Устья'}
+  'ТС 08 00 05 03': {class: ignore, geometry: PNT, name: 'Устье действующего вспомогательного шахтного ствола и эксплуатационных шурфов'}
+  'ТС 08 00 05 04': {class: ignore, geometry: PNT, name: 'Устье действующего вспомогательного шахтного ствола прямоугольного сечения'}
+  'ТС 08 00 05 05': {class: ignore, geometry: PNT, name: 'Устье действующего вспомогательного шахтного ствола круглого сечения'}
+  'ТС 08 00 05 09': {class: ignore, geometry: PNT, name: 'Устье недействующего вспомогательного шахтного ствола и эксплуатационного шурфа'}
+  'ТС 08 00 05 10': {class: building, geometry: PNT, name: 'Устье штольни действующее'}
+  'ТС 08 00 05 11': {class: building, geometry: PNT, name: 'Устье штольни недействующее'}
+  'ТС 08 00 07': {class: building, geometry: PNT, name: 'Рудники, прииски'}
+  'ТС 08 00 07 01': {class: building, geometry: PNT, name: 'Рудник'}
+  'ТС 08 00 07 02': {class: building, geometry: PNT, name: 'Прииск'}
+  'ТС 08 00 08': {class: building, geometry: PNT, name: 'Вершина террикона, отвала'}
+  'ТС 08 00 09': {class: building, geometry: PNT, name: 'Скважины, выходы'}
+  'ТС 08 00 09 01': {class: building, geometry: PNT, name: 'Скважина буровая и эксплуатационная'}
+  'ТС 08 00 09 02': {class: building, geometry: PNT, name: 'Скважина с вышками'}
+  'ТС 08 00 09 03': {class: building, geometry: PNT, name: 'Скважина без вышек'}
+  'ТС 08 00 09 04': {class: building, geometry: PNT, name: 'Скважина глубокого бурения'}
+  'ТС 08 00 09 05': {class: building, geometry: PNT, name: 'Скважина глубиной менее 500м'}
+  'ТС 08 00 10': {class: building, geometry: PNT, name: 'Выходы нефти'}
+  'ТС 08 00 11': {class: utility.access, geometry: PNT, name: 'Колодцы нефтяные'}
+  'ТС 08 00 12': {class: building, geometry: PNT, name: 'Факелы газовые'}
+  'ТС 08 00 13': {class: utility.unknown, geometry: PNT, name: 'Трубы (заводские, фабричные и др.)'}
+  'ТС 08 00 14': {class: building, geometry: PNT, name: 'Вышки'}
+  'ТС 08 00 14 01': {class: building, geometry: PNT, name: 'Вышка легкого типа'}
+  'ТС 08 00 14 02': {class: building, geometry: PNT, name: 'Вышка нефтяная'}
+  'ТС 08 00 14 03': {class: building, geometry: PNT, name: 'Вышка газовая'}
+  'ТС 08 00 15': {class: building, geometry: PNT, name: 'Объекты энергоснабжения'}
+  'ТС 08 00 15 01': {class: utility.power_cable, geometry: PNT, name: 'Электрическая подстанция (мелкий масштаб)'}
+  'ТС 08 00 15 02': {class: building, geometry: PNT, name: 'Будка трансформаторная (мелкий масштаб)'}
+  'ТС 08 00 15 03': {class: building, geometry: PNT, name: 'Трансформатор на столбах и на постаментах'}
+  'ТС 08 00 16': {class: obstacle, geometry: PNT, name: 'Памятники, скульптуры'}
+  'ТС 08 00 16 01': {class: obstacle, geometry: PNT, name: 'Памятник, монумент'}
+  'ТС 08 00 16 02': {class: obstacle, geometry: PNT, name: 'Памятник "Вечный огонь"'}
+  'ТС 08 00 16 03': {class: obstacle, geometry: PNT, name: 'Скульптура высотой 1 м и более'}
+  'ТС 08 00 16 04': {class: pole, geometry: PNT, name: 'Тура, каменный столб высотой 1 м и более'}
+  'ТС 08 00 16 05': {class: obstacle, geometry: PNT, name: 'Памятник религиозный'}
+  'ТС 08 00 17': {class: building, geometry: PNT, name: 'Религиозные знаки'}
+  'ТС 08 00 17 01': {class: ignore, geometry: PNT, name: 'Знак креста на церкви'}
+  'ТС 08 00 17 02': {class: building, geometry: PNT, name: 'Знак полумесяца на мечети'}
+  'ТС 08 00 18': {class: building, geometry: PNT, name: 'Могилы'}
+  'ТС 08 00 18 01': {class: building, geometry: PNT, name: 'Могила братская'}
+  'ТС 08 00 18 02': {class: building, geometry: PNT, name: 'Могила отдельная'}
+  'ТС 08 00 19': {class: building, geometry: PNT, name: 'Станции метеорологические'}
+  'ТС 08 00 20': {class: building, geometry: PNT, name: 'Объекты препятствующие проходу/проезду'}
+  'ТС 08 00 20 01': {class: building, geometry: PNT, name: 'Ворота'}
+  'ТС 08 00 20 02': {class: building, geometry: PNT, name: 'Боллард выдвижной'}
+  'ТС 08 00 20 03': {class: building, geometry: PNT, name: 'Боллард гидравлический'}
+  'ТС 08 00 20 04': {class: utility.power_cable, geometry: PNT, name: 'Боллард электромеханический'}
+  'ТС 08 00 20 05': {class: building, geometry: PNT, name: 'Боллард стационарный'}
+  'ТС 08 00 21': {class: building, geometry: PNT, name: 'Конструкции информационные'}
+  'ТС 08 00 21 01': {class: building, geometry: PNT, name: 'Рекламный щит'}
+  'ТС 08 00 21 02': {class: building, geometry: PNT, name: 'Табличка информационная'}
+  'ТС 08 00 21 03': {class: structure, geometry: PNT, name: 'Стенка для рисования'}
+  'ТС 08 10': {class: building, geometry: LIN, name: 'Объекты строений - линии'}
+  'ТС 08 10 01': {class: building, geometry: LIN, name: 'Карьеры'}
+  'ТС 08 10 01 01': {class: slope, geometry: LIN, name: 'Бровка яруса карьера'}
+  'ТС 08 10 01 02': {class: slope, geometry: LIN, name: 'Подошва яруса карьера'}
+  'ТС 08 10 02': {class: building, geometry: LIN, name: 'Отвалы'}
+  'ТС 08 10 02 01': {class: slope, geometry: LIN, name: 'Бровка террикона, отвала'}
+  'ТС 08 10 02 02': {class: slope, geometry: LIN, name: 'Подошва террикона, отвала'}
+  'ТС 08 10 03': {class: building, geometry: LIN, name: 'Ребра вышек'}
+  'ТС 08 10 04': {class: fence, geometry: LIN, name: 'Стены, ограды, заборы'}
+  'ТС 08 10 04 01': {class: building, geometry: LIN, name: 'Древняя историческая стена'}
+  'ТС 08 10 04 02': {class: fence, geometry: LIN, name: 'Ограда каменная, кирпичная и железобетонная высотой 1 м и более'}
+  'ТС 08 10 04 03': {class: fence, geometry: LIN, name: 'Ограда каменная, кирпичная и железобетонная высотой менее 1 м'}
+  'ТС 08 10 04 04': {class: fence, geometry: LIN, name: 'Ограда металлическая высотой 1 м и более на опорах металлических'}
+  'ТС 08 10 04 05': {class: fence, geometry: LIN, name: 'Ограда металлическая высотой 1 м и более на бетонных опорах круглых'}
+  'ТС 08 10 04 06': {class: fence, geometry: LIN, name: 'Ограда металлическая высотой 1 м и более на бетонных опорах квадратных'}
+  'ТС 08 10 04 07': {class: fence, geometry: LIN, name: 'Ограда металлическая менее 1 м на опорах металлических'}
+  'ТС 08 10 04 08': {class: fence, geometry: LIN, name: 'Ограда металлическая менее 1 м на бетонных опорах круглых'}
+  'ТС 08 10 04 09': {class: fence, geometry: LIN, name: 'Ограда металлическая менее 1 м на бетонных опорах квадратных'}
+  'ТС 08 10 04 14': {class: fence, geometry: LIN, name: 'Ограждение из колючей проволоки'}
+  'ТС 08 10 04 15': {class: fence, geometry: LIN, name: 'Ограждение из гладкой проволоки'}
+  'ТС 08 10 04 16': {class: ignore, geometry: LIN, name: 'Ограждение из проволочной сетки (вольеры)'}
+  'ТС 08 10 04 17': {class: building, geometry: LIN, name: 'Ворота'}
+  'ТС 08 10 04 18': {class: fence, geometry: LIN, name: 'Ограда каменная, кирпичная и железобетонная'}
+  'ТС 08 10 04 19': {class: fence, geometry: LIN, name: 'Забор'}
+  'ТС 08 10 05': {class: structure, geometry: LIN, name: 'Стенки подпорные'}
+  'ТС 08 10 05 01': {class: structure, geometry: LIN, name: 'Верхний край наклонной стенки каменной'}
+  'ТС 08 10 05 02': {class: structure, geometry: LIN, name: 'Нижний край наклонной стенки каменной'}
+  'ТС 08 10 06': {class: building, geometry: LIN, name: 'Пути рельсовые крановые надземные'}
+  'ТС 08 10 06 01': {class: building, geometry: LIN, name: 'Рельсы крановые'}
+  'ТС 08 20': {class: building, geometry: POL, name: 'Объекты строений - полигоны'}
+  'ТС 08 20 01': {class: building, geometry: POL, name: 'Строения'}
+  'ТС 08 20 01 01': {class: building, geometry: POL, name: 'Строение огнестойкое жилое'}
+  'ТС 08 20 01 02': {class: building, geometry: POL, name: 'Строение огнестойкое нежилое'}
+  'ТС 08 20 01 03': {class: building, geometry: POL, name: 'Строение не огнестойкое жилое'}
+  'ТС 08 20 01 04': {class: building, geometry: POL, name: 'Строение не огнестойкое нежилое'}
+  'ТС 08 20 01 05': {class: building, geometry: POL, name: 'Строение смешанное жилое'}
+  'ТС 08 20 01 06': {class: building, geometry: POL, name: 'Строение смешанное нежилое'}
+  'ТС 08 20 01 07': {class: building, geometry: POL, name: 'Строение строящееся'}
+  'ТС 08 20 02': {class: building, geometry: POL, name: 'Выдающиеся части зданий (шпили, башни)'}
+  'ТС 08 20 02 01': {class: building, geometry: POL, name: 'Каланча пожарная'}
+  'ТС 08 20 02 02': {class: pole, geometry: POL, name: 'Мачта'}
+  'ТС 08 20 02 03': {class: utility.unknown, geometry: POL, name: 'Труба заводская'}
+  'ТС 08 20 02 04': {class: building, geometry: POL, name: 'Шпиль'}
+  'ТС 08 20 02 99': {class: building, geometry: POL, name: 'Часть здания (сооружения) прочая'}
+  'ТС 08 20 03': {class: obstacle, geometry: POL, name: 'Свесы, навесы, иные выступающие части строения'}
+  'ТС 08 20 03 01': {class: obstacle, geometry: POL, name: 'Навес'}
+  'ТС 08 20 03 02': {class: building, geometry: POL, name: 'Перекрытие между зданиями'}
+  'ТС 08 20 03 03': {class: building, geometry: POL, name: 'Переход между зданиями'}
+  'ТС 08 20 03 04': {class: road, geometry: POL, name: 'Въезд на второй этаж'}
+  'ТС 08 20 03 05': {class: building, geometry: POL, name: 'Крыльцо закрытое каменное'}
+  'ТС 08 20 03 07': {class: obstacle, geometry: POL, name: 'Крыльцо открытое, ступени вверх'}
+  'ТС 08 20 03 08': {class: obstacle, geometry: POL, name: 'Крыльцо открытое, ступени вниз'}
+  'ТС 08 20 03 11': {class: obstacle, geometry: POL, name: 'Лестница пожарная'}
+  'ТС 08 20 03 13': {class: building, geometry: POL, name: 'Часть здания нависающая'}
+  'ТС 08 20 03 14': {class: building, geometry: POL, name: 'Ниша'}
+  'ТС 08 20 03 15': {class: building, geometry: POL, name: 'Лоджия'}
+  'ТС 08 20 03 16': {class: building, geometry: POL, name: 'Балкон'}
+  'ТС 08 20 03 17': {class: utility.access, geometry: POL, name: 'Люк подвальный'}
+  'ТС 08 20 03 18': {class: building, geometry: POL, name: 'Приямок (приямник)'}
+  'ТС 08 20 03 19': {class: sidewalk, geometry: POL, name: 'Отмостка строения'}
+  'ТС 08 20 03 20': {class: obstacle, geometry: POL, name: 'Навес на столбах'}
+  'ТС 08 20 03 21': {class: obstacle, geometry: POL, name: 'Навес на подкосах и навесы-козырьки'}
+  'ТС 08 20 03 22': {class: obstacle, geometry: POL, name: 'Навес для автомобильных весов'}
+  'ТС 08 20 03 23': {class: road, geometry: POL, name: 'Въезд под арку'}
+  'ТС 08 20 03 24': {class: building, geometry: POL, name: 'Лифт'}
+  'ТС 08 20 03 25': {class: building, geometry: POL, name: 'Рампа'}
+  'ТС 08 20 03 26': {class: obstacle, geometry: POL, name: 'Пандус'}
+  'ТС 08 20 03 27': {class: building, geometry: POL, name: 'Крыльцо открытое'}
+  'ТС 08 20 04': {class: structure, geometry: POL, name: 'Павильоны'}
+  'ТС 08 20 04 01': {class: structure, geometry: POL, name: 'Павильон'}
+  'ТС 08 20 04 02': {class: building, geometry: POL, name: 'Беседка'}
+  'ТС 08 20 04 03': {class: building, geometry: POL, name: 'Терраса'}
+  'ТС 08 20 05': {class: building, geometry: POL, name: 'Выемки'}
+  'ТС 08 20 05 01': {class: building, geometry: POL, name: 'Изрытое место'}
+  'ТС 08 20 05 02': {class: building, geometry: POL, name: 'Соляные разработки'}
+  'ТС 08 20 05 03': {class: building, geometry: POL, name: 'Торфоразработки'}
+  'ТС 08 20 05 04': {class: building, geometry: POL, name: 'Террикон'}
+  'ТС 08 20 05 05': {class: building, geometry: POL, name: 'Отвал'}
+  'ТС 08 20 05 06': {class: building, geometry: POL, name: 'Нефтяной бассейн яма'}
+  'ТС 08 20 05 07': {class: building, geometry: POL, name: 'Карьеры'}
+  'ТС 08 20 06': {class: building, geometry: POL, name: 'Основания и промплощадки'}
+  'ТС 08 20 06 01': {class: building, geometry: POL, name: 'Основание и промплощадка морских нефтепромыслов'}
+  'ТС 08 20 06 02': {class: building, geometry: POL, name: 'Основание и промплощадка морских нефтепромыслов строящаяся'}
+  'ТС 08 20 07': {class: building, geometry: POL, name: 'Строения, сооружения'}
+  'ТС 08 20 07 01': {class: utility.unknown, geometry: POL, name: 'Завод, фабрика с трубами'}
+  'ТС 08 20 07 02': {class: building, geometry: POL, name: 'Завод, фабрика без труб'}
+  'ТС 08 20 07 03': {class: utility.power_cable, geometry: POL, name: 'Электростанция'}
+  'ТС 08 20 07 04': {class: building, geometry: POL, name: 'Лесопильня'}
+  'ТС 08 20 07 05': {class: building, geometry: POL, name: 'Склад горючего'}
+  'ТС 08 20 07 06': {class: building, geometry: POL, name: 'Газгольдер'}
+  'ТС 08 20 07 07': {class: building, geometry: POL, name: 'Бак и цистерна для горючего'}
+  'ТС 08 20 07 08': {class: sidewalk, geometry: POL, name: 'Площадка вышки'}
+  'ТС 08 20 07 09': {class: building, geometry: POL, name: 'Основание вышки'}
+  'ТС 08 20 07 10': {class: building, geometry: POL, name: 'Градирня'}
+  'ТС 08 20 07 11': {class: utility.power_cable, geometry: POL, name: 'Электрическая подстанция (крупный масштаб)'}
+  'ТС 08 20 07 12': {class: building, geometry: POL, name: 'Будка трансформаторная (крупный масштаб)'}
+  'ТС 08 20 07 13': {class: building, geometry: POL, name: 'Склад открытые'}
+  'ТС 08 20 07 14': {class: building, geometry: POL, name: 'Склад закрытые'}
+  'ТС 08 20 07 15': {class: building, geometry: POL, name: 'Бак для кислот и химических удобрений'}
+  'ТС 08 20 07 16': {class: building, geometry: POL, name: 'Бункер саморазгружающийся'}
+  'ТС 08 20 07 17': {class: building, geometry: POL, name: 'Отстойник'}
+  'ТС 08 20 07 18': {class: building, geometry: POL, name: 'Свалка'}
+  'ТС 08 20 07 19': {class: building, geometry: POL, name: 'Сельскохозяйственное предприятие'}
+  'ТС 08 20 07 20': {class: building, geometry: POL, name: 'Объект лесного хозяйства'}
+  'ТС 08 20 07 21': {class: building, geometry: POL, name: 'Загон для скота'}
+  'ТС 08 20 07 22': {class: building, geometry: POL, name: 'Кошара'}
+  'ТС 08 20 07 23': {class: building, geometry: POL, name: 'Скотный двор'}
+  'ТС 08 20 07 24': {class: building, geometry: POL, name: 'Оранжерея'}
+  'ТС 08 20 07 25': {class: building, geometry: POL, name: 'Теплица'}
+  'ТС 08 20 07 26': {class: building, geometry: POL, name: 'Парник'}
+  'ТС 08 20 07 27': {class: building, geometry: POL, name: 'Пасека'}
+  'ТС 08 20 07 28': {class: building, geometry: POL, name: 'Яма и траншея для силоса и сенажа'}
+  'ТС 08 20 07 29': {class: building, geometry: POL, name: 'Погреб'}
+  'ТС 08 20 07 30': {class: building, geometry: POL, name: 'Овощехранилище'}
+  'ТС 08 20 07 31': {class: sidewalk, geometry: POL, name: 'Взлетно-посадочная площадка и полоса'}
+  'ТС 08 20 07 32': {class: road, geometry: POL, name: 'Площадка для стоянки самолетов'}
+  'ТС 08 20 07 33': {class: sidewalk, geometry: POL, name: 'Рулежная дорожки для самолетов'}
+  'ТС 08 20 07 34': {class: building, geometry: POL, name: 'Военная база'}
+  'ТС 08 20 07 35': {class: building, geometry: POL, name: 'Речной порт'}
+  'ТС 08 20 07 36': {class: building, geometry: POL, name: 'Учреждение науки, образования'}
+  'ТС 08 20 07 37': {class: building, geometry: POL, name: 'Учреждение здравоохранения'}
+  'ТС 08 20 07 38': {class: building, geometry: POL, name: 'Учреждение культуры и отдыха'}
+  'ТС 08 20 07 39': {class: structure, geometry: POL, name: 'Сооружение торговли'}
+  'ТС 08 20 07 40': {class: structure, geometry: POL, name: 'Спортивное сооружение'}
+  'ТС 08 20 07 41': {class: building, geometry: POL, name: 'Объект информации и рекламы (доски, стенды, тумбы, щиты)'}
+  'ТС 08 20 07 42': {class: structure, geometry: POL, name: 'Культовый объект и сооружение'}
+  'ТС 08 20 07 43': {class: building, geometry: POL, name: 'Мавзолей'}
+  'ТС 08 20 07 44': {class: building, geometry: POL, name: 'Монастырь и храм разных культов'}
+  'ТС 08 20 07 45': {class: building, geometry: POL, name: 'Церковь каменная'}
+  'ТС 08 20 07 47': {class: building, geometry: POL, name: 'Мечеть каменная'}
+  'ТС 08 20 07 49': {class: building, geometry: POL, name: 'Буддийский храм, пагода каменная'}
+  'ТС 08 20 07 51': {class: building, geometry: POL, name: 'Часовня каменная'}
+  'ТС 08 20 07 53': {class: building, geometry: POL, name: 'Кладбище открытое'}
+  'ТС 08 20 07 54': {class: building, geometry: POL, name: 'Кладбище закрытое'}
+  'ТС 08 20 07 55': {class: building, geometry: POL, name: 'Скотомогильник'}
+  'ТС 08 20 07 56': {class: building, geometry: POL, name: 'Яма выгребная'}
+  'ТС 08 20 07 57': {class: building, geometry: POL, name: 'Бак (некапитальный)'}
+  'ТС 08 20 07 58': {class: building, geometry: POL, name: 'Цистерна (некапитальный)'}
+  'ТС 08 20 07 59': {class: building, geometry: POL, name: 'Газгольдер (некапитальный)'}
+  'ТС 08 20 07 60': {class: building, geometry: POL, name: 'Туалет'}
+  'ТС 08 20 07 61': {class: building, geometry: POL, name: 'Бытовка'}
+  'ТС 08 20 07 62': {class: building, geometry: POL, name: 'Ящик металлический'}
+  'ТС 08 20 07 63': {class: obstacle, geometry: POL, name: 'Блок контейнер'}
+  'ТС 08 20 07 64': {class: building, geometry: POL, name: 'Гараж "ракушка"'}
+  'ТС 08 20 07 65': {class: obstacle, geometry: POL, name: 'Контейнер морской сухогрузный'}
+  'ТС 08 20 08': {class: building, geometry: POL, name: 'Фундаменты'}
+  'ТС 08 20 08 01': {class: fence, geometry: POL, name: 'Фундамент каменной, кирпичной и железобетонной ограды'}
+  'ТС 08 20 08 02': {class: fence, geometry: POL, name: 'Фундамент металлической ограды'}
+  'ТС 08 20 09': {class: building, geometry: POL, name: 'Заповедники, заказники, природные национальные парки'}
+  'ТС 08 20 10': {class: building, geometry: POL, name: 'Строительная техника'}
+  'ТС 08 20 10 01': {class: building, geometry: POL, name: 'Кран подъемный башенный'}
+  'ТС 08 20 10 02': {class: building, geometry: POL, name: 'Кран портальный стационарный'}
+  'ТС 08 20 10 03': {class: building, geometry: POL, name: 'Кран подъемный башенный и портальный на рельсах'}
+  'ТС 08 20 10 04': {class: building, geometry: POL, name: 'Кран портальный на рельсах'}
+  'ТС 08 20 10 05': {class: building, geometry: POL, name: 'Кран подъемный козловой на рельсах'}
+  'ТС 08 20 10 06': {class: structure, geometry: POL, name: 'Кран подъемный мостовой'}
+  'ТС 08 20 10 07': {class: building, geometry: POL, name: 'Кран подъемный настенно-консольный поворотный'}
+  'ТС 08 20 10 08': {class: building, geometry: POL, name: 'Кран-балка'}
+  'ТС 08 20 10 09': {class: building, geometry: POL, name: 'Кабина подъёмного крана'}
+  'ТС 08 20 10 10': {class: building, geometry: POL, name: 'Стрела подъемного крана'}
+  'ТС 08 20 20': {class: building, geometry: POL, name: 'Объекты препятствующие проходу/проезду'}
+  'ТС 08 20 20 01': {class: building, geometry: POL, name: 'Боллард выдвижной'}
+  'ТС 08 20 20 02': {class: building, geometry: POL, name: 'Боллард гидравлический'}
+  'ТС 08 20 20 03': {class: utility.power_cable, geometry: POL, name: 'Боллард электромеханический'}
+  'ТС 08 20 20 04': {class: building, geometry: POL, name: 'Боллард стационарный'}
+  'ТС 08 20 21': {class: building, geometry: POL, name: 'Колонны, колоннады'}
+  'ТС 08 20 22': {class: building, geometry: POL, name: 'Объекты энергоснабжения'}
+  'ТС 08 20 22 01': {class: building, geometry: POL, name: 'Трансформатор на столбах и на постаментах'}
+  'ТС 08 20 23': {class: obstacle, geometry: POL, name: 'Памятники, скульптуры'}
+  'ТС 08 20 23 01': {class: obstacle, geometry: POL, name: 'Памятник, монумент'}
+  'ТС 08 20 23 02': {class: obstacle, geometry: POL, name: 'Скульптура высотой 1 м и более'}
+  'ТС 08 20 24': {class: fence, geometry: POL, name: 'Стены, ограды, заборы'}
+  'ТС 08 20 24 01': {class: fence, geometry: POL, name: 'Ограда каменная, кирпичная и железобетонная высотой 1 м и более'}
+  'ТС 08 20 25': {class: structure, geometry: POL, name: 'Стенки подпорные'}
+  'ТС 08 30': {class: ignore, geometry: LAB, name: 'Объекты строений - надписи'}
+  'ТС 09 00 01 07': {class: ignore, geometry: PNT, name: 'Индекс и номер автодороги'}
+  'ТС 09 00 03': {class: structure, geometry: PNT, name: 'Придорожные сооружения'}
+  'ТС 09 00 03 01': {class: structure, geometry: PNT, name: 'Легкое придорожное сооружение'}
+  'ТС 09 00 03 02': {class: structure, geometry: PNT, name: 'Остановка транспорта необорудованная'}
+  'ТС 09 00 03 03': {class: structure, geometry: PNT, name: 'Остановка транспорта оборудованная (с павильоном)'}
+  'ТС 09 00 05 03': {class: utility.power_cable, geometry: PNT, name: 'Автомобильная электрозарядная станция (АЭЗС)'}
+  'ТС 09 10': {class: road, geometry: LIN, name: 'Объекты дорог - линии'}
+  'ТС 09 10 00': {class: road, geometry: LIN, name: 'Дороги'}
+  'ТС 09 10 00 01': {class: road, geometry: LIN, name: 'Автомагистраль (автострада)'}
+  'ТС 09 10 00 02': {class: road, geometry: LIN, name: 'Автодорога с усовершенствованным покрытием'}
+  'ТС 09 10 00 03': {class: road, geometry: LIN, name: 'Автодорога с покрытием (шоссе)'}
+  'ТС 09 10 00 05': {class: road, geometry: LIN, name: 'Грунтовая дорога без покрытия (улучшенная)'}
+  'ТС 09 10 00 06': {class: road, geometry: LIN, name: 'Грунтовая дорога проселочная'}
+  'ТС 09 10 00 07': {class: road, geometry: LIN, name: 'Грунтовая дорога полевая и лесная'}
+  'ТС 09 10 00 08': {class: road, geometry: LIN, name: 'Строящаяся автомагистраль'}
+  'ТС 09 10 00 09': {class: road, geometry: LIN, name: 'Строящееся усовершенствованное шоссе'}
+  'ТС 09 10 00 10': {class: road, geometry: LIN, name: 'Строящееся шоссе'}
+  'ТС 09 10 00 11': {class: road, geometry: LIN, name: 'Строящаяся грунтовая дорога улучшенная'}
+  'ТС 09 10 00 13': {class: sidewalk, geometry: LIN, name: 'Пешеходная тропа'}
+  'ТС 09 10 00 14': {class: sidewalk, geometry: LIN, name: 'Пешеходная аллея шириной более 3 м'}
+  'ТС 09 10 00 15': {class: sidewalk, geometry: LIN, name: 'Пешеходная дорожка'}
+  'ТС 09 10 00 16': {class: road, geometry: LIN, name: 'Тропа грунтовая'}
+  'ТС 09 10 00 17': {class: road, geometry: LIN, name: 'Улица в населенном пункте (центральная линия улицы)'}
+  'ТС 09 10 00 18': {class: road, geometry: LIN, name: 'Улица магистральная главная'}
+  'ТС 09 10 00 19': {class: road, geometry: LIN, name: 'Прочие улицы и проезды'}
+  'ТС 09 10 00 20': {class: road, geometry: LIN, name: 'Въезд во двор'}
+  'ТС 09 10 00 21': {class: road, geometry: LIN, name: 'Въезд во двор под аркой'}
+  'ТС 09 10 00 22': {class: fence, geometry: LIN, name: 'Скотопрогон с ограждением'}
+  'ТС 09 10 00 23': {class: road, geometry: LIN, name: 'Скотопрогон без ограждения'}
+  'ТС 09 10 00 24': {class: road, geometry: LIN, name: 'Зимняя дорога'}
+  'ТС 09 10 00 25': {class: road, geometry: LIN, name: 'Фашинный участок дорог'}
+  'ТС 09 10 00 26': {class: road, geometry: LIN, name: 'Гать'}
+  'ТС 09 10 00 27': {class: road, geometry: LIN, name: 'Гребля'}
+  'ТС 09 10 00 28': {class: road, geometry: LIN, name: 'Выстилка'}
+  'ТС 09 10 00 29': {class: road, geometry: LIN, name: 'Съезд с автодороги оборудованный'}
+  'ТС 09 10 00 30': {class: road, geometry: LIN, name: 'Съезд с автодороги необорудованный'}
+  'ТС 09 10 01': {class: road, geometry: LIN, name: 'Разделительная полоса автодороги узкая'}
+  'ТС 09 10 02': {class: curb, geometry: LIN, name: 'Бортовой камень'}
+  'ТС 09 10 03': {class: ignore, geometry: LIN, name: 'Разметка'}
+  'ТС 09 10 04': {class: road, geometry: LIN, name: 'Границы улиц'}
+  'ТС 09 10 04 01': {class: road, geometry: LIN, name: 'Граница улицы'}
+  'ТС 09 10 04 02': {class: curb, geometry: LIN, name: 'Граница улицы с бортовым камнем'}
+  'ТС 09 10 05': {class: structure, geometry: LIN, name: 'Сторона моста, путепровода, эстакады'}
+  'ТС 09 10 06': {class: road, geometry: LIN, name: 'Направление движения машины на эстакаде'}
+  'ТС 09 10 07': {class: road, geometry: LIN, name: 'Насыпи дорожные'}
+  'ТС 09 10 07 01': {class: slope, geometry: LIN, name: 'Бровка насыпи'}
+  'ТС 09 10 07 02': {class: slope, geometry: LIN, name: 'Подошва насыпи'}
+  'ТС 09 10 08': {class: road, geometry: LIN, name: 'Выемки дорожные'}
+  'ТС 09 10 08 01': {class: slope, geometry: LIN, name: 'Бровка выемки'}
+  'ТС 09 10 08 02': {class: slope, geometry: LIN, name: 'Подошва выемки'}
+  'ТС 09 10 09': {class: structure, geometry: LIN, name: 'Галереи, защитные сооружения'}
+  'ТС 09 10 09 01': {class: road, geometry: LIN, name: 'Галерея'}
+  'ТС 09 10 09 02': {class: road, geometry: LIN, name: 'Габион'}
+  'ТС 09 10 09 03': {class: structure, geometry: LIN, name: 'Защитное сооружение'}
+  'ТС 09 10 10': {class: road, geometry: LIN, name: 'Регулировщики'}
+  'ТС 09 10 10 01': {class: obstacle, geometry: LIN, name: 'Шлагбаум'}
+  'ТС 09 20': {class: road, geometry: POL, name: 'Дорожные объекты - полигоны'}
+  'ТС 09 20 01': {class: sidewalk, geometry: POL, name: 'Пешеходные дорожки и аллеи в парках шириной более 5 м'}
+  'ТС 09 20 02': {class: road, geometry: POL, name: 'Участки дорог'}
+  'ТС 09 20 02 01': {class: ignore, geometry: POL, name: 'Участок дорог с большими уклонами'}
+  'ТС 09 20 02 02': {class: road, geometry: POL, name: 'Участок дорог с малыми радиусами поворота'}
+  'ТС 09 20 03': {class: road, geometry: POL, name: 'Труднопроезжие участки'}
+  'ТС 09 20 03 01': {class: road, geometry: POL, name: 'Труднопроезжий участок дороги с покрытием'}
+  'ТС 09 20 03 02': {class: road, geometry: POL, name: 'Труднопроезжий участок дороги без покрытия'}
+  'ТС 09 20 03 03': {class: road, geometry: POL, name: 'Труднопроезжий участок грунтовой проселочной дороги'}
+  'ТС 09 20 03 04': {class: road, geometry: POL, name: 'Труднопроезжий участок грунтовой дороги'}
+  'ТС 09 20 04': {class: road, geometry: POL, name: 'Участки троп на искусственных карнизах'}
+  'ТС 09 20 05': {class: road, geometry: POL, name: 'Границы улиц'}
+  'ТС 09 20 05 01': {class: road, geometry: POL, name: 'Граница улицы'}
+  'ТС 09 20 05 02': {class: road, geometry: POL, name: 'Граница транспортной развязки'}
+  'ТС 09 20 05 03': {class: road, geometry: POL, name: 'Перекресток'}
+  'ТС 09 20 06': {class: road, geometry: POL, name: 'Стоянки автотранспорта'}
+  'ТС 09 20 07': {class: road, geometry: POL, name: 'Проезжая полоса автодороги'}
+  'ТС 09 20 08': {class: road, geometry: POL, name: 'Разделительная полоса автодороги широкая'}
+  'ТС 09 20 09': {class: road, geometry: POL, name: 'Обочины автодороги'}
+  'ТС 09 20 10': {class: road, geometry: POL, name: 'Проезжая часть улицы с твердым покрытием'}
+  'ТС 09 20 11': {class: sidewalk, geometry: POL, name: 'Тротуары, отмостка, пешеходные дорожки'}
+  'ТС 09 20 11 01': {class: sidewalk, geometry: POL, name: 'Тротуар'}
+  'ТС 09 20 11 02': {class: sidewalk, geometry: POL, name: 'Отмостка'}
+  'ТС 09 20 11 03': {class: sidewalk, geometry: POL, name: 'Пешеходная дорожка с мягким покрытием'}
+  'ТС 09 20 11 04': {class: sidewalk, geometry: POL, name: 'Тротуар с твердым покрытием'}
+  'ТС 09 20 11 05': {class: sidewalk, geometry: POL, name: 'Отмостка с твердым покрытием'}
+  'ТС 09 20 11 06': {class: sidewalk, geometry: POL, name: 'Пешеходная дорожка с твердым покрытием'}
+  'ТС 09 20 11 07': {class: sidewalk, geometry: POL, name: 'Дорожка пешеходная и велосипедная (велопешеходная)'}
+  'ТС 09 20 11 08': {class: sidewalk, geometry: POL, name: 'Тротуар технический (технологический)'}
+  'ТС 09 20 11 09': {class: sidewalk, geometry: POL, name: 'Дорожка велосипедная'}
+  'ТС 09 20 12': {class: road, geometry: POL, name: 'Непроезжая часть улицы'}
+  'ТС 09 20 12 01': {class: road, geometry: POL, name: 'Непроезжая часть улицы'}
+  'ТС 09 20 12 02': {class: obstacle, geometry: POL, name: 'Непроезжая часть улицы со ступенями'}
+  'ТС 09 20 13': {class: road, geometry: POL, name: 'Проезжая полоса автодороги'}
+  'ТС 09 20 14': {class: road, geometry: POL, name: 'Насыпи дорожные'}
+  'ТС 09 20 15': {class: road, geometry: POL, name: 'Выемки дорожные'}
+  'ТС 09 20 16': {class: road, geometry: POL, name: 'Селеспуски'}
+  'ТС 09 20 17': {class: structure, geometry: POL, name: 'Транспортные сооружения'}
+  'ТС 09 20 17 01': {class: structure, geometry: POL, name: 'Мост и путепровод однопролетный металлический'}
+  'ТС 09 20 17 02': {class: structure, geometry: POL, name: 'Мост и путепровод однопролетный каменный, железобетонный'}
+  'ТС 09 20 17 04': {class: structure, geometry: POL, name: 'Мост и путепровод многопролетный металлический'}
+  'ТС 09 20 17 05': {class: structure, geometry: POL, name: 'Мост и путепровод многопролетный каменный, железобетонный'}
+  'ТС 09 20 17 07': {class: structure, geometry: POL, name: 'Мост двухъярусный, верхний ярус - автодорога, нижний - ж.д.'}
+  'ТС 09 20 17 08': {class: structure, geometry: POL, name: 'Мост двухъярусный, верхний ярус - ж.д., нижний - автодорога'}
+  'ТС 09 20 17 09': {class: structure, geometry: POL, name: 'Мост и путепровод на общем пролетном основании'}
+  'ТС 09 20 17 10': {class: structure, geometry: POL, name: 'Мост и путепровод на разобщенном основании'}
+  'ТС 09 20 17 11': {class: structure, geometry: POL, name: 'Мост подъемный, разводной металлический'}
+  'ТС 09 20 17 12': {class: structure, geometry: POL, name: 'Мост подъемный, разводной каменный, железобетонный'}
+  'ТС 09 20 17 14': {class: structure, geometry: POL, name: 'Мост цепной и канатный'}
+  'ТС 09 20 17 15': {class: structure, geometry: POL, name: 'Мост малый (без разделения)'}
+  'ТС 09 20 17 17': {class: structure, geometry: POL, name: 'Мост малый каменный, железобетонный'}
+  'ТС 09 20 17 18': {class: structure, geometry: POL, name: 'Мост малый металлический'}
+  'ТС 09 20 17 19': {class: structure, geometry: POL, name: 'Мост наплавной'}
+  'ТС 09 20 17 20': {class: ignore, geometry: POL, name: 'Мост разборный деревянный'}
+  'ТС 09 20 17 21': {class: structure, geometry: POL, name: 'Мост пешеходный'}
+  'ТС 09 20 17 22': {class: structure, geometry: POL, name: 'Мост пешеходный висячий'}
+  'ТС 09 20 17 23': {class: pole, geometry: POL, name: 'Опора моста, путепровода'}
+  'ТС 09 20 17 24': {class: structure, geometry: POL, name: 'Промежуточный устой (бык) мостового перехода'}
+  'ТС 09 20 17 25': {class: structure, geometry: POL, name: 'Разводной участок моста металлический'}
+  'ТС 09 20 17 26': {class: structure, geometry: POL, name: 'Разводной участок моста каменный, железобетонный'}
+  'ТС 09 20 17 28': {class: building, geometry: POL, name: 'Пролетное строение моста'}
+  'ТС 09 20 17 29': {class: structure, geometry: POL, name: 'Проезжая часть моста'}
+  'ТС 09 20 17 30': {class: structure, geometry: POL, name: 'Пешеходная часть моста'}
+  'ТС 09 20 17 31': {class: structure, geometry: POL, name: 'Часть моста со ступенями'}
+  'ТС 09 20 17 32': {class: road, geometry: POL, name: 'Туннель'}
+  'ТС 09 20 17 33': {class: structure, geometry: POL, name: 'Эстакада путепроводная'}
+  'ТС 09 20 17 34': {class: structure, geometry: POL, name: 'Эстакада крановая'}
+  'ТС 09 20 17 35': {class: structure, geometry: POL, name: 'Эстакада технологическая'}
+  'ТС 09 20 17 36': {class: structure, geometry: POL, name: 'Эстакада погрузочная'}
+  'ТС 09 20 17 37': {class: structure, geometry: POL, name: 'Эстакада для ремонта автомашин'}
+  'ТС 09 20 17 38': {class: structure, geometry: POL, name: 'Эстакада портовая'}
+  'ТС 09 20 17 39': {class: structure, geometry: POL, name: 'Эстакада портовая строящаяся'}
+  'ТС 09 20 17 41': {class: road, geometry: POL, name: 'Переход надземный'}
+  'ТС 09 20 17 42': {class: road, geometry: POL, name: 'Лестничный марш'}
+  'ТС 09 20 17 43': {class: sidewalk, geometry: POL, name: 'Лестничная площадка'}
+  'ТС 09 20 17 44': {class: road, geometry: POL, name: 'Искусственная дорожная неровность резиновая'}
+  'ТС 09 20 17 45': {class: road, geometry: POL, name: 'Искусственная дорожная неровность пластиковая'}
+  'ТС 09 20 17 46': {class: road, geometry: POL, name: 'Подъемы и спуски для маломобильных граждан'}
+  'ТС 09 20 17 47': {class: road, geometry: POL, name: 'Шов деформационный'}
+  'ТС 09 20 17 48': {class: road, geometry: POL, name: 'Рампа'}
+  'ТС 09 20 17 49': {class: structure, geometry: POL, name: 'Мост и путепровод металлический'}
+  'ТС 09 20 17 50': {class: structure, geometry: POL, name: 'Мост и путепровод'}
+  'ТС 09 20 17 51': {class: structure, geometry: POL, name: 'Эстакада'}
+  'ТС 09 20 18': {class: road, geometry: POL, name: 'Автозаправки'}
+  'ТС 09 20 18 01': {class: road, geometry: POL, name: 'Автомобильная заправочная станция (АЗС)'}
+  'ТС 09 20 18 02': {class: road, geometry: POL, name: 'Автомобильная газозаправочная станция (АГЗС)'}
+  'ТС 09 20 18 03': {class: utility.power_cable, geometry: POL, name: 'Автомобильная электрозарядная станция (АЭЗС)'}
+  'ТС 09 20 19': {class: road, geometry: POL, name: 'Контроль территории парковки и проезда'}
+  'ТС 09 20 19 01': {class: road, geometry: POL, name: 'Паркомат'}
+  'ТС 09 20 20': {class: structure, geometry: POL, name: 'Придорожные сооружения'}
+  'ТС 09 20 20 01': {class: structure, geometry: POL, name: 'Легкое придорожное сооружение'}
+  'ТС 09 20 20 02': {class: structure, geometry: POL, name: 'Остановка транспорта необорудованная'}
+  'ТС 09 20 20 03': {class: structure, geometry: POL, name: 'Остановка транспорта оборудованная (с павильоном)'}
+  'ТС 09 20 20 04': {class: road, geometry: POL, name: 'Арка постоянная на автодорогах'}
+  'ТС 09 20 21': {class: road, geometry: POL, name: 'Дороги'}
+  'ТС 09 20 21 01': {class: road, geometry: POL, name: 'Автодорога с усовершенствованным покрытием'}
+  'ТС 09 20 21 02': {class: road, geometry: POL, name: 'Автодорога с покрытием (шоссе)'}
+  'ТС 09 20 21 03': {class: road, geometry: POL, name: 'Грунтовая дорога проселочная'}
+  'ТС 09 20 21 04': {class: road, geometry: POL, name: 'Грунтовая дорога полевая и лесная'}
+  'ТС 09 20 21 05': {class: road, geometry: POL, name: 'Строящаяся автомагистраль'}
+  'ТС 09 20 21 06': {class: road, geometry: POL, name: 'Строящееся шоссе'}
+  'ТС 09 20 21 08': {class: sidewalk, geometry: POL, name: 'Пешеходная дорожка'}
+  'ТС 09 20 21 09': {class: road, geometry: POL, name: 'Прочие улицы и проезды'}
+  'ТС 09 20 21 10': {class: road, geometry: POL, name: 'Въезд во двор'}
+  'ТС 09 20 21 11': {class: road, geometry: POL, name: 'Островок безопасности'}
+  'ТС 09 20 22': {class: curb, geometry: POL, name: 'Бортовой камень'}
+  'ТС 09 20 23': {class: road, geometry: POL, name: 'Проезжая часть'}
+  'ТС 09 30': {class: ignore, geometry: LAB, name: 'Дороги - надписи'}
+  'ТС 10 00 03 01': {class: pole, geometry: PNT, name: 'Светофор мачтовый'}
+  'ТС 10 00 03 02': {class: pole, geometry: PNT, name: 'Светофор карликовый'}
+  'ТС 10 00 03 03': {class: pole, geometry: PNT, name: 'Контроллер управления светофором'}
+  'ТС 10 00 04': {class: ignore, geometry: PNT, name: 'Стрелки переводные'}
+  'ТС 10 00 05': {class: pole, geometry: PNT, name: 'Опоры контактной сети'}
+  'ТС 10 00 05 01': {class: pole, geometry: PNT, name: 'Опора контактной сети односторонняя'}
+  'ТС 10 00 05 02': {class: pole, geometry: PNT, name: 'Опора контактной сети двухсторонняя'}
+  'ТС 10 10': {class: road, geometry: LIN, name: 'Линейные объекты железных дорог'}
+  'ТС 10 10 00': {class: road, geometry: LIN, name: 'Пути и линии'}
+  'ТС 10 10 00 01': {class: road, geometry: LIN, name: 'Железная дорога колеей менее 1520 мм'}
+  'ТС 10 10 00 03': {class: road, geometry: LIN, name: 'Недействующая железная дорога'}
+  'ТС 10 10 00 04': {class: road, geometry: LIN, name: 'Железная дорога строящаяся колеи 1520 мм'}
+  'ТС 10 10 00 05': {class: road, geometry: LIN, name: 'Железная дорога строящаяся колеи менее 1520 мм'}
+  'ТС 10 10 00 06': {class: road, geometry: LIN, name: 'Железная дорога колеи 1520 мм не электрофицированная однопутная'}
+  'ТС 10 10 00 07': {class: road, geometry: LIN, name: 'Железная дорога колеи 1520 мм не электрофицированная двухпутная'}
+  'ТС 10 10 00 08': {class: road, geometry: LIN, name: 'Железная дорога колеи 1520 мм не электрофицированная трёхпутная'}
+  'ТС 10 10 00 09': {class: road, geometry: LIN, name: 'Железная дорога колеи 1520 мм не электрофицированная четырёхпутная'}
+  'ТС 10 10 00 10': {class: utility.power_cable, geometry: LIN, name: 'Железная дорога колеи 1520 мм электрофицированная однопутная'}
+  'ТС 10 10 00 11': {class: utility.power_cable, geometry: LIN, name: 'Железная дорога колеи 1520 мм электрофицированная двухпутная'}
+  'ТС 10 10 00 12': {class: utility.power_cable, geometry: LIN, name: 'Железная дорога колеи 1520 мм электрофицированная трёхпутная'}
+  'ТС 10 10 00 13': {class: utility.power_cable, geometry: LIN, name: 'Железная дорога колеи 1520 мм электрофицированная четырёхпутная'}
+  'ТС 10 10 00 14': {class: road, geometry: LIN, name: 'Железнодорожные пути колеи 1520 мм станционные главные'}
+  'ТС 10 10 00 15': {class: road, geometry: LIN, name: 'Железнодорожные пути колеи 1520 мм станционные'}
+  'ТС 10 10 00 16': {class: road, geometry: LIN, name: 'Железнодорожные пути колеи 1520 мм межстанционные'}
+  'ТС 10 10 00 17': {class: road, geometry: LIN, name: 'Линия метрополитена наземная'}
+  'ТС 10 10 00 19': {class: road, geometry: LIN, name: 'Пути метрополитена станционные'}
+  'ТС 10 10 00 20': {class: ignore, geometry: LIN, name: 'Пути метрополитена вспомогательные'}
+  'ТС 10 10 00 21': {class: road, geometry: LIN, name: 'Пути метрополитена подъездные'}
+  'ТС 10 10 00 22': {class: road, geometry: LIN, name: 'Трамвайная линия'}
+  'ТС 10 10 00 23': {class: road, geometry: LIN, name: 'Трамвайная линия строящаяся'}
+  'ТС 10 10 00 24': {class: road, geometry: LIN, name: 'Пути трамвайные станционные'}
+  'ТС 10 10 00 25': {class: ignore, geometry: LIN, name: 'Пути трамвайные вспомогательные'}
+  'ТС 10 10 00 26': {class: road, geometry: LIN, name: 'Пути трамвайные подъездные'}
+  'ТС 10 10 00 27': {class: road, geometry: LIN, name: 'Железная дорога колеи 1520 мм'}
+  'ТС 10 10 01': {class: road, geometry: LIN, name: 'Регулировщики'}
+  'ТС 10 10 01 01': {class: pole, geometry: LIN, name: 'Светофор подвесной (светофорная арка)'}
+  'ТС 10 10 01 02': {class: pole, geometry: LIN, name: 'Опорный мостик семафоров'}
+  'ТС 10 10 01 03': {class: obstacle, geometry: LIN, name: 'Шлагбаум железнодорожный'}
+  'ТС 10 20': {class: road, geometry: POL, name: 'Объекты железных дорог - полигоны'}
+  'ТС 10 20 01': {class: structure, geometry: POL, name: 'Платформы'}
+  'ТС 10 20 01 01': {class: structure, geometry: POL, name: 'Платформа пассажирская открытая'}
+  'ТС 10 20 01 02': {class: structure, geometry: POL, name: 'Платформа пассажирская крытая'}
+  'ТС 10 20 01 03': {class: structure, geometry: POL, name: 'Платформа грузовая и погрузочно-разгрузочная площадка'}
+  'ТС 10 20 01 04': {class: curb, geometry: POL, name: 'Платформа грузовая с бортовым камнем'}
+  'ТС 10 20 01 05': {class: structure, geometry: POL, name: 'Платформа грузовая без бортового камня'}
+  'ТС 10 20 02': {class: building, geometry: POL, name: 'Здания станционные'}
+  'ТС 10 20 02 01': {class: building, geometry: POL, name: 'Здание станционное огнестойкое'}
+  'ТС 10 20 02 02': {class: building, geometry: POL, name: 'Здание станционное не огнестойкое'}
+  'ТС 10 20 03': {class: road, geometry: POL, name: 'Круги поворотные'}
+  'ТС 10 20 04': {class: road, geometry: POL, name: 'Путевые посты'}
+  'ТС 10 20 05': {class: road, geometry: POL, name: 'Переезды через железные дороги'}
+  'ТС 10 20 06': {class: road, geometry: POL, name: 'Вентиляторы метро'}
+  'ТС 10 20 06 01': {class: road, geometry: POL, name: 'Вентилятор метро наземный'}
+  'ТС 10 20 07': {class: road, geometry: POL, name: 'Концы рельсовых путей'}
+  'ТС 10 20 07 01': {class: road, geometry: POL, name: 'Концы рельсовых путей (тупик)'}
+  'ТС 10 20 07 02': {class: road, geometry: POL, name: 'Концы рельсовых путей без упоров'}
+  'ТС 10 20 07 03': {class: road, geometry: POL, name: 'Концы рельсовых путей с упорами'}
+  'ТС 10 20 07 04': {class: road, geometry: POL, name: 'Концы рельсовых путей с упором и балластной призмой'}
+  'ТС 10 30': {class: ignore, geometry: LAB, name: 'Объекты железных дорог - надписи'}
+  'ТС 11 00': {class: power_line_overhead, geometry: PNT, name: 'Точечные объекты ЛЭП'}
+  'ТС 11 00 01': {class: power_line_overhead, geometry: PNT, name: 'Столбы деревянные'}
+  'ТС 11 00 01 01': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с молниеотводом'}
+  'ТС 11 00 01 02': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с фонарем'}
+  'ТС 11 00 01 03': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с фонарем двойным'}
+  'ТС 11 00 01 04': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с часами'}
+  'ТС 11 00 01 05': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с фонарем и часами'}
+  'ТС 11 00 01 06': {class: power_line_overhead, geometry: PNT, name: 'Столб деревянный с прожектором'}
+  'ТС 11 00 02': {class: power_line_overhead, geometry: PNT, name: 'Столбы металлические'}
+  'ТС 11 00 02 01': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с молниеотводом'}
+  'ТС 11 00 02 02': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с фонарем'}
+  'ТС 11 00 02 03': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с фонарем двойным'}
+  'ТС 11 00 02 04': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с часами'}
+  'ТС 11 00 02 05': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с фонарем и часами'}
+  'ТС 11 00 02 06': {class: power_line_overhead, geometry: PNT, name: 'Столб металлический с прожектором'}
+  'ТС 11 00 03': {class: power_line_overhead, geometry: PNT, name: 'Столбы железобетонные'}
+  'ТС 11 00 03 01': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с молниеотводом'}
+  'ТС 11 00 03 02': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с фонарем'}
+  'ТС 11 00 03 03': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с фонарем двойными'}
+  'ТС 11 00 03 04': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с часами'}
+  'ТС 11 00 03 05': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с фонарем и часами'}
+  'ТС 11 00 03 06': {class: power_line_overhead, geometry: PNT, name: 'Столб железобетонный с прожектором'}
+  'ТС 11 00 04': {class: power_line_overhead, geometry: PNT, name: 'Столбы фермовые'}
+  'ТС 11 00 04 01': {class: power_line_overhead, geometry: PNT, name: 'Столб фермовый круглый'}
+  'ТС 11 00 04 02': {class: power_line_overhead, geometry: PNT, name: 'Столб фермовый круглый с молниеотводом'}
+  'ТС 11 00 04 03': {class: power_line_overhead, geometry: PNT, name: 'Столб фермовый квадратный'}
+  'ТС 11 00 04 04': {class: power_line_overhead, geometry: PNT, name: 'Столб фермовый квадратный с молниеотводом'}
+  'ТС 11 00 05': {class: power_line_overhead, geometry: PNT, name: 'Прожекторы карликовые постоянные'}
+  'ТС 11 00 06': {class: power_line_overhead, geometry: PNT, name: 'Переходы от воздушных ЛЭП к кабельным подземным'}
+  'ТС 11 00 07': {class: power_line_overhead, geometry: PNT, name: 'Точки подключения ЛЭП к зданиям (сооружениям)'}
+  'ТС 11 00 07 01': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения ЛЭП к зданиям (сооружениям) надземная'}
+  'ТС 11 00 07 02': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения ЛЭП к зданиям (сооружениям) подземная'}
+  'ТС 11 10': {class: power_line_overhead, geometry: LIN, name: 'Линейные объекты ЛЭП'}
+  'ТС 11 10 01': {class: power_line_overhead, geometry: LIN, name: 'Консоли'}
+  'ТС 11 10 02': {class: power_line_overhead, geometry: LIN, name: 'Перемычки опор'}
+  'ТС 11 10 03': {class: power_line_overhead, geometry: LIN, name: 'ЛЭП на незастроенной территории высокого напряжения'}
+  'ТС 11 10 04': {class: power_line_overhead, geometry: LIN, name: 'ЛЭП на незастроенной территории низкого напряжения'}
+  'ТС 11 10 05': {class: power_line_overhead, geometry: LIN, name: 'ЛЭП на застроенной территории высокого напряжения'}
+  'ТС 11 10 06': {class: power_line_overhead, geometry: LIN, name: 'ЛЭП на застроенной территории низкого напряжения'}
+  'ТС 11 10 07': {class: power_line_overhead, geometry: LIN, name: 'Граница охранной зоны ЛЭП'}
+  'ТС 11 10 08': {class: power_line_overhead, geometry: LIN, name: 'Точка подвеса воздушной кабельной линии'}
+  'ТС 11 20': {class: power_line_overhead, geometry: POL, name: 'Объекты ЛЭП - полигоны'}
+  'ТС 11 20 01': {class: power_line_overhead, geometry: POL, name: 'Ферма ЛЭП (контур)'}
+  'ТС 11 20 02': {class: power_line_overhead, geometry: POL, name: 'Столбы деревянные'}
+  'ТС 11 20 03': {class: power_line_overhead, geometry: POL, name: 'Столбы железобетонные'}
+  'ТС 11 20 04': {class: power_line_overhead, geometry: POL, name: 'Столбы металлические'}
+  'ТС 11 20 05': {class: power_line_overhead, geometry: POL, name: 'Столб фермовый круглый'}
+  'ТС 11 30': {class: ignore, geometry: LAB, name: 'Объекты ЛЭП - надписи'}
+  'ТС 12 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты сети электрокабеля'}
+  'ТС 12 00 01': {class: utility.access, geometry: PNT, name: 'Кабельные столбики-сторожки'}
+  'ТС 12 00 02': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на электрокабелях'}
+  'ТС 12 00 03': {class: utility.access, geometry: PNT, name: 'Точки подключения электрокабеля к зданиям (сооружениям)'}
+  'ТС 12 00 03 01': {class: utility.access, geometry: PNT, name: 'Точка подключения электрокабеля к зданиям (сооружениям) надземная'}
+  'ТС 12 00 03 02': {class: utility.access, geometry: PNT, name: 'Точка подключения электрокабеля к зданиям (сооружениям) подземная'}
+  'ТС 12 10': {class: utility.power_cable, geometry: LIN, name: 'Линейные объекты электрокабеля'}
+  'ТС 12 10 01': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные и подводные высокого напряжения'}
+  'ТС 12 10 02': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные и подводные высокого напряжения в блоках'}
+  'ТС 12 10 03': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные и подводные низкого напряжения'}
+  'ТС 12 10 04': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные и подводные низкого напряжения в блоках'}
+  'ТС 12 10 05': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные в каналах высокого напряжения'}
+  'ТС 12 10 06': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подземные в каналах низкого напряжения'}
+  'ТС 12 10 07': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подводные, проложенные под дном, высокого напряжения'}
+  'ТС 12 10 08': {class: utility.power_cable, geometry: LIN, name: 'Электрокабели подводные, проложенные под дном, низкого напряжения'}
+  'ТС 12 10 09': {class: utility.power_cable, geometry: LIN, name: 'Зацементированные блоки кабелей, несколько кабелей в траншее'}
+  'ТС 12 10 10': {class: utility.power_cable, geometry: LIN, name: 'Граница охранной зоны электрокабеля'}
+  'ТС 12 30': {class: ignore, geometry: LAB, name: 'Надписи объектов электрокабеля'}
+  'ТС 13 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты линий связи'}
+  'ТС 13 00 01': {class: utility.access, geometry: PNT, name: 'Переходы от воздушных линий связи к кабельным подземным'}
+  'ТС 13 00 02': {class: utility.access, geometry: PNT, name: 'Радиостанции и TV центры'}
+  'ТС 13 00 03': {class: utility.access, geometry: PNT, name: 'Мачты (TV-, радио- и радиорелейные)'}
+  'ТС 13 00 04': {class: utility.access, geometry: PNT, name: 'Смены характеристик кабельных линий'}
+  'ТС 13 00 05': {class: utility.access, geometry: PNT, name: 'Точки подвеса воздушной кабельной линии'}
+  'ТС 13 00 06': {class: utility.access, geometry: PNT, name: 'Шкафы, будки'}
+  'ТС 13 00 06 01': {class: utility.access, geometry: PNT, name: 'Будка телефонная вне здания'}
+  'ТС 13 00 06 02': {class: utility.access, geometry: PNT, name: 'Шкаф телефонный распределительный'}
+  'ТС 13 00 07': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на кабелях связи'}
+  'ТС 13 00 08': {class: utility.access, geometry: PNT, name: 'Точки подключения линии связи к зданиям (сооружениям)'}
+  'ТС 13 00 08 01': {class: utility.access, geometry: PNT, name: 'Точка подключения линии связи к зданиям (сооружениям) надземная'}
+  'ТС 13 00 08 02': {class: utility.access, geometry: PNT, name: 'Точка подключения линии связи к зданиям (сооружениям) подземная'}
+  'ТС 13 00 08 03': {class: utility.access, geometry: PNT, name: 'Завершение вне сооружения'}
+  'ТС 13 10': {class: utility.telecom, geometry: LIN, name: 'Объекты линий связи - линии'}
+  'ТС 13 10 01': {class: utility.telecom, geometry: LIN, name: 'Воздушные линии связи'}
+  'ТС 13 10 01 01': {class: utility.telecom, geometry: LIN, name: 'Воздушно-проводная линия связи и технических средств управления (ТСУ) на незастроенной территории'}
+  'ТС 13 10 01 02': {class: utility.telecom, geometry: LIN, name: 'Воздушно-проводная линия связи и ТСУ на застроенной территории'}
+  'ТС 13 10 01 03': {class: utility.telecom, geometry: LIN, name: 'Воздушно-кабельная линия связи и ТСУ на незастроенной территории'}
+  'ТС 13 10 01 04': {class: utility.telecom, geometry: LIN, name: 'Воздушно-кабельная линия связи и ТСУ на застроенной территории'}
+  'ТС 13 10 02': {class: utility.telecom, geometry: LIN, name: 'Кабели связи подводные'}
+  'ТС 13 10 02 01': {class: utility.telecom, geometry: LIN, name: 'Подводный кабель связи на поверхности дна'}
+  'ТС 13 10 02 02': {class: utility.telecom, geometry: LIN, name: 'Подводный кабель связи, проложенный под дном или перекрытый наносами'}
+  'ТС 13 10 03': {class: utility.telecom, geometry: none, name: 'Граница охранной зоны линии связи'}
+  'ТС 13 10 04': {class: utility.telecom, geometry: LIN, name: 'Кабели связи подземные'}
+  'ТС 13 10 04 01': {class: utility.telecom, geometry: LIN, name: 'Подземный кабель связи'}
+  'ТС 13 10 04 02': {class: utility.telecom, geometry: LIN, name: 'Кабель защиты'}
+  'ТС 13 20': {class: utility.telecom, geometry: POL, name: 'Объекты линий связи - полигоны'}
+  'ТС 13 20 01': {class: utility.telecom, geometry: POL, name: 'TV башни'}
+  'ТС 13 20 02': {class: utility.telecom, geometry: POL, name: 'Шкафы, будки'}
+  'ТС 13 20 02 01': {class: utility.telecom, geometry: POL, name: 'Будка телефонная вне здания'}
+  'ТС 13 20 02 02': {class: utility.telecom, geometry: none, name: 'Шкаф телефонный распределительный'}
+  'ТС 13 30': {class: ignore, geometry: LAB, name: 'Надписи объектов линий связи'}
+  'ТС 14 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты водопровода'}
+  'ТС 14 00 01': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на водопроводах'}
+  'ТС 14 00 02': {class: utility.access, geometry: PNT, name: 'Узловая точка водопровода на фитинге'}
+  'ТС 14 00 03': {class: utility.access, geometry: PNT, name: 'Арматура водопроводной сети'}
+  'ТС 14 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения водопровода подземные'}
+  'ТС 14 00 05': {class: utility.access, geometry: PNT, name: 'Точка подключения водопровода наземные'}
+  'ТС 14 10': {class: utility.water, geometry: LIN, name: 'Линейные объекты водопровода'}
+  'ТС 14 10 01': {class: utility.water, geometry: LIN, name: 'Водопроводы наземные'}
+  'ТС 14 10 02': {class: utility.water, geometry: LIN, name: 'Водопроводы подземные'}
+  'ТС 14 10 03': {class: utility.water, geometry: LIN, name: 'Дюкеры на водопроводах'}
+  'ТС 14 10 04': {class: utility.water, geometry: LIN, name: 'Граница охранной зоны водопровода'}
+  'ТС 14 20': {class: utility.water, geometry: POL, name: 'Объекты водопровода - полигоны'}
+  'ТС 14 20 01': {class: utility.water, geometry: POL, name: 'Камеры и колодцы на водопроводах наземные (граница)'}
+  'ТС 14 20 02': {class: utility.water, geometry: POL, name: 'Камеры и колодцы на водопроводах подземные (граница)'}
+  'ТС 14 30': {class: ignore, geometry: LAB, name: 'Надписи объектов водопровода'}
+  'ТС 15 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты канализации'}
+  'ТС 15 00 01': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на канализационных сетях'}
+  'ТС 15 00 02': {class: utility.access, geometry: PNT, name: 'Узловая точка канализации на фитинге'}
+  'ТС 15 00 03': {class: utility.access, geometry: PNT, name: 'Арматура канализационной сети'}
+  'ТС 15 00 04': {class: utility.access, geometry: PNT, name: 'Точки подключения канализационной сети'}
+  'ТС 15 00 04 01': {class: utility.access, geometry: PNT, name: 'Точка подключения канализационной сети к зданию (сооружению)'}
+  'ТС 15 00 04 02': {class: utility.access, geometry: PNT, name: 'Точка подключения канализационной сети к КНС'}
+  'ТС 15 10': {class: utility.sewer, geometry: LIN, name: 'Линейные объекты канализации'}
+  'ТС 15 10 01': {class: utility.sewer, geometry: LIN, name: 'Канализация хозяйственно-бытовая подземная самотечная'}
+  'ТС 15 10 02': {class: utility.sewer, geometry: LIN, name: 'Канализация хозяйственно-бытовая подземная напорная'}
+  'ТС 15 10 03': {class: utility.sewer, geometry: LIN, name: 'Дюкеры на канализационной сети'}
+  'ТС 15 10 04': {class: utility.sewer, geometry: LIN, name: 'Граница охранной зоны канализации'}
+  'ТС 15 20': {class: utility.sewer, geometry: POL, name: 'Объекты канализации - полигоны'}
+  'ТС 15 20 01': {class: utility.sewer, geometry: POL, name: 'Камеры и колодцы хозяйственно-бытовой канализации (граница)'}
+  'ТС 15 20 02': {class: utility.sewer, geometry: POL, name: 'Канализационная насосная станция (КНС)'}
+  'ТС 15 30': {class: ignore, geometry: LAB, name: 'Надписи объектов канализационной сети'}
+  'ТС 16 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты ливневой канализации'}
+  'ТС 16 00 01': {class: utility.access, geometry: PNT, name: 'Колодцы водосборные (люки) на ливневой канализации'}
+  'ТС 16 00 02': {class: utility.access, geometry: PNT, name: 'Решетка дождеприемника'}
+  'ТС 16 00 03': {class: utility.access, geometry: PNT, name: 'Точки подключения ливневой канализации'}
+  'ТС 16 00 03 01': {class: utility.access, geometry: PNT, name: 'Точка подключения ливневой канализации к ЛОС'}
+  'ТС 16 00 03 02': {class: utility.access, geometry: PNT, name: 'Точка подключения канализационной сети к КНС'}
+  'ТС 16 10': {class: utility.storm, geometry: LIN, name: 'Линейные объекты ливневой канализации'}
+  'ТС 16 10 01': {class: utility.storm, geometry: LIN, name: 'Канализация ливневая открытая'}
+  'ТС 16 10 02': {class: utility.storm, geometry: LIN, name: 'Канализация ливневая подземная'}
+  'ТС 16 20': {class: utility.storm, geometry: POL, name: 'Объекты ливневой канализации - полигоны'}
+  'ТС 16 20 01': {class: utility.storm, geometry: POL, name: 'Камеры и колодцы водосборные (граница)'}
+  'ТС 16 20 02': {class: utility.storm, geometry: POL, name: 'Локальные очистные сооружения (ЛОС) на ливневой канализации'}
+  'ТС 16 30': {class: ignore, geometry: LAB, name: 'Надписи объектов канализационной сети'}
+  'ТС 17 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты газопроводов'}
+  'ТС 17 00 01': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на газопроводах'}
+  'ТС 17 00 02': {class: utility.access, geometry: PNT, name: 'Узловая точка газопровода на фитинге'}
+  'ТС 17 00 03': {class: utility.access, geometry: PNT, name: 'Арматура газопроводов'}
+  'ТС 17 00 04': {class: utility.access, geometry: PNT, name: 'Пункт газосборный'}
+  'ТС 17 00 05': {class: utility.access, geometry: PNT, name: 'Газозамерный узел'}
+  'ТС 17 00 06': {class: utility.access, geometry: PNT, name: 'Точка подключения к зданию (сооружению)'}
+  'ТС 17 00 07': {class: utility.access, geometry: PNT, name: 'Точка перехода газопровода подземного в надземный'}
+  'ТС 17 10': {class: utility.gas, geometry: LIN, name: 'Объекты газопроводов - линии'}
+  'ТС 17 10 01': {class: utility.gas, geometry: LIN, name: 'Газопроводы наземные'}
+  'ТС 17 10 02': {class: utility.gas, geometry: LIN, name: 'Газопроводы подземные'}
+  'ТС 17 10 03': {class: utility.gas, geometry: LIN, name: 'Газопроводы надводные'}
+  'ТС 17 10 04': {class: utility.gas, geometry: LIN, name: 'Газопроводы подводные'}
+  'ТС 17 10 05': {class: utility.gas, geometry: LIN, name: 'Граница охранной зоны газопровода'}
+  'ТС 17 20': {class: utility.gas, geometry: POL, name: 'Объекты газопроводов - полигоны'}
+  'ТС 17 20 01': {class: utility.gas, geometry: POL, name: 'Газокомпрессорные станции (ГКС)'}
+  'ТС 17 20 02': {class: utility.gas, geometry: POL, name: 'Прочие станции газопроводов'}
+  'ТС 17 20 03': {class: utility.gas, geometry: POL, name: 'Ограждение надземные на газопроводах'}
+  'ТС 17 30': {class: ignore, geometry: LAB, name: 'Надписи объектов газопроводов'}
+  'ТС 18 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты нефтепроводов'}
+  'ТС 18 00 01': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на нефтепроводах'}
+  'ТС 18 00 02': {class: utility.access, geometry: PNT, name: 'Узловая точка нефтепровода на фитинге'}
+  'ТС 18 00 03': {class: utility.access, geometry: PNT, name: 'Арматура нефтепроводов'}
+  'ТС 18 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения нефтепровода к смотровому колодцу'}
+  'ТС 18 10': {class: utility.unknown, geometry: LIN, name: 'Объекты нефтепроводов - линии'}
+  'ТС 18 10 01': {class: utility.unknown, geometry: LIN, name: 'Нефтепроводы наземные'}
+  'ТС 18 10 02': {class: utility.unknown, geometry: LIN, name: 'Нефтепроводы подземные'}
+  'ТС 18 10 03': {class: utility.unknown, geometry: LIN, name: 'Нефтепроводы надводные'}
+  'ТС 18 10 04': {class: utility.unknown, geometry: LIN, name: 'Нефтепроводы подводные'}
+  'ТС 18 10 05': {class: utility.unknown, geometry: LIN, name: 'Граница охранной зоны нефтепровода'}
+  'ТС 18 20': {class: utility.unknown, geometry: POL, name: 'Объекты нефтепроводов - полигоны'}
+  'ТС 18 20 01': {class: utility.unknown, geometry: POL, name: 'Дожимная насосная станция (ДНС)'}
+  'ТС 18 20 02': {class: utility.unknown, geometry: POL, name: 'Станции перекачки нефти'}
+  'ТС 18 30': {class: ignore, geometry: LAB, name: 'Надписи объектов нефтепроводов'}
+  'ТС 19 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты теплотрассы'}
+  'ТС 19 00 01': {class: utility.access, geometry: PNT, name: 'Узловая точка теплотрассы на фитинге'}
+  'ТС 19 00 02': {class: utility.access, geometry: PNT, name: 'Колодцы смотровые (люки) на теплосетях'}
+  'ТС 19 00 03': {class: utility.access, geometry: PNT, name: 'Арматура тепловой сети'}
+  'ТС 19 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети'}
+  'ТС 19 00 04 01': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети к зданию (сооружению) надземная'}
+  'ТС 19 00 04 02': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети к зданию (сооружению) подземная'}
+  'ТС 19 00 04 03': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети к камере'}
+  'ТС 19 10': {class: utility.heat, geometry: LIN, name: 'Линейные объекты теплотрассы'}
+  'ТС 19 10 01': {class: utility.heat, geometry: LIN, name: 'Теплотрассы наземные'}
+  'ТС 19 10 02': {class: utility.heat, geometry: LIN, name: 'Теплотрассы подземные'}
+  'ТС 19 10 03': {class: utility.heat, geometry: LIN, name: 'Теплотрассы в непроходных каналах'}
+  'ТС 19 10 04': {class: utility.heat, geometry: LIN, name: 'Теплотрассы в полупроходных каналах'}
+  'ТС 19 10 05': {class: utility.heat, geometry: LIN, name: 'Граница охранной зоны тепловой сети'}
+  'ТС 19 20': {class: utility.heat, geometry: POL, name: 'Объекты теплотрассы - полигоны'}
+  'ТС 19 20 01': {class: utility.heat, geometry: POL, name: 'Камеры на теплотрассах наземные'}
+  'ТС 19 20 02': {class: utility.heat, geometry: POL, name: 'Камеры на теплотрассах подземные'}
+  'ТС 19 30': {class: ignore, geometry: LAB, name: 'кНаадписи объектов теплотрассы'}
+  'ТС 20 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты продуктопровода'}
+  'ТС 20 00 01': {class: utility.access, geometry: PNT, name: 'Узловая точка продуктопровода на фитинге'}
+  'ТС 20 00 02': {class: utility.access, geometry: PNT, name: 'Колодец смотровой (люк) на продуктопроводе'}
+  'ТС 20 00 03': {class: utility.access, geometry: PNT, name: 'Колодец смотровой (люк) на мазутопроводе'}
+  'ТС 20 00 04': {class: utility.access, geometry: PNT, name: 'Колодец смотровой (люк) на бензопроводе'}
+  'ТС 20 00 05': {class: utility.access, geometry: PNT, name: 'Колодец смотровой (люк) на золопроводе'}
+  'ТС 20 00 06': {class: utility.access, geometry: PNT, name: 'Колодец смотровой (люк) на воздухопроводе'}
+  'ТС 20 00 07': {class: utility.access, geometry: PNT, name: 'Арматура продуктопровода'}
+  'ТС 20 00 08': {class: utility.access, geometry: PNT, name: 'Точка подключения продуктопровода'}
+  'ТС 20 00 08 01': {class: utility.access, geometry: PNT, name: 'Точка подключения продуктопровода к зданию (сооружению) надземная'}
+  'ТС 20 00 08 02': {class: utility.access, geometry: PNT, name: 'Точка подключения продуктопровода к зданию (сооружению) подземная'}
+  'ТС 20 00 08 03': {class: utility.access, geometry: PNT, name: 'Точка подключения продуктопровода к смотровому колодцу'}
+  'ТС 20 10': {class: utility.unknown, geometry: LIN, name: 'Линейные объекты продуктопровода'}
+  'ТС 20 10 01': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы наземные на грунте'}
+  'ТС 20 10 02': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы наземные на опорах'}
+  'ТС 20 10 03': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы наземные в коробах'}
+  'ТС 20 10 04': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы подземные'}
+  'ТС 20 10 05': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы надводные на опорах'}
+  'ТС 20 10 06': {class: utility.unknown, geometry: LIN, name: 'Продуктопроводы подводные'}
+  'ТС 20 10 07': {class: utility.unknown, geometry: LIN, name: 'Граница охранной зоны продуктопровода'}
+  'ТС 20 20': {class: utility.unknown, geometry: POL, name: 'Объекты продуктопровода - полигоны'}
+  'ТС 20 20 01': {class: utility.unknown, geometry: POL, name: 'Станции перекачки продуктопроводов'}
+  'ТС 20 20 02': {class: utility.unknown, geometry: POL, name: 'Камеры и колодцы продуктопроводов'}
+  'ТС 20 30': {class: ignore, geometry: LAB, name: 'Надписи объектов продуктопровода'}
+  'ТС 21 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты трубопровода'}
+  'ТС 21 00 01': {class: utility.access, geometry: PNT, name: 'Колодец смотровые (люки) разрушенные'}
+  'ТС 21 00 02': {class: utility.access, geometry: PNT, name: 'Колодец смотровые (люки), находящиеся под мощением'}
+  'ТС 21 00 03': {class: utility.access, geometry: PNT, name: 'Колодец смотровые (люки) подземных коммуникаций'}
+  'ТС 21 00 04': {class: utility.access, geometry: PNT, name: 'Узловая точка трубопровода на фитинге'}
+  'ТС 21 00 05': {class: utility.access, geometry: PNT, name: 'Арматура трубопровода'}
+  'ТС 21 00 06': {class: utility.access, geometry: PNT, name: 'Уголы поворота в горизонтальной и/или в вертикальной плоскости'}
+  'ТС 21 00 07': {class: utility.access, geometry: PNT, name: 'Смены характеристик трубопроводов'}
+  'ТС 21 00 08': {class: utility.access, geometry: PNT, name: 'Точка подключения прочих трубопроводов'}
+  'ТС 21 00 08 01': {class: utility.access, geometry: PNT, name: 'Точка подключения прочих трубопроводов надземная'}
+  'ТС 21 00 08 02': {class: utility.access, geometry: PNT, name: 'Точка подключения прочих трубопроводов подземная'}
+  'ТС 21 10': {class: utility.unknown, geometry: LIN, name: 'Линейные объекты трубопровода'}
+  'ТС 21 10 01': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы наземные на грунте'}
+  'ТС 21 10 02': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы наземные на опорах'}
+  'ТС 21 10 03': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы наземные в коробах'}
+  'ТС 21 10 04': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы подземные'}
+  'ТС 21 10 05': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы надводные на опорах'}
+  'ТС 21 10 06': {class: utility.unknown, geometry: LIN, name: 'Трубопроводы подводные'}
+  'ТС 21 10 07': {class: utility.unknown, geometry: LIN, name: 'Граница охранной зоны трубопровода'}
+  'ТС 21 10 08': {class: utility.unknown, geometry: LIN, name: 'Станции перекачки трубопроводов'}
+  'ТС 21 10 09': {class: utility.unknown, geometry: LIN, name: 'Камеры и колодцы трубопроводов'}
+  'ТС 21 20': {class: utility.unknown, geometry: POL, name: 'Объекты трубопровода - полигоны'}
+  'ТС 21 20 01': {class: utility.unknown, geometry: POL, name: 'Колодцы смотровые или ливнесточные'}
+  'ТС 21 20 02': {class: utility.unknown, geometry: POL, name: 'Шахты вентиляционные'}
+  'ТС 21 20 03': {class: utility.unknown, geometry: POL, name: 'Камеры'}
+  'ТС 21 20 04': {class: utility.unknown, geometry: POL, name: 'Коллекторы'}
+  'ТС 21 20 05': {class: utility.unknown, geometry: POL, name: 'Каналы теплосети'}
+  'ТС 21 30': {class: ignore, geometry: LAB, name: 'Надписи объектов трубопровода'}
+  'ТС 22 00 01': {class: existing_tree, geometry: PNT, name: 'Деревья'}
+  'ТС 22 00 01 01': {class: existing_tree, geometry: PNT, name: 'Дерево отдельно стоящее'}
+  'ТС 22 00 01 02': {class: existing_tree, geometry: PNT, name: 'Дерево-ориентир хвойное'}
+  'ТС 22 00 01 03': {class: existing_tree, geometry: PNT, name: 'Дерево-ориентир лиственное'}
+  'ТС 22 00 01 04': {class: existing_tree, geometry: PNT, name: 'Дерево-ориентир фруктовое'}
+  'ТС 22 00 02': {class: existing_shrub, geometry: PNT, name: 'Кусты'}
+  'ТС 22 00 02 01': {class: existing_shrub, geometry: PNT, name: 'Куст отдельно стоящий'}
+  'ТС 22 00 02 02': {class: existing_shrub, geometry: PNT, name: 'Куст отдельно стоящий колючий'}
+  'ТС 22 00 02 03': {class: existing_shrub, geometry: PNT, name: 'Группа кустов'}
+  'ТС 22 00 02 04': {class: existing_shrub, geometry: PNT, name: 'Группа кустов колючих'}
+  'ТС 22 00 03': {class: ignore, geometry: PNT, name: 'Отметки глубины болота'}
+  'ТС 22 10 03': {class: existing_shrub, geometry: LIN, name: 'Полосы кустарников, живые изгороди'}
+  'ТС 22 20 02': {class: ignore, geometry: POL, name: 'Вырубки'}
+  'ТС 22 20 07': {class: existing_shrub, geometry: POL, name: 'Полосы кустарников, живые изгороди'}
+  'ТС 22 20 10': {class: existing_shrub, geometry: POL, name: 'Группы, заросли кустарниковые'}
+  'ТС 22 20 10 01': {class: existing_shrub, geometry: POL, name: 'Заросли кустарников'}
+  'ТС 22 20 10 02': {class: existing_shrub, geometry: POL, name: 'Заросли кустарников колючих'}
+  'ТС 22 20 10 03': {class: existing_shrub, geometry: POL, name: 'Группа кустарников'}
+  'ТС 22 20 10 04': {class: existing_shrub, geometry: POL, name: 'Группа кустарников колючих'}
+  'ТС 22 20 10 05': {class: existing_shrub, geometry: POL, name: 'Полоса кустарников узкая'}
+  'ТС 22 20 10 06': {class: existing_shrub, geometry: POL, name: 'Полоса кустарников широкая'}
+  'ТС 22 20 10 07': {class: existing_shrub, geometry: POL, name: 'Группа кустов'}
+  'ТС 22 20 10 08': {class: existing_shrub, geometry: POL, name: 'Группа кустов колючих'}
+  'ТС 22 20 11 05': {class: lawn, geometry: POL, name: 'Травянистая растительность степная'}
+  'ТС 22 20 11 07': {class: existing_shrub, geometry: POL, name: 'Кустарнички'}
+  'ТС 22 20 11 08': {class: lawn, geometry: POL, name: 'Травянистая и полукустарниковая растительность'}
+  'ТС 22 20 11 11': {class: ignore, geometry: POL, name: 'Посадки деревьев/кустарников'}
+  'ТС 22 20 12 02': {class: existing_shrub, geometry: POL, name: 'Плантация технических культур кустарниковых'}
+  'ТС 22 20 12 03': {class: lawn, geometry: POL, name: 'Плантация технических культур травянистых'}
+  'ТС 22 20 24 02': {class: sidewalk, geometry: POL, name: 'Поверхность щебеночная'}
+  'ТС 22 20 24 03': {class: sidewalk, geometry: POL, name: 'Поверхность галечниковая и гравийная'}
+  'ТС 22 30': {class: ignore, geometry: LAB, name: 'Надписи объектов растительности'}
+  'ТС 23 10': {class: road, geometry: LIN, name: 'Линейные объекты железных дорог'}
+  'ТС 23 10 00': {class: road, geometry: LIN, name: 'Пути и линии'}
+  'ТС 23 10 00 01': {class: road, geometry: LIN, name: 'Монорельсовая дорога'}
+  'ТС 23 10 00 02': {class: road, geometry: LIN, name: 'Дорога подвесная'}
+  'ТС 23 10 00 03': {class: road, geometry: LIN, name: 'Фуникулер'}
+  'ТС 23 10 00 04': {class: road, geometry: LIN, name: 'Бремсберг'}
+  'ТС 23 10 00 05': {class: road, geometry: LIN, name: 'Фуникулер строящийся'}
+  'ТС 23 10 00 06': {class: road, geometry: LIN, name: 'Бремсберг строящийся'}
+  'ТС 23 10 00 07': {class: road, geometry: LIN, name: 'Бугель'}
+  'ТС 23 30': {class: ignore, geometry: LAB, name: 'к Наадписи специальных видов дорог'}
+  'ТС 24 00': {class: utility.access, geometry: PNT, name: 'Точечные объекты инженерного оборудования на сетях коммуникаций'}
+  'ТС 24 00 99': {class: utility.access, geometry: PNT, name: 'Точечные объекты не вошедшие в основной перечень'}
+  'ТС 24 10': {class: utility.access, geometry: LIN, name: 'Линейные объекты инженерного оборудования на сетях коммуникаций'}
+  'ТС 24 10 01': {class: utility.access, geometry: LIN, name: 'Футляры'}
+  'ТС 24 10 02': {class: utility.access, geometry: LIN, name: 'Обоймы'}
+  'ТС 24 10 03': {class: utility.access, geometry: LIN, name: 'Гильзы'}
+  'ТС 24 10 04': {class: utility.access, geometry: LIN, name: 'Щиты'}
+  'ТС 24 10 05': {class: utility.access, geometry: LIN, name: 'Трубы'}
+  'ТС 24 10 99': {class: utility.access, geometry: LIN, name: 'Линейные объекты не вошедшие в основной перечень'}
+  'ТС 24 20': {class: utility.access, geometry: POL, name: 'Объекты инженерного оборудования на сетях коммуникаций-полигоны'}
+  'ТС 24 30': {class: ignore, geometry: LAB, name: 'Надписи объектов инженерного оборудования на сетях коммуникаций'}
+  'ТС 25 00': {class: utility.access, geometry: PNT, name: 'Устройства на сетях инженерных коммуникаций -точечные'}
+  'ТС 25 10': {class: utility.access, geometry: LIN, name: 'Устройства на сетях инженерных коммуникаций - линейные'}
+  'ТС 25 20': {class: utility.access, geometry: POL, name: 'Устройства на сетях инженерных коммуникаций - полигоны'}
+  'ТС 25 20 01': {class: utility.access, geometry: POL, name: 'Ковер'}
+  'ТС 25 20 02': {class: utility.access, geometry: POL, name: 'Контрольная трубка'}
+  'ТС 25 20 03': {class: utility.access, geometry: POL, name: 'Нюхательная трубка'}
+  'ТС 25 20 04': {class: utility.access, geometry: POL, name: 'Свеча'}
+  'ТС 25 20 05': {class: utility.access, geometry: POL, name: 'Контактное устройство'}
+  'ТС 25 20 06': {class: utility.access, geometry: POL, name: 'Глубинный анодный заземлитель'}
+  'ТС 25 20 07': {class: utility.access, geometry: POL, name: 'Протектор'}
+  'ТС 25 20 08': {class: utility.access, geometry: POL, name: 'Контур анодного заземления'}
+  'ТС 25 20 09': {class: utility.access, geometry: POL, name: 'Электрозащитная установка'}
+  'ТС 25 20 10': {class: utility.access, geometry: POL, name: 'Бесколодезная врезка'}
+  'ТС 25 20 11': {class: utility.access, geometry: POL, name: 'Заглушка'}
+  'ТС 25 20 12': {class: utility.access, geometry: POL, name: 'Контрольно-измерительный пункт'}
+  'ТС 25 30': {class: ignore, geometry: LAB, name: 'Устройства на сетях инженерных коммуникаций - надписи'}
+  'ТС 26 00': {class: pole, geometry: PNT, name: 'Столбы и опоры - точки'}
+  'ТС 26 00 01': {class: pole, geometry: PNT, name: 'Столбы'}
+  'ТС 26 00 01 01': {class: pole, geometry: PNT, name: 'Столб балкона'}
+  'ТС 26 00 01 02': {class: pole, geometry: PNT, name: 'Столб навеса отдельностоящего'}
+  'ТС 26 00 01 03': {class: pole, geometry: PNT, name: 'Столбик тротуарный'}
+  'ТС 26 00 02': {class: pole, geometry: PNT, name: 'Опоры'}
+  'ТС 26 00 02 01': {class: pole, geometry: PNT, name: 'Опора информационной конструкции'}
+  'ТС 26 00 02 02': {class: pole, geometry: PNT, name: 'Опора дорожного указателя'}
+  'ТС 26 00 03': {class: pole, geometry: PNT, name: 'Радиоантенна'}
+  'ТС 26 00 04': {class: pole, geometry: PNT, name: 'Флагшток'}
+  'ТС 26 00 05': {class: pole, geometry: PNT, name: 'Подкос для столба'}
+  'ТС 26 00 06': {class: pole, geometry: PNT, name: 'Навигационный указатель'}
+  'ТС 26 10': {class: pole, geometry: LIN, name: 'Столбы и опоры - линейные'}
+  'ТС 26 20': {class: pole, geometry: POL, name: 'Столбы и опоры - полигоны'}
+  'ТС 26 20 01': {class: pole, geometry: POL, name: 'Столбы'}
+  'ТС 26 20 01 01': {class: pole, geometry: POL, name: 'Столб балкона'}
+  'ТС 26 20 01 02': {class: pole, geometry: POL, name: 'Столб навеса отдельностоящего'}
+  'ТС 26 20 01 03': {class: pole, geometry: POL, name: 'Столб навеса и перекрытия'}
+  'ТС 26 20 02': {class: pole, geometry: POL, name: 'Тумба, колонна'}
+  'ТС 26 20 02 01': {class: pole, geometry: none, name: 'Колонна здания'}
+  'ТС 26 20 03': {class: pole, geometry: POL, name: 'Опоры'}
+  'ТС 26 20 03 01': {class: pole, geometry: POL, name: 'Опора бака'}
+  'ТС 26 20 03 02': {class: pole, geometry: POL, name: 'Опора цистерны'}
+  'ТС 26 20 03 03': {class: pole, geometry: POL, name: 'Опора газгольдера'}
+  'ТС 26 20 03 04': {class: pole, geometry: POL, name: 'Опора трубопровода надземного'}
+  'ТС 26 20 03 05': {class: pole, geometry: POL, name: 'Опора фермовая радиомачты (столб)'}
+  'ТС 26 20 03 06': {class: pole, geometry: POL, name: 'Опора платформы'}
+  'ТС 26 20 03 07': {class: pole, geometry: POL, name: 'Опора фермовая вышки легкого типа (контур)'}
+  'ТС 27 00': {class: pole, geometry: PNT, name: 'Объекты на столбах и опорах - точки'}
+  'ТС 27 00 01': {class: pole, geometry: PNT, name: 'Светильник, элемент благоустройства'}
+  'ТС 27 00 02': {class: pole, geometry: PNT, name: 'Устройство ГИБДД'}
+  'ТС 27 00 03': {class: pole, geometry: PNT, name: 'Устройство электрооборудования'}
+  'ТС 27 00 04': {class: pole, geometry: PNT, name: 'Семафор'}
+  'ТС 27 00 05': {class: pole, geometry: PNT, name: 'Светофор'}
+  'ТС 27 00 06': {class: pole, geometry: PNT, name: 'Держатель'}
+  'ТС 28 00 01 35': {class: obstacle, geometry: PNT, name: 'Игровой объект - скульптура'}
+  'ТС 28 00 01 52': {class: pole, geometry: PNT, name: 'Игровой элемент "светофорчик"'}
+  'ТС 28 00 01 57': {class: obstacle, geometry: PNT, name: 'Контейнерный шкаф "Блок композит"'}
+  'ТС 28 00 01 60': {class: obstacle, geometry: PNT, name: 'Урна для раздельного сбора отходов'}
+  'ТС 28 00 01 61': {class: obstacle, geometry: PNT, name: 'Урна для раздельного сбора отходов открытая'}
+  'ТС 28 00 01 62': {class: obstacle, geometry: PNT, name: 'Урна для раздельного сбора отходов открытая 2-х секционная'}
+  'ТС 28 00 01 63': {class: obstacle, geometry: PNT, name: 'Урна для раздельного сбора отходов открытая 3-х секционная'}
+  'ТС 28 00 01 64': {class: obstacle, geometry: PNT, name: 'Урна металлическая круглая на одной ножке'}
+  'ТС 28 00 01 65': {class: obstacle, geometry: PNT, name: 'Урна металлическая круглая на двух ножках'}
+  'ТС 28 00 01 66': {class: obstacle, geometry: PNT, name: 'Урна металлическая круглая'}
+  'ТС 28 00 01 67': {class: obstacle, geometry: PNT, name: 'Урна'}
+  'ТС 28 00 01 68': {class: obstacle, geometry: PNT, name: 'Урна железобетнная'}
+  'ТС 28 00 01 69': {class: obstacle, geometry: PNT, name: 'Урна металлическая квадратная'}
+  'ТС 28 00 01 71': {class: ignore, geometry: PNT, name: 'Контейнер-сетка дополнительный для раздельного сбора мусора (РСО)'}
+  'ТС 28 00 01 73': {class: structure, geometry: PNT, name: 'Павильон стационарный для раздельного сбора мусора (РСО)'}
+  'ТС 28 00 01 74': {class: obstacle, geometry: PNT, name: 'Контейнер для твердых бытовых отходов (ТБО) 1.1 куб.м.'}
+  'ТС 28 00 01 75': {class: obstacle, geometry: PNT, name: 'Контейнер для твердых бытовых отходов (ТБО) 0.8 куб.м.'}
+  'ТС 28 00 01 76': {class: obstacle, geometry: PNT, name: 'Контейнер для твердых бытовых отходов (ТБО) 0.66 куб.м.'}
+  'ТС 28 00 01 77': {class: pole, geometry: PNT, name: 'Флагшток'}
+  'ТС 28 00 01 79': {class: utility.access, geometry: PNT, name: 'Приствольная решетка'}
+  'ТС 28 00 01 81': {class: obstacle, geometry: PNT, name: 'Вазон'}
+  'ТС 28 00 01 83': {class: utility.access, geometry: PNT, name: 'Колодец'}
+  'ТС 28 00 01 85': {class: structure, geometry: PNT, name: 'Мостик'}
+  'ТС 28 00 01 87': {class: obstacle, geometry: PNT, name: 'Фонтан'}
+  'ТС 28 00 01 96': {class: structure, geometry: PNT, name: 'Шведская стенка'}
+  'ТС 28 00 01 104': {class: structure, geometry: PNT, name: 'Стенка "скалолаз"'}
+  'ТС 28 00 01 105': {class: structure, geometry: PNT, name: 'Стенка тренажер'}
+  'ТС 28 00 01 108': {class: obstacle, geometry: PNT, name: 'Скамья для пресса'}
+  'ТС 28 00 01 112': {class: pole, geometry: PNT, name: 'Волейбольная стойка'}
+  'ТС 28 00 01 120': {class: obstacle, geometry: PNT, name: 'Скамья для прыжков'}
+  'ТС 28 00 01 126': {class: obstacle, geometry: PNT, name: 'Скамья'}
+  'ТС 28 00 01 127': {class: obstacle, geometry: PNT, name: 'Скамья без спинки'}
+  'ТС 28 00 01 128': {class: obstacle, geometry: PNT, name: 'Скамья со спинкой железобетонная'}
+  'ТС 28 00 01 129': {class: obstacle, geometry: PNT, name: 'Скамья без спинки железобетонная'}
+  'ТС 28 00 01 130': {class: obstacle, geometry: PNT, name: 'Скамья со спинкой металлическая'}
+  'ТС 28 00 01 131': {class: obstacle, geometry: PNT, name: 'Скамья без спинки металлическая'}
+  'ТС 28 00 01 132': {class: obstacle, geometry: PNT, name: 'Скамья полукруглая металлическая'}
+  'ТС 28 00 01 133': {class: obstacle, geometry: PNT, name: 'Стол со скамьями'}
+  'ТС 28 00 01 134': {class: obstacle, geometry: PNT, name: 'Лавка железобетонная'}
+  'ТС 28 00 01 135': {class: obstacle, geometry: PNT, name: 'Лавка металлическая'}
+  'ТС 28 00 01 137': {class: pole, geometry: PNT, name: 'Оборудование для велопарковки (стойка)'}
+  'ТС 28 00 01 138': {class: pole, geometry: PNT, name: 'Опора для сушки белья'}
+  'ТС 28 00 01 141': {class: obstacle, geometry: PNT, name: 'Бетонная полусфера'}
+  'ТС 28 20 01 01': {class: obstacle, geometry: POL, name: 'Оборудование для велопарковки (контур)'}
+  'ПО ЗУ 08 00': {class: ignore, geometry: PNT, name: 'Координаты проекта - точки'}
+  'ПО ЗУ 08 00 01': {class: ignore, geometry: PNT, name: 'Базовая точка проекта'}
+  'ПО ЗУ 08 00 02': {class: ignore, geometry: PNT, name: 'Точка съемки'}
+  'ПО ЗУ 08 10': {class: ignore, geometry: LIN, name: 'Координаты проекта - линии'}
+  'ПО ЗУ 08 10 01': {class: ignore, geometry: LIN, name: 'Ось сетки'}
+  'ПО ЗУ 08 30': {class: ignore, geometry: LAB, name: 'Координаты проекта - надписи'}
+  'ПО ЗУ 09 00': {class: ignore, geometry: PNT, name: 'Объекты вертикальной планировки - точки'}
+  'ПО ЗУ 09 00 01': {class: ignore, geometry: PNT, name: 'Точка планировки в местах расстановки уклоноуказателей'}
+  'ПО ЗУ 09 00 02': {class: ignore, geometry: PNT, name: 'Проектная отметка'}
+  'ПО ЗУ 09 10': {class: ignore, geometry: LIN, name: 'Объекты вертикальной планировки - линии'}
+  'ПО ЗУ 09 10 01': {class: ignore, geometry: LIN, name: 'Проектная горизонталь'}
+  'ПО ЗУ 09 10 02': {class: ignore, geometry: LIN, name: 'Характерная линия'}
+  'ПО ЗУ 09 10 03': {class: ignore, geometry: LIN, name: 'Проектная бровка откоса выемки'}
+  'ПО ЗУ 09 10 04': {class: ignore, geometry: LIN, name: 'Проектная подошва откоса выемки'}
+  'ПО ЗУ 09 10 05': {class: ignore, geometry: LIN, name: 'Проектная бровка откоса насыпи'}
+  'ПО ЗУ 09 10 06': {class: ignore, geometry: LIN, name: 'Проектная подошва откоса насыпи'}
+  'ПО ЗУ 09 20': {class: ignore, geometry: POL, name: 'Объекты вертикальной планировки - полигоны'}
+  'ПО ЗУ 09 20 01': {class: ignore, geometry: POL, name: 'Граница типа проектной поверхности'}
+  'ПО ЗУ 09 30': {class: ignore, geometry: LAB, name: 'Объекты вертикальной планировки - надписи'}
+  'ПО ЗУ 10 00': {class: building, geometry: PNT, name: 'Объекты проектируемых зданий (сооружений) - точки'}
+  'ПО ЗУ 10 00 01': {class: ignore, geometry: PNT, name: 'Проектная отметка вход в здание (сооружение)'}
+  'ПО ЗУ 10 00 02': {class: ignore, geometry: PNT, name: 'Проектная отметка вход в подвал'}
+  'ПО ЗУ 10 00 03': {class: ignore, geometry: PNT, name: 'Проектная отметка въезд на парковку'}
+  'ПО ЗУ 10 00 04': {class: ignore, geometry: PNT, name: 'Проектная отметка забор'}
+  'ПО ЗУ 10 00 05': {class: ignore, geometry: PNT, name: 'Проектная отметка крыльцо'}
+  'ПО ЗУ 10 00 06': {class: ignore, geometry: PNT, name: 'Проектная отметка углов здания (сооружения)'}
+  'ПО ЗУ 10 00 07': {class: sidewalk, geometry: PNT, name: 'Проектная отметка углов отмостки здания (сооружения)'}
+  'ПО ЗУ 10 00 08': {class: ignore, geometry: PNT, name: 'Проектная отметка пандус'}
+  'ПО ЗУ 10 00 09': {class: building, geometry: PNT, name: 'Эвакуационный выход'}
+  'ПО ЗУ 10 00 10': {class: building, geometry: PNT, name: 'Арка (сквозной проезд)'}
+  'ПО ЗУ 10 10': {class: building, geometry: LIN, name: 'Объекты проектируемых зданий (сооружений) - линии'}
+  'ПО ЗУ 10 10 01': {class: building, geometry: LIN, name: 'Вход/Выход здания (сооружения)'}
+  'ПО ЗУ 10 10 02': {class: building, geometry: LIN, name: 'Вход/Выход подвал'}
+  'ПО ЗУ 10 10 03': {class: road, geometry: LIN, name: 'Въезд/Выезд'}
+  'ПО ЗУ 10 10 04': {class: fence, geometry: LIN, name: 'Забор'}
+  'ПО ЗУ 10 10 05': {class: building, geometry: LIN, name: 'Крыльцо'}
+  'ПО ЗУ 10 10 06': {class: sidewalk, geometry: LIN, name: 'Отмостка здания (сооружения)'}
+  'ПО ЗУ 10 10 07': {class: obstacle, geometry: LIN, name: 'Пандус'}
+  'ПО ЗУ 10 20': {class: building, geometry: POL, name: 'Объекты проектируемых зданий (сооружений) - полигоны'}
+  'ПО ЗУ 10 20 01': {class: building, geometry: POL, name: 'Граница здания (сооружения) со всеми спроецированными элементами'}
+  'ПО ЗУ 10 20 02': {class: sidewalk, geometry: POL, name: 'Граница отмостки здания (сооружения)'}
+  'ПО ЗУ 10 30': {class: ignore, geometry: LAB, name: 'Объекты проектируемых зданий (сооружений) - надписи'}
+  'ПО ЗУ 11 10': {class: road, geometry: LIN, name: 'Объекты проектируемого дорожного графа - линии'}
+  'ПО ЗУ 11 10 01': {class: ignore, geometry: LIN, name: 'Ось дорожного графа'}
+  'ПО ЗУ 11 10 02': {class: road, geometry: LIN, name: 'Сегмент дорожного графа'}
+  'ПО ЗУ 11 20': {class: road, geometry: POL, name: 'Объекты проектируемого дорожного графа - полигоны'}
+  'ПО ЗУ 11 20 01': {class: road, geometry: POL, name: 'Область источников дорожного трафика'}
+  'ПО ЗУ 11 20 02': {class: road, geometry: POL, name: 'Область приемников дорожного трафика'}
+  'ПО ЗУ 11 20 03': {class: road, geometry: POL, name: 'Область парковки'}
+  'ПО ЗУ 11 20 04': {class: road, geometry: POL, name: 'Область перекрестка'}
+  'ПО ЗУ 11 20 05': {class: road, geometry: POL, name: 'Область проезжей части'}
+  'ПО ЗУ 11 20 06': {class: road, geometry: POL, name: 'Область кругового перекрестка'}
+  'ПО ЗУ 11 20 07': {class: road, geometry: POL, name: 'Область тупика'}
+  'ПО ЗУ 11 30': {class: ignore, geometry: LAB, name: 'Объекты проектируемого дорожного графа - надписи'}
+  'ПО ЗУ 12 10': {class: sidewalk, geometry: LIN, name: 'Объекты пешеходного и велосипедного графа - линии'}
+  'ПО ЗУ 12 10 01': {class: ignore, geometry: LIN, name: 'Ось пешеходного графа'}
+  'ПО ЗУ 12 10 02': {class: ignore, geometry: LIN, name: 'Ось велосипедного графа'}
+  'ПО ЗУ 12 10 03': {class: sidewalk, geometry: LIN, name: 'Сегмент пешеходного графа'}
+  'ПО ЗУ 12 10 04': {class: sidewalk, geometry: LIN, name: 'Сегмент велосипедного графа'}
+  'ПО ЗУ 12 10 05': {class: sidewalk, geometry: LIN, name: 'Сегмент велопешеходного графа'}
+  'ПО ЗУ 12 20': {class: sidewalk, geometry: POL, name: 'Объекты пешеходного и велосипедного графа - полигоны'}
+  'ПО ЗУ 12 20 01': {class: sidewalk, geometry: POL, name: 'Область источников пешеходного и велосипедного трафика'}
+  'ПО ЗУ 12 20 02': {class: sidewalk, geometry: POL, name: 'Область приемников пешеходного и велосипедного трафика'}
+  'ПО ЗУ 12 30': {class: ignore, geometry: LAB, name: 'Объекты пешеходного и велосипедного трафика - надписи'}
+  'ПО ЗУ 13 10': {class: ignore, geometry: LIN, name: 'Объекты публичных сервитутов - линии'}
+  'ПО ЗУ 13 10 01': {class: ignore, geometry: LIN, name: 'Граница «красной линии» квартала'}
+  'ПО ЗУ 13 20': {class: ignore, geometry: POL, name: 'Объекты публичных сервитутов - полигоны'}
+  'ПО ЗУ 13 20 01': {class: ignore, geometry: POL, name: 'Территория застройки внутри «красных линий» квартала'}
+  'ПО ЗУ 13 20 02': {class: ignore, geometry: POL, name: 'Территория общего пользования'}
+  'ПО ЗУ 13 30': {class: ignore, geometry: LAB, name: 'Объекты публичных сервитутов - надписи'}
+  'ПО ЗУ 14 10 01': {class: utility.gas, geometry: LIN, name: 'Граница охранной зоны газопровода'}
+  'ПО ЗУ 14 10 02': {class: utility.telecom, geometry: LIN, name: 'Граница охранной зоны сети связи'}
+  'ПО ЗУ 14 10 03': {class: power_line_overhead, geometry: LIN, name: 'Граница охранной зоны ЛЭП'}
+  'ПО ЗУ 14 10 04': {class: utility.water, geometry: LIN, name: 'Граница охранной зоны сети водопровода'}
+  'ПО ЗУ 14 10 05': {class: utility.storm, geometry: LIN, name: 'Граница охранной зоны сети ливневой канализации'}
+  'ПО ЗУ 14 10 06': {class: utility.unknown, geometry: LIN, name: 'Граница охранной зоны сети хозяйственно-бытовой канализации'}
+  'ПО ЗУ 14 10 07': {class: utility.unknown, geometry: LIN, name: 'Граница охранной зоны тепловой сети'}
+  'ПО ЗУ 14 20 01': {class: utility.gas, geometry: POL, name: 'Область охранной зоны газопровода'}
+  'ПО ЗУ 14 20 02': {class: utility.telecom, geometry: POL, name: 'Область охранной зоны сети связи'}
+  'ПО ЗУ 14 20 03': {class: power_line_overhead, geometry: POL, name: 'Область охранной зоны ЛЭП'}
+  'ПО ЗУ 14 20 04': {class: utility.water, geometry: POL, name: 'Область охранной зоны сети водопровода'}
+  'ПО ЗУ 14 20 05': {class: utility.storm, geometry: POL, name: 'Область охранной зоны ливневой канализации'}
+  'ПО ЗУ 14 20 06': {class: utility.sewer, geometry: POL, name: 'Область охранной зоны хозяйственно-бытовой канализации'}
+  'ПО ЗУ 14 20 07': {class: utility.unknown, geometry: POL, name: 'Область охранной зоны тепловой сети'}
+  'ПО ЗУ 14 30': {class: ignore, geometry: LAB, name: 'Объекты охранных зон - надписи'}
+  'ПО ЗУ 15 20': {class: structure, geometry: POL, name: 'Объекты сносимых зданий (сооружений) - линии'}
+  'ПО ЗУ 15 20 01': {class: building, geometry: POL, name: 'Граница здания (сооружения), подлежащего сносу'}
+  'ПО ЗУ 15 30': {class: ignore, geometry: LAB, name: 'Объекты сносимых зданий (сооружений) - надписи'}
+  'ПО ЗУ 16 00': {class: ignore, geometry: PNT, name: 'ГИС-картограмма - точки'}
+  'ПО ЗУ 16 00 01': {class: ignore, geometry: PNT, name: 'Точка планировки ГИС-картограммы'}
+  'ПО ЗУ 16 10': {class: ignore, geometry: LIN, name: 'ГИС-картограмма - линии'}
+  'ПО ЗУ 16 10 01': {class: ignore, geometry: LIN, name: 'Линия нулевых работ ГИС-картограммы'}
+  'ПО ЗУ 16 10 02': {class: ignore, geometry: LIN, name: 'Граф перемещения земляных масс'}
+  'ПО ЗУ 16 20': {class: ignore, geometry: POL, name: 'ГИС-картограмма - полигоны'}
+  'ПО ЗУ 16 20 01': {class: ignore, geometry: POL, name: 'Граница ГИС-картограммы'}
+  'ПО ЗУ 16 20 02': {class: ignore, geometry: POL, name: 'Квадрат ГИС-картограммы'}
+  'ПО ЗУ 16 30': {class: ignore, geometry: LAB, name: 'ГИС-картограмма - надписи'}
+  'ПО ЗУ 17 00 02': {class: pole, geometry: PNT, name: 'Фонарь освещения'}
+  'ПО ЗУ 17 00 03': {class: utility.unknown, geometry: PNT, name: 'Трансформатор сети освещения'}
+  'ПО ЗУ 17 00 04': {class: existing_tree, geometry: PNT, name: 'Дерево лиственное'}
+  'ПО ЗУ 17 00 05': {class: existing_tree, geometry: PNT, name: 'Дерево хвойное'}
+  'ПО ЗУ 17 00 06': {class: existing_shrub, geometry: PNT, name: 'Кустарник'}
+  'ПО ЗУ 17 10 01': {class: fence, geometry: LIN, name: 'Ограждение декоративное'}
+  'ПО ЗУ 17 10 03': {class: utility.power_cable, geometry: LIN, name: 'Провод (кабель) освещения'}
+  'ПО ЗУ 17 10 04': {class: utility.unknown, geometry: LIN, name: 'Охранная зона сети освещения'}
+  'ПО ЗУ 17 20 01': {class: lawn, geometry: POL, name: 'Газон'}
+  'ПО ЗУ 17 20 03': {class: sidewalk, geometry: POL, name: 'Детская площадка'}
+  'ПО ЗУ 17 20 04': {class: sidewalk, geometry: POL, name: 'Площадка для выгула домашних животных'}
+  'ПО ЗУ 17 20 05': {class: sidewalk, geometry: POL, name: 'Спортивная площадка'}
+  'ПО ЗУ 17 20 06': {class: pole, geometry: POL, name: 'Зона максимальной яркости фонаря освещения'}
+  'ПО ЗУ 17 30': {class: ignore, geometry: LAB, name: 'Объекты благоустройства - надписи'}
+  'ПО ЗУ 19 00': {class: ignore, geometry: PNT, name: 'Объекты строительной техники - точки'}
+  'ПО ЗУ 19 00 01': {class: ignore, geometry: PNT, name: 'Перекресток графа движения строительной техники'}
+  'ПО ЗУ 19 00 02': {class: ignore, geometry: PNT, name: 'Узел примыкания графа к существующей дороге'}
+  'ПО ЗУ 19 10': {class: ignore, geometry: LIN, name: 'Объекты строительной техники - линии'}
+  'ПО ЗУ 19 10 01': {class: ignore, geometry: LIN, name: 'Граф перемещения строительной техники'}
+  'ПО ЗУ 19 20': {class: ignore, geometry: POL, name: 'Объекты строительной техники - полигоны'}
+  'ПО ЗУ 19 20 01': {class: ignore, geometry: POL, name: 'Площадка очистки строительной техники'}
+  'ПО ЗУ 19 30': {class: ignore, geometry: LAB, name: 'Объекты строительной техники - надписи'}
+  'ПО ЗУ 20 00': {class: utility.access, geometry: PNT, name: 'Водопровод - точки'}
+  'ПО ЗУ 20 00 01': {class: utility.access, geometry: PNT, name: 'Водопроводный фитинг'}
+  'ПО ЗУ 20 00 02': {class: utility.access, geometry: PNT, name: 'Водопроводная арматура'}
+  'ПО ЗУ 20 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения водопровода к инженерной сети здания'}
+  'ПО ЗУ 20 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения водопровода к инженерной сети источника'}
+  'ПО ЗУ 20 00 05': {class: utility.access, geometry: PNT, name: 'Водопроводный люк камеры (колодца)'}
+  'ПО ЗУ 20 10': {class: utility.water, geometry: LIN, name: 'Водопровод - линии'}
+  'ПО ЗУ 20 10 01': {class: utility.water, geometry: LIN, name: 'Сегмент водопровода'}
+  'ПО ЗУ 20 20': {class: utility.water, geometry: POL, name: 'Водопровод - полигоны'}
+  'ПО ЗУ 20 20 01': {class: utility.water, geometry: POL, name: 'Граница камеры (колодца) водопровода'}
+  'ПО ЗУ 20 30': {class: ignore, geometry: LAB, name: 'Водопровод - надписи'}
+  'ПО ЗУ 21 00': {class: utility.access, geometry: PNT, name: 'Напорная сеть - точки'}
+  'ПО ЗУ 21 00 01': {class: utility.access, geometry: PNT, name: 'Фитинг напорной сети'}
+  'ПО ЗУ 21 00 02': {class: utility.access, geometry: PNT, name: 'Арматура напорной сети'}
+  'ПО ЗУ 21 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения напорной сети к инженерной сети здания'}
+  'ПО ЗУ 21 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения напорной сети к инженерной сети приемника'}
+  'ПО ЗУ 21 00 05': {class: utility.access, geometry: PNT, name: 'Люк камеры (колодца) напорной сети'}
+  'ПО ЗУ 21 10': {class: utility.sewer, geometry: LIN, name: 'Напорная сеть - линии'}
+  'ПО ЗУ 21 10 01': {class: utility.sewer, geometry: LIN, name: 'Сегмент трубопровода напорной сети'}
+  'ПО ЗУ 21 20': {class: utility.sewer, geometry: POL, name: 'Напорная сеть - полигоны'}
+  'ПО ЗУ 21 20 01': {class: utility.sewer, geometry: POL, name: 'Граница камеры (колодца) напорной сети'}
+  'ПО ЗУ 21 30': {class: ignore, geometry: LAB, name: 'Напорная сеть - надписи'}
+  'ПО ЗУ 22 00': {class: utility.access, geometry: PNT, name: 'Самотечная сеть - точки'}
+  'ПО ЗУ 22 00 01': {class: utility.access, geometry: PNT, name: 'Фитинг самотечной сети'}
+  'ПО ЗУ 22 00 02': {class: utility.access, geometry: PNT, name: 'Арматура самотечной сети'}
+  'ПО ЗУ 22 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения самотечной сети к инженерной сети здания'}
+  'ПО ЗУ 22 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения самотечной сети к инженерной сети приемника'}
+  'ПО ЗУ 22 00 05': {class: utility.access, geometry: PNT, name: 'Люк камеры (колодца) самотечной сети'}
+  'ПО ЗУ 22 10': {class: utility.sewer, geometry: LIN, name: 'Самотечная сеть - линии'}
+  'ПО ЗУ 22 10 01': {class: utility.sewer, geometry: LIN, name: 'Сегмент трубопровода самотечной сети'}
+  'ПО ЗУ 22 20': {class: utility.sewer, geometry: POL, name: 'Самотечная сеть - полигоны'}
+  'ПО ЗУ 22 20 01': {class: utility.sewer, geometry: POL, name: 'Граница камеры (колодца) самотечной сети'}
+  'ПО ЗУ 22 30': {class: ignore, geometry: LAB, name: 'Самотечная сеть - надписи'}
+  'ПО ЗУ 23 00': {class: utility.access, geometry: PNT, name: 'Ливневая канализация - точки'}
+  'ПО ЗУ 23 00 01': {class: utility.access, geometry: PNT, name: 'Фитинг ливневой канализации'}
+  'ПО ЗУ 23 00 02': {class: utility.access, geometry: PNT, name: 'Арматура ливневой канализации'}
+  'ПО ЗУ 23 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения ливневой канализации к инженерной сети здания'}
+  'ПО ЗУ 23 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения ливневой канализации к инженерной сети приемника'}
+  'ПО ЗУ 23 00 05': {class: utility.access, geometry: PNT, name: 'Люк камеры (колодца) ливневой канализации'}
+  'ПО ЗУ 23 10': {class: utility.storm, geometry: LIN, name: 'Ливневая канализация - линии'}
+  'ПО ЗУ 23 10 01': {class: utility.storm, geometry: LIN, name: 'Сегмент трубопровода ливневой канализации'}
+  'ПО ЗУ 23 20': {class: utility.storm, geometry: POL, name: 'Ливневая канализация - полигоны'}
+  'ПО ЗУ 23 20 01': {class: utility.storm, geometry: POL, name: 'Граница водосборного колодца ливневой канализации'}
+  'ПО ЗУ 23 20 02': {class: utility.storm, geometry: POL, name: 'Граница водоприемника ливневой канализации'}
+  'ПО ЗУ 23 30': {class: ignore, geometry: LAB, name: 'Ливневая канализация - надписи'}
+  'ПО ЗУ 24 00': {class: utility.access, geometry: PNT, name: 'Тепловая сеть - точки'}
+  'ПО ЗУ 24 00 01': {class: utility.access, geometry: PNT, name: 'Фитинг тепловой сети'}
+  'ПО ЗУ 24 00 02': {class: utility.access, geometry: PNT, name: 'Арматура тепловой сети'}
+  'ПО ЗУ 24 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети к инженерной сети здания'}
+  'ПО ЗУ 24 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения тепловой сети к инженерной сети источника'}
+  'ПО ЗУ 24 00 05': {class: utility.access, geometry: PNT, name: 'Люк камеры (колодца) тепловой сети'}
+  'ПО ЗУ 24 10': {class: utility.heat, geometry: LIN, name: 'Тепловая сеть - линии'}
+  'ПО ЗУ 24 10 01': {class: utility.heat, geometry: LIN, name: 'Сегмент трубопровода тепловой сети'}
+  'ПО ЗУ 24 20': {class: utility.heat, geometry: POL, name: 'Тепловая сеть - полигоны'}
+  'ПО ЗУ 24 20 01': {class: utility.heat, geometry: POL, name: 'Граница камеры тепловой сети'}
+  'ПО ЗУ 24 20 02': {class: utility.heat, geometry: POL, name: 'Граница лотка тепловой сети'}
+  'ПО ЗУ 24 30': {class: ignore, geometry: LAB, name: 'Тепловая сеть - надписи'}
+  'ПО ЗУ 25 00': {class: utility.access, geometry: PNT, name: 'Газопровод - точки'}
+  'ПО ЗУ 25 00 01': {class: utility.access, geometry: PNT, name: 'Фитинг газопровода'}
+  'ПО ЗУ 25 00 02': {class: utility.access, geometry: PNT, name: 'Арматура газопровода'}
+  'ПО ЗУ 25 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения газопровода к инженерной сети здания'}
+  'ПО ЗУ 25 00 04': {class: utility.access, geometry: PNT, name: 'Точка подключения газопровода к инженерной сети источника'}
+  'ПО ЗУ 25 00 05': {class: utility.access, geometry: PNT, name: 'Люк смотрового колодца газопровода'}
+  'ПО ЗУ 25 00 06': {class: utility.access, geometry: PNT, name: 'Свеча газопровода'}
+  'ПО ЗУ 25 10': {class: utility.gas, geometry: LIN, name: 'Газопровод - линии'}
+  'ПО ЗУ 25 10 01': {class: utility.gas, geometry: LIN, name: 'Сегмент газопровода'}
+  'ПО ЗУ 25 20': {class: utility.gas, geometry: POL, name: 'Газопровод - полигоны'}
+  'ПО ЗУ 25 20 01': {class: utility.gas, geometry: POL, name: 'Граница смотрового колодца газопровода'}
+  'ПО ЗУ 25 20 02': {class: utility.gas, geometry: POL, name: 'Граница смотровой площадки арматуры газопровода'}
+  'ПО ЗУ 25 30': {class: ignore, geometry: LAB, name: 'Газопровод - надписи'}
+  'ПО ЗУ 26 00': {class: power_line_overhead, geometry: PNT, name: 'Воздушная ЛЭП - точки'}
+  'ПО ЗУ 26 00 01': {class: power_line_overhead, geometry: PNT, name: 'Опора бетонная воздушной ЛЭП'}
+  'ПО ЗУ 26 00 02': {class: power_line_overhead, geometry: PNT, name: 'Опора деревянная воздушной ЛЭП'}
+  'ПО ЗУ 26 00 03': {class: power_line_overhead, geometry: PNT, name: 'Опора металлическая воздушной ЛЭП'}
+  'ПО ЗУ 26 00 04': {class: power_line_overhead, geometry: PNT, name: 'Трансформатор воздушной ЛЭП'}
+  'ПО ЗУ 26 00 05': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения воздушной ЛЭП к инженерной сети здания'}
+  'ПО ЗУ 26 00 06': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения воздушной ЛЭП к инженерной сети источника'}
+  'ПО ЗУ 26 00 07': {class: power_line_overhead, geometry: PNT, name: 'Переход воздушной сети в кабель'}
+  'ПО ЗУ 26 00 08': {class: power_line_overhead, geometry: PNT, name: 'Молниеотвод воздушной ЛЭП'}
+  'ПО ЗУ 26 00 09': {class: power_line_overhead, geometry: PNT, name: 'Узел сегмента провода воздушной ЛЭП'}
+  'ПО ЗУ 26 10': {class: power_line_overhead, geometry: LIN, name: 'Воздушная ЛЭП - линии'}
+  'ПО ЗУ 26 10 01': {class: power_line_overhead, geometry: LIN, name: 'Сегмент провода воздушной ЛЭП'}
+  'ПО ЗУ 26 20': {class: power_line_overhead, geometry: POL, name: 'Воздушная ЛЭП - полигоны'}
+  'ПО ЗУ 26 20 01': {class: power_line_overhead, geometry: POL, name: 'Опора металлическая сборная воздушной ЛЭП'}
+  'ПО ЗУ 26 20 02': {class: power_line_overhead, geometry: POL, name: 'Граница подстанции воздушной ЛЭП'}
+  'ПО ЗУ 26 30': {class: ignore, geometry: LAB, name: 'Воздушная ЛЭП - надписи'}
+  'ПО ЗУ 27 00': {class: utility.access, geometry: PNT, name: 'Кабельная ЛЭП - точки'}
+  'ПО ЗУ 27 00 01': {class: utility.access, geometry: PNT, name: 'Трансформатор кабельной ЛЭП'}
+  'ПО ЗУ 27 00 02': {class: utility.access, geometry: PNT, name: 'Точка подключения кабельной ЛЭП к инженерной сети здания'}
+  'ПО ЗУ 27 00 03': {class: utility.access, geometry: PNT, name: 'Точка подключения кабельной ЛЭП к инженерной сети источника'}
+  'ПО ЗУ 27 00 04': {class: utility.access, geometry: PNT, name: 'Узел сегмента кабельной ЛЭП'}
+  'ПО ЗУ 27 10': {class: utility.power_cable, geometry: LIN, name: 'Кабельная ЛЭП - линии'}
+  'ПО ЗУ 27 10 01': {class: utility.power_cable, geometry: LIN, name: 'Сегмент кабеля ЛЭП'}
+  'ПО ЗУ 27 20': {class: utility.power_cable, geometry: POL, name: 'Кабельная ЛЭП - полигоны'}
+  'ПО ЗУ 27 20 01': {class: utility.power_cable, geometry: POL, name: 'Граница подстанции кабельной ЛЭП'}
+  'ПО ЗУ 27 30': {class: ignore, geometry: LAB, name: 'Кабельная ЛЭП - надписи'}
+  'ПО ЗУ 28 00': {class: power_line_overhead, geometry: PNT, name: 'Воздушная сеть связи - точки'}
+  'ПО ЗУ 28 00 01': {class: power_line_overhead, geometry: PNT, name: 'Опора бетонная воздушной сети связи'}
+  'ПО ЗУ 28 00 02': {class: power_line_overhead, geometry: PNT, name: 'Опора деревянная воздушной сети связи'}
+  'ПО ЗУ 28 00 03': {class: power_line_overhead, geometry: PNT, name: 'Опора металлическая воздушной сети связи'}
+  'ПО ЗУ 28 00 04': {class: power_line_overhead, geometry: PNT, name: 'Трансформатор воздушной сети связи'}
+  'ПО ЗУ 28 00 05': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения сети связи к инженерной сети здания'}
+  'ПО ЗУ 28 00 06': {class: power_line_overhead, geometry: PNT, name: 'Точка подключения сети связи к инженерной сети источника'}
+  'ПО ЗУ 28 00 07': {class: power_line_overhead, geometry: PNT, name: 'Переход воздушной сети связи в кабель'}
+  'ПО ЗУ 28 00 08': {class: power_line_overhead, geometry: PNT, name: 'Молниеотвод воздушной сети связи'}
+  'ПО ЗУ 28 00 09': {class: power_line_overhead, geometry: PNT, name: 'Узел сегмента провода воздушной сети связи'}
+  'ПО ЗУ 28 10': {class: power_line_overhead, geometry: LIN, name: 'Воздушная сеть связи - линии'}
+  'ПО ЗУ 28 10 01': {class: power_line_overhead, geometry: LIN, name: 'Сегмент провода воздушной сети связи'}
+  'ПО ЗУ 28 30': {class: ignore, geometry: LAB, name: 'Воздушная сеть связи - надписи'}
+  'ПО ЗУ 29 00': {class: utility.access, geometry: PNT, name: 'Кабельная сеть связи - точки'}
+  'ПО ЗУ 29 00 01': {class: utility.access, geometry: PNT, name: 'Точка подключения кабельной сети к инженерной сети здания'}
+  'ПО ЗУ 29 00 02': {class: utility.access, geometry: PNT, name: 'Точка подключения кабельной сети к инженерной сети источника'}
+  'ПО ЗУ 29 00 03': {class: utility.access, geometry: PNT, name: 'Узел сегмента провода кабельной сети'}
+  'ПО ЗУ 29 10': {class: utility.telecom, geometry: LIN, name: 'Кабельная сеть связи - линии'}
+  'ПО ЗУ 29 10 01': {class: utility.telecom, geometry: LIN, name: 'Сегмент провода кабельной сети'}
+  'ПО ЗУ 29 30': {class: ignore, geometry: LAB, name: 'Кабельная сеть связи - надписи'}
+  'ПО ЗУ 30 00': {class: ignore, geometry: PNT, name: 'Объекты обеспечения ПБ - точки'}
+  'ПО ЗУ 30 00 01': {class: ignore, geometry: PNT, name: 'Пожарный гидрант'}
+  'ПО ЗУ 30 00 02': {class: ignore, geometry: PNT, name: 'Огнетушитель'}
+  'ПО ЗУ 30 10': {class: ignore, geometry: LIN, name: 'Объекты обеспечения ПБ - линии'}
+  'ПО ЗУ 30 10 01': {class: ignore, geometry: LIN, name: 'Пожарный водопровод'}
+  'ПО ЗУ 30 20': {class: ignore, geometry: POL, name: 'Объекты обеспечения ПБ - полигоны'}
+  'ПО ЗУ 30 20 01': {class: ignore, geometry: POL, name: 'Пожарный водоем'}
+  'ПО ЗУ 30 20 02': {class: ignore, geometry: POL, name: 'Площадка размещения пожарной техники'}
+  'ПО ЗУ 30 30': {class: ignore, geometry: LAB, name: 'Объекты обеспечения ПБ - надписи'}
+  'ПО ЗУ 31 00 01': {class: building, geometry: PNT, name: 'Узел графа в точках входа (выхода) МГН в (из) зданий'}
+  'ПО ЗУ 31 00 03': {class: utility.telecom, geometry: PNT, name: 'Узел связи графа перемещения МГН с существующей инфраструктурой'}
+  'ПО ЗУ 31 10 02': {class: ignore, geometry: LIN, name: 'Тактильная разметка'}
+  'ПО ЗУ 31 20 01': {class: obstacle, geometry: POL, name: 'Граница площадки пандуса'}
+  'ПО ЗУ 31 20 02': {class: road, geometry: POL, name: 'Место стоянки автомобилей для инвалидов'}
+  'ПО ЗУ 31 30': {class: ignore, geometry: LAB, name: 'Объекты обеспечения доступа МГН - надписи'}
+  'ПО ЗУ 32 00': {class: ignore, geometry: PNT, name: 'Объекты земляных работ - точки'}
+  'ПО ЗУ 32 10': {class: ignore, geometry: LIN, name: 'Объекты земляных работ - линии'}
+  'ПО ЗУ 32 20': {class: ignore, geometry: POL, name: 'Объекты земляных работ - полигоны'}
+  'ПО ЗУ 32 30': {class: ignore, geometry: POL, name: 'Выемка'}
+  'ПО ЗУ 32 30': {class: ignore, geometry: LAB, name: 'Объекты земляных работ - надписи'}
+# Остальные строки классификатора: класс не задан (разделы, категории, объекты без
+# вывода по имени) - слой с таким кодом классифицируется обычным порядком.
+unmapped:
+  'ТС 01': {geometry: none, name: 'Координатная сетка'}
+  'ТС 02': {geometry: none, name: 'Геодезические пункты'}
+  'ТС 03': {geometry: none, name: 'Рельеф суши'}
+  'ТС 04': {geometry: none, name: 'Формы рельефа'}
+  'ТС 04 00': {geometry: PNT, name: 'Формы рельефа - точечные объекты'}
+  'ТС 04 00 01': {geometry: PNT, name: 'Ледниковые и мерзлотные формы рельефа'}
+  'ТС 04 00 01 02': {geometry: PNT, name: 'Яма ледниковая'}
+  'ТС 04 00 02': {geometry: PNT, name: 'Эрозионные формы рельефа'}
+  'ТС 04 00 02 01': {geometry: PNT, name: 'Яма мелкий масштаб'}
+  'ТС 04 00 02 02': {geometry: PNT, name: 'Воронка мелкий масштаб'}
+  'ТС 04 00 02 03': {geometry: PNT, name: 'Просадка карстовая и псевдокарстовая мелкий масштаб'}
+  'ТС 04 00 02 04': {geometry: PNT, name: 'Камень'}
+  'ТС 04 00 02 05': {geometry: PNT, name: 'Камень-ориентир отдельный'}
+  'ТС 04 00 02 06': {geometry: PNT, name: 'Выход подземных газов'}
+  'ТС 04 00 02 07': {geometry: PNT, name: 'Курган'}
+  'ТС 04 00 02 08': {geometry: PNT, name: 'Бугор'}
+  'ТС 04 00 02 09': {geometry: PNT, name: 'Пещера'}
+  'ТС 04 00 02 10': {geometry: PNT, name: 'Грот'}
+  'ТС 04 10': {geometry: LIN, name: 'Формы рельефа - линии'}
+  'ТС 04 10 01': {geometry: LIN, name: 'Ледниковые и мерзлотные формы рельефа'}
+  'ТС 04 10 01 01': {geometry: LIN, name: 'Граница ледниковых языков'}
+  'ТС 04 10 01 02': {geometry: LIN, name: 'Трещина ледниковая'}
+  'ТС 04 10 01 03': {geometry: LIN, name: 'Водоток на поверхности ледника'}
+  'ТС 04 10 01 04': {geometry: LIN, name: 'Ледяной обрыв (барьер)'}
+  'ТС 04 10 01 05': {geometry: LIN, name: 'Выход ископаемых льдов'}
+  'ТС 04 10 01 06': {geometry: LIN, name: 'Вал ледяной'}
+  'ТС 04 10 02': {geometry: LIN, name: 'Эрозионные формы рельефа'}
+  'ТС 04 10 02 01': {geometry: LIN, name: 'Сухое русло мелкий масштаб'}
+  'ТС 04 10 02 02': {geometry: LIN, name: 'Промоина мелкий масштаб'}
+  'ТС 04 10 02 03': {geometry: LIN, name: 'Эрозионная борозда'}
+  'ТС 04 10 02 04': {geometry: LIN, name: 'Бровка оврага'}
+  'ТС 04 10 02 08': {geometry: LIN, name: 'Река каменная'}
+  'ТС 04 10 02 09': {geometry: LIN, name: 'Гряда камней'}
+  'ТС 04 10 02 10': {geometry: LIN, name: 'Скала'}
+  'ТС 04 10 02 11': {geometry: LIN, name: 'Обрыв'}
+  'ТС 04 10 02 12': {geometry: LIN, name: 'Уступ'}
+  'ТС 04 10 02 13': {geometry: LIN, name: 'Скала-останец более 10 м высотой'}
+  'ТС 04 10 02 14': {geometry: LIN, name: 'Скалы-останцы менее 10 м высотой'}
+  'ТС 04 10 02 15': {geometry: LIN, name: 'Карниз скалы, обрыва'}
+  'ТС 04 10 02 16': {geometry: LIN, name: 'Дайка'}
+  'ТС 04 10 02 17': {geometry: LIN, name: 'Крутостенная гряда'}
+  'ТС 04 10 02 18': {geometry: LIN, name: 'Обрыв'}
+  'ТС 04 10 02 19': {geometry: LIN, name: 'Бровка обрыва'}
+  'ТС 04 10 02 20': {geometry: LIN, name: 'Уступ'}
+  'ТС 04 10 02 21': {geometry: LIN, name: 'Откос'}
+  'ТС 04 10 02 22': {geometry: LIN, name: 'Уступ задернованный'}
+  'ТС 04 10 02 23': {geometry: LIN, name: 'Уступ, укрепленный на террасированных участках склонов'}
+  'ТС 04 10 02 24': {geometry: LIN, name: 'Откос неукрепленный'}
+  'ТС 04 10 02 25': {geometry: LIN, name: 'Откос укрепленный'}
+  'ТС 04 10 02 26': {geometry: LIN, name: 'Нижняя граница откоса'}
+  'ТС 04 10 02 27': {geometry: LIN, name: 'Вал земляной'}
+  'ТС 04 10 02 28': {geometry: LIN, name: 'Вал береговой'}
+  'ТС 04 10 02 29': {geometry: LIN, name: 'Вал корчевания'}
+  'ТС 04 20': {geometry: POL, name: 'Формы рельефа - полигоны'}
+  'ТС 04 20 01': {geometry: POL, name: 'Ледниковые и мерзлотные формы рельефа'}
+  'ТС 04 20 01 01': {geometry: POL, name: 'Ледник'}
+  'ТС 04 20 01 02': {geometry: POL, name: 'Язык ледниковый'}
+  'ТС 04 20 01 03': {geometry: POL, name: 'Граница фирновых полей, вечных снегов'}
+  'ТС 04 20 01 04': {geometry: POL, name: 'Ледолом'}
+  'ТС 04 20 01 05': {geometry: POL, name: 'Наледь'}
+  'ТС 04 20 01 06': {geometry: POL, name: 'Наледь речная'}
+  'ТС 04 20 01 07': {geometry: POL, name: 'Наледь грунтовая'}
+  'ТС 04 20 01 08': {geometry: POL, name: 'Граница наледных полян'}
+  'ТС 04 20 01 09': {geometry: POL, name: 'Снежник'}
+  'ТС 04 20 01 10': {geometry: POL, name: 'Заструга'}
+  'ТС 04 20 02': {geometry: POL, name: 'Эрозионные формы рельефа'}
+  'ТС 04 20 02 01': {geometry: POL, name: 'Сухое русло крупный масштаб'}
+  'ТС 04 20 02 03': {geometry: POL, name: 'Овраг'}
+  'ТС 04 20 02 04': {geometry: POL, name: 'Промоина крупный масштаб'}
+  'ТС 04 20 02 05': {geometry: POL, name: 'Яма крупный масштаб'}
+  'ТС 04 20 02 06': {geometry: POL, name: 'Воронка крупный масштаб'}
+  'ТС 04 20 02 07': {geometry: POL, name: 'Просадка карстовая и псевдокарстовая крупный масштаб'}
+  'ТС 04 20 02 08': {geometry: POL, name: 'Западина'}
+  'ТС 04 20 02 09': {geometry: POL, name: 'Вымочка'}
+  'ТС 04 20 02 10': {geometry: POL, name: 'Дефляционная котловина'}
+  'ТС 04 20 02 11': {geometry: POL, name: 'Оползень'}
+  'ТС 04 20 02 12': {geometry: POL, name: 'Осыпь рыхлых пород'}
+  'ТС 04 20 02 13': {geometry: POL, name: 'Осыпь твердых пород'}
+  'ТС 04 20 02 15': {geometry: POL, name: 'Осыпь твердых пород галечниковая'}
+  'ТС 04 20 02 16': {geometry: POL, name: 'Скопление камней'}
+  'ТС 04 20 02 17': {geometry: POL, name: 'Скала'}
+  'ТС 04 20 02 18': {geometry: POL, name: 'Скальный выступ'}
+  'ТС 04 20 02 19': {geometry: POL, name: 'Скалистый обрыв'}
+  'ТС 04 20 02 20': {geometry: POL, name: 'Курган'}
+  'ТС 04 20 02 21': {geometry: POL, name: 'Бугор'}
+  'ТС 04 20 02 22': {geometry: POL, name: 'Обрыв'}
+  'ТС 04 20 02 23': {geometry: POL, name: 'Откос'}
+  'ТС 04 20 02 24': {geometry: POL, name: 'Осыпь'}
+  'ТС 04 20 03': {geometry: POL, name: 'Антропогенные формы рельефа'}
+  'ТС 04 20 03 01': {geometry: POL, name: 'Котлован'}
+  'ТС 05': {geometry: none, name: 'Объекты геологии'}
+  'ТС 05 00': {geometry: PNT, name: 'Объекты геологии - точечные объекты'}
+  'ТС 05 00 01': {geometry: PNT, name: 'Устья разведочных геологических шурфов'}
+  'ТС 05 00 02': {geometry: PNT, name: 'Устья разведочных геологических скважин'}
+  'ТС 05 10': {geometry: LIN, name: 'Объекты геологии - линии'}
+  'ТС 05 10 01': {geometry: LIN, name: 'Линии разведочных геологических шурфов'}
+  'ТС 05 10 02': {geometry: LIN, name: 'Линии разведочных геологических скважин'}
+  'ТС 05 10 03': {geometry: LIN, name: 'Канавы геологические'}
+  'ТС 05 10 04': {geometry: LIN, name: 'Расчистки'}
+  'ТС 06': {geometry: none, name: 'Объекты гидрографии'}
+  'ТС 06 00': {geometry: PNT, name: 'Объекты гидрографии - точечные объекты'}
+  'ТС 06 00 01': {geometry: PNT, name: 'Ключи, родники'}
+  'ТС 06 00 01 01': {geometry: PNT, name: 'Ключ, родник необорудованный'}
+  'ТС 06 00 01 02': {geometry: PNT, name: 'Ключ, родник оборудованный'}
+  'ТС 06 00 01 04': {geometry: PNT, name: 'Гейзер'}
+  'ТС 06 00 03': {geometry: PNT, name: 'Узлы подключения'}
+  'ТС 06 00 03 02': {geometry: PNT, name: 'Бак водонапорный'}
+  'ТС 06 00 04 02': {geometry: PNT, name: 'Скважина артезианская'}
+  'ТС 06 00 04 05': {geometry: PNT, name: 'Скважина с механическим подъемом воды'}
+  'ТС 06 00 04 06': {geometry: PNT, name: 'Чигирь'}
+  'ТС 06 00 04 07': {geometry: PNT, name: 'Скважина водозаборная'}
+  'ТС 06 00 04 10': {geometry: PNT, name: 'Скважина с ручным насосом'}
+  'ТС 06 00 04 12': {geometry: PNT, name: 'Колонка водоразборная'}
+  'ТС 06 00 04 13': {geometry: PNT, name: 'Колонка гидравлическая'}
+  'ТС 06 00 04 14': {geometry: PNT, name: 'Водоразборная будка'}
+  'ТС 06 00 04 15': {geometry: PNT, name: 'Колонка питьевая'}
+  'ТС 06 00 04 16': {geometry: PNT, name: 'Гидрант'}
+  'ТС 06 00 04 17': {geometry: PNT, name: 'Водокачка'}
+  'ТС 06 00 05': {geometry: PNT, name: 'Насосы'}
+  'ТС 06 00 05 01': {geometry: PNT, name: 'Насос стационарный'}
+  'ТС 06 00 05 02': {geometry: PNT, name: 'Насос передвижной'}
+  'ТС 06 00 06': {geometry: PNT, name: 'Пристани, доки'}
+  'ТС 06 00 06 01': {geometry: PNT, name: 'Пристань, остановочный пункт'}
+  'ТС 06 00 06 02': {geometry: PNT, name: 'Пристань с оборудованным причалом'}
+  'ТС 06 00 06 03': {geometry: PNT, name: 'Пристань без оборудованного причала'}
+  'ТС 06 00 06 04': {geometry: PNT, name: 'Якорная стоянка'}
+  'ТС 06 00 06 05': {geometry: PNT, name: 'Док сухой'}
+  'ТС 06 00 06 06': {geometry: PNT, name: 'Слип'}
+  'ТС 06 00 06 07': {geometry: PNT, name: 'Стапель'}
+  'ТС 06 00 07': {geometry: PNT, name: 'Маяки, сваи, ледорезы'}
+  'ТС 06 00 07 01': {geometry: PNT, name: 'Маяк'}
+  'ТС 06 00 07 02': {geometry: PNT, name: 'Маяк плавучий'}
+  'ТС 06 00 07 03': {geometry: PNT, name: 'Маяк плавучий с двумя огнями'}
+  'ТС 06 00 07 04': {geometry: PNT, name: 'Маяк плавучий с одним огнем'}
+  'ТС 06 00 07 05': {geometry: PNT, name: 'Маяк береговой'}
+  'ТС 06 00 07 06': {geometry: PNT, name: 'Огни'}
+  'ТС 06 00 07 07': {geometry: PNT, name: 'Огонь плавучий'}
+  'ТС 06 00 07 08': {geometry: PNT, name: 'Знак береговой сигнализации'}
+  'ТС 06 00 07 09': {geometry: PNT, name: 'Знак створный'}
+  'ТС 06 00 07 10': {geometry: PNT, name: 'Буй светящийся'}
+  'ТС 06 00 07 11': {geometry: PNT, name: 'Пост водомерный'}
+  'ТС 06 00 07 12': {geometry: PNT, name: 'Футшток'}
+  'ТС 06 00 07 13': {geometry: PNT, name: 'Ряжь'}
+  'ТС 06 00 07 14': {geometry: PNT, name: 'Свая в воде (группа свай)'}
+  'ТС 06 00 07 15': {geometry: PNT, name: 'Ледорез'}
+  'ТС 06 00 08': {geometry: PNT, name: 'Пляжи'}
+  'ТС 06 00 08 01': {geometry: PNT, name: 'Пляж оборудованный'}
+  'ТС 06 00 08 02': {geometry: PNT, name: 'Пляж необорудованный'}
+  'ТС 06 00 09': {geometry: PNT, name: 'Навигационные опасности'}
+  'ТС 06 00 09 01': {geometry: PNT, name: 'Навигационная опасность'}
+  'ТС 06 00 09 02': {geometry: PNT, name: 'Скала надводная'}
+  'ТС 06 00 09 03': {geometry: PNT, name: 'Камень подводный'}
+  'ТС 06 00 09 04': {geometry: PNT, name: 'Камень надводный'}
+  'ТС 06 00 09 05': {geometry: PNT, name: 'Камень надводный отдельный'}
+  'ТС 06 00 09 06': {geometry: PNT, name: 'Камень осыхающий'}
+  'ТС 06 00 09 07': {geometry: PNT, name: 'Банка'}
+  'ТС 06 00 09 08': {geometry: PNT, name: 'Затопленное отдельное дерево'}
+  'ТС 06 00 09 09': {geometry: PNT, name: 'Затопленный кустарник'}
+  'ТС 06 10': {geometry: LIN, name: 'кОабъекты гидрографии - линии'}
+  'ТС 06 10 01': {geometry: LIN, name: 'Изобаты'}
+  'ТС 06 10 03': {geometry: LIN, name: 'Водопады'}
+  'ТС 06 10 04': {geometry: LIN, name: 'Пороги'}
+  'ТС 06 10 05': {geometry: LIN, name: 'Направление течения'}
+  'ТС 06 10 06': {geometry: LIN, name: 'Указатели начала регулярного судоходства'}
+  'ТС 06 10 07': {geometry: LIN, name: 'Броды'}
+  'ТС 06 10 08': {geometry: LIN, name: 'Реки, каналы, канавы'}
+  'ТС 06 10 08 01': {geometry: LIN, name: 'Река с постоянным водотоком'}
+  'ТС 06 10 08 02': {geometry: LIN, name: 'Ручей с постоянным водотоком'}
+  'ТС 06 10 08 03': {geometry: LIN, name: 'Река пересыхающая'}
+  'ТС 06 10 08 04': {geometry: LIN, name: 'Ручей пересыхающий'}
+  'ТС 06 10 08 05': {geometry: LIN, name: 'Подземный и пропадающий участок рек'}
+  'ТС 06 10 08 06': {geometry: LIN, name: 'Канал наземный действующий'}
+  'ТС 06 10 08 07': {geometry: LIN, name: 'Канал наземный строящийся'}
+  'ТС 06 10 08 08': {geometry: LIN, name: 'Канал подземный'}
+  'ТС 06 10 08 10': {geometry: LIN, name: 'Канал судоходный действующий'}
+  'ТС 06 10 08 11': {geometry: LIN, name: 'Канал судоходный строящийся'}
+  'ТС 06 10 08 12': {geometry: LIN, name: 'Канал морской'}
+  'ТС 06 10 08 13': {geometry: LIN, name: 'Канава сухая'}
+  'ТС 06 10 08 14': {geometry: LIN, name: 'Канава'}
+  'ТС 06 10 09': {geometry: LIN, name: 'Линии береговые'}
+  'ТС 06 10 09 01': {geometry: LIN, name: 'Линия береговая постоянная и определенная'}
+  'ТС 06 10 09 02': {geometry: LIN, name: 'Линия береговая непостоянная и неопределенная'}
+  'ТС 06 10 09 03': {geometry: LIN, name: 'Линия береговая неопределенная'}
+  'ТС 06 10 09 04': {geometry: LIN, name: 'Линия береговая непостоянная'}
+  'ТС 06 10 10': {geometry: LIN, name: 'Границы пропадающих участков рек'}
+  'ТС 06 10 11': {geometry: LIN, name: 'Кяризы'}
+  'ТС 06 10 11 01': {geometry: LIN, name: 'Кяриз действующий'}
+  'ТС 06 10 11 02': {geometry: LIN, name: 'Кяриз недействующий'}
+  'ТС 06 10 12 01': {geometry: LIN, name: 'Борт акведука деревянного'}
+  'ТС 06 10 13': {geometry: LIN, name: 'Водопропускные устройства'}
+  'ТС 06 10 13 05': {geometry: LIN, name: 'Водораспределительное устройство'}
+  'ТС 06 10 13 06': {geometry: LIN, name: 'Борт быстротока, перепада деревянный'}
+  'ТС 06 10 13 08': {geometry: LIN, name: 'Консольная часть деревянная'}
+  'ТС 06 10 13 09': {geometry: LIN, name: 'Консольная часть бетонированная'}
+  'ТС 06 10 14': {geometry: LIN, name: 'Плотины'}
+  'ТС 06 10 14 02': {geometry: LIN, name: 'Дамба односторонняя'}
+  'ТС 06 10 14 03': {geometry: LIN, name: 'Шлюз'}
+  'ТС 06 10 14 04': {geometry: LIN, name: 'Ворота (затвор) шлюзов'}
+  'ТС 06 10 14 05': {geometry: LIN, name: 'Пал'}
+  'ТС 06 10 14 06': {geometry: LIN, name: 'Валик односторонний'}
+  'ТС 06 10 14 07': {geometry: LIN, name: 'Валик двухсторонний'}
+  'ТС 06 10 14 08': {geometry: LIN, name: 'Мол'}
+  'ТС 06 10 14 09': {geometry: LIN, name: 'Причал'}
+  'ТС 06 10 14 10': {geometry: LIN, name: 'Пирс'}
+  'ТС 06 10 14 11': {geometry: LIN, name: 'Волнолом'}
+  'ТС 06 10 14 12': {geometry: LIN, name: 'Бун'}
+  'ТС 06 10 14 13': {geometry: LIN, name: 'Оградительное устройство'}
+  'ТС 06 10 14 14': {geometry: LIN, name: 'Регуляционное устройство'}
+  'ТС 06 10 14 17': {geometry: none, name: 'Дамба обвалования'}
+  'ТС 06 10 15': {geometry: LIN, name: 'Берега'}
+  'ТС 06 10 15 01': {geometry: LIN, name: 'Берег с укрепленными откосами'}
+  'ТС 06 10 15 02': {geometry: LIN, name: 'Берег с укрепленными откосами с бермой'}
+  'ТС 06 10 15 04': {geometry: LIN, name: 'Берег со спланированными неукрепленными откосами'}
+  'ТС 06 10 15 05': {geometry: LIN, name: 'Набережная'}
+  'ТС 06 10 15 06': {geometry: LIN, name: 'Набережная каменная, бетонная, железобетонная'}
+  'ТС 06 10 15 07': {geometry: LIN, name: 'Набережная каменная, бетонная, железобетонная отвесная'}
+  'ТС 06 10 15 08': {geometry: LIN, name: 'Набережная деревянная'}
+  'ТС 06 10 15 09': {geometry: LIN, name: 'Набережная деревянная отвесная'}
+  'ТС 06 10 15 13': {geometry: LIN, name: 'Парапет деревянный'}
+  'ТС 06 10 16': {geometry: LIN, name: 'Переправы, перевозы'}
+  'ТС 06 10 16 01': {geometry: LIN, name: 'Паромная переправа морская железнодорожная'}
+  'ТС 06 10 16 02': {geometry: LIN, name: 'Паромная переправа морская автомобильная'}
+  'ТС 06 10 16 03': {geometry: LIN, name: 'Паромная переправа речная'}
+  'ТС 06 10 16 04': {geometry: LIN, name: 'Паром автогужевой с механическим двигателем'}
+  'ТС 06 10 16 05': {geometry: LIN, name: 'Паром автогужевой несамоходные'}
+  'ТС 06 10 16 06': {geometry: LIN, name: 'Перевоз лодочный с механическим двигателем'}
+  'ТС 06 10 16 07': {geometry: LIN, name: 'Перевоз лодочный несамоходный'}
+  'ТС 06 10 17': {geometry: LIN, name: 'Морские пути'}
+  'ТС 06 10 18': {geometry: LIN, name: 'Устройства рыбозащитные и мусороулавливающие'}
+  'ТС 06 10 19': {geometry: LIN, name: 'Гидрометрические створы'}
+  'ТС 06 20': {geometry: POL, name: 'Объекты гидрографии - полигоны'}
+  'ТС 06 20 01': {geometry: POL, name: 'Моря и океаны'}
+  'ТС 06 20 03': {geometry: POL, name: 'Водохранилища'}
+  'ТС 06 20 03 01': {geometry: POL, name: 'Водохранилище загрязненное'}
+  'ТС 06 20 03 02': {geometry: POL, name: 'Водохранилище строящееся'}
+  'ТС 06 20 03 03': {geometry: POL, name: 'Водохранилище подземное'}
+  'ТС 06 20 03 04': {geometry: POL, name: 'Водохранилище временное'}
+  'ТС 06 20 04': {geometry: POL, name: 'Острова'}
+  'ТС 06 20 05': {geometry: POL, name: 'Площади разливов или зоны затоплений'}
+  'ТС 06 20 06': {geometry: POL, name: 'Акведуки'}
+  'ТС 06 20 06 01': {geometry: POL, name: 'Акведук деревянный'}
+  'ТС 06 20 06 02': {geometry: POL, name: 'Акведук металлический'}
+  'ТС 06 20 06 03': {geometry: POL, name: 'Акведук бетонный'}
+  'ТС 06 20 07': {geometry: POL, name: 'Водопропускные устройства'}
+  'ТС 06 20 07 01': {geometry: POL, name: 'Быстроток'}
+  'ТС 06 20 07 03': {geometry: POL, name: 'Перепад (сброс) консольный'}
+  'ТС 06 20 08': {geometry: POL, name: 'Станции насосные'}
+  'ТС 06 20 09': {geometry: POL, name: 'Плотины'}
+  'ТС 06 20 09 03': {geometry: POL, name: 'Плотина непроезжая'}
+  'ТС 06 20 09 04': {geometry: POL, name: 'Гребень плотины'}
+  'ТС 06 20 09 05': {geometry: POL, name: 'Плотина подводная'}
+  'ТС 06 20 09 07': {geometry: POL, name: 'Водослив в плотине'}
+  'ТС 06 20 09 08': {geometry: POL, name: 'Плотина'}
+  'ТС 06 20 10': {geometry: POL, name: 'Дамбы, молы, волноломы'}
+  'ТС 06 20 10 01': {geometry: POL, name: 'Дамба двухсторонняя'}
+  'ТС 06 20 10 02': {geometry: POL, name: 'Камера шлюза'}
+  'ТС 06 20 11': {geometry: POL, name: 'Водные станции, набережные'}
+  'ТС 06 20 11 01': {geometry: POL, name: 'Станция водная'}
+  'ТС 06 20 11 02': {geometry: POL, name: 'Набережная каменная, бетонная, железобетонная наклонная'}
+  'ТС 06 20 11 03': {geometry: POL, name: 'Набережная деревянная наклонная'}
+  'ТС 06 20 12': {geometry: POL, name: 'Берега'}
+  'ТС 06 20 12 01': {geometry: POL, name: 'Берег опасный'}
+  'ТС 06 20 12 02': {geometry: POL, name: 'Берег осыхающий (приливо-отливная полоса)'}
+  'ТС 06 20 12 03': {geometry: POL, name: 'Берег осыхающий песчаный'}
+  'ТС 06 20 12 04': {geometry: POL, name: 'Берег осыхающий песчано-каменистый'}
+  'ТС 06 20 12 05': {geometry: POL, name: 'Берег осыхающий песчано-илистый'}
+  'ТС 06 20 12 07': {geometry: POL, name: 'Берег осыхающий илистый'}
+  'ТС 06 20 12 08': {geometry: POL, name: 'Берег осыхающий скалистый'}
+  'ТС 06 20 12 09': {geometry: POL, name: 'Берег осыхающий глинистый'}
+  'ТС 06 20 12 11': {geometry: POL, name: 'Берег осыхающий ракушечный'}
+  'ТС 06 20 12 12': {geometry: POL, name: 'Берег осыхающий каменистый'}
+  'ТС 06 20 12 13': {geometry: POL, name: 'Берег осыхающий валунный'}
+  'ТС 06 20 12 14': {geometry: POL, name: 'Берег обрывистый без пляжа'}
+  'ТС 06 20 12 15': {geometry: POL, name: 'Берег обрывистый с пляжем'}
+  'ТС 06 20 13': {geometry: POL, name: 'Отмели'}
+  'ТС 06 20 13 01': {geometry: POL, name: 'Отмель береговая'}
+  'ТС 06 20 13 02': {geometry: POL, name: 'Мель русловая'}
+  'ТС 06 20 13 03': {geometry: POL, name: 'Перекат'}
+  'ТС 06 20 14': {geometry: POL, name: 'Водные препятствия'}
+  'ТС 06 20 14 01': {geometry: POL, name: 'Камень надводный группа'}
+  'ТС 06 20 14 02': {geometry: POL, name: 'Места скопления плавника'}
+  'ТС 06 20 14 03': {geometry: POL, name: 'Водоросли'}
+  'ТС 06 20 14 04': {geometry: POL, name: 'Растительность травяная с плавающими листьями'}
+  'ТС 06 20 14 05': {geometry: POL, name: 'Растительность травяная с погруженными листьями'}
+  'ТС 06 20 14 06': {geometry: POL, name: 'Водная растительность моховая'}
+  'ТС 06 20 14 07': {geometry: POL, name: 'Затопленный участок леса'}
+  'ТС 06 20 15': {geometry: POL, name: 'Ключи, родники'}
+  'ТС 06 20 15 01': {geometry: POL, name: 'Ключ, родник необорудованный'}
+  'ТС 06 20 15 02': {geometry: POL, name: 'Ключ, родник оборудованный'}
+  'ТС 06 20 16 02': {geometry: POL, name: 'Скважина водозаборная'}
+  'ТС 06 20 16 03': {geometry: POL, name: 'Колонка водоразборная'}
+  'ТС 06 20 16 04': {geometry: POL, name: 'Колонка питьевая'}
+  'ТС 06 20 16 05': {geometry: POL, name: 'Гидрант'}
+  'ТС 06 20 17': {geometry: POL, name: 'Пляжи'}
+  'ТС 06 20 17 01': {geometry: POL, name: 'Пляж оборудованный'}
+  'ТС 06 20 17 02': {geometry: POL, name: 'Пляж необорудованный'}
+  'ТС 06 20 18': {geometry: POL, name: 'Реки, каналы, канавы'}
+  'ТС 06 20 18 01': {geometry: POL, name: 'Река с постоянным водотоком'}
+  'ТС 06 20 18 02': {geometry: POL, name: 'Ручей с постоянным водотоком'}
+  'ТС 06 20 18 03': {geometry: POL, name: 'Река пересыхающая'}
+  'ТС 06 20 18 04': {geometry: POL, name: 'Ручей пересыхающий'}
+  'ТС 06 20 18 05': {geometry: POL, name: 'Канава сухая'}
+  'ТС 06 20 18 06': {geometry: POL, name: 'Канава'}
+  'ТС 07': {geometry: none, name: 'Назначение территории'}
+  'ТС 07 00': {geometry: PNT, name: 'Назначение территории - точечные объекты'}
+  'ТС 07 00 01': {geometry: PNT, name: 'Географические объекты'}
+  'ТС 07 20': {geometry: POL, name: 'Назначение территории - полигоны'}
+  'ТС 07 20 00': {geometry: POL, name: 'Поселки'}
+  'ТС 07 20 00 01': {geometry: POL, name: 'Поселок городского типа'}
+  'ТС 07 20 00 02': {geometry: POL, name: 'Поселок сельского типа'}
+  'ТС 07 20 00 03': {geometry: POL, name: 'Поселок дачного типа'}
+  'ТС 07 20 01': {geometry: POL, name: 'Поселения, анклавы'}
+  'ТС 07 20 01 01': {geometry: POL, name: 'Поселение при промышленном предприятии'}
+  'ТС 07 20 01 02': {geometry: POL, name: 'Анклав населенного пункта'}
+  'ТС 07 20 01 03': {geometry: POL, name: 'Поселение временное'}
+  'ТС 07 20 01 04': {geometry: POL, name: 'Поселение однодворное'}
+  'ТС 07 20 01 05': {geometry: POL, name: 'Поселение разрушенное и полуразрушенное'}
+  'ТС 07 20 02': {geometry: POL, name: 'Кварталы'}
+  'ТС 07 20 02 03': {geometry: POL, name: 'Квартал плотнозастроенный без разделения по огнестойкости'}
+  'ТС 07 20 02 04': {geometry: POL, name: 'Квартал плотнозастроенный в крупных городах'}
+  'ТС 07 20 02 05': {geometry: POL, name: 'Квартал плотнозастроенный в малых городах'}
+  'ТС 07 20 02 06': {geometry: POL, name: 'Квартал плотнозастроенный в поселке городского типа'}
+  'ТС 07 20 02 07': {geometry: POL, name: 'Квартал плотнозастроенный в сельских поселениях'}
+  'ТС 07 20 02 08': {geometry: POL, name: 'Квартал редкозастроенный'}
+  'ТС 07 20 02 09': {geometry: POL, name: 'Квартал незастроенный'}
+  'ТС 07 20 02 10': {geometry: POL, name: 'Квартал разрушенный'}
+  'ТС 07 20 02 11': {geometry: POL, name: 'Квартал строящийся'}
+  'ТС 07 20 02 12': {geometry: POL, name: 'Район строящийся'}
+  'ТС 07 20 02 13': {geometry: POL, name: 'Квартал проектируемый'}
+  'ТС 07 20 02 14': {geometry: POL, name: 'Район проектируемый'}
+  'ТС 07 20 03': {geometry: POL, name: 'Массивы кварталов'}
+  'ТС 07 20 03 01': {geometry: POL, name: 'Массив кварталов в крупном городе'}
+  'ТС 07 20 03 02': {geometry: POL, name: 'Массив кварталов в малом городе'}
+  'ТС 07 20 03 03': {geometry: POL, name: 'Массив кварталов в поселке городского типа'}
+  'ТС 07 20 04': {geometry: POL, name: 'Разные территории'}
+  'ТС 07 20 04 01': {geometry: POL, name: 'Парк'}
+  'ТС 07 20 04 02': {geometry: POL, name: 'Сквер'}
+  'ТС 07 20 04 04': {geometry: POL, name: 'Клумба'}
+  'ТС 07 20 04 05': {geometry: POL, name: 'Пустырь'}
+  'ТС 07 20 04 07': {geometry: POL, name: 'Территория специального назначения'}
+  'ТС 07 20 04 08': {geometry: POL, name: 'Территория общего пользования'}
+  'ТС 07 20 04 10': {geometry: POL, name: 'Территория земляных работ'}
+  'ТС 07 20 04 11': {geometry: POL, name: 'Навал'}
+  'ТС 07 20 04 12': {geometry: POL, name: 'Завал'}
+  'ТС 08': {geometry: none, name: 'Строения'}
+  'ТС 08 00 05 01': {geometry: PNT, name: 'Устье действующего основного шахтного ствола прямоугольного сечения'}
+  'ТС 08 00 05 02': {geometry: PNT, name: 'Устье действующего основного шахтного ствола круглого сечения'}
+  'ТС 08 00 05 06': {geometry: PNT, name: 'Устье недействующего шахтного ствола и эксплуатационного шурфа'}
+  'ТС 08 00 05 07': {geometry: PNT, name: 'Устье недействующего шахтного ствола прямоугольного сечения'}
+  'ТС 08 00 05 08': {geometry: PNT, name: 'Устье недействующего шахтного ствола круглого сечения'}
+  'ТС 08 00 05 12': {geometry: PNT, name: 'Устье шахтного ствола, шурфа, штольни обрушившееся'}
+  'ТС 08 10 04 10': {geometry: LIN, name: 'Забор деревянный с капитальными опорами или столбами металлическими'}
+  'ТС 08 10 04 11': {geometry: LIN, name: 'Забор деревянный с капитальными опорами или столбами бетонными'}
+  'ТС 08 10 04 12': {geometry: LIN, name: 'Забор деревянный на каменном, бетонном или кирпичном фундаменте'}
+  'ТС 08 10 04 13': {geometry: LIN, name: 'Изгородь, плетень и трельяж'}
+  'ТС 08 10 05 03': {geometry: LIN, name: 'Верхний край наклонной стенки деревянной'}
+  'ТС 08 10 05 04': {geometry: LIN, name: 'Нижний край наклонной стенки деревянной'}
+  'ТС 08 20 03 06': {geometry: POL, name: 'Крыльцо закрытое деревянное'}
+  'ТС 08 20 03 09': {geometry: POL, name: 'Вход открытый в подземную часть здания'}
+  'ТС 08 20 03 10': {geometry: POL, name: 'Вход закрытый в подземную часть здания'}
+  'ТС 08 20 03 12': {geometry: POL, name: 'Часть здания подземная'}
+  'ТС 08 20 07 46': {geometry: POL, name: 'Церковь деревянная'}
+  'ТС 08 20 07 48': {geometry: POL, name: 'Мечеть деревянная'}
+  'ТС 08 20 07 50': {geometry: POL, name: 'Буддийский храм, пагода деревянная'}
+  'ТС 08 20 07 52': {geometry: POL, name: 'Часовня деревянная'}
+  'ТС 08 20 08 03': {geometry: POL, name: 'Фундамент деревянной ограды'}
+  'ТС 09': {geometry: none, name: 'Дороги'}
+  'ТС 09 00': {geometry: PNT, name: 'Дороги - точечные объекты'}
+  'ТС 09 00 01': {geometry: PNT, name: 'Дорожные знаки'}
+  'ТС 09 00 01 01': {geometry: PNT, name: 'Знак километровый'}
+  'ТС 09 00 01 02': {geometry: PNT, name: 'Указатель расстояний'}
+  'ТС 09 00 01 03': {geometry: PNT, name: 'Дорожный указатель'}
+  'ТС 09 00 01 04': {geometry: PNT, name: 'Указатель названия населенного пункта'}
+  'ТС 09 00 01 05': {geometry: PNT, name: 'Указатель названия реки'}
+  'ТС 09 00 01 06': {geometry: PNT, name: 'Указатель остановок общественного транспорта'}
+  'ТС 09 00 01 08': {geometry: PNT, name: 'Знак дорожный прочий'}
+  'ТС 09 00 02': {geometry: PNT, name: 'Указатель направления движения машин'}
+  'ТС 09 00 03 04': {geometry: PNT, name: 'Арка постоянная на автодорогах'}
+  'ТС 09 00 04': {geometry: PNT, name: 'Посты, будки'}
+  'ТС 09 00 04 01': {geometry: PNT, name: 'Пост регулировщика движения'}
+  'ТС 09 00 04 02': {geometry: PNT, name: 'Будка регулировщика движения'}
+  'ТС 09 00 05': {geometry: PNT, name: 'Автозаправки'}
+  'ТС 09 00 05 01': {geometry: PNT, name: 'Автомобильная заправочная станция (АЗС)'}
+  'ТС 09 00 05 02': {geometry: PNT, name: 'Автомобильная газозаправочная станция (АГЗС)'}
+  'ТС 09 00 06': {geometry: PNT, name: 'Шахтные стволы и штольни на туннелях'}
+  'ТС 09 00 07': {geometry: PNT, name: 'Указатели тактильные наземные'}
+  'ТС 09 00 07 01': {geometry: PNT, name: 'Указатель тактильный наземный 300х300 мм'}
+  'ТС 09 00 07 02': {geometry: PNT, name: 'Указатель тактильный наземный 400х400 мм'}
+  'ТС 09 00 07 03': {geometry: PNT, name: 'Указатель тактильный наземный 500х500 мм'}
+  'ТС 09 00 07 04': {geometry: PNT, name: 'Указатель тактильный наземный 600х600 мм'}
+  'ТС 09 00 08': {geometry: PNT, name: 'Регулировщики'}
+  'ТС 09 00 08 01': {geometry: PNT, name: 'Шлагбаум'}
+  'ТС 09 00 99': {geometry: PNT, name: 'Точечные дорожные объекты не вошедшие в основной перечень'}
+  'ТС 09 10 00 04': {geometry: LIN, name: 'Автодорога с деревянным покрытием'}
+  'ТС 09 10 00 12': {geometry: LIN, name: 'Строящаяся дорога с деревянным покрытием'}
+  'ТС 09 20 17 03': {geometry: POL, name: 'Мост и путепровод однопролетный деревянный'}
+  'ТС 09 20 17 06': {geometry: POL, name: 'Мост и путепровод многопролетный деревянный'}
+  'ТС 09 20 17 13': {geometry: POL, name: 'Мост подъемный, разводной деревянный'}
+  'ТС 09 20 17 16': {geometry: POL, name: 'Мост малый деревянный'}
+  'ТС 09 20 17 27': {geometry: POL, name: 'Разводной участок моста деревянный'}
+  'ТС 09 20 17 40': {geometry: POL, name: 'Переход подземный (туннель пешеходный)'}
+  'ТС 09 20 21 07': {geometry: POL, name: 'Строящаяся дорога с деревянным покрытием'}
+  'ТС 10': {geometry: none, name: 'Железные дороги'}
+  'ТС 10 00': {geometry: PNT, name: 'Точечные объекты железных дорог'}
+  'ТС 10 00 01': {geometry: PNT, name: 'Выход линии метро на поверхность'}
+  'ТС 10 00 02': {geometry: PNT, name: 'Станции'}
+  'ТС 10 00 02 01': {geometry: PNT, name: 'Станция ж.д.'}
+  'ТС 10 00 02 02': {geometry: PNT, name: 'Остановочный пункт ж.д.'}
+  'ТС 10 00 02 03': {geometry: PNT, name: 'Станция на узкоколейных ж.д.'}
+  'ТС 10 00 02 04': {geometry: PNT, name: 'Станция метро'}
+  'ТС 10 00 02 05': {geometry: PNT, name: 'Вход в станцию метро'}
+  'ТС 10 00 03': {geometry: PNT, name: 'Регулировщики'}
+  'ТС 10 00 03 04': {geometry: PNT, name: 'Семафор'}
+  'ТС 10 00 03 05': {geometry: PNT, name: 'Семафор на мостике консольном'}
+  'ТС 10 00 03 06': {geometry: PNT, name: 'Шлагбаум железнодорожный'}
+  'ТС 10 00 06': {geometry: PNT, name: 'Концы рельсовых путей'}
+  'ТС 10 00 06 01': {geometry: PNT, name: 'Концы рельсовых путей (тупик)'}
+  'ТС 10 00 06 02': {geometry: PNT, name: 'Концы рельсовых путей без упоров'}
+  'ТС 10 00 06 03': {geometry: PNT, name: 'Концы рельсовых путей с упорами'}
+  'ТС 10 00 06 04': {geometry: PNT, name: 'Концы рельсовых путей с упором и балластной призмой'}
+  'ТС 10 00 07': {geometry: PNT, name: 'Вентиляторы метро'}
+  'ТС 10 00 07 01': {geometry: PNT, name: 'Вентилятор метро наземный квадратный'}
+  'ТС 10 00 07 02': {geometry: PNT, name: 'Вентилятор метро наземный круглый'}
+  'ТС 10 00 07 03': {geometry: PNT, name: 'Вентилятор метро подземный квадратный'}
+  'ТС 10 00 07 04': {geometry: PNT, name: 'Вентилятор метро подземный круглый'}
+  'ТС 10 00 08': {geometry: PNT, name: 'Железнодорожный указатели'}
+  'ТС 10 00 08 01': {geometry: PNT, name: 'Указатель расстояний железнодорожный'}
+  'ТС 10 00 08 02': {geometry: PNT, name: 'Указатель направления входа в метро'}
+  'ТС 10 00 08 03': {geometry: PNT, name: 'Знак ж.д. сигнализации'}
+  'ТС 10 10 00 18': {geometry: LIN, name: 'Линия метрополитена подземная'}
+  'ТС 10 20 06 02': {geometry: POL, name: 'Вентилятор метро подземный'}
+  'ТС 11': {geometry: none, name: 'ЛЭП'}
+  'ТС 12': {geometry: none, name: 'Электрокабели'}
+  'ТС 13': {geometry: none, name: 'Линии связи воздушные и кабельные'}
+  'ТС 14': {geometry: none, name: 'Водопровод'}
+  'ТС 15': {geometry: none, name: 'Канализация хозяйственно-бытовая'}
+  'ТС 16': {geometry: none, name: 'Канализация ливневая'}
+  'ТС 17': {geometry: none, name: 'Газопроводы'}
+  'ТС 18': {geometry: none, name: 'Нефтепроводы'}
+  'ТС 19': {geometry: none, name: 'Теплотрассы'}
+  'ТС 20': {geometry: none, name: 'Продуктопроводы'}
+  'ТС 21': {geometry: none, name: 'Прочие трубопроводы'}
+  'ТС 22': {geometry: none, name: 'Растительность'}
+  'ТС 22 00': {geometry: PNT, name: 'Точечные объекты растительности'}
+  'ТС 22 10': {geometry: LIN, name: 'Линейные объекты растительности'}
+  'ТС 22 10 01': {geometry: LIN, name: 'Лесополосы высотой до 4 м'}
+  'ТС 22 10 02': {geometry: LIN, name: 'Лесополосы высотой 4 м и более'}
+  'ТС 22 10 04': {geometry: LIN, name: 'Просеки'}
+  'ТС 22 20': {geometry: POL, name: 'Объекты растительности - полигоны'}
+  'ТС 22 20 01': {geometry: POL, name: 'Леса'}
+  'ТС 22 20 01 01': {geometry: POL, name: 'Лес густой высокий'}
+  'ТС 22 20 01 02': {geometry: POL, name: 'Лес густой низкорослый'}
+  'ТС 22 20 01 03': {geometry: POL, name: 'Лес саженый высокоствольный'}
+  'ТС 22 20 01 04': {geometry: POL, name: 'Лес редкий высокий'}
+  'ТС 22 20 01 05': {geometry: POL, name: 'Лес редкий низкорослый'}
+  'ТС 22 20 01 06': {geometry: POL, name: 'Бурелом площадной'}
+  'ТС 22 20 01 07': {geometry: POL, name: 'Горелый и сухостойный лес'}
+  'ТС 22 20 01 08': {geometry: POL, name: 'Криволесье'}
+  'ТС 22 20 01 09': {geometry: POL, name: 'Поросль леса густая'}
+  'ТС 22 20 01 10': {geometry: POL, name: 'Поросль леса редкая'}
+  'ТС 22 20 03': {geometry: POL, name: 'Лесопосадки молодые'}
+  'ТС 22 20 04': {geometry: POL, name: 'Питомники лесных пород'}
+  'ТС 22 20 05': {geometry: POL, name: 'Лесополосы высотой до 4 м'}
+  'ТС 22 20 06': {geometry: POL, name: 'Лесополосы высотой 4 м и более'}
+  'ТС 22 20 08': {geometry: POL, name: 'Просеки'}
+  'ТС 22 20 09': {geometry: POL, name: 'Рощи'}
+  'ТС 22 20 09 01': {geometry: POL, name: 'Роща отдельная хвойная'}
+  'ТС 22 20 09 02': {geometry: POL, name: 'Роща отдельная лиственная'}
+  'ТС 22 20 09 03': {geometry: POL, name: 'Роща отдельная смешанная'}
+  'ТС 22 20 11': {geometry: POL, name: 'Прочие заросли и растительность'}
+  'ТС 22 20 11 01': {geometry: POL, name: 'Камышовые и тростниковые заросли'}
+  'ТС 22 20 11 02': {geometry: POL, name: 'Растительность высокотравная'}
+  'ТС 22 20 11 03': {geometry: POL, name: 'Растительность низкотравная'}
+  'ТС 22 20 11 04': {geometry: POL, name: 'Растительность луговая'}
+  'ТС 22 20 11 06': {geometry: POL, name: 'Полукустарники'}
+  'ТС 22 20 11 09': {geometry: POL, name: 'Моховая растительность'}
+  'ТС 22 20 11 10': {geometry: POL, name: 'Лишайниковая растительность'}
+  'ТС 22 20 12': {geometry: POL, name: 'Плантации'}
+  'ТС 22 20 12 01': {geometry: POL, name: 'Плантация технических культур древесных'}
+  'ТС 22 20 13': {geometry: POL, name: 'Сады, питомники, виноградники'}
+  'ТС 22 20 13 01': {geometry: POL, name: 'Сад фруктовый'}
+  'ТС 22 20 13 02': {geometry: POL, name: 'Виноградник'}
+  'ТС 22 20 13 03': {geometry: POL, name: 'Сад ягодный'}
+  'ТС 22 20 13 04': {geometry: POL, name: 'Сад фруктово-ягодный'}
+  'ТС 22 20 13 05': {geometry: POL, name: 'Питомник плодовый'}
+  'ТС 22 20 14': {geometry: POL, name: 'Пашни'}
+  'ТС 22 20 14 01': {geometry: POL, name: 'Пашня, осушенная открытым дренажем'}
+  'ТС 22 20 14 02': {geometry: POL, name: 'Пашня, осушенная закрытым дренажем'}
+  'ТС 22 20 14 03': {geometry: POL, name: 'Пашня с оросительной сетью'}
+  'ТС 22 20 14 04': {geometry: POL, name: 'Пашня орошаемая'}
+  'ТС 22 20 14 05': {geometry: POL, name: 'Пашня заливная'}
+  'ТС 22 20 14 06': {geometry: POL, name: 'Пашня с осушительно-оросительными системами'}
+  'ТС 22 20 14 07': {geometry: POL, name: 'Пашня, засоренная камнями'}
+  'ТС 22 20 15': {geometry: POL, name: 'Залежи'}
+  'ТС 22 20 15 01': {geometry: POL, name: 'Залежи чистые'}
+  'ТС 22 20 15 02': {geometry: POL, name: 'Залежи богарные'}
+  'ТС 22 20 15 03': {geometry: POL, name: 'Залежи, осушенные открытым дренажем'}
+  'ТС 22 20 15 04': {geometry: POL, name: 'Залежи, осушенные закрытым дренажем'}
+  'ТС 22 20 15 05': {geometry: POL, name: 'Залежи с оросительной сетью'}
+  'ТС 22 20 15 06': {geometry: POL, name: 'Залежи орошаемые'}
+  'ТС 22 20 15 07': {geometry: POL, name: 'Залежи заливные'}
+  'ТС 22 20 15 08': {geometry: POL, name: 'Залежи с осушительно-оросительными системами'}
+  'ТС 22 20 15 09': {geometry: POL, name: 'Залежи, засоренные камнями'}
+  'ТС 22 20 16': {geometry: POL, name: 'Сенокосы'}
+  'ТС 22 20 16 01': {geometry: POL, name: 'Сенокос чистый'}
+  'ТС 22 20 16 02': {geometry: POL, name: 'Сенокос чистый на растительности луговой'}
+  'ТС 22 20 16 03': {geometry: POL, name: 'Сенокос чистый на растительности степной'}
+  'ТС 22 20 16 04': {geometry: POL, name: 'Сенокос осушенный открытым дренажем'}
+  'ТС 22 20 16 05': {geometry: POL, name: 'Сенокос осушенный закрытым дренажем'}
+  'ТС 22 20 16 06': {geometry: POL, name: 'Сенокос с оросительной сетью на растительности луговой'}
+  'ТС 22 20 16 07': {geometry: POL, name: 'Сенокос с оросительной сетью на растительности степной'}
+  'ТС 22 20 16 08': {geometry: POL, name: 'Сенокос орошаемый'}
+  'ТС 22 20 16 09': {geometry: POL, name: 'Сенокос заливной'}
+  'ТС 22 20 16 10': {geometry: POL, name: 'Сенокос с осушительно-оросительной системой'}
+  'ТС 22 20 16 11': {geometry: POL, name: 'Сенокос заболоченный'}
+  'ТС 22 20 16 12': {geometry: POL, name: 'Сенокос засоренный камнями на луговой растительности'}
+  'ТС 22 20 16 13': {geometry: POL, name: 'Сенокос засоренный камнями на степной растительности'}
+  'ТС 22 20 16 14': {geometry: POL, name: 'Сенокос засоренный галькой на луговой растительности'}
+  'ТС 22 20 16 15': {geometry: POL, name: 'Сенокос засоренный галькой на степной растительности'}
+  'ТС 22 20 16 16': {geometry: POL, name: 'Сенокос засоренный песком на луговой растительности'}
+  'ТС 22 20 16 17': {geometry: POL, name: 'Сенокос засоренный песком на степной растительности'}
+  'ТС 22 20 17': {geometry: POL, name: 'Пастбища'}
+  'ТС 22 20 17 01': {geometry: POL, name: 'Пастбище чистое на луговой растительности'}
+  'ТС 22 20 17 02': {geometry: POL, name: 'Пастбище чистое на степной растительности'}
+  'ТС 22 20 17 03': {geometry: POL, name: 'Пастбище культурное'}
+  'ТС 22 20 17 04': {geometry: POL, name: 'Пастбище осушенное открытым дренажем'}
+  'ТС 22 20 17 05': {geometry: POL, name: 'Пастбище осушенное закрытым дренажем'}
+  'ТС 22 20 17 06': {geometry: POL, name: 'Пастбище с оросительной сетью на луговой растительности'}
+  'ТС 22 20 17 07': {geometry: POL, name: 'Пастбище с оросительной сетью на степной растительности'}
+  'ТС 22 20 17 08': {geometry: POL, name: 'Пастбище орошаемое'}
+  'ТС 22 20 17 09': {geometry: POL, name: 'Пастбище заливное'}
+  'ТС 22 20 17 10': {geometry: POL, name: 'Пастбище с осушительно-оросительными системами'}
+  'ТС 22 20 17 11': {geometry: POL, name: 'Пастбище заболоченное'}
+  'ТС 22 20 17 12': {geometry: POL, name: 'Пастбище, засоренное камнями на луговой растительности'}
+  'ТС 22 20 17 13': {geometry: POL, name: 'Пастбище, засоренное камнями на степной растительности'}
+  'ТС 22 20 17 14': {geometry: POL, name: 'Пастбище, засоренное галькой на луговой растительности'}
+  'ТС 22 20 17 15': {geometry: POL, name: 'Пастбище, засоренное галькой на степной растительности'}
+  'ТС 22 20 17 16': {geometry: POL, name: 'Пастбище, засоренное песком на луговой растительности'}
+  'ТС 22 20 17 17': {geometry: POL, name: 'Пастбище, засоренное песком на степной растительности'}
+  'ТС 22 20 18': {geometry: POL, name: 'Участки мелиоративного строительства'}
+  'ТС 22 20 19': {geometry: POL, name: 'Участки в стадии рекультивации'}
+  'ТС 22 20 20': {geometry: POL, name: 'Сельскохозяйственные угодья, загрязненные отходами'}
+  'ТС 22 20 21': {geometry: POL, name: 'Огороды'}
+  'ТС 22 20 22': {geometry: POL, name: 'Просеки площадной'}
+  'ТС 22 20 23': {geometry: POL, name: 'Кварталы лесные'}
+  'ТС 22 20 24': {geometry: POL, name: 'Поверхности'}
+  'ТС 22 20 24 01': {geometry: POL, name: 'Поверхность каменная монолитная'}
+  'ТС 22 20 24 04': {geometry: POL, name: 'Поверхность песчаная'}
+  'ТС 22 20 24 05': {geometry: POL, name: 'Поверхность глинистая'}
+  'ТС 22 20 24 06': {geometry: POL, name: 'Кочки'}
+  'ТС 22 20 25': {geometry: POL, name: 'Болота'}
+  'ТС 22 20 25 01': {geometry: POL, name: 'Болото непроходимое и труднопроходимое'}
+  'ТС 22 20 25 02': {geometry: POL, name: 'Болото проходимое'}
+  'ТС 22 20 26': {geometry: POL, name: 'Солончаки'}
+  'ТС 22 20 27 01': {geometry: POL, name: 'Солончаки непроходимые'}
+  'ТС 22 20 27 02': {geometry: POL, name: 'Солончаки проходимые'}
+  'ТС 23': {geometry: none, name: 'Специальные виды дорог'}
+  'ТС 23 00': {geometry: PNT, name: 'Точечные объекты железных дорог'}
+  'ТС 24': {geometry: none, name: 'Инженерное оборудование на сетях коммуникаций'}
+  'ТС 25': {geometry: none, name: 'Устройства на сетях инженерных коммуникаций'}
+  'ТС 26': {geometry: none, name: 'Столбы и опоры'}
+  'ТС 27': {geometry: none, name: 'Объекты на столбах и опорах'}
+  'ТС 28': {geometry: none, name: 'Объекты благоустройства'}
+  'ТС 28 00': {geometry: PNT, name: 'Объекты благоустройства - точки'}
+  'ТС 28 00 01': {geometry: PNT, name: 'Малые архитектурные формы'}
+  'ТС 28 00 01 01': {geometry: PNT, name: 'Горка прямая без крыши деревянная'}
+  'ТС 28 00 01 02': {geometry: PNT, name: 'Горка прямая без крыши металлическая'}
+  'ТС 28 00 01 03': {geometry: PNT, name: 'Горка прямая без крыши пластиковая'}
+  'ТС 28 00 01 04': {geometry: PNT, name: 'Горка прямая с крышей деревянная'}
+  'ТС 28 00 01 05': {geometry: PNT, name: 'Горка прямая с крышей металлическая'}
+  'ТС 28 00 01 06': {geometry: PNT, name: 'Горка деревянная'}
+  'ТС 28 00 01 07': {geometry: PNT, name: 'Горка прямая с крышей пластиковая'}
+  'ТС 28 00 01 08': {geometry: PNT, name: 'Комплекс детский 1 категории более 40 кв.м'}
+  'ТС 28 00 01 09': {geometry: PNT, name: 'Комплекс детский 2 категории от 15 до 40 кв.м'}
+  'ТС 28 00 01 10': {geometry: PNT, name: 'Комплекс детский 3 категории менее 15 кв.м'}
+  'ТС 28 00 01 11': {geometry: PNT, name: 'Песочница деревянная'}
+  'ТС 28 00 01 12': {geometry: PNT, name: 'Песочница пластиковая'}
+  'ТС 28 00 01 13': {geometry: PNT, name: 'Комплекс детский - катерок'}
+  'ТС 28 00 01 14': {geometry: PNT, name: 'Игровой элемент спортивный'}
+  'ТС 28 00 01 15': {geometry: PNT, name: 'Комплекс детский спортивный 1 категория более 10 кв.м'}
+  'ТС 28 00 01 16': {geometry: PNT, name: 'Комплекс детский спортивный 2 категория менее 10 кв.м'}
+  'ТС 28 00 01 17': {geometry: PNT, name: 'Качалка на пружине металлическая'}
+  'ТС 28 00 01 18': {geometry: PNT, name: 'Качалка балансир'}
+  'ТС 28 00 01 19': {geometry: PNT, name: 'Качалка балансир двойная'}
+  'ТС 28 00 01 20': {geometry: PNT, name: 'Качели металлические'}
+  'ТС 28 00 01 21': {geometry: PNT, name: 'Качели двойные металлические'}
+  'ТС 28 00 01 22': {geometry: PNT, name: 'Качели деревянные'}
+  'ТС 28 00 01 23': {geometry: PNT, name: 'Качели деревянные двойные'}
+  'ТС 28 00 01 24': {geometry: PNT, name: 'Карусель с сиденьями из дерева'}
+  'ТС 28 00 01 25': {geometry: PNT, name: 'Карусель с сиденьями из пластика'}
+  'ТС 28 00 01 26': {geometry: PNT, name: 'Карусель с сиденьями из металла'}
+  'ТС 28 00 01 27': {geometry: PNT, name: 'Карусель без сидений'}
+  'ТС 28 00 01 28': {geometry: PNT, name: 'Игровые формы'}
+  'ТС 28 00 01 29': {geometry: PNT, name: 'Игровой объект - слон'}
+  'ТС 28 00 01 30': {geometry: PNT, name: 'Игровой объект - пеликан'}
+  'ТС 28 00 01 31': {geometry: PNT, name: 'Игровой объект - вак-вак'}
+  'ТС 28 00 01 32': {geometry: PNT, name: 'Игровой объект - лошадь'}
+  'ТС 28 00 01 33': {geometry: PNT, name: 'Игровой объект - микки'}
+  'ТС 28 00 01 34': {geometry: PNT, name: 'Игровой объект - грибок'}
+  'ТС 28 00 01 36': {geometry: PNT, name: 'Игровой элемент "домик"'}
+  'ТС 28 00 01 37': {geometry: PNT, name: 'Игровой элемент "ромашка"'}
+  'ТС 28 00 01 38': {geometry: PNT, name: 'Игровой элемент "стена"'}
+  'ТС 28 00 01 39': {geometry: PNT, name: 'Игровой элемент "машинка"'}
+  'ТС 28 00 01 40': {geometry: PNT, name: 'Игровой элемент "кораблик"'}
+  'ТС 28 00 01 41': {geometry: PNT, name: 'Игровой элемент "лодочка"'}
+  'ТС 28 00 01 42': {geometry: PNT, name: 'Игровой элемент "трактор"'}
+  'ТС 28 00 01 43': {geometry: PNT, name: 'Игровой комплекс "каскад"'}
+  'ТС 28 00 01 44': {geometry: PNT, name: 'Игровой элемент "паутинка"'}
+  'ТС 28 00 01 45': {geometry: PNT, name: 'Игровой элемент "самолёт"'}
+  'ТС 28 00 01 46': {geometry: PNT, name: 'Игровой элемент "паровозик"'}
+  'ТС 28 00 01 47': {geometry: PNT, name: 'Игровой элемент "барьер"'}
+  'ТС 28 00 01 48': {geometry: PNT, name: 'Игровой элемент "змейка"'}
+  'ТС 28 00 01 49': {geometry: PNT, name: 'Игровой элемент "счеты"'}
+  'ТС 28 00 01 50': {geometry: PNT, name: 'Игровой элемент "лесенка"'}
+  'ТС 28 00 01 51': {geometry: PNT, name: 'Игровой элемент "треугольники"'}
+  'ТС 28 00 01 53': {geometry: PNT, name: 'Игровой комплекс "корабль"'}
+  'ТС 28 00 01 54': {geometry: PNT, name: 'Игровой объект - лабиринт'}
+  'ТС 28 00 01 55': {geometry: PNT, name: 'Игровой объект - лесенка-круг'}
+  'ТС 28 00 01 56': {geometry: PNT, name: 'Блок для сбора мусора плстиковый'}
+  'ТС 28 00 01 58': {geometry: PNT, name: 'Блок для сбора мусора стеклянный'}
+  'ТС 28 00 01 59': {geometry: PNT, name: 'Блок для сбора мусора прочий'}
+  'ТС 28 00 01 70': {geometry: PNT, name: 'Бункерная площадка для крупно габаритного мусора (КГО)'}
+  'ТС 28 00 01 72': {geometry: PNT, name: 'Бункер-накопитель 8 куб.м.'}
+  'ТС 28 00 01 78': {geometry: PNT, name: 'Трельяж'}
+  'ТС 28 00 01 80': {geometry: PNT, name: 'Кадка для деревьев'}
+  'ТС 28 00 01 82': {geometry: PNT, name: 'Мельница'}
+  'ТС 28 00 01 84': {geometry: PNT, name: 'Камень'}
+  'ТС 28 00 01 86': {geometry: PNT, name: 'Телега'}
+  'ТС 28 00 01 88': {geometry: PNT, name: 'Бассейн'}
+  'ТС 28 00 01 89': {geometry: PNT, name: 'Тренажер спортивный с подвижными элементами'}
+  'ТС 28 00 01 90': {geometry: PNT, name: 'Тренажер спортивный без подвижных элементов'}
+  'ТС 28 00 01 91': {geometry: PNT, name: 'Тренажер спортивный'}
+  'ТС 28 00 01 92': {geometry: PNT, name: 'Ворота игровые футбольные'}
+  'ТС 28 00 01 93': {geometry: PNT, name: 'Бревно'}
+  'ТС 28 00 01 94': {geometry: PNT, name: 'Бум'}
+  'ТС 28 00 01 95': {geometry: PNT, name: 'Спортивный элемент воркаут'}
+  'ТС 28 00 01 97': {geometry: PNT, name: 'Спортивный уголок'}
+  'ТС 28 00 01 98': {geometry: PNT, name: 'Кольца'}
+  'ТС 28 00 01 99': {geometry: PNT, name: 'Трамплин'}
+  'ТС 28 00 01 100': {geometry: PNT, name: 'Лежак для стрельбы'}
+  'ТС 28 00 01 101': {geometry: PNT, name: 'Иной спортивный элемент'}
+  'ТС 28 00 01 102': {geometry: PNT, name: 'Тир'}
+  'ТС 28 00 01 103': {geometry: PNT, name: 'Рукоход'}
+  'ТС 28 00 01 106': {geometry: PNT, name: 'Турник'}
+  'ТС 28 00 01 107': {geometry: PNT, name: 'Турник-лесенка'}
+  'ТС 28 00 01 109': {geometry: PNT, name: 'Стол для настольного тенниса'}
+  'ТС 28 00 01 110': {geometry: PNT, name: 'Баскетбольная башня с корзиной'}
+  'ТС 28 00 01 111': {geometry: PNT, name: 'Гимнастические брусья'}
+  'ТС 28 00 01 113': {geometry: PNT, name: 'Искусственные препятствия'}
+  'ТС 28 00 01 114': {geometry: PNT, name: 'Перекладина'}
+  'ТС 28 00 01 115': {geometry: PNT, name: 'Ногоход'}
+  'ТС 28 00 01 116': {geometry: PNT, name: 'Гимнастический комплекс'}
+  'ТС 28 00 01 117': {geometry: PNT, name: 'Скейтпарк - разгонка'}
+  'ТС 28 00 01 118': {geometry: PNT, name: 'Скейтпарк - фанбокс'}
+  'ТС 28 00 01 119': {geometry: PNT, name: 'Скейтпарк - радиусная пирамида'}
+  'ТС 28 00 01 121': {geometry: PNT, name: 'Балансир'}
+  'ТС 28 00 01 122': {geometry: PNT, name: 'Трап'}
+  'ТС 28 00 01 123': {geometry: PNT, name: 'Лесенка'}
+  'ТС 28 00 01 124': {geometry: PNT, name: 'Барьер'}
+  'ТС 28 00 01 125': {geometry: PNT, name: 'Подвеска-покрышка для прыжков'}
+  'ТС 28 00 01 136': {geometry: PNT, name: 'Стол (детский)'}
+  'ТС 28 00 01 139': {geometry: PNT, name: 'Трибуна'}
+  'ТС 28 00 01 140': {geometry: PNT, name: 'Кормушка для птиц'}
+  'ТС 28 10': {geometry: LIN, name: 'Объекты благоустройства - линейные'}
+  'ТС 28 20': {geometry: POL, name: 'Объекты благоустройства - полигоны'}
+  'ТС 28 20 01': {geometry: POL, name: 'Малые архитектурные формы'}
+  'ТС 28 20 01 02': {geometry: POL, name: 'Трибуна металлическая'}
+  'ТС 28 20 01 03': {geometry: POL, name: 'Железобетонное изделие'}
+  'ПО ЗУ 08': {geometry: none, name: 'Координаты проекта'}
+  'ПО ЗУ 09': {geometry: none, name: 'Объекты вертикальной планировки'}
+  'ПО ЗУ 10': {geometry: none, name: 'Объекты проектируемых зданий (сооружений)'}
+  'ПО ЗУ 10 20 03': {geometry: POL, name: 'Граница подземной парковки спроецированная'}
+  'ПО ЗУ 11': {geometry: none, name: 'Объекты проектируемого дорожного графа'}
+  'ПО ЗУ 11 00': {geometry: PNT, name: 'Объекты проектируемого дорожного графа - точки'}
+  'ПО ЗУ 11 00 01': {geometry: PNT, name: 'Узел дорожного графа - перекресток 2х'}
+  'ПО ЗУ 11 00 02': {geometry: PNT, name: 'Узел дорожного графа - перекресток 3х'}
+  'ПО ЗУ 11 00 03': {geometry: PNT, name: 'Узел дорожного графа - перекресток 4х'}
+  'ПО ЗУ 11 00 04': {geometry: PNT, name: 'Узел дорожного графа - перекресток 5х'}
+  'ПО ЗУ 11 00 05': {geometry: PNT, name: 'Узел дорожного графа - перекресток с пешеходной дорожкой'}
+  'ПО ЗУ 11 00 06': {geometry: PNT, name: 'Узел дорожного графа - перекресток с велосипедной дорожкой'}
+  'ПО ЗУ 11 00 07': {geometry: PNT, name: 'Узел дорожного графа - перекресток с велопешеходной дорожкой'}
+  'ПО ЗУ 11 00 08': {geometry: PNT, name: 'Узел дорожного графа - перекресток с существующей дорогой'}
+  'ПО ЗУ 11 00 09': {geometry: PNT, name: 'Узел дорожного графа - примыкание к существующей дороге'}
+  'ПО ЗУ 12': {geometry: none, name: 'Объекты пешеходного и велосипедного графа'}
+  'ПО ЗУ 12 00': {geometry: PNT, name: 'Объекты пешеходного и велосипедного графа - точки'}
+  'ПО ЗУ 12 00 01': {geometry: PNT, name: 'Узел пешеходного графа - перекресток'}
+  'ПО ЗУ 12 00 02': {geometry: PNT, name: 'Узел велосипедного графа - перекресток'}
+  'ПО ЗУ 12 00 03': {geometry: PNT, name: 'Перекресток пешеходного и велосипедного графа'}
+  'ПО ЗУ 13': {geometry: none, name: 'Объекты публичных сервитутов'}
+  'ПО ЗУ 14': {geometry: none, name: 'Объекты охранных зон'}
+  'ПО ЗУ 14 10': {geometry: LIN, name: 'Объекты охранных зон - линии'}
+  'ПО ЗУ 14 20': {geometry: POL, name: 'Объекты охранных зон - полигоны'}
+  'ПО ЗУ 15': {geometry: none, name: 'Объекты сносимых зданий (сооружений)'}
+  'ПО ЗУ 16': {geometry: none, name: 'Объекты ГИС-картограммы'}
+  'ПО ЗУ 17': {geometry: none, name: 'Объекты благоустройства'}
+  'ПО ЗУ 17 00': {geometry: PNT, name: 'Объекты благоустройства - точки'}
+  'ПО ЗУ 17 00 01': {geometry: PNT, name: 'Малая архитектурная форма'}
+  'ПО ЗУ 17 10': {geometry: LIN, name: 'Объекты благоустройства - линии'}
+  'ПО ЗУ 17 10 02': {geometry: LIN, name: 'Полоса зеленых насаждений'}
+  'ПО ЗУ 17 20': {geometry: POL, name: 'Объекты благоустройства - полигоны'}
+  'ПО ЗУ 17 20 02': {geometry: POL, name: 'Декоративные водные объекты'}
+  'ПО ЗУ 19': {geometry: none, name: 'Объекты строительной техники'}
+  'ПО ЗУ 20': {geometry: none, name: 'Водопровод'}
+  'ПО ЗУ 21': {geometry: none, name: 'Объекты напорных сетей'}
+  'ПО ЗУ 22': {geometry: none, name: 'Объекты самотечных сетей'}
+  'ПО ЗУ 23': {geometry: none, name: 'Объекты ливневой канализации'}
+  'ПО ЗУ 24': {geometry: none, name: 'Объекты тепловых сетей'}
+  'ПО ЗУ 25': {geometry: none, name: 'Объекты газопроводов'}
+  'ПО ЗУ 26': {geometry: none, name: 'Объекты воздушных ЛЭП'}
+  'ПО ЗУ 27': {geometry: none, name: 'Объекты кабельной ЛЭП'}
+  'ПО ЗУ 28': {geometry: none, name: 'Объекты воздушной сети связи'}
+  'ПО ЗУ 29': {geometry: none, name: 'Объекты кабельной сети связи'}
+  'ПО ЗУ 30': {geometry: none, name: 'Обеспечение пожарной безопасности (ПБ)'}
+  'ПО ЗУ 31': {geometry: none, name: 'Объекты обеспечения доступа маломобильных групп населения (МГН)'}
+  'ПО ЗУ 31 00': {geometry: PNT, name: 'Объекты обеспечения доступа МГН - точки'}
+  'ПО ЗУ 31 00 02': {geometry: PNT, name: 'Узел графа перемещения МГН'}
+  'ПО ЗУ 31 10': {geometry: LIN, name: 'Объекты обеспечения доступа МГН - линии'}
+  'ПО ЗУ 31 10 01': {geometry: LIN, name: 'Сегмент графа перемещения МГН'}
+  'ПО ЗУ 31 20': {geometry: POL, name: 'Объекты обеспечения доступа МГН - полигоны'}
+  'ПО ЗУ 32': {geometry: none, name: 'Объекты земляных работ'}
