@@ -23,7 +23,7 @@ from green.application.classification import (
     promote_unknown_lines,
     require_classified,
 )
-from green.application.constraints import work_boundary
+from green.application.constraints import lawns_outside_note, work_boundary
 from green.application.diameters import assign_diameters
 from green.application.editing import RunContext
 from green.application.effect import street_effect
@@ -437,7 +437,7 @@ class PlanSite:
                 ),
                 None,
             )
-            scene = _noted(scene, note)
+            scene = _noted(scene, note, lawns_outside_note(features, boundary))
         site = site_of(features, surface, crown_m=params.existing_crown_m)
         places = place_map(features)
         inventory = request.inventory

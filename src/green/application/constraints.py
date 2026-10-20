@@ -408,6 +408,48 @@ def work_boundary(features: Sequence[Feature]) -> BaseGeometry | None:
     return _boundary([f for f in features if f.object_class is ObjectClass.WORK_BOUNDARY])
 
 
+_LAWN_OUTSIDE_MIN_M2 = 500.0  # меньше - обрывки газона у края, не другой участок
+_LAWN_INSIDE_SHARE = 0.05  # внутри границы меньше этой доли газонов - граница не та
+
+
+def lawns_outside_note(features: Sequence[Feature], boundary: BaseGeometry | None) -> str | None:
+    """Газоны чертежа почти целиком за границей работ: план выйдет пустым или почти пустым.
+
+    Чертёж жюри «3) СПОЗУ АГР АПР К2.dxf»: слой «ГП Граница работ» обводит участок без
+    газонов, а газоны проекта лежат рядом за ним - 0 посадок. Сервис границу не меняет (она
+    задана чертежом), но говорит, что видит, и как запустить без неё.
+    """
+    if boundary is None or boundary.is_empty:
+        return None
+    lawns = [
+        f
+        for f in features
+        if f.object_class is ObjectClass.LAWN and f.geometry.geom_type.endswith("Polygon")
+    ]
+    if not lawns:
+        return None
+    union = shapely.union_all([f.geometry for f in lawns])
+    total = float(union.area)
+    inside = float(union.intersection(boundary).area)
+    outside = total - inside
+    if outside < _LAWN_OUTSIDE_MIN_M2 or inside > _LAWN_INSIDE_SHARE * total:
+        return None
+    layers = sorted({f.layer for f in features if f.object_class is ObjectClass.WORK_BOUNDARY})
+    named = ", ".join(f"«{layer}»" for layer in layers[:3])
+    example = layers[0] if layers else "слой границы"
+
+    def m2(value: float) -> str:
+        return f"{value:,.0f}".replace(",", " ")
+
+    return (
+        f"Газоны чертежа лежат за границей работ: внутри {m2(inside)} м², снаружи "
+        f"{m2(outside)} м². Граница со слоя {named} обводит не участок озеленения, поэтому "
+        "посадок в ней нет или почти нет. Если граница не та, запустите прогон без неё: в "
+        f'параметрах поверх профиля {{"layer_classes": {{"{example}": "ignore"}}}} - граница '
+        "будет выведена по объектам участка."
+    )
+
+
 def boundary_gaps(features: Sequence[Feature]) -> list[tuple[str, float]]:
     """Слои и разрывы, м, линий границы работ, которые граница замкнула хордой."""
     return [
