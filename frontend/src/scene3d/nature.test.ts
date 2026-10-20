@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { archetypeOf, foliageColor, foliageOf, hexRgb, isGreen, leafless } from './archetypes';
+import {
+  archetypeOf,
+  foliageColor,
+  foliageOf,
+  hexRgb,
+  isGreen,
+  leafless,
+  liveTone,
+} from './archetypes';
 import { existingSize, PLAN_YEAR, plantingStock, sizeAt } from './growth';
 import { SEASON_DAY, sunDirection, sunPosition } from './solar';
 import type { Plant, SceneSpeciesJson } from './types';
@@ -106,6 +114,45 @@ describe('архетипы и листва', () => {
         plant('juniperus_sabina', { genus: 'juniperus', life_form: 'shrub_medium' }, 'shrub'),
       ),
     ).toBe('creeper');
+  });
+
+  it('остальные роды: тополь, дуб, ясень, сосна, туя, лиственница; кустовая форма хвойных - карликовая', () => {
+    const of = (genus: string, life = 'tree_large') =>
+      archetypeOf(plant(`${genus}_test`, { genus, life_form: life }));
+    expect(of('populus')).toBe('poplar');
+    expect(of('quercus')).toBe('oak');
+    expect(of('fraxinus')).toBe('ash');
+    expect(of('pinus')).toBe('pine');
+    expect(of('pinus', 'shrub_large')).toBe('dwarf_conifer');
+    expect(of('larix')).toBe('spruce');
+    expect(of('abies', 'shrub_small')).toBe('dwarf_conifer');
+    expect(of('thuja')).toBe('thuja');
+    // Род по коду, если в каталоге его нет.
+    expect(archetypeOf(plant('quercus_robur', { genus: '' }))).toBe('oak');
+  });
+
+  it('существующие деревья и кусты - из своего набора по зерну', () => {
+    const tree = { ...plant('existing'), existing: true, type: 'existing_tree' };
+    const shrub = { ...plant('existing'), existing: true, type: 'existing_shrub' };
+    const trees = new Set([0, 1, 2, 3, 4, 5, 6, 7].map((seed) => archetypeOf({ ...tree, seed })));
+    const shrubs = new Set([0, 1, 2, 3, 4, 5, 6, 7].map((seed) => archetypeOf({ ...shrub, seed })));
+    expect(trees.size).toBeGreaterThan(1);
+    for (const a of shrubs) expect(trees.has(a)).toBe(false);
+  });
+
+  it('живой тон: темнее бумажного и насыщеннее, оттенок тот же; серый почти серый', () => {
+    const paper = hexRgb('#8fbf6a');
+    const live = liveTone(paper);
+    expect(live.g).toBeLessThan(paper.g);
+    expect(live.g).toBeGreaterThan(live.r);
+    expect(live.g).toBeGreaterThan(live.b);
+    expect(isGreen(live)).toBe(true);
+    const grey = liveTone({ r: 0.5, g: 0.5, b: 0.5 }, 1);
+    // Серому добавляется насыщенность 0,08 при оттенке 0: он чуть краснеет, но остаётся серым.
+    expect(grey.r - grey.g).toBeLessThan(0.1);
+    expect(grey.g).toBeCloseTo(grey.b, 6);
+    expect(liveTone(hexRgb('#3355cc')).b).toBeGreaterThan(liveTone(hexRgb('#3355cc')).r);
+    expect(liveTone(hexRgb('#cc3355')).r).toBeGreaterThan(liveTone(hexRgb('#cc3355')).g);
   });
 
   it('тон цветущего кустарника без поля bloom - это цветок, листва у него зелёная', () => {

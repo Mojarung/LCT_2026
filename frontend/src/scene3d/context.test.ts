@@ -100,3 +100,91 @@ describe('стоянки карты', () => {
     expect(parkingCars(lot, (p) => p.x < 20).every((c) => c.x >= 20)).toBe(true);
   });
 });
+
+describe('город вокруг: края данных', () => {
+  const ring = (x: number, y: number, w: number, d: number): [number, number][] => [
+    [x, y],
+    [x + w, y],
+    [x + w, y + d],
+    [x, y + d],
+  ];
+
+  it('дом без этажности и известного типа - этажность по площади; вырожденный контур пропускается', () => {
+    const scene = contextScene(
+      {
+        ...json,
+        buildings: [
+          { ring: ring(1100, 2000, 60, 40), levels: null, kind: 'yes' },
+          { ring: ring(1300, 2000, 6, 5), levels: null, kind: 'yes' },
+          {
+            ring: [
+              [1400, 2000],
+              [1401, 2000],
+            ],
+            levels: 3,
+            kind: 'yes',
+          },
+        ],
+        roads: [],
+      },
+      frame,
+      surveyed,
+    );
+    expect(scene.buildings).toHaveLength(2);
+    const [big, small] = scene.buildings;
+    expect(big?.use).toBeNull();
+    expect(big?.source).toBe('assumed');
+    expect(big?.floors ?? 0).toBeGreaterThan(small?.floors ?? 0);
+    expect(big?.height ?? 0).toBeGreaterThan(small?.height ?? 0);
+  });
+
+  it('стоянка на снятом месте и вырожденная не кладутся, за краем - асфальт и машины', () => {
+    const scene = contextScene(
+      {
+        ...json,
+        buildings: [],
+        roads: [],
+        parkings: [
+          { ring: ring(1100, 1900, 40, 30), kind: 'surface' },
+          { ring: ring(1000, 1900, 20, 20), kind: 'surface' },
+          {
+            ring: [
+              [1200, 1900],
+              [1210, 1900],
+            ],
+            kind: 'surface',
+          },
+        ],
+      },
+      frame,
+      surveyed,
+    );
+    expect(scene.parkings).toHaveLength(1);
+    expect(scene.cars.length).toBeGreaterThan(0);
+    for (const car of scene.cars) expect(car.x).toBeGreaterThan(50);
+    expect(scene.source).toBe(json.source);
+  });
+
+  it('узкая полоса - не стоянка: ряд машин в неё не помещается', () => {
+    const strip = [
+      { x: 100, z: 0 },
+      { x: 140, z: 0 },
+      { x: 140, z: 4 },
+      { x: 100, z: 4 },
+    ];
+    expect(parkingCars(strip, () => false)).toEqual([]);
+  });
+
+  it('ломаная из одной точки и целиком на снятом месте - без частей', () => {
+    expect(outsideParts([{ x: 100, z: 0 }], surveyed)).toEqual([]);
+    expect(
+      outsideParts(
+        [
+          { x: 0, z: 0 },
+          { x: 40, z: 0 },
+        ],
+        surveyed,
+      ),
+    ).toEqual([]);
+  });
+});
