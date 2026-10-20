@@ -626,7 +626,9 @@ class PlanSite:
         with watch.stage("verify"):
             integrity = self._integrity.check(snapshot, pending)
             export_validation = self._integrity.check_plan(pending, plan, unit_m=scene.unit_m)
-            require_valid_export(integrity, export_validation)
+            require_valid_export(
+                integrity, export_validation, allow_unexportable=not params.strict_input
+            )
             pending.replace(output)
         integrity_notes: tuple[str, ...] = ()
         if integrity.unexportable:
@@ -750,7 +752,11 @@ class PlanSite:
         with watch.stage("verify"):
             integrity = self._integrity.check(snapshot, pending)
             export_validation = self._integrity.check_plan(pending, plan, unit_m=context.unit_m)
-            require_valid_export(integrity, export_validation)
+            require_valid_export(
+                integrity,
+                export_validation,
+                allow_unexportable=not context.report.params.strict_input,
+            )
             pending.replace(output)
         return replace(
             context.report,
@@ -764,8 +770,14 @@ class PlanSite:
         )
 
 
-def require_valid_export(integrity: IntegrityReport, exported: PlanExportReport) -> None:
-    if integrity.ok and exported.ok:
+def require_valid_export(
+    integrity: IntegrityReport, exported: PlanExportReport, *, allow_unexportable: bool = False
+) -> None:
+    """Исходник цел и посадки записаны. Сущности без данных (REGION без ACIS после LibreDWG)
+    ezdxf записать не может: при strict_input=false (по умолчанию) это заметка, а не остановка -
+    геометрии у них нет уже в конвертированном DXF (чертёж жюри «2026-07-21 - СПОЗУ.dwg»)."""
+    damaged = integrity.changed or integrity.missing or integrity.added_outside_result_layers
+    if exported.ok and not damaged and (allow_unexportable or not integrity.unexportable):
         return
     detail = "; ".join(exported.issues[:8])
     raise InputError(

@@ -36,3 +36,25 @@ def test_lawns_inside_the_boundary_say_nothing() -> None:
 
     assert lawns_outside_note([lawn, far], boundary) is None
     assert lawns_outside_note([lawn], None) is None
+
+
+def test_unexportable_regions_stop_only_strict_runs() -> None:
+    """REGION без ACIS после LibreDWG («2026-07-21 - СПОЗУ.dwg»): по умолчанию заметка."""
+    import pytest  # noqa: PLC0415 - нужен только здесь
+
+    from green.application.errors import InputError  # noqa: PLC0415
+    from green.application.results import IntegrityReport, PlanExportReport  # noqa: PLC0415
+    from green.application.use_case import require_valid_export  # noqa: PLC0415
+
+    integrity = IntegrityReport(
+        source_entities=10,
+        unchanged=10,
+        changed=(),
+        missing=(),
+        added_outside_result_layers=(),
+        unexportable=3,
+    )
+    exported = PlanExportReport(expected_placements=0, found_placements=0, issues=())
+    require_valid_export(integrity, exported, allow_unexportable=True)
+    with pytest.raises(InputError, match="не сохраняются 3"):
+        require_valid_export(integrity, exported)
