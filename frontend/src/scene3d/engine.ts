@@ -98,6 +98,7 @@ import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
 import { sizeGuide } from './guide';
+import { VISIBLE_SHARE, visibleShare } from './visibility';
 import { GRASS_PRESETS, GrassField } from './grass';
 import type { Line, Plant, Ring, World } from './types';
 import { frameAt } from './world';
@@ -281,6 +282,8 @@ export class SceneEngine {
   private lastHover: string | null = null;
   /** Рамка размеров посадки под прицелом (guide.ts). */
   private readonly guide = sizeGuide();
+  /** Объекты зданий (стены, крыши, лоджии) - для маски видимости кадра (visibility.ts). */
+  private readonly buildingParts = new Set<THREE.Object3D>();
   private hoverTick = 0;
   private lights: StreetLights | null = null;
   /** Облёт: маршрут, пройденный путь и сглаженный курс - разворот на концах идёт плавно. */
@@ -986,6 +989,7 @@ export class SceneEngine {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         group.add(mesh);
+        this.buildingParts.add(mesh);
       }
       // Ближние к съёмке соседи - с лоджиями и подъездами, дальние - объёмом с окнами.
       const [bx0, bz0, bx1, bz1] = this.world.bounds;
@@ -994,7 +998,9 @@ export class SceneEngine {
           (p) => p.x > bx0 - 120 && p.x < bx1 + 120 && p.z > bz0 - 120 && p.z < bz1 + 120,
         ),
       );
-      group.add(facadeModules(near, this.world.curbs, { parapets: false }));
+      const nearModules = facadeModules(near, this.world.curbs, { parapets: false });
+      group.add(nearModules);
+      this.buildingParts.add(nearModules);
     }
     // В пределах маски дороги карты - фактурой земли (paintContextRoads), лентой - только за
     // её краем, на дальнем поле.
@@ -1157,6 +1163,7 @@ export class SceneEngine {
     }
     wallMesh.name = 'walls';
     roofMesh.name = 'roofs';
+    this.buildingParts.add(wallMesh).add(roofMesh);
     // Навесы съёмки: кровля на стойках над покрытием площадки или остановки.
     const canopies = canopyGroup(this.world.canopies ?? []);
     this.scene.add(canopies);
@@ -1168,6 +1175,7 @@ export class SceneEngine {
     // Лоджии, подъезды, парапеты и машинные помещения - объёмом, по серии дома.
     const modules = facadeModules(this.world.buildings, this.world.curbs);
     this.scene.add(modules);
+    this.buildingParts.add(modules);
     this.disposables.push({
       dispose: () => {
         disposeGroup(modules);
@@ -1564,7 +1572,7 @@ export class SceneEngine {
       blob,
       viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground',
       ...speciesInView(this.forest.bodies(), pose),
-      buildings: buildingsInView(this.allBuildings, pose),
+      buildings: this.buildingsVisible(pose),
     };
   }
 
@@ -1581,8 +1589,37 @@ export class SceneEngine {
       trees,
       shrubs,
       viewpoint: pose.y > DRONE_FROM_M ? 'aerial' : 'ground',
-      buildings: buildingsInView(this.allBuildings, pose),
+      buildings: this.buildingsVisible(pose),
     };
+  }
+
+  /** Есть ли в кадре с позы видимый дом: сначала проекция углов (быстро, без заслонения),
+   *  затем маска кадра с заслонением кронами и соседями (visibility.ts). Дом за деревьями
+   *  абзац о фасадах в промпт фото больше не приносит. */
+  private buildingsVisible(pose: Pose): boolean {
+    if (!buildingsInView(this.allBuildings, pose)) return false;
+    if (!this.buildingParts.size) return true;
+    const camera = this.camera;
+    const position = camera.position.clone();
+    const rotation = camera.rotation.clone();
+    const aspect = camera.aspect;
+    try {
+      camera.position.set(pose.x, pose.y, pose.z);
+      camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+      camera.aspect = SHOT_WIDTH / SHOT_HEIGHT;
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      return visibleShare(this.renderer, this.scene, camera, this.buildingParts) >= VISIBLE_SHARE;
+    } catch {
+      // Маска не нарисовалась (контекст WebGL потерян): ответ проекции, как раньше.
+      return true;
+    } finally {
+      camera.position.copy(position);
+      camera.rotation.copy(rotation);
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+    }
   }
 
   /** Ракурсы для галереи: улица отрезками или посадка по кругу. Солнце ночью не учитывается. */
@@ -1595,7 +1632,7 @@ export class SceneEngine {
       target.kind === 'street'
         ? streetShots(bodies, obstacles, sun)
         : plantShots(bodies, target.id, obstacles, sun);
-    return shots.map((s) => ({ ...s, buildings: buildingsInView(this.allBuildings, s.pose) }));
+    return shots.map((s) => ({ ...s, buildings: this.buildingsVisible(s.pose) }));
   }
 
   /** Кадры заданных поз в PNG заданного размера, без панелей и без сдвига камеры человека.
