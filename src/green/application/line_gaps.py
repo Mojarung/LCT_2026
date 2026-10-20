@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 GAP_M = 2.0
 NEIGHBOURS = 8  # ближайших концов на каждый конец
+LOOP_MIN = 4  # своя линия замыкается, если она длиннее стольких разрывов
 _TOUCH_M = 1e-6
 _MIN_POINTS = 2
 
@@ -56,7 +57,10 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
             touching[[a, b]] = True
     out: list[BaseGeometry] = []
     taken = set(np.flatnonzero(touching).tolist())
-    for a, b in _nearest_pairs(tree, ends, touching, gap):
+    # Концы одной длинной линии тоже сводятся: контур газона, не дотянутый до начала на
+    # полметра, - почти замкнутое кольцо. Короткий крючок (длина до LOOP_MIN разрывов) - нет.
+    loops = shapely.length(np.array(parts, dtype=object)) > LOOP_MIN * gap
+    for a, b in _nearest_pairs(tree, ends, touching, gap, loops):
         if a in taken or b in taken:
             continue
         taken.update((a, b))
@@ -66,7 +70,11 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
 
 
 def _nearest_pairs(
-    tree: KDTree, ends: NDArray[np.float64], touching: NDArray[np.bool_], gap: float
+    tree: KDTree,
+    ends: NDArray[np.float64],
+    touching: NDArray[np.bool_],
+    gap: float,
+    loops: NDArray[np.bool_],
 ) -> list[tuple[int, int]]:
     """Пары концов разных линий ближе gap, от ближней к дальней, по NEIGHBOURS соседей."""
     n = len(ends)
@@ -79,7 +87,7 @@ def _nearest_pairs(
     lengths = distance.ravel()
     keep = (cols < n) & (lengths > _TOUCH_M)
     rows, cols, lengths = rows[keep], cols[keep], lengths[keep]
-    keep = (rows // 2 != cols // 2) & ~touching[rows] & ~touching[cols]
+    keep = ((rows // 2 != cols // 2) | loops[rows // 2]) & ~touching[rows] & ~touching[cols]
     first = np.minimum(rows[keep], cols[keep])
     second = np.maximum(rows[keep], cols[keep])
     lengths = lengths[keep]

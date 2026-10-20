@@ -32,13 +32,15 @@ def test_closed_nonmaterial_lines_do_not_authorize_soil(kind: ObjectClass) -> No
     assert surface.unsupported_boundary_faces == 1
 
 
-def test_fence_cannot_complete_an_unfinished_curb() -> None:
+def test_fence_completes_an_unfinished_curb_but_not_alone() -> None:
+    """Ограда - край участка земли: вместе с бортом она замыкает грань, и подпись решает её
+    целиком (20.10.2026). Грань из одних оград материала не получает (тест выше)."""
     features = [
         feature(ObjectClass.CURB, LineString([(0, 0), (0, 20), (20, 20), (20, 0)])),
         feature(ObjectClass.FENCE, LineString([(0, 0), (20, 0)]), "fence"),
     ]
     surface = build_surface_map(features, [label("ГАЗОН", 5, 5)], box(-5, -5, 25, 25), 0.5)
-    assert material(surface, 10, 10) is Material.UNKNOWN
+    assert material(surface, 10, 10) is Material.SOIL
 
 
 def test_inner_fence_preserves_unknown_hole_without_erasing_outer_lawn() -> None:
@@ -62,13 +64,14 @@ def test_shared_fence_and_material_edge_keeps_actual_material_evidence() -> None
     assert material(surface, 10, 10) is Material.SOIL
 
 
-def test_fence_divider_preserves_material_ambiguity_on_both_sides() -> None:
+def test_fence_divider_decides_only_the_labelled_side() -> None:
+    """Ограда делит грань: подписанная половина - газон, неподписанная остаётся неизвестной."""
     features = [
         feature(ObjectClass.CURB, box(0, 0, 20, 20).boundary),
         feature(ObjectClass.FENCE, LineString([(10, 0), (10, 20)]), "fence"),
     ]
     surface = build_surface_map(features, [label("ГАЗОН", 5, 5)], box(-5, -5, 25, 25), 0.5)
-    assert material(surface, 5, 5) is Material.UNKNOWN
+    assert material(surface, 5, 5) is Material.SOIL
     assert material(surface, 15, 5) is Material.UNKNOWN
 
 
@@ -76,3 +79,17 @@ def test_hard_surface_area_keeps_negative_evidence_without_labels() -> None:
     road = feature(ObjectClass.ROAD, box(0, 0, 20, 20))
     surface = build_surface_map([road], [], box(-5, -5, 25, 25), 0.5)
     assert material(surface, 10, 10) is Material.PAVED
+
+
+def test_dash_gap_and_short_tail_do_not_spoil_a_closed_lawn() -> None:
+    """Разрыв пунктира до 1 м замыкает контур (как допуск разрыва штриховки CAD), засечка
+    короче 2 м внутри не делит грань: газон решён контуром, а не разливом подписи."""
+    features = [
+        feature(ObjectClass.CURB, LineString([(0, 0), (20, 0), (20, 20), (0, 20), (0, 0.8)])),
+        feature(ObjectClass.CURB, LineString([(10, 10), (11.5, 10)]), "tick"),
+    ]
+    surface = build_surface_map(features, [label("ГАЗОН", 5, 5)], box(-5, -5, 25, 25), 0.5)
+    assert surface is not None
+    assert material(surface, 15, 15) is Material.SOIL
+    assert surface.soil_area is not None
+    assert surface.soil_area.area > 350

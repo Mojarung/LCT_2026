@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from scipy import sparse
+from scipy import ndimage, sparse
 from scipy.ndimage import distance_transform_edt
 from scipy.ndimage import label as connected_components
 from scipy.sparse.csgraph import dijkstra
@@ -435,6 +435,16 @@ DISPLAY_MARGIN_M = 40.0
 # Разрыв между штрихами пунктира съёмки (борт, край покрытия) не шире этого закрывается в
 # карте для посадок, м: штрих около метра, просвет 0,3-0,6 м, проход и въезд - от 1,5 м.
 STROKE_GAP_M = 1.0
+# Висячий хвост линии внутри грани короче этого не мешает решить грань подписью, м: засечка,
+# обрывок борта у съезда. Длиннее - возможная граница материала, грань остаётся спорной.
+SHORT_DANGLE_M = 2.0
+_MATERIAL_EDGES = frozenset({ObjectClass.CURB, ObjectClass.PAVEMENT_EDGE, ObjectClass.LAWN})
+# Стена и ограда - край участка земли, но не довод о материале: грань, замкнутая только ими
+# (контур здания, огороженная площадка), материала не получает; вместе с бортом или краем
+# покрытия они её замыкают.
+_WALL_EDGES = frozenset(
+    {ObjectClass.BUILDING, ObjectClass.SCHOOL, ObjectClass.STRUCTURE, ObjectClass.FENCE}
+)
 
 
 def display_extent(extent: BaseGeometry | None) -> BaseGeometry | None:
@@ -986,13 +996,22 @@ def _closed_materials(
     separating_lines = _barrier_lines(
         [f for f in features if f.object_class is not ObjectClass.WORK_BOUNDARY]
     )
-    material_lines = _barrier_lines(
-        [
-            f
-            for f in features
-            if f.object_class in {ObjectClass.CURB, ObjectClass.PAVEMENT_EDGE, ObjectClass.LAWN}
-            or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
-        ]
+    # Грань замыкают и разрывы пунктира до STROKE_GAP_M: так контур с допуском разрыва
+    # замыкает штриховка CAD (HPGAPTOL) и сборка площадей ГИС после склейки концов (v.clean).
+    separating_lines = _with_bridges(separating_lines)
+    # Материал грани ограничивают борт, край покрытия и газон, а вместе с ними и стена здания
+    # с оградой: газон у фасада и у ограды площадки замкнут ими (20.10.2026: на Кустанайской
+    # так подтверждается контуром в полтора раза больше грунта).
+    wall_lines = _barrier_lines([f for f in features if f.object_class in _WALL_EDGES])
+    material_lines = _with_bridges(
+        _barrier_lines(
+            [
+                f
+                for f in features
+                if f.object_class in _MATERIAL_EDGES
+                or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
+            ]
+        )
     )
     woodland = seed_kind == _WOODLAND_SEED
     faces = closed_face_materials(
@@ -1000,13 +1019,20 @@ def _closed_materials(
         seed_xy[certain & ((seed_kind == Material.SOIL) | woodland)],
         seed_xy[certain & (seed_kind == Material.PAVED)],
         material_lines=material_lines,
+        wall_lines=wall_lines,
         woodland_xy=seed_xy[woodland],
         functional_xy=np.array([(x, y) for x, y, _ in functional_labels], dtype=np.float64).reshape(
             -1, 2
         ),
         functional_max_area_m2=FUNCTIONAL_MAX_AREA_M2,
+        short_dangle_m=SHORT_DANGLE_M,
     )
     return replace(faces, unassigned_labels=faces.unassigned_labels + int((~certain).sum()))
+
+
+def _with_bridges(lines: NDArray[np.object_]) -> NDArray[np.object_]:
+    extra = bridges(list(lines), STROKE_GAP_M)
+    return np.concatenate([lines, np.array(extra, dtype=object)]) if extra else lines
 
 
 def _merge_material_area(
@@ -1313,12 +1339,50 @@ def _assign(
         return dijkstra(graph, directed=False, indices=sources, min_only=True, limit=reach)
 
     paved = distances(Material.PAVED, limit)
-    soil = np.minimum(distances(Material.SOIL, limit), distances(_TREE_SEED, tree_limit))
+    # Кто из подписей ближе, решает путь с ценой узких мест: клетка у линии чертежа дороже,
+    # и разлив через разрыв борта или калитку проигрывает подписи по ту сторону. Дальность
+    # разлива (limit) меряется по-прежнему без цены: узкий тротуар не короче, чем он есть.
+    narrow = sparse.coo_matrix((_narrow_weights(free, a, b), (a, b)), shape=(count, count)).tocsr()
+
+    def costs(kind: int, reach: NDArray[np.float64]) -> NDArray[np.float64]:
+        sources = np.unique(seed_nodes[kinds == kind])
+        if not len(sources):
+            return np.full(count, np.inf)
+        # Цена не меньше расстояния: дальше limit * (1 + NARROW_COST) считать незачем.
+        found = dijkstra(
+            narrow,
+            directed=False,
+            indices=sources,
+            min_only=True,
+            limit=max(limit, tree_limit) * (1 + NARROW_COST),
+        )
+        return np.where(np.isfinite(reach), found, np.inf)
+
+    paved_cost = costs(Material.PAVED, paved)
+    soil_cost = np.minimum(
+        costs(Material.SOIL, distances(Material.SOIL, limit)),
+        costs(_TREE_SEED, distances(_TREE_SEED, tree_limit)),
+    )
     material = np.zeros(count, dtype=np.int8)
-    material[paved + ambiguity < soil] = int(Material.PAVED)
-    material[soil + ambiguity < paved] = int(Material.SOIL)
+    material[paved_cost + ambiguity < soil_cost] = int(Material.PAVED)
+    material[soil_cost + ambiguity < paved_cost] = int(Material.SOIL)
     grid[free] = material
     return grid
+
+
+# Цена шага у линии чертежа: клетка ближе NARROW_CELLS к линии стоит до 1 + NARROW_COST шагов.
+# Разрыв борта 2 м (центр в 2 клетках от краёв) обходится в 6 шагов на клетку, а полоса шире
+# 4 м посередине - в один: в открытом месте раздел остаётся по равному расстоянию.
+NARROW_CELLS = 4.0
+NARROW_COST = 10.0
+
+
+def _narrow_weights(
+    free: NDArray[np.bool_], a: NDArray[np.int64], b: NDArray[np.int64]
+) -> NDArray[np.float64]:
+    depth = ndimage.distance_transform_edt(free)[free]
+    shallow = np.clip(1 - np.minimum(depth[a], depth[b]) / NARROW_CELLS, 0, 1)
+    return 1 + NARROW_COST * shallow
 
 
 # Грань для показа отдаётся материалу, если другого в ней не больше этой доли известного:
