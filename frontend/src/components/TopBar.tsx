@@ -93,6 +93,22 @@ function MainNav() {
   );
 }
 
+// Служебные параметры пересчёта с уточнениями: ссылки на объекты и хеш исходника. В шапке
+// вместо них одна подпись «уточнено объектов: N».
+const REVIEW_KEYS = new Set([
+  'feature_classes',
+  'label_roles',
+  'semantic_source_sha256',
+  'require_reviewed_objects',
+  'require_known_objects',
+]);
+
+function reviewLabel(overrides: Record<string, unknown>): string[] {
+  const assigned = overrides.feature_classes;
+  if (!assigned || typeof assigned !== 'object') return [];
+  return [`уточнено объектов: ${String(Object.keys(assigned).length)}`];
+}
+
 /** Путь до прогона и его виды. Имя чертежа приходит из того же запроса, что у страницы
  *  прогона (кэш TanStack Query), второго обращения к API нет. */
 function RunCrumbs({ runId }: { runId: string }) {
@@ -101,7 +117,10 @@ function RunCrumbs({ runId }: { runId: string }) {
   const params = run
     ? [
         profileTitle(run.profile),
-        ...Object.entries(run.overrides).map(([k, v]) => overrideLabel(k, v)),
+        ...Object.entries(run.overrides)
+          .filter(([k]) => !REVIEW_KEYS.has(k))
+          .map(([k, v]) => overrideLabel(k, v)),
+        ...reviewLabel(run.overrides),
       ]
     : [];
   return (

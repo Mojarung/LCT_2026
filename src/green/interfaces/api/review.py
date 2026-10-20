@@ -96,7 +96,10 @@ def replay_review(
             shutil.copy2(inventories[0], stage / inventories[0].name)
         if (input_dir / "gis").is_dir():
             shutil.copytree(input_dir / "gis", stage / "gis")
-        record = container.runs.register("review-input.dxf", original.profile, overrides)
+        # Имя исходного чертежа, а не служебное «review-input»: в списке прогонов и в шапке
+        # пересчёт с уточнениями узнаётся по своему чертежу. Вход всегда DXF (копия исходника).
+        name = f"{Path(original.source_name).stem}.dxf"
+        record = container.runs.register(name, original.profile, overrides)
         try:
             target = container.store.input_path(record.run_id)
             shutil.copy2(stage / "drawing.dxf", target)
