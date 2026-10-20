@@ -56,8 +56,9 @@ def test_lawn_leaking_through_a_curb_gap_stays_inside_on_display() -> None:
     surface = build_surface_map(SQUARE, labels, EXTENT, 0.5, inference_mode="hybrid")
     assert surface is not None
     assert surface.display_grid is not None
-    # Контроль: разлив действительно проходит через разрыв.
-    assert _at(surface, surface.grid, 61.5, 30) == Material.SOIL
+    # Разрыв борта - узкое место: «А» снаружи ближе по цене пути, газон за разрыв не течёт
+    # и в карте для посадок (20.10.2026; прежде здесь был газон).
+    assert _at(surface, surface.grid, 61.5, 30) == Material.PAVED
     assert _at(surface, surface.display_grid, 61.5, 30) == Material.PAVED
     assert _at(surface, surface.display_grid, 55, 30) == Material.SOIL
     assert _at(surface, surface.display_grid, 59.75, 30) == Material.SOIL

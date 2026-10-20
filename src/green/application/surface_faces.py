@@ -38,12 +38,15 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
     paved_xy: NDArray[np.float64],
     *,
     material_lines: NDArray[np.object_],
+    wall_lines: NDArray[np.object_] | None = None,
     woodland_xy: NDArray[np.float64] | None = None,
     functional_xy: NDArray[np.float64] | None = None,
     functional_max_area_m2: float = 3000.0,
+    short_dangle_m: float = 0.0,
 ) -> FaceMaterials:
-    # Noding only splits actual intersections. No snapping or arbitrary bridge
-    # may turn an unfinished contour into a positive planting region.
+    # Noding only splits actual intersections. Перемычки разрывов пунктира (не шире
+    # surfaces.STROKE_GAP_M) приходят уже в lines: так замыкает контур штриховка CAD с допуском
+    # разрыва. Произвольная линия контур не замыкает.
     noded = shapely.union_all(lines)
     polygons, cuts, dangles, invalid = shapely.polygonize_full(shapely.get_parts(noded))
     faces = shapely.get_parts(polygons)
@@ -51,10 +54,24 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
     # A fence/rail/axis can cut a face or reserve an unknown hole, but cannot
     # establish a homogeneous material enclosure. Only the exterior needs
     # positive support: interior holes remain outside the assigned material.
-    supported = _covered(shapely.get_exterior_ring(faces), material_lines)
+    rings = shapely.get_exterior_ring(faces)
+    if wall_lines is None or not len(wall_lines):
+        supported = _covered(rings, material_lines)
+    else:
+        # Стена и ограда замыкают грань вместе с линиями материала, но не одни: у грани должен
+        # быть хотя бы отрезок борта, края покрытия или газона.
+        supported = _covered(rings, np.concatenate([material_lines, wall_lines])) & _on_material(
+            rings, material_lines, noded
+        )
+
+    # Щель уже SLIVER_M между двумя линиями (двойная линия знака ограды, замкнутая
+    # перемычками на концах) - рисунок, а не участок земли: подпись в ней грани не получает и
+    # остаётся подписью на линии.
+    sliver = 2 * shapely.area(faces) < SLIVER_M * shapely.length(rings)
 
     def assigned(xy: NDArray[np.float64]) -> tuple[NDArray[np.bool_], int]:
         matches = index.query(shapely.points(xy), predicate="within")
+        matches = matches[:, ~sliver[matches[1]]] if matches.shape[1] else matches
         present = np.zeros(len(faces), dtype=bool)
         present[matches[1]] = True
         return present, len(xy) - len(np.unique(matches[0]))
@@ -66,6 +83,12 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
     functional &= supported & (shapely.area(faces) < functional_max_area_m2)
     # An unfinished material separator inside an otherwise closed face means
     # the outer face may contain several materials. Outside tails are harmless.
+    # Висячий хвост короче short_dangle_m (засечка, выноска, обрывок борта у съезда) не делит
+    # грань на два материала: грань с ним решается подписью, как замкнутая.
+    tails = shapely.get_parts(dangles)
+    if short_dangle_m > 0 and len(tails):
+        tails = tails[shapely.length(tails) >= short_dangle_m]
+    dangles = shapely.GeometryCollection(list(tails))
     incomplete = shapely.get_parts(shapely.union_all([cuts, dangles, invalid]))
     pairs = index.query(incomplete, predicate="intersects")
     affected = np.zeros(len(faces), dtype=bool)
@@ -101,6 +124,33 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
         functional_area=shapely.union_all(faces[functional]),
     )
 
+
+def _on_material(
+    rings: NDArray[np.object_], lines: NDArray[np.object_], noded: BaseGeometry
+) -> NDArray[np.bool_]:
+    """У кольца есть общий отрезок (не точка) хотя бы с одной линией материала.
+
+    Кусок узловой сети граней либо целиком лежит на кольце, либо касается его концом, поэтому
+    хватает середины куска: середины кусков на линиях материала ищутся у колец по
+    подготовленному индексу. Попарная проверка DE-9IM разбирала кольцо на каждую пару и на
+    грани у пунктира из 20 тыс. штрихов шла секунды (ревью 20.10.2026)."""
+    found = np.zeros(len(rings), dtype=bool)
+    parts = shapely.get_parts(np.asarray(lines, dtype=object))
+    pieces = shapely.get_parts(noded)
+    if not len(rings) or not len(parts) or not len(pieces):
+        return found
+    middles = shapely.line_interpolate_point(pieces, 0.5, normalized=True)
+    on_lines = STRtree(parts).query(middles, predicate="dwithin", distance=_NEAR_M)[0]
+    if not len(on_lines):
+        return found
+    ring_ids = STRtree(rings).query(
+        middles[np.unique(on_lines)], predicate="dwithin", distance=_NEAR_M
+    )[1]
+    found[np.unique(ring_ids)] = True
+    return found
+
+
+SLIVER_M = 0.8  # грань уже этого (2 * площадь / периметр) - щель между линиями, м
 
 # Соседние куски линий материала для кольца и сетка округления для спорных колец, м.
 _NEAR_M = 1e-6
