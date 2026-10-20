@@ -21,10 +21,11 @@ vi.mock('../../map/engine', () => ({
 const item = { id: 'p1' } as MapItem;
 
 // Хуки - отдельные моки, а не методы интерфейса: так их можно проверять без привязки this.
-type HookMocks = { [K in keyof EngineHooks]: Mock<EngineHooks[K]> };
+type HookMocks = { [K in keyof EngineHooks]-?: Mock<NonNullable<EngineHooks[K]>> };
 
 function hooks(): HookMocks {
   return {
+    navigate: vi.fn<NonNullable<EngineHooks['navigate']>>(),
     select: vi.fn<EngineHooks['select']>(),
     probe: vi.fn<EngineHooks['probe']>(),
     move: vi.fn<EngineHooks['move']>(),
