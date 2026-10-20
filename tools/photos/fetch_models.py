@@ -34,6 +34,11 @@ MODELS = (
         f"{HF}/unsloth/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q4_K_S.gguf",
         "qwen-image-2.1-Q4_K_S.gguf",
     ),
+    # Turbo: сервис берёт её, когда файл есть (8 шагов вместо 40), лицензия та же - Qwen Research.
+    (
+        f"{HF}/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q4_K_S.gguf",
+        "qwen-image-2.1-turbo-Q4_K_S.gguf",
+    ),
     (
         f"{HF}/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
         "vae/qwen_image_2.1_vae_bf16.safetensors",

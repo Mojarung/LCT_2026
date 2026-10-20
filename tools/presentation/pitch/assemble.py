@@ -1,9 +1,9 @@
-# ruff: noqa: INP001, T201, SLF001 - standalone deck assembler; python-pptx has no API for slide order
+# ruff: noqa: INP001, T201 - standalone deck assembler
 """Собирает презентацию к сдаче в шаблоне ЛЦТ 2026, целиком редактируемую в PowerPoint.
 
 Слайды 7-11 шаблона обязательные (deck/mandatory.py): оформление шаблона, меняется только текст.
-За ними слайд шаблона с рекомендуемой структурой и свободные слайды native.py по шести
-разделам этой структуры: текст, фигуры, таблицы и графики PowerPoint, снимки сервиса - картинками.
+За ними свободные слайды native.py по шести разделам рекомендуемой структуры шаблона (раздел -
+метка на каждом слайде): текст, фигуры, таблицы и графики PowerPoint, снимки сервиса - картинками.
 PDF - тот же PPTX через LibreOffice.
 
 Запуск (после shots.mjs; фоны bg/ - из шаблона):
@@ -32,7 +32,6 @@ import native  # noqa: E402
 ROOT = HERE.parents[2]
 PITCH = ROOT / "out" / "presentation" / "pitch"
 SOFFICE = Path(r"C:\Program Files\LibreOffice\program\soffice.exe")
-STRUCTURE = 4  # слайд шаблона «Рекомендуемая структура презентации»
 
 
 def plan_band() -> Path:
@@ -44,19 +43,14 @@ def plan_band() -> Path:
 
 def build(template: Path) -> Presentation:
     prs = Presentation(str(template))
-    deck.drop_slides(prs, {STRUCTURE, *deck.MANDATORY})
-    structure_s, title_s, about_s, team_s, history_s, short_s = list(prs.slides)
-    ids = prs.slides._sldIdLst
-    first = ids[0]
-    ids.remove(first)
-    ids.insert(len(deck.MANDATORY), first)  # структура - сразу после обязательных
+    deck.drop_slides(prs, set(deck.MANDATORY))
+    title_s, about_s, team_s, history_s, short_s = list(prs.slides)
     assets = {"plan_band": plan_band(), **deck.poser_logo()}
     deck.fill_title_slide(title_s, assets)
     deck.fill_about_slide(about_s, assets)
     deck.fill_team_slide(team_s, [deck.portrait(*spec) for spec in deck.TEAM_PHOTOS])
     deck.fill_history_slide(history_s)
     deck.fill_short_slide(short_s)
-    native.fill_structure_slide(structure_s)
     native.add_slides(prs)
     return prs
 
