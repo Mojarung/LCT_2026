@@ -13,7 +13,7 @@
 - суждения нескольких экспертов сводятся поэлементным геометрическим средним (AIJ, Forman,
   Peniwati 1998), итоговый вес слагаемого = вес группы x вес внутри группы.
 
-Источники и статусы проверки - docs/plans/2026-09-22-quality-literature.md, п. 8.
+Источники и статусы проверки - docs/quality-literature.md, п. 8.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-# Группы индекса (docs/plans/2026-09-22-quality-literature.md, п. 8.1). Порядок внутри группы
+# Группы индекса (docs/quality-literature.md, п. 8.1). Порядок внутри группы
 # задаёт порядок строк и столбцов матрицы суждений.
 GROUPS: dict[str, tuple[str, ...]] = {
     "reliability": ("fit", "category", "margin"),

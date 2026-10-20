@@ -83,7 +83,7 @@ def test_error_headline_names_what_is_missing_in_plain_words() -> None:
 @pytest.mark.parametrize("kind", ["3dsolid", "body"])
 def test_volume_with_acis_is_read_as_its_plan_footprint(tmp_path: Path, kind: str) -> None:
     """Тело (дом, сооружение в 3D-чертеже) - след на плане, а не пробел, останавливающий
-    расчёт: синтетические участки других финалистов (17.10.2026) останавливались на одном
+    расчёт: синтетические участки сторонних авторов (17.10.2026) останавливались на одном
     теле. Куб 1 x 1 x 1 даёт квадрат 1 м²."""
     doc = ezdxf.new("R2018")
     entity = getattr(doc.modelspace(), f"add_{kind}")()

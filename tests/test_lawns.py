@@ -310,7 +310,7 @@ def test_edit_recounts_lawn_around_the_new_plan(
 
 
 def test_assumed_open_ground_becomes_new_lawn() -> None:
-    """Чертёж без признаков грунта (входы других финалистов): запасной грунт в границе работ -
+    """Чертёж без признаков грунта (входы сторонних авторов): запасной грунт в границе работ -
     устраиваемый газон (ТЗ п. 3, травянистые покрытия), а не «газоны не выделены»."""
     features = [
         _feature(ObjectClass.WORK_BOUNDARY, box(0, 0, 60, 40), "boundary"),

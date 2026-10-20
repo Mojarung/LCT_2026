@@ -35,7 +35,6 @@ var/
 # снимки и снапшоты playwright-cli при проверке вёрстки
 .playwright-cli/
 
-# рабочие копии агентов Claude Code
 .claude/worktrees/
 
 # Рабочие материалы команды: лежат локально, в репозиторий сдачи не идут (29.09.2026)
@@ -58,7 +57,7 @@ docs/build_pipeline_brief.py
 docs/presentation.md
 docs/deploy.md
 docs/plans/*
-!docs/plans/2026-09-22-quality-literature.md
+!docs/quality-literature.md
 docs/notes/*
 !docs/notes/11-species-norms.md
 !docs/notes/12-catalog-families.md
@@ -95,7 +94,7 @@ tools/presentation/deck/
 data/osm/*
 !data/osm/README.md
 
-# Чужие решения задачи ЛЦТ 2026 №3 для разбора (клоны, у каждого свой .git)
+# Внешние тестовые входы
 other/
 
 # Рабочие папки исполнения планов (superpowers)

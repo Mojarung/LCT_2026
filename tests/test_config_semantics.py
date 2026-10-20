@@ -129,7 +129,7 @@ def test_pole_and_wall_words_still_work_elsewhere(name: str, expected: ObjectCla
     assert found.object_class is expected
 
 
-# Входные DXF других команд финала (other/*, 17.10.2026): имена слоёв без правил пилота.
+# Входные DXF сторонних авторов (17.10.2026): имена слоёв без правил пилота.
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
@@ -205,7 +205,7 @@ def test_review_regressions_in_the_vocabulary(name: str, expected: ObjectClass) 
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        # Входы других финалистов без грунта (17.10.2026): водоём - не земля и не линия покрытия.
+        # Сторонние входы без грунта (17.10.2026): водоём - не земля и не линия покрытия.
         ("ВОДОЕМ", ObjectClass.OBSTACLE),
         ("OSM_HYDROGRAPHY", ObjectClass.OBSTACLE),
         ("POND", ObjectClass.OBSTACLE),

@@ -44,7 +44,7 @@ rules:
   - {pattern: "(?:^|[|$])ZABOR$", object_class: fence, confirmed: true, priority: 10}
   - {pattern: "(?:^|[|$])(?:LAWN|GROUND|GRASS)$", object_class: lawn, confirmed: true, priority: 10,
      note: "GROUND - земля под озеленение у синтетических участков других команд (17.10.2026)"}
-  # green-atlas (other/, 17.10.2026): слои выгрузки OSM. GREEN_EXISTING - существующее озеленение:
+  # green-atlas (17.10.2026): слои выгрузки OSM. GREEN_EXISTING - существующее озеленение:
   # площади - газоны и скверы (грунт), круги - кроны существующих деревьев, линии - ряды деревьев
   # без ширины (оформление). OSM_RAILWAY - железная дорога.
   - {pattern: "(?:^|[|$_])GREEN_EXISTING$", geometry: circle, object_class: existing_tree, confirmed: true, priority: 10}
