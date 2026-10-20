@@ -1027,7 +1027,9 @@ def _surface_areas(
     parts, kinds = _paved_parts(paved, basemap, exact_paved)
     parts, kinds = _walk_ends_to_road(parts, kinds)
     parts, kinds = _exploded(_walk_notches_paved(parts, kinds, soil, basemap), kinds)
-    parts = [_without_artifact_holes(part, soil) for part in parts]
+    soil_parts = shapely.get_parts(soil) if soil is not None else np.empty(0, dtype=object)
+    soil_index = shapely.STRtree(soil_parts)
+    parts = [_without_artifact_holes(part, soil_parts, soil_index) for part in parts]
     roads = [part for part, kind in zip(parts, kinds, strict=True) if kind == PAVED_ROAD]
     mesh = (
         shapely.union_all(roads).buffer(ROAD_MESH_MARGIN_M, join_style="mitre") if roads else None
@@ -1098,16 +1100,25 @@ def _walk_notches_paved(
 ARTIFACT_HOLE_M2 = 4.0
 
 
-def _without_artifact_holes(part: BaseGeometry, soil: BaseGeometry | None) -> BaseGeometry:
+def _without_artifact_holes(
+    part: BaseGeometry, soil_parts: np.ndarray, soil_index: shapely.STRtree
+) -> BaseGeometry:
     """Малые дыры покрытия, под которыми нет газона, заливаются: в 3D борт обходил их
-    островком посреди проезда (Кустанайская, 19.10.2026). Газон-остров и клумба остаются."""
+    островком посреди проезда (Кустанайская, 19.10.2026). Газон-остров и клумба остаются.
+
+    Газон под дырой меряется только по кускам газона рядом с ней и только у малой дыры:
+    пересечение каждой дыры со всем газоном улицы шло 76 с на Олимпийской деревне."""
     if part.geom_type != "Polygon" or not part.interiors:
         return part
     holes = []
     for ring in part.interiors:
         hole = shapely.Polygon(ring)
-        lawn = soil is not None and _intersection_area(hole, soil) >= hole.area / 2
-        if hole.area >= ARTIFACT_HOLE_M2 or lawn:
+        if hole.area >= ARTIFACT_HOLE_M2:
+            holes.append(ring)
+            continue
+        near = soil_parts[soil_index.query(hole, predicate="intersects")]
+        lawn = sum(_intersection_area(hole, piece) for piece in near) >= hole.area / 2
+        if lawn:
             holes.append(ring)
     return shapely.Polygon(part.exterior, holes)
 
@@ -1138,6 +1149,10 @@ def _walk_ends_to_road(
     closed: dict[int, BaseGeometry] = {}
     out = list(parts)
     r = WALK_END_MOUTH_M / 2
+    # Концы дорожек копятся по проездам и вливаются в проезд один раз: склейка всего проезда
+    # на каждый конец (буфер туда и обратно) шла 54 с на Олимпийской деревне.
+    ends: dict[int, list[BaseGeometry]] = {}
+    walks: dict[int, list[int]] = {}
     for i, kind in enumerate(kinds):
         if kind not in {PAVED_ASPHALT, PAVED_PAVERS}:
             continue
@@ -1148,10 +1163,15 @@ def _walk_ends_to_road(
             end = _areal(out[i].intersection(closed[road]))
             if end.is_empty or not WALK_END_MIN_M2 <= end.area < WALK_END_SHARE * out[i].area:
                 continue
-            # Между дорожкой и проездом бывает щель в доли метра: склейка с замыканием, иначе
-            # конец остаётся островом проезда со своим бортом.
-            g = WALK_END_TOUCH_M
-            out[road] = _areal(shapely.union_all([out[road], end]).buffer(g).buffer(-g))
+            ends.setdefault(road, []).append(end)
+            walks.setdefault(i, []).append(road)
+    # Между дорожкой и проездом бывает щель в доли метра: склейка с замыканием, иначе конец
+    # остаётся островом проезда со своим бортом.
+    g = WALK_END_TOUCH_M
+    for road, pieces in ends.items():
+        out[road] = _areal(shapely.union_all([out[road], *pieces]).buffer(g).buffer(-g))
+    for i, roads in walks.items():
+        for road in roads:
             out[i] = _areal(out[i].difference(out[road]))
     return _exploded(out, kinds)
 
