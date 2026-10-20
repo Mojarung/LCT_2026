@@ -1049,10 +1049,17 @@ def _merge_material_area(
 def _exact_areas(
     polygons: Sequence[Feature], extent: BaseGeometry | None
 ) -> tuple[BaseGeometry | None, BaseGeometry | None]:
-    soil = shapely.union_all(
-        [inner_area(f) for f in polygons if f.object_class is ObjectClass.LAWN]
-    )
-    paved = shapely.union_all([outer_area(f) for f in polygons if f.object_class.is_hard_surface])
+    lawns = [inner_area(f) for f in polygons if f.object_class is ObjectClass.LAWN]
+    hard = [outer_area(f) for f in polygons if f.object_class.is_hard_surface]
+    soil = shapely.union_all(lawns)
+    paved = shapely.union_all(hard)
+    # Газон-остров внутри много большего контура покрытия: проектировщик нарисовал заливку
+    # проезда целиком, а газоны поверх неё, без вырезов («2026-07-21 - СПОЗУ.dwg» жюри: контуры
+    # проездов накрывали все 3 878 м² газонов, грунта не было ни клетки). Такой газон сильнее
+    # покрытия; газон, лишь заходящий на край тротуара, по-прежнему уступает покрытию.
+    islands = _lawn_islands(lawns, hard)
+    if islands is not None:
+        paved = _overlay(paved, islands, "difference")
     if extent is not None:
         soil, paved = (
             _overlay(soil, extent, "intersection"),
@@ -1060,6 +1067,33 @@ def _exact_areas(
         )
     soil = _overlay(soil, paved, "difference")
     return (None if soil.is_empty else soil, None if paved.is_empty else paved)
+
+
+_ISLAND_COVER = 0.9  # газон лежит внутри покрытия почти целиком
+_ISLAND_RATIO = 10.0  # покрытие во столько раз больше газона - это заливка вокруг, не сосед
+
+
+def _lawn_islands(
+    lawns: Sequence[BaseGeometry], hard: Sequence[BaseGeometry]
+) -> BaseGeometry | None:
+    """Газоны, каждый из которых почти целиком лежит в одном контуре покрытия, много
+    большем самого газона."""
+    if not lawns or not hard:
+        return None
+    tree = shapely.STRtree(hard)
+    islands = []
+    for lawn in lawns:
+        area = float(lawn.area)
+        if area <= 0:
+            continue
+        for index in tree.query(lawn, predicate="intersects"):
+            cover = hard[int(index)]
+            if float(cover.area) < _ISLAND_RATIO * area:
+                continue
+            if float(_overlay(lawn, cover, "intersection").area) >= _ISLAND_COVER * area:
+                islands.append(lawn)
+                break
+    return shapely.union_all(islands) if islands else None
 
 
 # Самопересекающиеся заливки чужих чертежей роняют наложение GEOS («Unable to determine overlay

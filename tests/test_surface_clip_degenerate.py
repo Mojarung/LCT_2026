@@ -24,3 +24,15 @@ def test_clip_retries_with_make_valid(monkeypatch) -> None:  # noqa: ANN001 - ф
 
     assert len(calls) == 2
     assert clipped.area == 25
+
+
+def test_lawn_island_inside_a_large_paved_fill_stays_soil() -> None:
+    """Заливка проезда без вырезов и газоны поверх неё (СПОЗУ жюри 2026-07-21)."""
+    from green.application import surfaces  # noqa: PLC0415
+
+    fill = box(0, 0, 100, 100)
+    island = box(40, 40, 50, 50)
+    edge = box(95, 40, 105, 50)  # газон заходит на край покрытия - уступает ему
+    islands = surfaces._lawn_islands([island, edge], [fill])  # noqa: SLF001
+    assert islands is not None
+    assert islands.area == 100
