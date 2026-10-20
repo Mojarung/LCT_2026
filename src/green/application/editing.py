@@ -442,6 +442,7 @@ def apply_edits_detailed(
     current: list[Placement | None] = list(context.plan.placements)
     positions = {p.placement_id: i for i, p in enumerate(context.plan.placements)}
     marks = _EditMarks(context.plan.edits)
+    touched: list[tuple[float, float]] = []
 
     for edit in edits:
         if edit.kind is EditKind.ADD:
@@ -449,9 +450,11 @@ def apply_edits_detailed(
             current.append(added)
             positions[added.placement_id] = len(current) - 1
             marks.added(added)
+            touched.append((added.x, added.y))
             continue
         position = _require_existing(positions, edit)
         before = _at(current, position, edit)
+        touched.append((before.x, before.y))
         if edit.kind is EditKind.DELETE:
             current[position] = None
             positions.pop(_placement_id(edit))
@@ -460,8 +463,9 @@ def apply_edits_detailed(
             after = _moved(context, before, edit)
             current[position] = after
             marks.moved(before, after)
+            touched.append((after.x, after.y))
 
-    plan, rejected = _rebuild_plan(context, [p for p in current if p is not None], catalog)
+    plan, rejected = _rebuild_plan(context, [p for p in current if p is not None], catalog, touched)
     plan, spaced = _reject_crowding(context, plan, _edited_ids(edits, current))
     rejected = (*rejected, *spaced)
     for item in rejected:
@@ -526,8 +530,16 @@ def _validate_draft(context: RunContext, plan: Plan, catalog: Sequence[Species])
     )
 
 
+# Перепроверяются посадки не дальше этого от места правки: наибольший отступ норм - 10 м
+# (широкие кроны от зданий, школы), с запасом на шаг соседей и кроны.
+EDIT_REACH_M = 30.0
+
+
 def _rebuild_plan(
-    context: RunContext, kept: list[Placement], catalog: Sequence[Species]
+    context: RunContext,
+    kept: list[Placement],
+    catalog: Sequence[Species],
+    touched: Sequence[tuple[float, float]] = (),
 ) -> tuple[Plan, tuple[EditRejection, ...]]:
     """Собрать план заново: нарушающая посадка становится отказом, как у генератора.
 
@@ -537,9 +549,21 @@ def _rebuild_plan(
     согласования», и в просмотрщике эксперт прочитает нарушение как согласуемое решение.
     Такие посадки возвращаются и отдельно, с причиной: правка не уводит их в отказ молча.
     """
-    refreshed = reassess_placements(
-        kept, context.rulebook, catalog, context.params, context.index_for
+    # Правка отвечает за своё место: посадки далеко от неё прошли проверку генератора и её
+    # не меняют. Перепроверка всего плана снимала кусты в 125 м от перенесённого дерева
+    # (проверка жюри 20.10), а в DXF они ложились как «удалены вручную».
+    # Без правок (обновление черновика) перепроверяется весь план, как раньше.
+    near = [
+        i
+        for i, p in enumerate(kept)
+        if not touched or any(math.hypot(p.x - x, p.y - y) <= EDIT_REACH_M for x, y in touched)
+    ]
+    fresh = reassess_placements(
+        [kept[i] for i in near], context.rulebook, catalog, context.params, context.index_for
     )
+    refreshed = list(kept)
+    for i, placement in zip(near, fresh, strict=True):
+        refreshed[i] = placement
     good: list[Placement] = []
     violating: list[Placement] = []
     for placement in refreshed:

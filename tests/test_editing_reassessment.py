@@ -254,3 +254,19 @@ def test_shrub_alternatives_exclude_other_life_forms() -> None:
     result = apply_edits(_context((plant,)), [], (species, groundcover))
     assert result.placements[0].assortment is not None
     assert not result.placements[0].assortment.alternatives
+
+
+def test_edit_does_not_recheck_plantings_far_from_it() -> None:
+    """Перенос дерева не снимает посадки в другом конце участка (проверка жюри 20.10: перенос
+    на 0,8 м снял три куста в 125 м). Далёкая посадка прошла проверку генератора."""
+    species = _species()
+    near = _plant(species, identity="p1", x=10, y=20)
+    far = _plant(species, identity="p2", x=90, y=60)
+    context = _context((near, far))
+    # Сеть прямо под далёкой посадкой: при перепроверке всего плана она ушла бы в отказ.
+    context.features = (
+        *context.features,
+        feature(ObjectClass.UTILITY_HEAT, LineString([(80, 60), (100, 60)]), "heat"),
+    )
+    plan = apply_edits(context, [Edit(EditKind.MOVE, "p1", 10.5, 20)], (species,))
+    assert {p.placement_id for p in plan.placements} == {"p1", "p2"}
