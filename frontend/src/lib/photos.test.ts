@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PhotoOut } from '../api/types';
-import { coverCrop, expectedSeconds, PHOTO_SECONDS_DEFAULT, photoProgress } from './photos';
+import {
+  coverCrop,
+  expectedSeconds,
+  fitForPhoto,
+  PHOTO_HEIGHT,
+  PHOTO_SECONDS_DEFAULT,
+  PHOTO_WIDTH,
+  photoProgress,
+} from './photos';
 
 function photo(patch: Partial<PhotoOut>): PhotoOut {
   return {
@@ -84,5 +92,77 @@ describe('photoProgress', () => {
   it('shows the failure reason', () => {
     const failed = photo({ state: 'failed', error: 'out of memory' });
     expect(photoProgress(failed, [failed], now, 80).label).toBe('не получилось, можно повторить');
+  });
+});
+
+describe('fitForPhoto', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function stubBitmap(width: number, height: number) {
+    const close = vi.fn();
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(() => Promise.resolve({ width, height, close })),
+    );
+    return close;
+  }
+
+  it('crops the centre to 16:9 and draws it at the model size', async () => {
+    const close = stubBitmap(2000, 2000);
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    const out = new Blob(['png'], { type: 'image/png' });
+    const toBlob = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((done) => {
+      done(out);
+    });
+    await expect(fitForPhoto(new Blob(['shot']))).resolves.toBe(out);
+    expect(drawImage).toHaveBeenCalledWith(
+      expect.anything(),
+      0,
+      438,
+      2000,
+      1125,
+      0,
+      0,
+      PHOTO_WIDTH,
+      PHOTO_HEIGHT,
+    );
+    expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/png');
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('fails clearly without a 2D canvas and still frees the bitmap', async () => {
+    const close = stubBitmap(1920, 1080);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    await expect(fitForPhoto(new Blob(['shot']))).rejects.toThrow(
+      'Браузер не дал холст для подготовки снимка',
+    );
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('fails clearly when the canvas gives no image', async () => {
+    stubBitmap(1920, 1080);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((done) => {
+      done(null);
+    });
+    await expect(fitForPhoto(new Blob(['shot']))).rejects.toThrow(
+      'Браузер не отдал подготовленный снимок',
+    );
+  });
+});
+
+describe('photoProgress edge cases', () => {
+  it('a finished photo is full, a lone queued one has nobody ahead', () => {
+    const now = Date.parse('2026-09-29T10:01:00Z');
+    const done = photo({ state: 'succeeded' });
+    expect(photoProgress(done, [done], now, 80)).toEqual({ share: 1, label: 'готово' });
+    expect(photoProgress(photo({}), [photo({})], now, 80).label).toBe('в очереди');
   });
 });

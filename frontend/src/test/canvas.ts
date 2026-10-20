@@ -90,8 +90,14 @@ const DEFAULTS = {
 /** Ширина текста по числу знаков: этого хватает, чтобы подписи раскладывались детерминированно. */
 export const CHAR_PX = 6;
 
+/** Чем отвечает getImageData: по умолчанию прозрачные нули, тест может подложить свой растр. */
+export interface CanvasOptions {
+  pixels?: (width: number, height: number) => Uint8ClampedArray;
+}
+
 export function fakeContext(
   canvas: { width: number; height: number } = { width: 800, height: 600 },
+  options: CanvasOptions = {},
 ): FakeContext {
   const calls: CanvasCall[] = [];
   const props: Record<string, unknown> = { ...DEFAULTS, canvas };
@@ -137,7 +143,9 @@ export function fakeContext(
     getImageData: (_x, _y, w, h) => ({
       width: w,
       height: h,
-      data: new Uint8ClampedArray((w as number) * (h as number) * 4),
+      data:
+        options.pixels?.(w as number, h as number) ??
+        new Uint8ClampedArray((w as number) * (h as number) * 4),
     }),
     createImageData: (w, h) => ({
       width: w,
@@ -200,6 +208,23 @@ class DOMMatrixStub {
   }
 }
 
+/** ImageData без canvas-пакета: в jsdom его нет. */
+export class FakeImageData {
+  readonly data: Uint8ClampedArray;
+  constructor(
+    public width: number,
+    public height: number,
+  ) {
+    this.data = new Uint8ClampedArray(width * height * 4);
+  }
+}
+
+/** Подменить ImageData и DOMMatrix, которых нет в jsdom (снимается vi.unstubAllGlobals). */
+export function installImaging(): void {
+  vi.stubGlobal('ImageData', FakeImageData);
+  vi.stubGlobal('DOMMatrix', DOMMatrixStub);
+}
+
 /** Холст вне документа: размер и записывающий контекст. */
 export class FakeOffscreenCanvas {
   readonly fake: FakeContext;
@@ -223,7 +248,7 @@ export interface InstalledCanvas {
 
 /** Подменить Path2D, OffscreenCanvas и getContext у HTMLCanvasElement. Снимается само:
  *  setup.ts вызывает vi.unstubAllGlobals, а restoreMocks возвращает getContext. */
-export function installCanvas(): InstalledCanvas {
+export function installCanvas(options: CanvasOptions = {}): InstalledCanvas {
   const contexts: FakeContext[] = [];
   vi.stubGlobal('Path2D', RecordingPath2D);
   vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
@@ -233,7 +258,7 @@ export function installCanvas(): InstalledCanvas {
   ) {
     let fake = own.get(this);
     if (!fake) {
-      fake = fakeContext(this);
+      fake = fakeContext(this, options);
       own.set(this, fake);
       contexts.push(fake);
     }

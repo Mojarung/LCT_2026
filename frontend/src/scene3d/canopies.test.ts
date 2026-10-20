@@ -1,6 +1,7 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { canopyCover, canopyPosts, freeCanopies } from './canopies';
+import { CANOPY_HEIGHT_M, canopyCover, canopyGroup, canopyPosts, freeCanopies } from './canopies';
 import type { Flat } from './types';
 
 const rect = (x: number, z: number, w: number, d: number): Flat[] => [
@@ -40,4 +41,42 @@ it('площадь под навесом закрыта для оборудов�
   ]);
   expect(cover.length).toBeGreaterThan(4);
   expect(cover.every((p) => p.x >= 0 && p.x <= 4 && p.z >= 0 && p.z <= 3)).toBe(true);
+});
+
+describe('навесы в сцене', () => {
+  it('без навесов - пустая группа', () => {
+    const group = canopyGroup([]);
+    expect(group.name).toBe('canopies');
+    expect(group.children).toHaveLength(0);
+  });
+
+  it('кровля на высоте навеса над контуром и стойки экземплярами в своих точках', () => {
+    const ring = rect(10, 20, 6, 4);
+    const group = canopyGroup([ring]);
+    const [roof, posts] = group.children as [THREE.Mesh, THREE.InstancedMesh];
+    roof.geometry.computeBoundingBox();
+    const box = roof.geometry.boundingBox ?? new THREE.Box3();
+    expect(box.min.y).toBeCloseTo(CANOPY_HEIGHT_M, 5);
+    expect(box.min.x).toBeCloseTo(10, 5);
+    expect(box.max.z).toBeCloseTo(24, 5);
+    expect(roof.castShadow).toBe(true);
+    const spots = canopyPosts(ring);
+    expect(posts.count).toBe(spots.length);
+    const m = new THREE.Matrix4();
+    posts.getMatrixAt(0, m);
+    const p = new THREE.Vector3().setFromMatrixPosition(m);
+    expect(p.x).toBeCloseTo(spots[0]?.x ?? NaN, 5);
+    expect(p.z).toBeCloseTo(spots[0]?.z ?? NaN, 5);
+  });
+
+  it('контур без углов (меньше трёх) - без стоек, кровля остаётся', () => {
+    const sliver = [
+      { x: 0, z: 0 },
+      { x: 10, z: 0.01 },
+      { x: 20, z: 0 },
+    ];
+    expect(canopyPosts(sliver)).toEqual([]);
+    const group = canopyGroup([sliver]);
+    expect(group.children).toHaveLength(1);
+  });
 });
