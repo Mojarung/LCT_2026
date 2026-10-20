@@ -43,7 +43,10 @@ def test_letter_split_between_text_chunks_is_not_a_change(tmp_path: Path) -> Non
     _split_a_letter_between_chunks(source)
     loaded, _ = load_document(source)
     text = loaded.modelspace().query("MTEXT").first.text
-    assert any(0xDC80 <= ord(ch) <= 0xDCFF for ch in text), "разрыв буквы не воспроизведён"
+    # Загрузчик собирает разорванную букву (иначе суррогаты падают при записи JSON, чертёж
+    # жюри «ИС ЗИЛ озеленение.dwg»), а сверка целостности по-прежнему не видит изменений.
+    assert not any(0xDC80 <= ord(ch) <= 0xDCFF for ch in text)
+    assert text == LONG_TEXT
 
     checker = EzdxfIntegrityChecker()
     snapshot = checker.snapshot(source)
