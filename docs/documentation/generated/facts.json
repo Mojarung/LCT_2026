@@ -1,6 +1,10 @@
 {
  "rules_total": "104",
  "rules_distance": "70",
+ "rules_distance_classes": "30",
+ "rules_distance_forbid": "56",
+ "rules_distance_approval": "14",
+ "result_layers": "13",
  "rules_verified": "101",
  "rules_by_text": "86",
  "rules_project": "15",
