@@ -57,7 +57,7 @@ import { flowerbedGroup } from './flowerbeds';
 import { edgeCurbs, PAVING_LIFT_M, pavingGeometry } from './paving';
 import { litterTexture, litterUniforms, withLitter } from './litter';
 import { pitGroup, pitsOnPaving } from './treePits';
-import { Freecam, type Mode, type Pose } from './freecam';
+import { EYE_M, Freecam, type Mode, type Pose } from './freecam';
 import {
   buildMask,
   type MaskInfo,
@@ -98,6 +98,8 @@ import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
 import { sizeGuide } from './guide';
+import { pickTreeWarning, type TreeClearanceConflict } from './treeClearance';
+import { treeWarningOverlay } from './treeWarningOverlay';
 import { VISIBLE_SHARE, visibleShare } from './visibility';
 import { GRASS_PRESETS, GrassField } from './grass';
 import type { Line, Plant, Ring, World } from './types';
@@ -131,6 +133,7 @@ export interface ViewSettings {
   /** Contact light, HDR and antialiasing; disabled in the fast preset. */
   enhanced: boolean;
   showExisting: boolean;
+  showTreeWarnings: boolean;
   /** Погода, 0..1: сила ветра, дождя, снега и листопада. */
   wind: number;
   rain: number;
@@ -162,6 +165,7 @@ export const DEFAULT_SETTINGS: ViewSettings = {
   quality: 'medium',
   enhanced: true,
   showExisting: true,
+  showTreeWarnings: true,
   wind: 0.3,
   rain: 0,
   snow: 0,
@@ -204,6 +208,7 @@ const QUALITY: Record<Quality, QualityPreset> = {
 export type Stage = 'textures' | 'ground' | 'buildings' | 'plants' | 'ready';
 
 export interface Hover {
+  clearance?: TreeClearanceConflict;
   plant: Plant;
   height: number;
   crown: number;
@@ -280,6 +285,8 @@ export class SceneEngine {
   private frames = 0;
   private fpsStart = 0;
   private lastHover: string | null = null;
+  private treeConflicts: readonly TreeClearanceConflict[] = [];
+  private warningOverlay: ReturnType<typeof treeWarningOverlay> | null = null;
   /** Рамка размеров посадки под прицелом (guide.ts). */
   private readonly guide = sizeGuide();
   /** Объекты зданий (стены, крыши, лоджии) - для маски видимости кадра (visibility.ts). */
@@ -1197,6 +1204,8 @@ export class SceneEngine {
     }
     this.hourShown = s.hour;
     if (settings.quality) this.adaptive.reset();
+    if (this.warningOverlay)
+      this.warningOverlay.group.visible = s.showExisting && s.showTreeWarnings;
     const shrubBands = this.scene.getObjectByName('shrub-strip-bands');
     if (shrubBands) shrubBands.visible = s.showExisting;
     for (const name of ['cars', 'city-cars']) {
@@ -1291,6 +1300,20 @@ export class SceneEngine {
     this.scene.add(this.grassField.mesh);
   }
 
+  setTreeClearanceConflicts(conflicts: readonly TreeClearanceConflict[]): void {
+    if (this.warningOverlay) {
+      this.scene.remove(this.warningOverlay.group);
+      this.warningOverlay.dispose();
+    }
+    this.treeConflicts = conflicts;
+    this.warningOverlay = treeWarningOverlay(conflicts);
+    this.warningOverlay.group.visible =
+      this.settings.showExisting && this.settings.showTreeWarnings;
+    this.scene.add(this.warningOverlay.group);
+    this.lastHover = null;
+    this.events.hover?.(null);
+  }
+
   setMode(mode: Mode): void {
     this.freecam.setMode(mode);
   }
@@ -1303,6 +1326,18 @@ export class SceneEngine {
   setView(pose: Pose, mode: Mode): void {
     this.freecam.setMode(mode);
     this.freecam.setPose(pose);
+  }
+
+  /** Переход со схемы на землю с сохранением направления взгляда. */
+  teleportTo(x: number, z: number): boolean {
+    const [x0, z0, x1, z1] = this.world.bounds;
+    if (!Number.isFinite(x) || !Number.isFinite(z) || x < x0 || x > x1 || z < z0 || z > z1)
+      return false;
+    if (this.walls.roofAt({ x, z }) > 0) return false;
+    this.stopTour();
+    this.freecam.releaseKeys();
+    this.setView({ x, z, y: EYE_M, yaw: this.freecam.pose.yaw, pitch: 0 }, 'walk');
+    return true;
   }
 
   private trackPointer(): void {
@@ -1467,7 +1502,14 @@ export class SceneEngine {
     const o = this.camera.position;
     const bodies = this.forest.bodies();
     const index = pick({ ox: o.x, oy: o.y, oz: o.z, dx: dir.x, dy: dir.y, dz: dir.z }, bodies);
-    const body = bodies[index];
+    let body = bodies[index];
+    if (!body && this.warningOverlay?.group.visible) {
+      const id = pickTreeWarning(
+        { ox: o.x, oy: o.y, oz: o.z, dx: dir.x, dy: dir.y, dz: dir.z },
+        this.treeConflicts,
+      );
+      body = bodies.find((b) => b.plant.id === id);
+    }
     const id = body ? body.plant.id : null;
     if (id === this.lastHover) return;
     this.lastHover = id;
@@ -1477,6 +1519,7 @@ export class SceneEngine {
       body
         ? {
             plant: body.plant,
+            clearance: this.treeConflicts.find((c) => c.plant.id === body.plant.id),
             height: body.height,
             crown: body.radius * 2,
             distance: Math.hypot(body.x - o.x, body.z - o.z),
@@ -1644,6 +1687,8 @@ export class SceneEngine {
     const ratio = this.renderer.getPixelRatio();
     const lod = this.lodDistance();
     const out: Blob[] = [];
+    const warningsVisible = this.warningOverlay?.group.visible ?? false;
+    if (this.warningOverlay) this.warningOverlay.group.visible = false;
     // Рабочие слои и рамка размеров - для работы, не для фото: в кадр для модели они не идут.
     this.showOverlays(false, false);
     const guide = this.guide.group.visible;
@@ -1672,6 +1717,7 @@ export class SceneEngine {
       return out;
     } finally {
       this.showOverlays(this.settings.utilities, this.settings.boundary);
+      if (this.warningOverlay) this.warningOverlay.group.visible = warningsVisible;
       this.guide.group.visible = guide;
       if (this.isRunning()) {
         this.forest.apply({ lodDistance: lod });
@@ -1751,6 +1797,7 @@ export class SceneEngine {
     this.renderer.setAnimationLoop(null);
     this.resizeObserver?.disconnect();
     this.freecam.dispose();
+    this.warningOverlay?.dispose();
     this.forest.dispose();
     this.atmosphere.dispose();
     this.lights?.dispose();

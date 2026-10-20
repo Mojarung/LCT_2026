@@ -77,6 +77,7 @@ export function IconChevron({
 
 /** Значки полосы 3D-вида: режим камеры, облёт, снимок, фото нейросетью, кадры, панели. */
 const SCENE_GLYPHS = {
+  map: IconMap,
   fly: IconPlane,
   walk: IconWalk,
   overview: IconHome,

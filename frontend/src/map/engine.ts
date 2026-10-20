@@ -110,6 +110,14 @@ const validBox = (box: Box | null | undefined): Box | null =>
   box && (box[2] - box[0] > 0 || box[3] - box[1] > 0) ? box : null;
 
 export class PlanEngine {
+  private viewpoint: { x: number; y: number; yaw: number } | null = null;
+
+  /** Камера 3D в координатах чертежа, направление — как у свободной камеры. */
+  setViewpoint(point: { x: number; y: number; yaw: number } | null): void {
+    this.viewpoint = point;
+    this.schedule();
+  }
+
   private semanticReview: {
     selected: Path2D;
     changed: Path2D;
@@ -908,6 +916,28 @@ export class PlanEngine {
       }
       drawDimensions(ctx, this.view, chosen, this.dims.list, mono);
     }
+    if (this.viewpoint) {
+      const p = this.viewpoint;
+      const at = toScreen(this.view, p.x, p.y);
+      const ahead = toScreen(this.view, p.x - Math.sin(p.yaw), p.y + Math.cos(p.yaw));
+      ctx.save();
+      ctx.translate(at.sx, at.sy);
+      ctx.rotate(Math.atan2(ahead.sx - at.sx, at.sy - ahead.sy));
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 32, -Math.PI / 2 - 0.45, -Math.PI / 2 + 0.45);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(64, 91, 211, 0.3)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#405bd3';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    }
     drawNorth(ctx, area, this.view, this.palette, font);
     drawScaleBar(ctx, area, this.view, this.palette, font);
 
@@ -1071,6 +1101,11 @@ export class PlanEngine {
   /** Щелчок без переноса: один ствол - выбор; несколько - список для человека; ни одного -
    *  крона под точкой. */
   private clickAt(event: PointerEvent): void {
+    if (this.hooks.navigate) {
+      const point = this.worldOf(event);
+      this.hooks.navigate(point.x, point.y);
+      return;
+    }
     const trunks = this.trunksAt(event);
     if (trunks.length > 1) {
       const rect = this.canvas.getBoundingClientRect();
@@ -1102,6 +1137,7 @@ export class PlanEngine {
     let hovered = false;
 
     this.listen('pointerdown', (event) => {
+      if (this.hooks.navigate && event.button !== 0) return;
       dragging = true;
       moved = 0;
       last = { x: event.clientX, y: event.clientY };
@@ -1121,7 +1157,7 @@ export class PlanEngine {
     this.listen('pointermove', (event) => {
       if (!dragging) {
         // Курсор-указатель над посадкой: подсказка про клик без единого слова в панели.
-        const over = this.pickAt(event) !== null;
+        const over = !this.hooks.navigate && this.pickAt(event) !== null;
         if (over !== hovered) {
           hovered = over;
           this.canvas.style.cursor = over ? 'pointer' : '';
@@ -1151,6 +1187,7 @@ export class PlanEngine {
     });
 
     this.listen('pointerup', (event) => {
+      if (this.hooks.navigate && (!dragging || event.button !== 0)) return;
       dragging = false;
       this.canvas.classList.remove('dragging');
       const item = grabbed;
@@ -1181,10 +1218,35 @@ export class PlanEngine {
       this.schedule();
     });
 
+    this.listen('pointercancel', () => {
+      if (!this.hooks.navigate) return;
+      dragging = false;
+      grabbed = null;
+      this.canvas.classList.remove('dragging');
+    });
+
     // Карта доступна с клавиатуры: требование заказчика - увидеть норму по посадке - иначе
     // выполнимо только мышью, а это отказ по WCAG 2.1.1.
     this.listen('keydown', (event) => {
       const middle = () => ({ x: this.canvas.clientWidth / 2, y: this.canvas.clientHeight / 2 });
+      if (this.hooks.navigate) {
+        event.stopPropagation();
+        const direction = NUDGE_KEYS[event.key];
+        if (direction) {
+          event.preventDefault();
+          this.view.tx -= direction[0] * 40;
+          this.view.ty -= direction[1] * 40;
+          this.touched = true;
+          this.schedule();
+          return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          const point = toWorld(this.view, middle().x, middle().y);
+          this.hooks.navigate(point.x, point.y);
+          return;
+        }
+      }
       const keys: Record<string, () => void> = {
         ArrowRight: () => {
           this.step(1);

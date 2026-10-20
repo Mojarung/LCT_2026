@@ -1,8 +1,10 @@
-import { screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { mockApi, run } from '../test/api';
 import { renderApp } from '../test/render';
+import { keys } from '../api/queries';
+import * as world from '../scene3d/world';
 
 vi.mock('../components/run/PlanMap', () => ({
   PlanMap: () => <canvas aria-label="План посадок" />,
@@ -11,6 +13,40 @@ vi.mock('../components/run/PlanMap', () => ({
 // jsdom не даёт WebGL: сцену проверяют модульные тесты движка и живой браузер. Здесь - что
 // страница честно говорит, почему сцены нет, и ведёт обратно к плану.
 describe('3D-вид прогона', () => {
+  it(
+    'загрузка основного плана для схемы не пересобирает готовый мир из scene.json',
+    { timeout: 30_000 },
+    async () => {
+      const build = vi.spyOn(world, 'buildWorld');
+      mockApi({
+        '/api/v1/runs/r1': run({
+          artifacts: ['scene.json', 'plan.json'].map((name) => ({ name, url: '', size_bytes: 1 })),
+        }),
+        '/api/v1/runs/r1/artifacts/scene.json': {
+          version: 1,
+          extent: [0, 0, 100, 100],
+          counts: {},
+          buildings: [],
+          plants: [],
+          species: {},
+        },
+      });
+      const { client } = renderApp('/runs/r1/3d');
+      await waitFor(
+        () => {
+          expect(build).toHaveBeenCalled();
+        },
+        { timeout: 20_000 },
+      );
+      const builds = build.mock.calls.length;
+      await act(async () => {
+        client.setQueryData(keys.artifact('r1', 'plan.json'), { placements: [], rejections: [] });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(build).toHaveBeenCalledTimes(builds);
+    },
+  );
+
   it(
     'без WebGL объясняет, что 3D недоступно, и даёт вернуться к плану',
     { timeout: 30_000 },

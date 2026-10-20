@@ -100,6 +100,8 @@ export interface Area {
 }
 
 export interface EngineHooks {
+  /** Просмотр 3D из точки плана; в этом режиме щелчок не выбирает посадку. */
+  navigate?(x: number, y: number): void;
   /** Выбрана посадка или отказ (или выбор снят). */
   select(item: MapItem | null): void;
   /** Посадку тянут в режиме правки: живая проверка точки. */

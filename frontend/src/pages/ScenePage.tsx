@@ -9,7 +9,7 @@ import '../styles/scene.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 
-import type { BasemapJson, PlanJson, SurfaceMeta } from '../api/artifacts';
+import type { BasemapJson, PlanJson, SurfaceMeta, RulesJson } from '../api/artifacts';
 import { artifactUrl, getJson } from '../api/client';
 import {
   useArtifact,
@@ -25,6 +25,7 @@ import { MediaViewer } from '../components/scene/MediaViewer';
 import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog';
 import { RunTitle } from '../components/run/RunParts';
 import { SquareLoader } from '../components/ui/SquareLoader';
+import { ScenePlanMap } from '../components/scene/ScenePlanMap';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -41,7 +42,7 @@ import {
   type ViewSettings,
   webglAvailable,
 } from '../scene3d/engine';
-import { FLY_SPEED_DEFAULT } from '../scene3d/freecam';
+import { FLY_SPEED_DEFAULT, type Pose } from '../scene3d/freecam';
 import type { SurfaceImage } from '../scene3d/ground';
 import { mediaItems, type Shot } from '../lib/media';
 import { fitForPhoto } from '../lib/photos';
@@ -50,6 +51,8 @@ import { formatView, parseView } from '../scene3d/viewHash';
 import type { Plant, SceneJson } from '../scene3d/types';
 import type { ContextJson } from '../scene3d/context';
 import { buildWorld } from '../scene3d/world';
+import { treeClearanceConflicts } from '../scene3d/treeClearance';
+import { TreeClearanceNotice } from '../components/scene/TreeClearanceNotice';
 
 const STAGE_TITLES: Record<Stage, string> = {
   textures: 'Фактуры покрытий',
@@ -157,6 +160,7 @@ export function ScenePage() {
     'surface.json',
     done && names.has('surface.json'),
   );
+  const rules = useArtifact<RulesJson>(runId, 'rules.json', done && names.has('rules.json'));
   const needsSurface = names.has('surface.json');
   const [loadedSurface, setLoadedSurface] = useState<{
     runId: string;
@@ -201,22 +205,39 @@ export function ScenePage() {
   // подоснова и карта покрытий - нет, без них сцена беднее, но строится.
   const planReady = hasScene ? Boolean(scene.data) : Boolean(plan.data) || !names.has('plan.json');
   const basemapReady = Boolean(basemap.data) || basemap.isError || !names.has('basemap.geojson');
-  const loadError = scene.isError ? 'scene.json' : plan.isError ? 'plan.json' : null;
+  const loadError = hasScene
+    ? scene.isError
+      ? 'scene.json'
+      : null
+    : plan.isError
+      ? 'plan.json'
+      : null;
   const ready = done && planReady && basemapReady && surfaceReady !== null;
+  // Загрузка плана для нижней схемы не должна пересоздавать уже готовую 3D-сцену.
+  const scenePlan = hasScene ? null : (plan.data ?? null);
   const world = useMemo(
     () =>
       ready
         ? buildWorld({
             scene: scene.data ?? null,
-            plan: plan.data ?? null,
+            plan: scenePlan,
             basemap: basemap.data ?? null,
           })
         : null,
-    [ready, scene.data, plan.data, basemap.data],
+    [ready, scene.data, scenePlan, basemap.data],
   );
 
+  const treeConflicts = useMemo(
+    () => (world ? treeClearanceConflicts(world, rules.data ?? null) : []),
+    [world, rules.data],
+  );
+  const conflictsRef = useRef(treeConflicts);
   const holder = useRef<HTMLDivElement>(null);
   const engine = useRef<SceneEngine | null>(null);
+  useEffect(() => {
+    conflictsRef.current = treeConflicts;
+    engine.current?.setTreeClearanceConflicts(treeConflicts);
+  }, [treeConflicts]);
   const [progress, setProgress] = useState<{ stage: Stage; done: number; total: number }>({
     stage: 'textures',
     done: 0,
@@ -258,11 +279,13 @@ export function ScenePage() {
     locked: false,
     touring: false,
   });
+  const [cameraPose, setCameraPose] = useState<Pose | null>(null);
   const [stats, setStats] = useState<FrameStats | null>(null);
   const [settings, setSettings] = useState<ViewSettings>(DEFAULT_SETTINGS);
   const [shots, setShots] = useState<Shot[]>([]);
   const [shooting, setShooting] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [flash, setFlash] = useState(0);
   const [everLocked, setEverLocked] = useState(false);
   const [search] = useSearchParams();
@@ -341,8 +364,10 @@ export function ScenePage() {
         if (alive) setStats(s);
       },
       pose: (pose, mode) => {
-        if (alive)
+        if (alive) {
+          setCameraPose({ ...pose });
           window.history.replaceState(window.history.state, '', `#${formatView(pose, mode)}`);
+        }
       },
     })
       .then((e) => {
@@ -357,6 +382,7 @@ export function ScenePage() {
           setSettings(settingsRef.current);
         }
         e.apply(settingsRef.current);
+        e.setTreeClearanceConflicts(conflictsRef.current);
         const view = parseView(window.location.hash);
         if (view) e.setView(view.pose, view.mode);
         engine.current = e;
@@ -611,9 +637,34 @@ export function ScenePage() {
     <div
       className="workspace page-scene"
       data-hud={hudHidden ? 'hidden' : 'shown'}
+      data-plan={planOpen && !hudHidden && readyToFly ? 'open' : undefined}
       data-gallery={gallery ? 'open' : undefined}
     >
       <div className="canvas-holder" ref={holder} />
+      {planOpen && !hudHidden && readyToFly && world ? (
+        <ScenePlanMap
+          key={runId}
+          runId={runId}
+          hasPlan={names.has('plan.json')}
+          basemap={basemap.data ?? null}
+          surfaceMeta={surfaceMeta.data ?? null}
+          world={world}
+          pose={cameraPose}
+          onClose={() => {
+            setPlanOpen(false);
+          }}
+          onTeleport={(point) => {
+            const e = engine.current;
+            if (!e) return;
+            if (e.teleportTo(point.x, point.z)) {
+              setCameraPose({ ...e.freecam.pose });
+              toast('Вы на выбранной точке. Щёлкните по 3D-сцене, чтобы осмотреться.');
+            } else {
+              toast('Здесь препятствие или край участка. Выберите свободную точку рядом.');
+            }
+          }}
+        />
+      ) : null}
       {flash ? <div key={flash} className="scene-flash" aria-hidden="true" /> : null}
       {cam.locked && readyToFly ? <div className="scene-crosshair" aria-hidden="true" /> : null}
       {data ? <RunTitle run={data} /> : <h1 className="visually-hidden">{title}</h1>}
@@ -664,6 +715,20 @@ export function ScenePage() {
                         ? `Кустарниковые полосы: ${String(world.shrubStrips.length)}, размеры условные.`
                         : ''}
                     </p>
+                  ) : null}
+                  {treeConflicts.length ? (
+                    <div className="scene-tree-warning-summary" role="note">
+                      <strong>
+                        Отступ до здания: {treeConflicts.length}{' '}
+                        {plural(treeConflicts.length, 'дерево', 'дерева', 'деревьев')}
+                      </strong>
+                      <p>
+                        Существующие деревья из исходного чертежа стоят ближе к зданию, чем
+                        допускается для новой посадки. Красные круги отмечают их в 3D; наведите на
+                        дерево или круг для подробностей.
+                      </p>
+                      <p>Пометка не означает назначение к вырубке.</p>
+                    </div>
                   ) : null}
                   <SourceConflictNotice report={basemap.data?.source_conflicts} runId={runId} />
                   <details className="scene-more fold">
@@ -784,6 +849,16 @@ export function ScenePage() {
               />
             </div>
             <div className="bar-group" role="group" aria-label="Панели">
+              <BarButton
+                icon="map"
+                label="Схема"
+                pressed={planOpen}
+                title="Открыть план в нижней половине экрана и выбрать точку просмотра"
+                onClick={() => {
+                  engine.current?.freecam.releaseKeys();
+                  setPlanOpen((open) => !open);
+                }}
+              />
               <BarButton
                 icon="hide"
                 label="Без панелей"
@@ -910,6 +985,7 @@ export function ScenePage() {
                 : 'при посадке'}
             {`, ${metres(hover.distance)} м от вас`}
           </span>
+          {hover.clearance ? <TreeClearanceNotice conflict={hover.clearance} /> : null}
           <span className="hint">K - кадры этого растения</span>
         </div>
       ) : null}

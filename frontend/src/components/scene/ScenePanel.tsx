@@ -259,6 +259,17 @@ export function ScenePanel({ settings, onChange, speed, onSpeed }: ScenePanelPro
               />
               Существующие насаждения с подосновы
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.showTreeWarnings}
+                disabled={!settings.showExisting}
+                onChange={(e) => {
+                  onChange({ showTreeWarnings: e.target.checked });
+                }}
+              />
+              Отмечать недостаточный отступ деревьев до здания
+            </label>
           </Section>
           <Section
             id="time"

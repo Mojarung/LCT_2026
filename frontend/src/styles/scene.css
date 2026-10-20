@@ -1543,3 +1543,206 @@
     max-width: calc(100% - 2 * (var(--hud-right-w) + var(--inset) * 2));
   }
 }
+
+/* Панорама сверху, основной план снизу. ResizeObserver подстраивает оба холста. */
+.page-scene[data-plan='open'] > .canvas-holder {
+  bottom: 50%;
+}
+.page-scene[data-plan='open'] .scene-left,
+.page-scene[data-plan='open'] .scene-panel:not(.collapsed) {
+  bottom: calc(50% + var(--inset));
+  max-height: calc(50% - var(--inset) * 2);
+}
+.page-scene[data-plan='open'] .scene-bar {
+  bottom: calc(50% + 12px);
+  max-width: calc(100% - 24px);
+}
+.page-scene[data-plan='open'] .scene-help {
+  display: none;
+}
+.scene-plan-map {
+  position: absolute;
+  inset: 50% 0 0;
+  z-index: 3;
+  background: var(--map-sheet);
+  border-top: 1px solid var(--hair-2);
+  box-shadow: 0 -3px 16px rgb(0 0 0 / 8%);
+}
+.scene-plan-head {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--hair);
+}
+.scene-plan-title,
+.scene-plan-actions,
+.scene-plan-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-small);
+}
+.scene-plan-title span,
+.scene-plan-controls span {
+  color: var(--bone-2);
+  font-size: var(--fs-micro);
+}
+.scene-plan-actions button,
+.scene-plan-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-control);
+  color: var(--bone);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.scene-plan-actions button:hover,
+.scene-plan-controls button:hover {
+  background: var(--panel-2);
+}
+.scene-plan-canvas-holder {
+  position: absolute;
+  inset: 48px 0 0;
+}
+.scene-plan-canvas-holder canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+.scene-plan-canvas-holder canvas.dragging {
+  cursor: grabbing;
+}
+.scene-plan-canvas-holder canvas:focus-visible {
+  outline: 2px solid var(--accent-halo);
+  outline-offset: -3px;
+}
+.scene-plan-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: var(--lift);
+}
+.scene-plan-center {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #405bd3;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #fff;
+}
+.scene-plan-canvas-holder:has(canvas:focus-visible) .scene-plan-center {
+  display: block;
+}
+.scene-plan-notice {
+  position: absolute;
+  left: 16px;
+  top: 50px;
+  padding: 6px 10px;
+  background: var(--panel);
+  font-size: var(--fs-small);
+}
+@media (max-width: 800px) {
+  .scene-plan-title span,
+  .scene-plan-controls span {
+    display: none;
+  }
+  .scene-plan-head {
+    padding: 0 10px;
+  }
+  .page-scene[data-plan='open'] .scene-left,
+  .page-scene[data-plan='open'] .scene-panel {
+    display: none;
+  }
+}
+@media (max-height: 600px) {
+  .page-scene[data-plan='open'] .scene-left,
+  .page-scene[data-plan='open'] .scene-panel {
+    display: none;
+  }
+}
+.page-scene[data-plan='open'] .scene-crosshair {
+  top: 25%;
+}
+@media (max-width: 1080px) {
+  .workspace.page-scene[data-plan='open'] {
+    position: fixed;
+    inset: var(--bar) 0 0;
+    display: block;
+    overflow: hidden;
+    --side-l: 0px;
+    --side-r: 0px;
+  }
+  .page-scene[data-plan='open'] > .canvas-holder {
+    position: absolute;
+    inset: 0 0 50%;
+    height: auto;
+    min-height: 0;
+  }
+  .page-scene[data-plan='open'] .scene-left,
+  .page-scene[data-plan='open'] .scene-panel {
+    display: none;
+  }
+  .page-scene[data-plan='open'] .scene-bar {
+    left: 50%;
+  }
+}
+
+.scene-tree-warning-summary,
+.scene-tree-clearance {
+  padding: 10px 12px;
+  border-left: 3px solid #d83e3e;
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, #d83e3e 8%, var(--panel));
+  font-size: var(--fs-small);
+  line-height: 1.45;
+}
+.scene-tree-warning-summary {
+  margin: 10px 0;
+}
+.scene-tree-warning-summary p,
+.scene-tree-clearance p {
+  margin: 6px 0;
+}
+.scene-hover:has(.scene-tree-clearance) {
+  width: min(440px, calc(100vw - 24px));
+  white-space: normal;
+}
+.scene-hover .scene-tree-clearance {
+  margin-top: 8px;
+  text-align: left;
+}
+.scene-tree-clearance > span {
+  font-size: var(--fs-micro);
+  color: var(--bone-2);
+}
+
+/* В split-виде длинная карточка относится к верхней сцене и не закрывает карту. */
+.page-scene[data-plan='open'] .scene-hover {
+  top: var(--inset);
+  max-height: calc(50% - var(--inset) * 2);
+  overflow-y: auto;
+}
