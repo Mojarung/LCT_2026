@@ -47,6 +47,8 @@ OBJECT_LABELS: dict[ObjectClass, str] = {
     ObjectClass.OBSTACLE: "наземного препятствия",
     ObjectClass.ZONE_POWER: "охранной зоны воздушной линии",
     ObjectClass.ZONE_GAS: "охранной зоны газопровода",
+    ObjectClass.PARCEL_PRIVATE: "земельного участка вне территории общего пользования",
+    ObjectClass.PARCEL_RESIDENTIAL: "земельного участка многоквартирного дома",
 }
 
 _FACTOR_LABELS = {

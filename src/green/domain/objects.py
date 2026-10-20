@@ -54,6 +54,11 @@ class ObjectClass(StrEnum):
     # которой заходит в зону, требует согласования (ПП РФ N 160, п. 10; N 878, п. 16).
     ZONE_POWER = "zone.power_line"
     ZONE_GAS = "zone.gas"
+    # Земельные участки публичного кадастра, не относящиеся к территориям общего пользования
+    # (ГрК РФ, ст. 1, п. 12): посадка на них - по согласованию с правообладателем. Участок
+    # многоквартирного дома - отдельно: решение общего собрания (ЖК РФ, ст. 44, ч. 2, п. 2.1).
+    PARCEL_PRIVATE = "parcel.private"
+    PARCEL_RESIDENTIAL = "parcel.residential"
     # Вид территории из слоя функционального зонирования (ГИС): где улица, где двор, где сквер.
     # Отступа не дают; задают место посадки и категорию по МГСН 1.02-02, табл. В.6.
     TERRITORY_STREET = "territory.street"
@@ -84,7 +89,13 @@ class ObjectClass(StrEnum):
     def occupies_interior(self) -> bool:
         """Замкнутый контур занимает площадь внутри: в середине фонтана или памятника посадки нет,
         хотя до линии контура оттуда дальше нормы."""
-        return self in {ObjectClass.OBSTACLE, ObjectClass.ZONE_POWER, ObjectClass.ZONE_GAS}
+        return self in {
+            ObjectClass.OBSTACLE,
+            ObjectClass.ZONE_POWER,
+            ObjectClass.ZONE_GAS,
+            ObjectClass.PARCEL_PRIVATE,
+            ObjectClass.PARCEL_RESIDENTIAL,
+        }
 
     @property
     def is_hard_surface(self) -> bool:

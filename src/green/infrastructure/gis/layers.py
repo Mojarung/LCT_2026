@@ -55,6 +55,9 @@ class _Rule(BaseModel):
     # территории у каждого источника своё (NAME, VID, TYPE, «Наименование»).
     any_value: str | None = None
     object_class: str
+    # Второй класс того же объекта: участок жилого дома - и тип территории «двор», и участок,
+    # озеленение которого решает общее собрание собственников.
+    also: str | None = None
     note: str = ""
 
     @field_validator("file", "value", "any_value")
@@ -138,19 +141,9 @@ def _read_layer(path: Path, config: _Config, target: pyproj.CRS) -> GisLayers:
             continue
         if rule is not None and rule.note:
             rule_notes.add(rule.note)
-        counts[object_class.value] += 1
-        if object_class is ObjectClass.IGNORE:
-            continue
-        features.append(
-            Feature(
-                ref=SourceRef(file_sha8=sha8, xref_hash8=NO_XREF, handle=f"gis{index}"),
-                layer=f"ГИС {name}",
-                geometry=record.geometry,
-                object_class=object_class,
-                geometry_error_m=error,
-                source_entity_type="gis",
-            )
-        )
+        classes = [object_class, *([ObjectClass(rule.also)] if rule and rule.also else [])]
+        counts.update(cls.value for cls in classes)
+        features += _record_features(classes, record.geometry, f"ГИС {name}", (sha8, index), error)
     classes = ", ".join(f"{cls} {n}" for cls, n in sorted(counts.items()))
     total = counted(len(records), "объект", "объекта", "объектов")
     notes = [f"Слой ГИС {name}: {total}, {how}; классы: {classes or 'нет'}"]
@@ -162,6 +155,33 @@ def _read_layer(path: Path, config: _Config, target: pyproj.CRS) -> GisLayers:
             "(нет правила в config/geo_layers.yaml и атрибута green_class) в расчёт не вошли"
         )
     return GisLayers(tuple(features), tuple(notes), tuple(warnings))
+
+
+def _record_features(
+    classes: Sequence[ObjectClass],
+    geometry: BaseGeometry,
+    layer: str,
+    origin: tuple[str, int],
+    error: float,
+) -> list[Feature]:
+    """Объекты слоя одной записи: по объекту на класс, без «к сведению»."""
+    sha8, index = origin
+    return [
+        Feature(
+            ref=SourceRef(
+                file_sha8=sha8,
+                xref_hash8=NO_XREF,
+                handle=f"gis{index}" if not number else f"gis{index}.{number}",
+            ),
+            layer=layer,
+            geometry=geometry,
+            object_class=cls,
+            geometry_error_m=error,
+            source_entity_type="gis",
+        )
+        for number, cls in enumerate(classes)
+        if cls is not ObjectClass.IGNORE
+    ]
 
 
 def _classify(

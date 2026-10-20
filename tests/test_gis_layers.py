@@ -11,6 +11,7 @@ import json
 import zipfile
 from typing import TYPE_CHECKING
 
+import pytest
 import shapefile
 import shapely
 from shapely.geometry import Polygon, box
@@ -213,8 +214,21 @@ def test_cadastre_parcels_set_the_territory_by_permitted_use_not_by_address(
 
     layers = YamlGisLayerSource(CONFIG).read([path])
 
-    assert [f.object_class for f in layers.features] == [cls for _, _, cls in parcels]
-    assert any("приняты к сведению" in note for note in layers.notes)
+    assert [f.object_class for f in layers.features] == [
+        ObjectClass.TERRITORY_STREET,
+        ObjectClass.TERRITORY_YARD,
+        ObjectClass.PARCEL_RESIDENTIAL,  # участок многоквартирного дома - ещё и общее собрание
+        ObjectClass.TERRITORY_SQUARE,
+        ObjectClass.TERRITORY_PARK,
+        ObjectClass.PARCEL_PRIVATE,  # школа - не территория общего пользования
+    ]
+    assert [cls for _, _, cls in parcels] == [
+        ObjectClass.TERRITORY_STREET,
+        ObjectClass.TERRITORY_YARD,
+        ObjectClass.TERRITORY_SQUARE,
+        ObjectClass.TERRITORY_PARK,
+    ]
+    assert any("требует согласования с правообладателем" in note for note in layers.notes)
 
 
 def test_cadastre_restricted_zones_keep_gas_and_power_lines_as_constraints(
@@ -244,3 +258,43 @@ def test_cadastre_capital_construction_objects_are_buildings(tmp_path: Path) -> 
     path = _write(tmp_path / "nspd_oks.geojson", _collection(_feature(box(0, 0, 10, 10))))
     (feature,) = YamlGisLayerSource(CONFIG).read([path]).features
     assert feature.object_class is ObjectClass.BUILDING
+
+
+@pytest.mark.parametrize(
+    ("use", "rule"),
+    [
+        ("Дошкольное, начальное и среднее общее образование", "R-PARCEL-TREE-001"),
+        ("Многоэтажная жилая застройка (высотная застройка)", "R-MKD-TREE-001"),
+    ],
+)
+def test_planting_on_a_parcel_outside_public_land_needs_approval(
+    tmp_path: Path, use: str, rule: str
+) -> None:
+    """Посадка, яма которой заходит на участок вне территории общего пользования, требует
+    согласования: с правообладателем (ГрК РФ, ст. 1, п. 12) или с общим собранием
+    собственников многоквартирного дома (ЖК РФ, ст. 44, ч. 2, п. 2.1)."""
+    source = tmp_path / "street.dxf"
+    _street(source)
+    parcel = box(0, 0, 45, 60)
+    layer = _write(
+        tmp_path / "кадастр_участки.geojson",
+        _collection(_feature(parcel, vri=use, cad_num="77:06:0012003:1")),
+    )
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load(
+        "strict",
+        {"shrub_rows": False, "understory": False, "shrub_fill": False, "curb_hedges": False},
+    )
+
+    report = container.use_case.execute(
+        PlanRequest("parcel", source, tmp_path / "out", "strict", params, gis_layers=(layer,))
+    )
+
+    plan = report.plan
+    inside = [p for p in plan.placements if parcel.contains(shapely.Point(p.x, p.y))]
+    outside = [p for p in plan.placements if not parcel.buffer(2).contains(shapely.Point(p.x, p.y))]
+    assert inside
+    assert outside
+    assert all(p.verdict is not Verdict.ALLOWED for p in inside)
+    assert all(rule in {c.rule_id for c in p.checks} for p in inside if p.species.is_tree)
+    assert any(p.verdict is Verdict.ALLOWED for p in outside)
