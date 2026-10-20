@@ -863,6 +863,12 @@ export class Forest {
       group.farCount = 0;
     }
     const sphere = new THREE.Sphere();
+    // Дальняя модель - сплошная крона с листвой: зимой лиственные идут в лёгкую модель ветвей,
+    // иначе вдали деревья, полосы и изгороди оставались зелёными среди голых (проверка 20.10).
+    const bare = new Map<Group, boolean>();
+    for (const group of this.groups.values()) {
+      bare.set(group, leafless(group.archetype, this.settings.season));
+    }
     for (const instance of this.instances) {
       if (instance.hidden) continue;
       sphere.set(instance.center, instance.radius);
@@ -873,7 +879,7 @@ export class Forest {
       const near = SHRUBS.has(instance.group.archetype)
         ? this.settings.lodDistance * 0.5
         : this.settings.lodDistance;
-      if (d >= near * FAR_FACTOR) {
+      if (d >= near * FAR_FACTOR && !bare.get(instance.group)) {
         const group = instance.group;
         group.far.setMatrixAt(group.farCount, instance.matrix);
         group.far.setColorAt(group.farCount, instance.color);
@@ -887,14 +893,14 @@ export class Forest {
     }
     for (const group of this.groups.values()) {
       // Зимой у лиственных листвы нет: рисуются только ветви, и тень от них же.
-      const bare = leafless(group.archetype, this.settings.season);
+      const noLeaves = bare.get(group) ?? false;
       group.far.count = group.farCount;
       group.far.instanceMatrix.needsUpdate = true;
       if (group.far.instanceColor) group.far.instanceColor.needsUpdate = true;
       for (const pair of [group.hi, group.lo]) {
         pair.branches.count = pair.count;
-        pair.leaves.count = bare ? 0 : pair.count;
-        pair.core.count = bare ? 0 : pair.count;
+        pair.leaves.count = noLeaves ? 0 : pair.count;
+        pair.core.count = noLeaves ? 0 : pair.count;
         pair.branches.instanceMatrix.needsUpdate = true;
         if (pair.leaves.instanceColor) pair.leaves.instanceColor.needsUpdate = true;
       }
