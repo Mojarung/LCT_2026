@@ -174,7 +174,7 @@ def test_true_millimetre_street_is_not_mistaken_for_a_conflict(tmp_path: Path) -
 
 
 def test_empty_model_space_is_named_instead_of_units() -> None:
-    """green-atlas internet-sample: пустая модель - сказать, что чертить нечего, а не просить
+    """Пустой сторонний чертёж: пустая модель - сказать, что чертить нечего, а не просить
     единицы, которые ничего не изменят."""
     doc = ezdxf.new()
     doc.header["$INSUNITS"] = 0

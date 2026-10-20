@@ -43,7 +43,7 @@ def test_similar_name_gets_the_class_of_its_neighbours() -> None:
 
 
 def test_model_never_widens_the_planting_zone() -> None:
-    """Газон и граница работ - только по правилам и словам (правило безопасности greenai)."""
+    """Газон и граница работ - только по правилам и словам (правило безопасности сторонний вход)."""
     assert MODEL.guess("Газон новый рулонный", None) is None
 
 

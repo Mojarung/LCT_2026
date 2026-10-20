@@ -233,7 +233,7 @@ def test_foreign_site_names_without_soil(name: str, expected: ObjectClass) -> No
 @pytest.mark.parametrize(
     ("layer", "geometry", "radius", "expected"),
     [
-        # green-atlas: «существующее озеленение» из OSM - площади зелени (газон), а круги - кроны.
+        # OSM: «существующее озеленение» - площади зелени (газон), а круги - кроны.
         ("OSM_GREEN_EXISTING", box(0, 0, 30, 20), None, ObjectClass.LAWN),
         ("GREEN_EXISTING", Point(5, 5).buffer(3.0), 3.0, ObjectClass.EXISTING_TREE),
         ("OSM_RAILWAY", LineString([(0, 0), (50, 0)]), None, ObjectClass.RAILWAY),
@@ -253,7 +253,7 @@ def test_osm_green_and_railway_layers(
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        # GreenCity: слой «ЛИСТВЕННИЦА ЕВРОПЕЙСКАЯ» брал слово оформления «лист» началом слова.
+        # сторонний вход: слой «ЛИСТВЕННИЦА ЕВРОПЕЙСКАЯ» брал слово оформления «лист» началом слова.
         ("ЛИСТВЕННИЦА ЕВРОПЕЙСКАЯ", ObjectClass.EXISTING_TREE),
         ("Лиственница сибирская", ObjectClass.EXISTING_TREE),
         ("Лист 1", ObjectClass.IGNORE),

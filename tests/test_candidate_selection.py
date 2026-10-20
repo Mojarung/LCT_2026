@@ -181,7 +181,7 @@ def test_invalid_problem_is_an_error(changes: dict[str, object]) -> None:
 def test_weight_sum_beyond_float_precision_keeps_the_baseline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ВДНХ green-atlas (3,4 км², 17.10.2026): сумма весов мест вышла за точность float, и прогон
+    """ВДНХ (3,4 км², 17.10.2026): сумма весов мест вышла за точность float, и прогон
     падал. Задача выбора мест тогда не решается, остаётся проверенный жадный план."""
 
     def fail(*_args: object, **_kwargs: object) -> None:
