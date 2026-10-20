@@ -9,6 +9,7 @@ from green.application.errors import InputError
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import BinaryIO
 
 _BINARY_HEADER = b"AutoCAD Binary DXF\r\n\x1a\x00"
 _ASCII_ENTITIES = re.compile(
@@ -22,6 +23,17 @@ _CHUNK = 1_048_576
 _OVERLAP = 128
 
 
+def require_container_bounds(path: Path, name: str | None = None) -> None:
+    """Size, head and tail of an ASCII or binary DXF, without scanning the body.
+
+    Cheap enough for the upload request itself: an empty file, text instead of DXF or
+    a truncated download is refused before the run waits in the queue (API intake).
+    `name` is the file name the person knows when it differs from the stored one.
+    """
+    with path.open("rb") as stream:
+        _require_bounds(stream, name or path.name)
+
+
 def require_complete_container(path: Path) -> None:
     """Require ENTITIES and a terminal EOF in ASCII or binary DXF.
 
@@ -29,32 +41,7 @@ def require_complete_container(path: Path) -> None:
     source objects. The actual DXF grammar and repairs remain ezdxf's responsibility.
     """
     with path.open("rb") as stream:
-        head = stream.read(len(_LFS_POINTER))
-        if head == _LFS_POINTER:
-            raise InputError(
-                f"{path.name} - не чертёж, а указатель Git LFS (ссылка на файл в хранилище "
-                "репозитория): получите сам файл командой git lfs pull и загрузите его"
-            )
-        binary = head.startswith(_BINARY_HEADER)
-        stream.seek(0, 2)
-        size = stream.tell()
-        if size == 0:
-            raise InputError(f"Файл {path.name} пуст (0 байт): загрузите чертёж ещё раз")
-        if not binary and not _looks_like_dxf(head):
-            raise InputError(
-                f"{path.name} - не DXF: в начале файла нет кодов групп DXF (текстовый DXF "
-                "начинается с «0 SECTION», двоичный - с «AutoCAD Binary DXF»). Сохраните "
-                "чертёж из CAD как DXF или загрузите DWG"
-            )
-        stream.seek(max(0, size - _CHUNK))
-        tail = stream.read()
-        complete = (
-            tail.rstrip(b"\r\n").endswith(b"\x00EOF\x00")
-            if binary
-            else _ASCII_EOF.search(_newlines(tail)) is not None
-        )
-        if not complete:
-            raise InputError(f"Неполный DXF {path.name}: отсутствует конечный маркер EOF")
+        binary = _require_bounds(stream, path.name)
         stream.seek(0)
         carry = b""
         while chunk := stream.read(_CHUNK):
@@ -68,6 +55,40 @@ def require_complete_container(path: Path) -> None:
                 return
             carry = data[-_OVERLAP:]
     raise InputError(f"Неполный DXF {path.name}: отсутствует секция ENTITIES")
+
+
+def _require_bounds(stream: BinaryIO, name: str) -> bool:
+    """Git LFS pointer, empty file, no DXF group codes at the start, no EOF at the end.
+
+    Returns whether the container is binary DXF.
+    """
+    head = stream.read(len(_LFS_POINTER))
+    if head == _LFS_POINTER:
+        raise InputError(
+            f"{name} - не чертёж, а указатель Git LFS (ссылка на файл в хранилище "
+            "репозитория): получите сам файл командой git lfs pull и загрузите его"
+        )
+    binary = head.startswith(_BINARY_HEADER)
+    stream.seek(0, 2)
+    size = stream.tell()
+    if size == 0:
+        raise InputError(f"Файл {name} пуст (0 байт): загрузите чертёж ещё раз")
+    if not binary and not _looks_like_dxf(head):
+        raise InputError(
+            f"{name} - не DXF: в начале файла нет кодов групп DXF (текстовый DXF "
+            "начинается с «0 SECTION», двоичный - с «AutoCAD Binary DXF»). Сохраните "
+            "чертёж из CAD как DXF или загрузите DWG"
+        )
+    stream.seek(max(0, size - _CHUNK))
+    tail = stream.read()
+    complete = (
+        tail.rstrip(b"\r\n").endswith(b"\x00EOF\x00")
+        if binary
+        else _ASCII_EOF.search(_newlines(tail)) is not None
+    )
+    if not complete:
+        raise InputError(f"Неполный DXF {name}: отсутствует конечный маркер EOF")
+    return binary
 
 
 def _looks_like_dxf(head: bytes) -> bool:

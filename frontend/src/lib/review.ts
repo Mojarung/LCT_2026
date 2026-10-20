@@ -4,6 +4,7 @@
  * и сохранёнными входами; JSON остаётся дополнительным способом воспроизведения. */
 
 import type { Geometry } from '../api/artifacts';
+import { integer, plural } from './format';
 
 /** Объект подосновы в геометрии проверки: координаты местные, в метрах, без упрощения. */
 export interface ReviewFeature {
@@ -255,6 +256,15 @@ export function unresolvedCount(
     const group = report?.groups[f.properties.group];
     return group ? groupNeedsReview(group) : UNKNOWN.has(f.properties.class);
   }).length;
+}
+
+/** Почему пересчёт с уточнениями ещё нельзя запустить. Сервер ставит новому прогону
+ *  require_reviewed_objects: остался хоть один сомнительный объект - прогон остановится с
+ *  «Требуется уточнить классы объектов». Пустая строка - запускать можно. */
+export function pendingReviewHint(pending: number): string {
+  if (pending <= 0) return '';
+  const objects = plural(pending, 'объект', 'объекта', 'объектов');
+  return `Осталось уточнить ${integer(pending)} ${objects}. Пересчёт с уточнениями требует назначить тип всем сомнительным объектам, иначе он остановится.`;
 }
 
 /** JSON уточнений для повторного прогона. Несмысловые параметры прогона сохраняются, широкие

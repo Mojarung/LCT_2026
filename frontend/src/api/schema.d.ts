@@ -77,6 +77,9 @@ export interface paths {
          *
          *     Источник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного
          *     проекта (`street`, её комплект уже лежит в каталоге). Статус: GET /runs/{id}.
+         *
+         *     Пустой DXF, текст вместо DXF и DXF без конечного маркера EOF отклоняются сразу, без
+         *     очереди: 422 с причиной (application/problem+json).
          */
         post: operations["create_run_api_v1_runs_post"];
         delete?: never;
@@ -351,6 +354,8 @@ export interface paths {
          *
          *     Черновик с нарушением финальной проверки (например, шаг до соседней посадки меньше
          *     нормы) не ставится в очередь: 422 с перечнем нарушений, прогон остаётся готовым.
+         *     Пересборка ждёт свободного места вместе с прогонами: пока ждёт, состояние прогона
+         *     queued, во время работы - running, по готовности - succeeded с новым updated_at.
          */
         post: operations["rebuild_api_v1_runs__run_id__rebuild_post"];
         delete?: never;

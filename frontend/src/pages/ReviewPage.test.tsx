@@ -62,6 +62,27 @@ describe('уточнение объектов чертежа', () => {
     expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeEnabled();
   });
 
+  it('пересчёт недоступен, пока остались неуточнённые объекты: иначе прогон остановится', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi(
+      routes(['semantic-review.geojson', 'classification.json', 'review-input.dxf']),
+    );
+    renderApp('/runs/r1/review');
+    await screen.findByText(/Не уточнено: 2/);
+    await user.selectOptions(screen.getByLabelText('Новый тип: Газон, группа 3'), 'building');
+    expect(screen.getByText('Назначений к применению: 1')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Применить и пересчитать' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(
+      'Осталось уточнить 2 объекта. Пересчёт с уточнениями требует назначить тип всем сомнительным объектам, иначе он остановится.',
+    );
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'fence');
+    expect(screen.getByText(/Не уточнено: 0/)).toBeInTheDocument();
+    expect(screen.queryByText(/Осталось уточнить/)).toBeNull();
+    expect(button).toBeEnabled();
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+  });
+
   it('поиск и фильтр показывают сомнительные группы по имени', async () => {
     const user = userEvent.setup();
     const report = {

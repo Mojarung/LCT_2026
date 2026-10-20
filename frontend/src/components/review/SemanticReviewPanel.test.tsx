@@ -156,6 +156,25 @@ describe('уточнение объектов поверх основного п
     await user.click(screen.getByRole('button', { name: 'Отменить изменения: 0, группа 1' }));
     expect(screen.getByRole('button', { name: 'Применить и пересчитать' })).toBeDisabled();
   });
+  it('пока остались сомнительные объекты, пересчёт недоступен и объясняет почему', async () => {
+    const user = userEvent.setup();
+    const calls = mockApi(routes);
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Открыть' }));
+    await user.selectOptions(
+      await screen.findByLabelText('Новый тип: Газон, группа 3'),
+      'building',
+    );
+    expect(screen.getByText('Назначений к применению: 1')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Применить и пересчитать' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(/Осталось уточнить 2 объекта\./);
+    await user.selectOptions(screen.getByLabelText('Новый тип: 0, группа 1'), 'fence');
+    expect(screen.getByText(/требуют уточнения: 0/)).toBeInTheDocument();
+    expect(screen.queryByText(/Осталось уточнить/)).toBeNull();
+    expect(button).toBeEnabled();
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+  });
   it('применение сохраняет прежние назначения, привязку к исходнику и черновик при ошибке', async () => {
     const user = userEvent.setup();
     const calls = mockApi({

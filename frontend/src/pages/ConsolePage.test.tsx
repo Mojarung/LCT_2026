@@ -168,6 +168,31 @@ describe('консоль запуска', () => {
     expect(screen.getByRole('button', { name: 'Запустить прогон' })).toBeEnabled();
   });
 
+  it('битый чертёж отклоняется при загрузке, форма показывает причину сервера', async () => {
+    const detail = 'Неполный DXF truncated.dxf: отсутствует конечный маркер EOF';
+    const calls = mockApi({
+      ...consoleRoutes(),
+      'POST /api/v1/runs': () =>
+        new Response(JSON.stringify({ title: 'Данные не приняты', status: 422, detail }), {
+          status: 422,
+          headers: { 'content-type': 'application/problem+json' },
+        }),
+    });
+    const { container } = renderApp('/');
+    const user = userEvent.setup();
+    await screen.findByLabelText('Улица пилотного проекта');
+    const input = container.querySelector<HTMLInputElement>(
+      'input[type="file"][accept=".dxf,.dwg"]',
+    );
+    if (!input) throw new Error('Нет поля чертежа');
+    await user.upload(input, new File(['0\nSECTION\n'], 'truncated.dxf'));
+    await user.click(screen.getByRole('button', { name: 'Запустить прогон' }));
+
+    expect(await screen.findByText(detail)).toBeVisible();
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Запустить прогон' })).toBeEnabled();
+  });
+
   it('без каталога улиц предлагает встроенный участок и запускает его через API', async () => {
     const calls = mockApi({
       ...consoleRoutes({ streets: [] }),

@@ -104,6 +104,9 @@ async def create_run(  # noqa: PLR0913 - form fields are separate parameters by 
 
     Источник ровно один: свой чертёж (`file`, к нему комплект `extra`) или улица пилотного
     проекта (`street`, её комплект уже лежит в каталоге). Статус: GET /runs/{id}.
+
+    Пустой DXF, текст вместо DXF и DXF без конечного маркера EOF отклоняются сразу, без
+    очереди: 422 с причиной (application/problem+json).
     """
     has_file = file is not None and bool(file.filename)
     if street and has_file:

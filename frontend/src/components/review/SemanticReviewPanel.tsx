@@ -11,6 +11,7 @@ import {
   groupMembers,
   groupNeedsReview,
   groupOrder,
+  pendingReviewHint,
   relatedIndices,
   reviewJson,
   unresolvedCount,
@@ -150,6 +151,9 @@ export function SemanticReviewPanel({
     );
   };
   const count = Object.keys(assignments).length;
+  // Сервер ставит пересчёту require_reviewed_objects: с сомнительными объектами он остановится.
+  const pending = data && classes ? unresolvedCount(data, assignments, classes) : 0;
+  const pendingHint = pendingReviewHint(pending);
   const selectedGroup = classes?.groups[current];
   const selectedTypes = data
     ? [
@@ -164,7 +168,7 @@ export function SemanticReviewPanel({
         .join(', ')
     : '';
   const apply = async () => {
-    if (!ready || !count) return;
+    if (!ready || !count || pending > 0) return;
     setApplying(true);
     setError('');
     try {
@@ -241,8 +245,7 @@ export function SemanticReviewPanel({
         ) : (
           <>
             <p className="semantic-summary">
-              Элементов DXF: {integer(data.features.length)} · требуют уточнения:{' '}
-              {integer(unresolvedCount(data, assignments, classes))}
+              Элементов DXF: {integer(data.features.length)} · требуют уточнения: {integer(pending)}
             </p>
             <div className="review-filters">
               <label className="field">
@@ -369,10 +372,16 @@ export function SemanticReviewPanel({
           <p role="status">
             {count ? `Назначений к применению: ${integer(count)}` : 'Новых назначений нет'}
           </p>
+          {pendingHint ? (
+            <p className="hint" id="semantic-review-pending">
+              {pendingHint}
+            </p>
+          ) : null}
           <button
             type="button"
             className="primary"
-            disabled={!ready || !count || applying || !names.has('review-input.dxf')}
+            disabled={!ready || !count || applying || pending > 0 || !names.has('review-input.dxf')}
+            aria-describedby={pendingHint ? 'semantic-review-pending' : undefined}
             onClick={() => {
               void apply();
             }}

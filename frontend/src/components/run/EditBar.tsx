@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import type { PlanEditor } from '../../state/editor';
+import type { PlanEditor, RebuildPhase } from '../../state/editor';
 import { useWorkspace } from '../../state/workspace';
+
+const REBUILDING = 'Пересобираем DXF и объяснения…';
+const QUEUED =
+  'Пересборка в очереди: сервис считает другие прогоны. Она начнётся сама, как только освободится место.';
 
 /** Правка плана: сообщение и пересборка DXF. Режим включает кнопка «править» у карты (MapHud),
  *  по умолчанию он выключен: случайно сдвинуть дерево во время осмотра плана нельзя. Пока
@@ -12,6 +16,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
   const message = useWorkspace((s) => s.message);
   const say = useWorkspace((s) => s.say);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<RebuildPhase | null>(null);
 
   // Правки уже на сервере, но DXF и объяснения в файлах старые: закрыть вкладку в этот момент -
   // унести с собой план, который расходится с картой. Браузер спросит, уходить ли.
@@ -28,9 +33,13 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
 
   const rebuild = async () => {
     setBusy(true);
-    say('Пересобираем DXF и объяснения, до минуты…');
+    setPhase(null);
+    say(REBUILDING);
     try {
-      await editor.rebuild();
+      await editor.rebuild((next) => {
+        setPhase(next);
+        say(next === 'queued' ? QUEUED : REBUILDING);
+      });
       setStale(false);
       say('Файлы результата пересобраны по исправленному плану.');
       onRebuilt();
@@ -38,6 +47,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
       say(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
+      setPhase(null);
     }
   };
 
@@ -63,7 +73,7 @@ export function EditBar({ editor, onRebuilt }: { editor: PlanEditor; onRebuilt: 
           disabled={busy}
           onClick={() => void rebuild()}
         >
-          {busy ? 'Пересобираем…' : 'Пересобрать DXF'}
+          {busy ? (phase === 'queued' ? 'В очереди…' : 'Пересобираем…') : 'Пересобрать DXF'}
         </button>
       ) : null}
     </div>

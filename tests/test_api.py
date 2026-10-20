@@ -335,15 +335,70 @@ def test_upload_over_the_limit_is_refused_and_recorded(client: TestClient) -> No
     assert newest["state"] == "failed"
 
 
-def test_broken_drawing_fails_the_run_with_a_reason(client: TestClient) -> None:
+# Без секции ENTITIES, но с началом и концом DXF: дешёвая проверка при приёме его пропускает.
+NO_ENTITIES = b"0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nEOF\n"
+
+
+@pytest.mark.parametrize(
+    ("name", "data", "message"),
+    [
+        ("empty.dxf", b"", "Файл empty.dxf пуст (0 байт): загрузите чертёж ещё раз"),
+        ("text.dxf", b"this is not a drawing", "text.dxf - не DXF: в начале файла нет кодов групп"),
+        (
+            "truncated.dxf",
+            b"0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n",
+            "Неполный DXF truncated.dxf: отсутствует конечный маркер EOF",
+        ),
+    ],
+    ids=["empty", "text", "truncated"],
+)
+def test_broken_drawing_is_refused_at_upload_without_the_queue(
+    client: TestClient, name: str, data: bytes, message: str
+) -> None:
+    """Пустой, текстовый и обрезанный DXF: 422 сразу, тот же текст, что дал бы прогон."""
     response = client.post(
-        f"{API_PREFIX}/runs", files={"file": ("broken.dxf", b"this is not a drawing", "text/plain")}
+        f"{API_PREFIX}/runs", files={"file": (name, data, "application/octet-stream")}
+    )
+    body = _assert_problem(response, 422)
+    assert str(body["detail"]).startswith(message)
+    newest = client.get(f"{API_PREFIX}/runs", params={"limit": 1}).json()["items"][0]
+    assert newest["source_name"] == name
+    assert newest["state"] == "failed"
+    assert newest["error"] == body["detail"]
+    assert newest["artifacts"] == []
+
+
+def test_broken_extra_drawing_is_refused_by_its_own_name(client: TestClient, street: bytes) -> None:
+    response = client.post(
+        f"{API_PREFIX}/runs",
+        files=[
+            ("file", ("street.dxf", street, "image/vnd.dxf")),
+            ("extra", ("Сети.dxf", b"0\nSECTION\n2\nENTITIES\n", "image/vnd.dxf")),
+        ],
+    )
+    body = _assert_problem(response, 422)
+    assert body["detail"] == "Неполный DXF Сети.dxf: отсутствует конечный маркер EOF"
+
+
+def test_drawing_with_bounds_but_no_body_fails_the_run_with_a_reason(client: TestClient) -> None:
+    """Тело DXF проверяет прогон: при приёме читаются только начало и конец файла."""
+    response = client.post(
+        f"{API_PREFIX}/runs", files={"file": ("hollow.dxf", NO_ENTITIES, "image/vnd.dxf")}
     )
     assert response.status_code == 202
     run = client.get(response.headers["Location"]).json()
     assert run["state"] == "failed"
-    assert "broken.dxf" in run["error"] or "DXF" in run["error"]
+    assert run["error"] == "Неполный DXF hollow.dxf: отсутствует секция ENTITIES"
     assert run["artifacts"] == []
+
+
+def test_dwg_is_not_checked_as_dxf_at_upload(client: TestClient) -> None:
+    """DWG читает конвертер: приём его не отвергает по правилам DXF."""
+    response = client.post(
+        f"{API_PREFIX}/runs",
+        files={"file": ("plan.dwg", b"AC1032 not a real dwg", "image/vnd.dwg")},
+    )
+    assert response.status_code == 202
 
 
 @pytest.mark.parametrize(
@@ -432,7 +487,7 @@ def test_finished_demo_run_is_deleted_with_its_files_and_edit_state(
 
 def test_failed_run_is_deleted(client: TestClient, work: Path) -> None:
     created = client.post(
-        f"{API_PREFIX}/runs", files={"file": ("broken.dxf", b"not a drawing", "text/plain")}
+        f"{API_PREFIX}/runs", files={"file": ("broken.dxf", NO_ENTITIES, "image/vnd.dxf")}
     )
     run_id = created.json()["id"]
     assert client.get(created.headers["Location"]).json()["state"] == "failed"

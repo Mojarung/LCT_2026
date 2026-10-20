@@ -112,10 +112,13 @@ def rebuild(
 
     Черновик с нарушением финальной проверки (например, шаг до соседней посадки меньше
     нормы) не ставится в очередь: 422 с перечнем нарушений, прогон остаётся готовым.
+    Пересборка ждёт свободного места вместе с прогонами: пока ждёт, состояние прогона
+    queued, во время работы - running, по готовности - succeeded с новым updated_at.
     """
     context = container.contexts.rebuildable(run_id)
     if context is None:
         raise EditContextLostError(CONTEXT_LOST)
+    container.runs.queue_rebuild(run_id)
     background.add_task(container.runs.rebuild, run_id)
     response.headers["Location"] = f"/api/v1/runs/{run_id}"
     return PlanSummaryOut.from_plan(context.plan, stale=True)

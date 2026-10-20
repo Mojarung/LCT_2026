@@ -299,4 +299,62 @@ describe('PlanEditor.rebuild', () => {
     await vi.advanceTimersByTimeAsync(1500);
     await outcome;
   });
+
+  it('waits in the shared queue past the 10-minute limit and reports each phase', async () => {
+    vi.useFakeTimers();
+    // 20.10.2026: 27 с пересборки после 10 мин очереди, клиент сдавался на 10-й минуте.
+    let state: 'queued' | 'running' | 'done' = 'queued';
+    const answers = [run({ state: 'succeeded', updated_at: 'T0' })];
+    mockApi({
+      '/api/v1/runs/r1': () =>
+        Response.json(
+          answers.shift() ??
+            (state === 'done'
+              ? run({ state: 'succeeded', updated_at: 'T2' })
+              : run({ state, updated_at: 'T1' })),
+        ),
+      'POST /api/v1/runs/r1/rebuild': summary,
+    });
+    const phases: string[] = [];
+    let finished = false;
+    const pending = new PlanEditor('r1')
+      .rebuild((phase) => phases.push(phase))
+      .then((result) => {
+        finished = true;
+        return result;
+      });
+
+    await vi.advanceTimersByTimeAsync(15 * 60_000);
+    expect(finished).toBe(false);
+    expect(phases).toEqual(['queued']);
+    state = 'running';
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(phases).toEqual(['queued', 'running']);
+    state = 'done';
+    await vi.advanceTimersByTimeAsync(1500);
+    await expect(pending).resolves.toMatchObject({ state: 'succeeded', updated_at: 'T2' });
+  });
+
+  it('limits the rebuild itself to 10 minutes from its start', async () => {
+    vi.useFakeTimers();
+    let state: 'queued' | 'running' = 'queued';
+    const answers = [run({ state: 'succeeded', updated_at: 'T0' })];
+    mockApi({
+      '/api/v1/runs/r1': () => Response.json(answers.shift() ?? run({ state, updated_at: 'T1' })),
+      'POST /api/v1/runs/r1/rebuild': summary,
+    });
+    const pending = new PlanEditor('r1').rebuild();
+    const outcome = expect(pending).rejects.toThrow('Пересборка идёт дольше 10 минут');
+    await vi.advanceTimersByTimeAsync(12 * 60_000);
+    state = 'running';
+    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    let failed = false;
+    pending.catch(() => {
+      failed = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failed).toBe(false);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    await outcome;
+  });
 });
