@@ -23,8 +23,11 @@ RUN apt-get update \
         build-essential ca-certificates curl pkg-config python3 xz-utils \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-RUN curl -fsSL "https://github.com/LibreDWG/libredwg/releases/download/${LIBREDWG_VERSION}/libredwg-${LIBREDWG_VERSION}.tar.xz" \
-    | tar -xJ --strip-components=1
+# Архив сначала в файл: повтор после обрыва загрузки не скармливает tar половину архива.
+RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/libredwg.tar.xz \
+        "https://github.com/LibreDWG/libredwg/releases/download/${LIBREDWG_VERSION}/libredwg-${LIBREDWG_VERSION}.tar.xz" \
+    && tar -xJf /tmp/libredwg.tar.xz --strip-components=1 \
+    && rm /tmp/libredwg.tar.xz
 RUN ./configure --prefix=/opt/libredwg --disable-shared --enable-static --disable-bindings \
         --disable-dependency-tracking \
     && make -j"${LIBREDWG_BUILD_JOBS}" -C src \
@@ -87,7 +90,7 @@ RUN apt-get update \
         apt-get install -y --no-install-recommends curl xvfb xauth \
             libopengl0 libegl1 libglib2.0-0t64 libxkbcommon0 libxkbcommon-x11-0 libdbus-1-3 \
             libfontconfig1 libgssapi-krb5-2 \
-        && curl -fsSL -o /tmp/oda.deb "${ODA_URL}" \
+        && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/oda.deb "${ODA_URL}" \
         && apt-get install -y /tmp/oda.deb \
         && rm -f /tmp/oda.deb \
         && apt-get purge -y curl \
