@@ -124,8 +124,15 @@ def test_unitless_metre_street_without_text_is_taken_in_metres() -> None:
     assert decide_units(_unitless(480, 290)).unit_m == 1.0
 
 
-def test_unitless_drawing_in_the_ambiguous_band_takes_metres_and_warns() -> None:
+def test_unitless_drawing_in_the_ambiguous_band_takes_millimetres_and_warns() -> None:
+    """В метрах улица не длиннее 10 км: 25 000 единиц - миллиметры, с просьбой проверить."""
     decision = decide_units(_unitless(25_000, 2_000, text=3.5))
+    assert decision.unit_m == pytest.approx(0.001)
+    assert "проверьте масштаб" in decision.notes[0]
+
+
+def test_small_unitless_drawing_without_evidence_takes_metres() -> None:
+    decision = decide_units(_unitless(900, 300, text=60))
     assert decision.unit_m == 1.0
     assert "проверьте масштаб" in decision.notes[0]
 

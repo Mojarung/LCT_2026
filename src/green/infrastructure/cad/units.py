@@ -224,8 +224,8 @@ def _fallback_guess(doc: Drawing) -> tuple[str, str, str]:
     if spread is None:
         return "m", "координат для оценки нет", "mm"
     extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
-    if spread.size > _MAX_SITE_M:
-        return "mm", f"{extent}: в метрах участок длиннее 100 км", "m"
+    if spread.size > _UNITLESS_SPLIT:
+        return "mm", f"{extent}: в метрах участок длиннее 10 км", "m"
     return "m", extent + _text(spread.text_height), "mm"
 
 

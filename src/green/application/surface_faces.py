@@ -61,7 +61,7 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
         # Стена и ограда замыкают грань вместе с линиями материала, но не одни: у грани должен
         # быть хотя бы отрезок борта, края покрытия или газона.
         supported = _covered(rings, np.concatenate([material_lines, wall_lines])) & _on_material(
-            rings, material_lines
+            rings, material_lines, noded
         )
 
     # Щель уже SLIVER_M между двумя линиями (двойная линия знака ограды, замкнутая
@@ -125,17 +125,28 @@ def closed_face_materials(  # noqa: PLR0913 - geometry evidence and area cap
     )
 
 
-def _on_material(rings: NDArray[np.object_], lines: NDArray[np.object_]) -> NDArray[np.bool_]:
-    """У кольца есть общий отрезок (не точка) хотя бы с одной линией материала."""
+def _on_material(
+    rings: NDArray[np.object_], lines: NDArray[np.object_], noded: BaseGeometry
+) -> NDArray[np.bool_]:
+    """У кольца есть общий отрезок (не точка) хотя бы с одной линией материала.
+
+    Кусок узловой сети граней либо целиком лежит на кольце, либо касается его концом, поэтому
+    хватает середины куска: середины кусков на линиях материала ищутся у колец по
+    подготовленному индексу. Попарная проверка DE-9IM разбирала кольцо на каждую пару и на
+    грани у пунктира из 20 тыс. штрихов шла секунды (ревью 20.10.2026)."""
     found = np.zeros(len(rings), dtype=bool)
     parts = shapely.get_parts(np.asarray(lines, dtype=object))
-    if not len(rings) or not len(parts):
+    pieces = shapely.get_parts(noded)
+    if not len(rings) or not len(parts) or not len(pieces):
         return found
-    ring_ids, part_ids = STRtree(parts).query(rings, predicate="dwithin", distance=_NEAR_M)
-    if not len(ring_ids):
+    middles = shapely.line_interpolate_point(pieces, 0.5, normalized=True)
+    on_lines = STRtree(parts).query(middles, predicate="dwithin", distance=_NEAR_M)[0]
+    if not len(on_lines):
         return found
-    shared = shapely.relate_pattern(rings[ring_ids], parts[part_ids], "1********")
-    found[np.unique(ring_ids[shared])] = True
+    ring_ids = STRtree(rings).query(
+        middles[np.unique(on_lines)], predicate="dwithin", distance=_NEAR_M
+    )[1]
+    found[np.unique(ring_ids)] = True
     return found
 
 

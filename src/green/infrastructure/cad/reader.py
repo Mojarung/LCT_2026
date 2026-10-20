@@ -1050,7 +1050,8 @@ def _anchor_point(entity: DXFGraphic) -> Point | None:
     for name in ("center", "start", "insert", "location"):
         if dxf.hasattr(name):
             point = dxf.get(name)
-            if name in {"center", "insert"} and entity.dxf.hasattr("extrusion"):
+            # Центр круга и точка вставки - в OCS; центр эллипса уже в WCS.
+            if (name == "insert" or entity.dxftype() == "CIRCLE") and dxf.hasattr("extrusion"):
                 point = entity.ocs().to_wcs(point)
             return Point(point.x, point.y)
     if isinstance(entity, LWPolyline) and len(entity):

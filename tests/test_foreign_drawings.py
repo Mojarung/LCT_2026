@@ -254,3 +254,18 @@ def test_dwg_saved_as_dxf_is_sent_to_the_converter(tmp_path: Path) -> None:
     assert name == "fake"
     assert converter.seen == [".dwg"]
     assert path.suffix == ".dxf"
+
+
+def test_french_latin1_text_is_not_mistaken_for_cyrillic(tmp_path: Path) -> None:
+    """Ревью 20.10.2026: буквы Latin-1 среди обычной латиницы - французский, а не кириллица."""
+    doc = _new("R2000")
+    for i in range(10):
+        doc.modelspace().add_text(
+            f"Bâtiment élevé à côté de la façade {i}", dxfattribs={"layer": "Façade"}
+        )
+    source = tmp_path / "fr.dxf"
+    doc.saveas(source)
+    loaded, notes = load_document(source)
+    assert loaded.encoding == "cp1252"
+    assert not any("cp1251" in n for n in notes)
+    assert "Façade" in {e.dxf.layer for e in loaded.modelspace()}

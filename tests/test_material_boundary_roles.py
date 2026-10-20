@@ -93,3 +93,15 @@ def test_dash_gap_and_short_tail_do_not_spoil_a_closed_lawn() -> None:
     assert material(surface, 15, 15) is Material.SOIL
     assert surface.soil_area is not None
     assert surface.soil_area.area > 350
+
+
+def test_lawn_between_curb_and_facade_closes_across_a_short_gap() -> None:
+    """Ревью 20.10.2026: борт, не дотянутый до стены на полметра, замыкает газон у фасада."""
+    features = [
+        feature(ObjectClass.BUILDING, box(0, 20, 20, 30), "house"),
+        feature(ObjectClass.CURB, LineString([(0, 19.5), (0, 0), (20, 0), (20, 19.5)])),
+    ]
+    surface = build_surface_map(features, [label("ГАЗОН", 10, 10)], box(-5, -5, 25, 35), 0.5)
+    assert surface is not None
+    assert surface.soil_area is not None
+    assert surface.soil_area.area > 350

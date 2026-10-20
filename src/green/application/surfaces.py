@@ -1002,17 +1002,19 @@ def _closed_materials(
     # Материал грани ограничивают борт, край покрытия и газон, а вместе с ними и стена здания
     # с оградой: газон у фасада и у ограды площадки замкнут ими (20.10.2026: на Кустанайской
     # так подтверждается контуром в полтора раза больше грунта).
-    wall_lines = _barrier_lines([f for f in features if f.object_class in _WALL_EDGES])
-    material_lines = _with_bridges(
-        _barrier_lines(
-            [
-                f
-                for f in features
-                if f.object_class in _MATERIAL_EDGES
-                or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
-            ]
-        )
+    walls = _barrier_lines([f for f in features if f.object_class in _WALL_EDGES])
+    materials = _barrier_lines(
+        [
+            f
+            for f in features
+            if f.object_class in _MATERIAL_EDGES
+            or (f.object_class.is_hard_surface and f.geometry.geom_type in _AREA_TYPES)
+        ]
     )
+    material_lines = _with_bridges(materials)
+    # Перемычки и продления стыка «борт - стена» строятся по линиям материала и стенам вместе:
+    # газон, у которого борт не дотянут до фасада на полметра, замкнут (ревью 20.10.2026).
+    wall_lines = _with_bridges(np.concatenate([materials, walls]))
     woodland = seed_kind == _WOODLAND_SEED
     faces = closed_face_materials(
         separating_lines,

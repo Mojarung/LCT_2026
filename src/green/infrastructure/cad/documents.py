@@ -255,6 +255,7 @@ def _require_safe_audit(
 CP1251 = "cp1251"
 _LATIN_LETTERS = re.compile("[À-ÿ]")
 _CYRILLIC = re.compile("[Ѐ-ӿ]")
+_ASCII_LETTERS = re.compile("[A-Za-z]")
 _CODEPAGE_SAMPLE = 5_000  # объектов модели для проверки кодировки
 _MOJIBAKE_MIN = 20  # букв Latin-1 - меньше не повод перечитывать
 _FIXED_SHARE = 0.8  # после перекодировки кириллицей становятся почти все такие буквы
@@ -272,7 +273,10 @@ def _misdeclared_cyrillic(doc: Drawing) -> bool:
             sample.append(str(entity.dxf.get("text", "")))
     text = "".join(sample)
     latin = len(_LATIN_LETTERS.findall(text))
-    if latin < _MOJIBAKE_MIN or len(_CYRILLIC.findall(text)) >= latin:
+    # Французское «Façade» тоже даёт буквы Latin-1, но среди обычных латинских они редки; у
+    # кириллицы, прочитанной как cp1252, обычных латинских букв почти нет (ревью 20.10.2026).
+    ascii_letters = len(_ASCII_LETTERS.findall(text))
+    if latin < _MOJIBAKE_MIN or latin < ascii_letters or len(_CYRILLIC.findall(text)) >= latin:
         return False
     try:
         fixed = text.encode(doc.encoding, errors="ignore").decode(CP1251, errors="ignore")

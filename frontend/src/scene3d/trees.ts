@@ -377,7 +377,25 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
   const box = new THREE.Box3();
   if (branches.boundingBox) box.union(branches.boundingBox);
   if (leaves.boundingBox) box.union(leaves.boundingBox);
-  const crown = leaves.boundingBox && !leaves.boundingBox.isEmpty() ? leaves.boundingBox : box;
+  const leafBox = leaves.boundingBox && !leaves.boundingBox.isEmpty() ? leaves.boundingBox : box;
+  const size = measureCrown(
+    positionsOf(leaves),
+    joined(positionsOf(branches), positionsOf(leaves)),
+  );
+  // Плотная середина и дальняя модель - по той же мерке кроны, что и масштаб экземпляра
+  // (fit.ts): иначе при смене детализации крона прыгала бы на отношение рамки к квантилю.
+  const crown = new THREE.Box3(
+    new THREE.Vector3(
+      size.centerX - size.widthX / 2,
+      leafBox.min.y,
+      size.centerZ - size.widthZ / 2,
+    ),
+    new THREE.Vector3(
+      size.centerX + size.widthX / 2,
+      leafBox.max.y,
+      size.centerZ + size.widthZ / 2,
+    ),
+  );
   const barkMaterial = tree.branchesMesh.material as THREE.MeshPhongMaterial;
   const leafMaterial = tree.leavesMesh.material as THREE.MeshPhongMaterial;
   const model: Model = {
@@ -387,7 +405,7 @@ export function generateModel(archetype: Archetype, variant: number, lod: Lod): 
     far: farGeometry(crown, archetype),
     bark: tree.options.bark.type,
     leafType: tree.options.leaves.type,
-    size: measureCrown(positionsOf(leaves), joined(positionsOf(branches), positionsOf(leaves))),
+    size,
     barkMaps: {
       map: barkMaterial.map,
       normalMap: barkMaterial.normalMap,

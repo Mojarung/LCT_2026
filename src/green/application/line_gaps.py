@@ -41,12 +41,15 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
     Каждый конец смотрит только на NEIGHBOURS ближайших концов: на чертеже с тысячами коротких
     штрихов (разобранная штриховка, частый пунктир) все пары в радиусе gap - десятки миллионов,
     а перемычка всё равно идёт к ближайшему свободному концу."""
-    parts = [
+    drawn = [
         p
         for g in lines
         for p in shapely.get_parts(g)
-        if p.geom_type == "LineString" and len(p.coords) >= _MIN_POINTS and not p.is_ring
+        if p.geom_type in {"LineString", "LinearRing"} and len(p.coords) >= _MIN_POINTS
     ]
+    parts = [p for p in drawn if not p.is_ring]
+    # Замкнутый контур (стена здания) концов не имеет, но конец борта до него продлевается.
+    rings = [p for p in drawn if p.is_ring]
     if not parts:
         return []
     ends, outward = _ends(parts)
@@ -65,7 +68,7 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
             continue
         taken.update((a, b))
         out.append(shapely.LineString([ends[a], ends[b]]))
-    out.extend(_extensions(parts, ends, outward, taken, gap))
+    out.extend(_extensions([*parts, *rings], ends, outward, taken, gap))
     return out
 
 
@@ -119,7 +122,9 @@ def _extensions(
     taken: set[int],
     gap: float,
 ) -> list[BaseGeometry]:
-    """Висячий конец продлевается вдоль своего направления до первой встречной линии."""
+    """Висячий конец продлевается вдоль своего направления до первой встречной линии.
+
+    parts - сначала линии с концами (их номера - номера концов // 2), за ними замкнутые."""
     free = [i for i in range(len(ends)) if i not in taken and outward[i].any()]
     if not free:
         return []
