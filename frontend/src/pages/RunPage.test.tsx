@@ -166,6 +166,31 @@ function succeededRoutes(record: RunOut = done()) {
 }
 
 describe('RunPage: finished run', () => {
+  it.each([false, true, undefined])(
+    'marks the objects button only when semantic assignments are incomplete (%s)',
+    async (complete) => {
+      const record = done();
+      mockApi(
+        succeededRoutes({
+          ...record,
+          summary: { ...record.summary, semantic_assignments_complete: complete },
+          artifacts: [...(record.artifacts ?? []), artifact('semantic-review.geojson')],
+        }),
+      );
+      renderApp('/runs/r1');
+      const trigger = await screen.findByRole('button', { name: 'Объекты чертежа' });
+      if (complete === false) {
+        expect(trigger).toHaveAccessibleDescription(
+          'Не все объекты чертежа распознаны однозначно. Откройте таблицу, чтобы уточнить их типы.',
+        );
+        expect(trigger).toHaveClass('needs-review');
+      } else {
+        expect(trigger).not.toHaveAttribute('aria-describedby');
+        expect(trigger).not.toHaveClass('needs-review');
+      }
+    },
+  );
+
   it('does not call inferred ground unrestricted and shows pits requiring review', async () => {
     const record = done();
     mockApi(

@@ -54,6 +54,16 @@
     height: 62vh;
     min-height: 340px;
   }
+  .workspace .semantic-review-trigger {
+    position: relative;
+    order: 1;
+    align-self: center;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin: 12px 16px;
+    max-width: calc(100% - 32px);
+  }
   /* В полосах сворачивать нечего: ширину у плана здесь никто не отнимает. */
   .panel-toggle {
     display: none;

@@ -14,6 +14,7 @@ import type {
 import { ApiError } from '../api/client';
 import { keys, useArtifact, useRun } from '../api/queries';
 import { SemanticReviewPanel } from '../components/review/SemanticReviewPanel';
+import { UiIcon } from '../components/icons';
 import { DetailPanel } from '../components/detail/DetailPanel';
 import { SourceConflictNotice } from '../components/run/SourceConflictNotice';
 import { Downloads } from '../components/run/Downloads';
@@ -107,6 +108,7 @@ export function RunPage() {
     };
   }, [failed]);
   const data = run.data;
+  const objectsNeedReview = data?.summary?.semantic_assignments_complete === false;
   const state = data?.state;
   const live = state === 'queued' || state === 'running';
   const done = state === 'succeeded';
@@ -399,14 +401,27 @@ export function RunPage() {
             <button
               type="button"
               ref={reviewTrigger}
-              className="semantic-review-trigger"
+              className={`semantic-review-trigger${objectsNeedReview ? ' needs-review' : ''}`}
+              aria-label="Объекты чертежа"
               aria-expanded={reviewOpen}
               aria-controls="semantic-review-panel"
+              aria-describedby={objectsNeedReview ? 'semantic-review-warning' : undefined}
               onClick={() => {
                 setReviewOpen((value) => !value);
               }}
             >
+              {objectsNeedReview ? <UiIcon name="alert" size={18} /> : null}
               Объекты чертежа
+              {objectsNeedReview ? (
+                <span
+                  id="semantic-review-warning"
+                  role="tooltip"
+                  className="semantic-review-tooltip"
+                >
+                  Не все объекты чертежа распознаны однозначно. Откройте таблицу, чтобы уточнить их
+                  типы.
+                </span>
+              ) : null}
             </button>
             <SemanticReviewPanel
               key={runId}

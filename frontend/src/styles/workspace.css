@@ -1719,6 +1719,9 @@ body.shell-map .topbar {
 
 /* Уточнение типов на основной подоснове: панель и отметки вместо второго чертежа. */
 .semantic-review-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   position: absolute;
   z-index: 4;
   top: var(--inset);
@@ -1735,6 +1738,41 @@ body.shell-map .topbar {
 .semantic-review-trigger[aria-expanded='true'] {
   background: var(--bone);
   color: var(--panel);
+}
+.semantic-review-trigger.needs-review {
+  border-color: var(--warn);
+}
+.semantic-review-trigger.needs-review > .icon {
+  flex-shrink: 0;
+  color: var(--warn);
+}
+.semantic-review-trigger.needs-review[aria-expanded='true'] > .icon {
+  color: var(--panel);
+}
+.semantic-review-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  color: var(--bone);
+  box-shadow: 0 4px 16px #0002;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: normal;
+  white-space: normal;
+  visibility: hidden;
+  opacity: 0;
+}
+.semantic-review-trigger:hover .semantic-review-tooltip,
+.semantic-review-trigger:focus-visible .semantic-review-tooltip {
+  visibility: visible;
+  opacity: 1;
 }
 .workspace.semantic-review-on > .hud-left,
 .workspace.semantic-review-on > .hud-right,
@@ -1835,6 +1873,10 @@ body.shell-map .topbar {
   border-top: 3px dashed var(--review-label-active);
 }
 @media (max-width: 760px) {
+  .semantic-review-tooltip {
+    left: 0;
+    transform: none;
+  }
   .semantic-review-trigger {
     left: var(--inset);
     transform: none;
