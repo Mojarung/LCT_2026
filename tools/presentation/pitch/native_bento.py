@@ -1,4 +1,4 @@
-# ruff: noqa: INP001, SLF001, E501, PLR2004, PLR0913 - модуль колоды рядом с assemble_bento.py; текст
+# ruff: noqa: INP001, SLF001, E501, PLR0913 - модуль колоды рядом с assemble_bento.py; текст
 # слайдов длинными строками; у python-pptx нет API для прозрачности и формы картинки.
 """Свободные слайды презентации бенто-сетками: вторая версия рядом с native.py.
 
@@ -26,29 +26,44 @@ from native import (
     BG,
     BLUSH,
     BODY,
+    CITY_ASSUMPTIONS,
+    CITY_ECON,
+    CITY_ECON_HEAD,
+    CITY_SOURCES,
+    COVER_BACKEND,
+    COVER_FRONTEND,
     INK,
+    INPUT_ITEMS,
+    INPUT_NOTES,
     LAV,
     MEDIUM,
     MIST,
     MONO,
+    MUTE,
     NIGHT,
-    PHOTO,
-    PHOTO_CROP,
     PINK,
     PLUM,
     ROSE,
-    SCENE_CROP,
     SECTIONS,
     SEMI,
     TESTS_BACKEND,
     TESTS_FRONTEND,
+    VISUAL_CHIP,
+    VISUAL_NOTES,
+    VISUAL_PANEL,
+    VISUAL_SCENE,
+    VISUAL_TILES,
+    VISUAL_TOP,
     WHITE,
-    WORK_CROP,
+    WORKSPACE_FOOT,
     X_BOLD,
     Crop,
     Style,
     alpha,
     circle_number,
+    city_cards,
+    city_notes,
+    effect_stats,
     facts,
     fill_frame,
     hbar_chart,
@@ -62,8 +77,9 @@ from native import (
     street_curbs,
     street_minutes,
     style_chart,
-    tag,
     text,
+    tile_crop,
+    workspace_tiles,
 )
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
@@ -208,6 +224,27 @@ def note(
     text(slide, inset(box), paras, line=1.18, after=5, anchor=anchor)
 
 
+def caption(slide: Slide, box: Box, label: str) -> None:
+    """Подпись снимка плашкой в левом нижнем углу; длинная переносится в узкой карточке."""
+    x, y, w, h = box
+    room = w - 0.32
+    need = 0.3 + len(label) * 0.085
+    lines = 1 if need <= room else -(-need // room)
+    tw = min(need, room)
+    th = 0.3 + (lines - 1) * 0.17
+    t = rect(slide, (x + 0.16, y + h - 0.16 - th, tw, th), INK, radius=0.15)
+    alpha(t, 82)
+    fill_frame(
+        t.text_frame,
+        [para(label, Style(SEMI, 10, WHITE))],
+        align=PP_ALIGN.CENTER if lines == 1 else PP_ALIGN.LEFT,
+        anchor=MSO_ANCHOR.MIDDLE,
+        line=1.0,
+    )
+    t.text_frame.word_wrap = lines > 1
+    t.text_frame.margin_left = t.text_frame.margin_right = Inches(0.1)
+
+
 def shot(
     slide: Slide,
     name: str,
@@ -220,8 +257,7 @@ def shot(
     """Снимок сервиса во всю карточку; подпись плашкой в левом нижнем углу."""
     picture(slide, name, box, crop, dark=dark, radius=R, shadow=False, border=None)
     if label:
-        x, y, _, h = box
-        tag(slide, x + 0.16, y + h - 0.46, label)
+        caption(slide, box, label)
 
 
 # --------------------------------------------------------------------------- каркас слайда
@@ -262,16 +298,25 @@ def s_problem(prs: Deck, f: dict[str, str]) -> None:
         "utilities.png",
         cell(0, 7, 0, 6),
         Crop((0.5, 0.5), 1.35, (0.5, 0.45)),
-        "Подземные сети Кустанайской, слои плана скрыты",
+        "Подземные сети Кустанайской улицы, слои плана скрыты",
         dark=True,
     )
     box = cell(7, 5, 0, 2)
     card(s, box, LIGHT)
     x, y, w, h = inset(box)
-    text(s, (x, y, w, 0.3), [para("СП 42.13330.2016, табл. 9.1".upper(), Style(SEMI, 9.5, NIGHT))])
+    text(
+        s,
+        (x, y, w, 0.3),
+        [
+            para(
+                "Дерево нельзя посадить ближе · СП 42.13330.2016, табл. 9.1".upper(),
+                Style(SEMI, 9, NIGHT),
+            )
+        ],
+    )
     third = w / 3
     for i, (big, label) in enumerate(
-        (("2 м", "до силового кабеля"), ("1,5 м", "до газопровода"), ("5 м", "до стены дома"))
+        (("2 м", "к силовому кабелю"), ("1,5 м", "к газопроводу"), ("5 м", "к стене дома"))
     ):
         text(
             s,
@@ -283,7 +328,7 @@ def s_problem(prs: Deck, f: dict[str, str]) -> None:
         s,
         cell(7, 5, 2, 2),
         "Сети сверяют вручную",
-        "Проектировщик проверяет каждое место по чертежу сетей. Заказчик назвал разбор сетей самым трудоёмким этапом проекта.",
+        "Проектировщик сверяет каждое место с сетями на чертеже вручную. Заказчик назвал разбор сетей самым трудоёмким этапом проекта.",
         body_size=11.5,
     )
     stat(
@@ -311,9 +356,9 @@ def s_solution(prs: Deck, f: dict[str, str]) -> None:
     shot(
         s,
         "explain-card.png",
-        cell(9, 3, 0, 6),
+        cell(9, 3, 0, 4),
         Crop((0.5, 0.0)),
-        "3  Объяснение посадки",
+        "3  Объяснение каждой посадки: замер, норма и акт",
         dark=True,
     )
     note(
@@ -326,19 +371,19 @@ def s_solution(prs: Deck, f: dict[str, str]) -> None:
     )
     note(
         s,
-        cell(4, 3, 4, 2),
+        cell(4, 5, 4, 2),
         "Выход: слои GREEN_*",
-        "Деревья, кусты, газоны, цветники, отказы, зоны допустимости.",
+        "Деревья, кусты, газоны, цветники, отказы, зоны допустимости. У каждой посадки в DXF есть атрибуты вида и нормы.",
         kind=GLASS,
         head_size=13,
     )
     stat(
         s,
-        cell(7, 2, 4, 2),
+        cell(9, 3, 4, 2),
         f["entities_changed"],
         f"изменено из {f['entities']} объектов исходников",
         kind=ACCENT,
-        size=30,
+        size=26,
         label_size=10,
     )
     notes(
@@ -354,25 +399,28 @@ def s_steps(prs: Deck, f: dict[str, str]) -> None:
     steps = (
         (
             "Точный парсинг",
-            "Учёт 100% примитивов чертежа и сквозная сверка геометрии с исходным DXF",
+            "Учёт 100% примитивов чертежа и сквозная сверка геометрии с исходным DXF.",
         ),
         (
             "Семантика слоёв",
-            f"Сети, борта, застройка и {f['symbols']} типов условных знаков геоподосновы",
+            f"Распознавание сетей, бортов, застройки и {f['symbols']} типов условных знаков геоподосновы.",
         ),
         (
             "Анализ покрытий",
-            "Газоны, тротуары, проезды и зоны с открытым грунтом под посадки",
+            "Выделение газонов, тротуаров, проездов и зон с открытым грунтом под посадки.",
         ),
-        ("Сценарии посадки", "Аллея вдоль бортов, куртины на газонах, живые изгороди, цветники"),
+        ("Сценарии посадки", "Аллея вдоль бортов, куртины на газонах, живые изгороди, цветники."),
         (
             "Подбор пород (MILP)",
-            f"{f['species']} видов с учётом инсоляции, габаритов и городских квот",
+            f"Подбор из {f['species']} видов с учётом инсоляции, габаритов и городских квот.",
         ),
-        ("Аудит и валидация", f"Финальная проверка готового плана по {f['rules_total']} правилам"),
+        (
+            "Аудит и валидация",
+            f"Финальная проверка готового плана по {f['rules_total']} правилам: {f['violations']} нарушений на выходе.",
+        ),
         (
             "Экспорт и отчётность",
-            "Слои GREEN_*, ведомость, CSV, записка DOCX и протокол со ссылками на акты",
+            "Слои GREEN_*, ведомость, таблицы CSV, записка DOCX и протокол со ссылками на акты.",
         ),
     )
     for i, (head, sub) in enumerate(steps):
@@ -402,27 +450,27 @@ def s_steps(prs: Deck, f: dict[str, str]) -> None:
     x, y, w, h = inset(box, 0.3)
     text(
         s,
-        (x, y, 3.2, h),
+        (x, y, 4.3, h),
         [
-            para("Оптимизация,", Style(X_BOLD, 24, WHITE)),
-            para("а не обучение", Style(X_BOLD, 24, ROSE)),
+            para("Математическая оптимизация", Style(X_BOLD, 18, WHITE)),
+            para("вместо машинного обучения", Style(X_BOLD, 18, ROSE)),
         ],
         line=1.05,
         anchor=MSO_ANCHOR.MIDDLE,
     )
     text(
         s,
-        (x + 3.5, y, w - 3.5, h),
+        (x + 4.6, y, w - 4.6, h),
         [
             para(
                 "В принятом плане Берзарина нормы отступов нарушены в 391 посадке из 554: обучать "
                 "нейросеть на таких данных нельзя. Солвер MILP (HiGHS) строго соблюдает нормативные "
                 "пороги, каждое дерево проверяемо. Локальная языковая модель только подсказывает "
                 "класс незнакомого слоя.",
-                Style(MEDIUM, 12.5, MIST),
+                Style(MEDIUM, 12, MIST),
             )
         ],
-        line=1.22,
+        line=1.2,
         anchor=MSO_ANCHOR.MIDDLE,
     )
     notes(
@@ -435,37 +483,34 @@ def s_explain(prs: Deck, f: dict[str, str]) -> None:
     shot(
         s,
         "explain-map.png",
-        cell(0, 5, 0, 6),
+        cell(0, 4, 0, 6),
         Crop((0.3, 0.5), 1.3, (0.5, 0.5)),
         "Выноска: замер до сети",
     )
-    shot(s, "explain-card.png", cell(5, 3, 0, 6), Crop((0.5, 0.0)))
+    shot(s, "explain-card.png", cell(4, 3, 0, 6), Crop((0.5, 0.0)))
     note(
         s,
-        cell(8, 4, 0, 2),
-        "Наглядные замеры",
-        "Теплосеть: факт 3,47 м ≥ норма 2,50 м. В карточке - пункт документа и дословная цитата.",
+        cell(7, 5, 0, 2),
+        "Наглядные замеры на плане и в карточке",
+        "Сервис рассчитывает расстояние до сетей (теплосеть: факт 3,47 м ≥ норма 2,50 м) и прикрепляет пункт документа с дословной цитатой.",
         eyebrow="посадка",
-        head_size=13,
+        head_size=12.5,
         body_size=10.5,
     )
     note(
         s,
-        cell(8, 4, 2, 2),
-        "Выявление нарушений",
-        (
-            "«До силового кабеля 0,51 м < 2,00 м».",
-            "R-POWER-TREE-001, СП 42.13330.2016, п. 9.6, табл. 9.1.",
-        ),
+        cell(7, 5, 2, 2),
+        "Аргументированное выявление нарушений",
+        "Отказ со ссылкой на регламент: «до силового кабеля 0,51 м при норме 2,00 м» (R-POWER-TREE-001, СП 42.13330.2016, п. 9.6, табл. 9.1).",
         eyebrow="отказ",
-        head_size=13,
+        head_size=12.5,
         body_size=10.5,
     )
     stat(
         s,
-        cell(8, 4, 4, 2),
+        cell(7, 5, 4, 2),
         f"{f['rules_total']} правил · {f['acts']} актов",
-        "без «галлюцинаций»: формулировки собирает строгий алгоритм, а не нейросеть",
+        f"Без «галлюцинаций»: в базе {f['rules_total']} правил из {f['acts']} нормативных актов. Формулировки собирает строгий алгоритм, а не нейросеть: результат детерминирован и проверяем.",
         kind=ACCENT,
         size=22,
         label_size=10,
@@ -478,40 +523,40 @@ def s_explain(prs: Deck, f: dict[str, str]) -> None:
 
 def s_users(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 2, "Кому нужен сервис")
-    box = cell(0, 5, 0, 4)
+    box = cell(0, 5, 0, 3)
     card(s, box, DEEP)
-    x, y, w, h = inset(box, 0.3)
+    x, y, w, h = inset(box, 0.28)
     text(
         s,
         (x, y, w, h),
         [
             para("1 · ПРОЕКТИРОВЩИК БЛАГОУСТРОЙСТВА", Style(SEMI, 9.5, ROSE)),
-            para(f"{f['minutes_median']} мин", Style(X_BOLD, 40, WHITE)),
-            para("медиана на улицу", Style(SEMI, 12, ROSE)),
+            para(f"{f['minutes_median']} мин", Style(X_BOLD, 36, WHITE)),
+            para("Скорость: медиана на улицу", Style(SEMI, 12, ROSE)),
             para(
                 "Загружает чертёж, автоматически получает схему посадок, вносит правки в "
                 "веб-интерфейсе и возвращает результат в привычный CAD.",
-                Style(MEDIUM, 11.5, MIST),
+                Style(MEDIUM, 11, MIST),
             ),
         ],
-        line=1.15,
-        after=6,
+        line=1.12,
+        after=4,
     )
     roles = (
         (
-            cell(5, 4, 0, 4),
+            cell(5, 4, 0, 3),
             "2 · Специалист ДПиООС",
             (
                 "Автоматически проверяет отступы от сетей и нормативную базу. За минуты "
                 "проверяет готовые чертежи подрядчиков перед согласованием."
             ),
-            "green audit",
+            "Контроль: аудит каждой посадки",
         ),
         (
-            cell(9, 3, 0, 4),
+            cell(9, 3, 0, 3),
             "3 · Согласующие ведомства",
-            "Оценивают баланс и объёмы озеленения, ведомость, записку и облик улицы в 3D.",
-            "DOCX и 3D",
+            "Оценивают баланс и объёмы озеленения, ведомость, записку DOCX и будущий облик улицы в интерактивном 3D-виде.",
+            "Наглядность: ведомость и 3D",
         ),
     )
     for b, head, body, metric in roles:
@@ -519,32 +564,41 @@ def s_users(prs: Deck, f: dict[str, str]) -> None:
         x, y, w, h = inset(b)
         text(
             s,
-            (x, y, w, h - 0.55),
-            [para(head.upper(), Style(SEMI, 9.5, NIGHT)), para(body, Style(MEDIUM, 12.5, BODY))],
-            line=1.2,
-            after=8,
+            (x, y, w, h - 0.6),
+            [para(head.upper(), Style(SEMI, 9.5, NIGHT)), para(body, Style(MEDIUM, 11, BODY))],
+            line=1.15,
+            after=6,
         )
         text(
             s,
-            (x, y + h - 0.45, w, 0.45),
-            [para(metric, Style(X_BOLD, 17, PINK))],
+            (x, y + h - 0.5, w, 0.5),
+            [para(metric, Style(X_BOLD, 12.5, PINK))],
             anchor=MSO_ANCHOR.BOTTOM,
         )
     quotes = (
-        ("Топ-1 и 2", "причины возврата: нарушение отступов от сетей и ошибки в объёмах посадок"),
-        ("0", "свободная ниша: попыток автоматизации проектирования не было"),
-        ("DXF", "работа в стандартном AutoCAD без плагинов: результат - в обычных слоях"),
-        ("до 60 мин", "ориентир на генерацию плана улицы, до 30 мин на подбор мест"),
+        (
+            "Топ-1 и Топ-2",
+            "главные причины возврата проектов: нарушение отступов от сетей и ошибки в объёмах посадок",
+        ),
+        (
+            "0",
+            "свободная ниша: у заказчика не было попыток автоматизировать проектирование озеленения",
+        ),
+        ("DXF", "работа в стандартном AutoCAD без плагинов: результат - в обычных слоях чертежа"),
+        (
+            "до 60 мин",
+            f"ориентир на генерацию плана улицы, до 30 мин на подбор мест; сервис - {f['minutes_median']} мин",
+        ),
     )
     for i, (big, label) in enumerate(quotes):
-        b = cell(i * 3, 3, 4, 2)
+        b = cell(i * 3, 3, 3, 3)
         card(s, b, SOFT)
         x, y, w, h = inset(b, 0.2)
-        text(s, (x, y, w, 0.25), [para("ЗАКАЗЧИК", Style(SEMI, 8, PLUM))])
+        text(s, (x, y, w, 0.25), [para("ВАЛИДАЦИЯ БОЛЕЙ ЗАКАЗЧИКА", Style(SEMI, 9, PLUM))])
         text(
             s,
             (x, y + 0.26, w, h - 0.26),
-            [para(big, Style(X_BOLD, 20, PINK)), para(label, Style(MEDIUM, 10, BODY))],
+            [para(big, Style(X_BOLD, 22, PINK)), para(label, Style(MEDIUM, 11, BODY))],
             line=1.15,
             after=2,
         )
@@ -652,50 +706,39 @@ def s_audit(prs: Deck, f: dict[str, str]) -> None:
 def s_visual(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
     s = new_slide(prs, 2, "3D-визуализация и фотореализм", bg="dark")
     # 3D-вид в ТЗ не просили, фото ИИ - бонус ТЗ: жюри видит это до того, как читает слайд.
-    extra = "СВЕРХ ТЗ: 3D-ВИД  ·  БОНУС ТЗ: ФОТО ИИ"
-    w = 0.45 + len(extra) * 0.098
-    right = SLIDE_W - MARGIN
-    chip = rect(s, (right - w, 1.12, w, 0.4), LAV, radius=0.2)
+    w = 0.45 + len(VISUAL_CHIP) * 0.098
+    chip = rect(s, (SLIDE_W - MARGIN - w, 1.12, w, 0.4), LAV, radius=0.2)
     fill_frame(
         chip.text_frame,
-        [para(extra, Style(SEMI, 10.5, WHITE))],
+        [para(VISUAL_CHIP, Style(SEMI, 10.5, WHITE))],
         align=PP_ALIGN.CENTER,
         anchor=MSO_ANCHOR.MIDDLE,
     )
     chip.text_frame.word_wrap = False
-    shot(s, "scene3d.png", cell(0, 8, 0, 4), SCENE_CROP, "3D-вид по координатам плана", dark=True)
-    shot(s, PHOTO, cell(8, 4, 0, 3), PHOTO_CROP, "фото ИИ по этому кадру", dark=True)
-    # ночью выразительна нижняя часть кадра: пятна света фонарей у посадок и окна домов
-    night = Crop((0.5, 0.85), 1.2, (0.6, 0.85))
-    shot(
-        s, "scene-night.png", cell(8, 4, 3, 3), night, "та же улица ночью: фонари и окна", dark=True
-    )
-    note(
+    # главная карточка - фото ИИ; рядом город вокруг и пульт, под ними что настраивается
+    (photo, photo_crop, photo_label), city, panel = VISUAL_TOP
+    shot(s, photo, cell(0, 5, 0, 4), photo_crop, photo_label, dark=True)
+    shot(s, city[0], cell(5, 4, 0, 2), city[1], city[2], dark=True)
+    shot(s, panel[0], cell(9, 3, 0, 2), panel[1], panel[2], dark=True)
+    box = cell(5, 7, 2, 2)
+    card(s, box, GLASS)
+    text(
         s,
-        cell(0, 4, 4, 2),
-        "Сцена из чертежа",
-        "Покрытия, борта, ограды и площадки - по линиям чертежа, этажность - по подписям, кроны - по виду и возрасту, солнце - по часу над Москвой.",
-        kind=GLASS,
-        head_size=13,
-        body_size=10.5,
+        inset(box, 0.2),
+        [
+            [(VISUAL_PANEL[0], Style(SEMI, 10, WHITE)), (VISUAL_PANEL[1], Style(MEDIUM, 10, MIST))],
+            para(VISUAL_SCENE, Style(MEDIUM, 10, MIST)),
+        ],
+        line=1.1,
+        after=3,
+        anchor=MSO_ANCHOR.MIDDLE,
     )
-    note(
-        s,
-        cell(4, 4, 4, 2),
-        "Фото без внешних сервисов",
-        "Фото по кадру рисует Qwen-Image-2.1-Turbo на своей видеокарте.",
-        kind=GLASS,
-        head_size=13,
-        body_size=10.5,
-    )
-    notes(
-        s,
-        "3D-вид сделан сверх ТЗ, фото ИИ - бонус ТЗ; оба из того же плана. Посадки стоят там же, где в DXF; по тротуарам "
-        "ходят люди, на площадках дети. Время суток и сезон меняются на пульте, ночью горят "
-        "фонари. Фото по кадру: режим «по плану» не дорисовывает деревья, которых нет в плане. "
-        "Время: на RTX 5070 кадр 1536 x 864 - 85 с, через API с апскейлом до 4K - 94 с "
-        "(docs/notes/40); фото на слайде - 1536 x 864 без апскейла.",
-    )
+    # нижняя полоса: семь кадров одного ракурса - сезоны, ночь, возраст посадок
+    x0, y0, strip_w, strip_h = cell(0, 12, 4, 2)
+    tw = (strip_w - (len(VISUAL_TILES) - 1) * GAP) / len(VISUAL_TILES)
+    for i, (name, label) in enumerate(VISUAL_TILES):
+        shot(s, name, (x0 + i * (tw + GAP), y0, tw, strip_h), tile_crop(name), label, dark=True)
+    notes(s, VISUAL_NOTES)
 
 
 # --------------------------------------------------------------------------- 03 бизнес
@@ -703,79 +746,38 @@ def s_visual(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая
 
 def s_city(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 3, "Эффект внедрения для города")
-    box = cell(0, 6, 0, 3)
-    card(s, box, ACCENT)
-    x, y, w, h = inset(box, 0.3)
+    for i, (big, label) in enumerate(city_cards(f)):
+        stat(s, cell(i * 3, 3, 0, 2), big, label, size=26, label_size=10.5)
+    # главная карточка - экономия в рублях: три колонки по два числа
+    box = cell(0, 12, 2, 3)
+    card(s, box, DEEP)
+    x, y, w, _ = inset(box, 0.3)
+    text(s, (x, y - 0.06, w, 0.32), [para(CITY_ECON_HEAD, Style(SEMI, 13, ROSE))])
+    cw = (w - 2 * 0.4) / 3
+    for i, (head, rows) in enumerate(CITY_ECON):
+        cx = x + i * (cw + 0.4)
+        text(s, (cx, y + 0.36, cw, 0.3), [para(head.upper(), Style(SEMI, 10, WHITE))])
+        for j, (big, sub) in enumerate(rows):
+            ry = y + 0.7 + j * 0.74
+            text(s, (cx, ry, cw, 0.38), [para(big, Style(X_BOLD, 18, WHITE))])
+            text(s, (cx, ry + 0.36, cw, 0.32), [para(sub, Style(MEDIUM, 10, MIST))], line=1.05)
     text(
         s,
-        (x, y, w, h),
+        cell(0, 12, 5, 1),
         [
-            para(f"{f['minutes_median']} мин", Style(X_BOLD, 48, WHITE)),
-            para("на генерацию плана улицы", Style(SEMI, 14, WHITE)),
-            para(
-                f"Медиана по {f['streets_done']} улицам пилота, от {f['minutes_min']} до {f['minutes_max']} мин. "
-                "Ориентир заказчика - до 60 мин.",
-                Style(MEDIUM, 11.5, WHITE),
-            ),
+            para(CITY_ASSUMPTIONS, Style(MEDIUM, 9, MUTE)),
+            para(CITY_SOURCES, Style(MEDIUM, 9, MUTE)),
         ],
-        line=1.1,
-        after=5,
-        anchor=MSO_ANCHOR.BOTTOM,
+        line=1.05,
+        after=2,
     )
-    stat(
-        s,
-        cell(6, 3, 0, 3),
-        f["rules_total"],
-        f"оцифрованных правил: {f['acts']} актов, в том числе 743-ПП и СП 42.13330; {f['violations']} нарушений в планах {f['streets_done']} улиц",
-        size=36,
-        label_size=10.5,
-    )
-    stat(
-        s,
-        cell(9, 3, 0, 3),
-        "2,7 мин",
-        "на нормоконтроль плана улицы: пункт акта и недобор в метрах",
-        size=32,
-        label_size=10.5,
-    )
-    points = (
-        (
-            "Гибкость и актуальность",
-            "Нормативы вынесены в конфигурацию: смена редакции или региональных правил без переписывания кода. СП00a042.13330 2016 и 2026 уже в своде.",
-        ),
-        (
-            "Данные не уходят (on-premise)",
-            "Работа в закрытом контуре заказчика. Расчёту не нужны сеть и GPU, фото и подсказки модели - на своей видеокарте.",
-        ),
-        (
-            "Проверяемость решений",
-            "Каждая посадка и каждый отказ со ссылкой на акт, пункт и цитату: согласующий проверяет решение, а не верит ему.",
-        ),
-    )
-    for i, (head, body) in enumerate(points):
-        note(
-            s,
-            cell(i * 4, 4, 3, 3),
-            head,
-            body,
-            kind=SOFT,
-            eyebrow="системное преимущество",
-            head_size=14,
-            body_size=11,
-        )
-    notes(
-        s,
-        f"Эффект для города: улица за минуты вместо ручного разбора сетей, {f['rules_total']} "
-        "правил вместо ручной сверки, нормоконтроль подрядчика за 2,7 минуты. Внизу - три свойства, "
-        "которые важны заказчику: нормы меняются без кода, данные не уходят из контура, "
-        "каждое решение проверяемо по пункту акта.",
-    )
+    notes(s, city_notes(f))
 
 
 def s_effect(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 3, "Экологический эффект: тень и защита от пыли", bg="dark")
     top = sorted(street_curbs(), key=lambda r: r[2] - r[1], reverse=True)[:7]
-    box = cell(0, 7, 0, 6)
+    box = cell(0, 6, 0, 6)
     card(s, box, GLASS)
     x, y, w, h = inset(box)
     text(
@@ -783,10 +785,10 @@ def s_effect(prs: Deck, f: dict[str, str]) -> None:
         (x, y, w, 0.6),
         [
             [
-                ("Борта под кронами и кустарником, %: ", Style(SEMI, 12.5, WHITE)),
-                ("было", Style(SEMI, 12.5, LAV)),
-                (" и ", Style(SEMI, 12.5, WHITE)),
-                ("с планом сервиса", Style(SEMI, 12.5, ROSE)),
+                ("Борта под кронами и кустарником, %: ", Style(SEMI, 11.5, WHITE)),
+                ("было", Style(SEMI, 11.5, LAV)),
+                (" и ", Style(SEMI, 11.5, WHITE)),
+                ("с планом сервиса", Style(SEMI, 11.5, ROSE)),
             ],
             para("7 улиц с наибольшим приростом", Style(MEDIUM, 10.5, MIST)),
         ],
@@ -801,42 +803,11 @@ def s_effect(prs: Deck, f: dict[str, str]) -> None:
         size=10,
         legend=False,
     )
-    stat(
-        s,
-        cell(7, 5, 0, 2),
-        f["effect_curb"].replace(" длины бортов", ""),
-        "прирост длины бортов под кронами и кустарником: меньше шума, пыли и выхлопа на тротуарах",
-        kind=ACCENT,
-        size=26,
-        label_size=10.5,
-    )
-    stat(
-        s,
-        cell(7, 5, 2, 2),
-        f"{f['trees']} и {f['shrubs']}",
-        f"деревьев и кустов подобрано с соблюдением норм на {f['streets_done']} улицах Москвы",
-        kind=GLASS,
-        size=24,
-        label_size=10.5,
-    )
-    stat(
-        s,
-        cell(7, 3, 4, 2),
-        f["effect_canopy_m2"],
-        f"площадь затенения от взрослых крон: {f['effect_canopy']}",
-        kind=GLASS,
-        size=18,
-        label_size=10,
-    )
-    stat(
-        s,
-        cell(10, 2, 4, 2),
-        f["effect_tiers"],
-        "деревьев с кустарником под кроной: два яруса",
-        kind=GLASS,
-        size=14,
-        label_size=10,
-    )
+    (trees, trees_l), (curb, curb_l), (canopy, canopy_l), (tiers, tiers_l) = effect_stats(f)
+    stat(s, cell(6, 6, 0, 2), curb, curb_l, kind=ACCENT, size=26, label_size=10.5)
+    stat(s, cell(6, 6, 2, 2), trees, trees_l, kind=GLASS, size=24, label_size=10.5)
+    stat(s, cell(6, 3, 4, 2), canopy, canopy_l, kind=GLASS, size=18, label_size=10)
+    stat(s, cell(9, 3, 4, 2), tiers, tiers_l, kind=GLASS, size=16, label_size=10)
     notes(
         s,
         "Эффект для города: тень, пылезащита, ярусность - то, что заказчик назвал признаками хорошего плана.",
@@ -848,16 +819,18 @@ def s_effect(prs: Deck, f: dict[str, str]) -> None:
 
 def s_deploy(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 4, "Архитектура: единое ядро и гибкие интерфейсы", bg="dark")
-    for i, (head, sub) in enumerate(
+    for box, (head, sub) in zip(
+        (cell(0, 2, 0, 2), cell(2, 2, 0, 2), cell(4, 3, 0, 2)),
         (
             ("CLI", "пакетная обработка улиц, аудит чужих чертежей"),
             ("REST API", "OpenAPI 3.1, Swagger для интеграции с ГИС"),
-            ("Веб", "React: просмотр и правка плана, 3D и фото"),
-        )
+            ("Веб-интерфейс", "React: просмотр и правка плана, 3D и фото"),
+        ),
+        strict=True,
     ):
         note(
             s,
-            cell(i * 2, 2, 0, 2),
+            box,
             head,
             sub,
             kind=GLASS,
@@ -865,19 +838,19 @@ def s_deploy(prs: Deck, f: dict[str, str]) -> None:
             body_size=10,
             anchor=MSO_ANCHOR.TOP,
         )
-    b = card(s, cell(0, 6, 2, 1), ACCENT)
+    b = card(s, cell(0, 7, 2, 1), ACCENT)
     fill_frame(
         b.text_frame,
         [
             [
                 ("Единое ядро:  ", Style(X_BOLD, 13, WHITE)),
-                ("общие правила для всех интерфейсов", Style(MEDIUM, 11.5, WHITE)),
+                ("общие правила и алгоритмы для всех интерфейсов", Style(MEDIUM, 11.5, WHITE)),
             ]
         ],
         anchor=MSO_ANCHOR.MIDDLE,
     )
     b.text_frame.margin_left = Inches(PAD)
-    code = rect(s, cell(0, 6, 3, 1), "000000", radius=R)
+    code = rect(s, cell(0, 7, 3, 1), "000000", radius=R)
     alpha(code, 35)
     fill_frame(
         code.text_frame,
@@ -896,24 +869,27 @@ def s_deploy(prs: Deck, f: dict[str, str]) -> None:
         s,
         cell(0, 3, 4, 2),
         f"{TESTS_BACKEND} + {TESTS_FRONTEND}",
-        "тестов бэкенда и фронтенда",
+        f"Тесты бэкенда и фронтенда; покрытие строк {COVER_BACKEND} и {COVER_FRONTEND}",
         kind=GLASS,
         size=20,
         label_size=10.5,
     )
     note(
         s,
-        cell(3, 3, 4, 2),
+        cell(3, 4, 4, 2),
         f"{f['params']} параметров",
-        "5 профилей. Образ на Ubuntu 26.04 (МосТех.ОС близка к ней), ODA - аргументом сборки, Kubernetes - kubeconform.",
+        (
+            "5 профилей. Образ на Ubuntu 26.04: по ТЗ МосТех.ОС близка к Ubuntu; ODA File Converter - аргументом сборки.",
+            "Ollama для подсказок - профиль llm в compose. Манифесты Kubernetes проверены kubeconform.",
+        ),
         kind=GLASS,
-        head_size=15,
-        body_size=9.5,
+        head_size=13,
+        body_size=9,
     )
     shot(
         s,
         "swagger.png",
-        cell(6, 6, 0, 6),
+        cell(7, 5, 0, 6),
         Crop((0.0, 0.0)),
         "Swagger UI из образа, без интернета",
         dark=True,
@@ -988,7 +964,7 @@ def s_speed(prs: Deck, f: dict[str, str]) -> None:
         s,
         cell(8, 4, 0, 2),
         f"{f['streets_done']} из {len(rows)}",
-        "улиц каталога с планом; Фрунзенская собрана из PDF-генплана",
+        "улиц каталога с планом; Фрунзенская собрана из PDF-генплана, DWG у неё нет",
         size=30,
         label_size=10.5,
     )
@@ -1023,74 +999,59 @@ def s_inputs(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая
     shot(
         s,
         "review.png",
-        cell(0, 6, 0, 6),
+        cell(0, 4, 0, 6),
         Crop((0.12, 0.0)),
-        "Уточнение объектов: класс слоя и основание",
+        "Уточнение объектов чертежа: класс каждого слоя и основание",
     )
-    items = (
-        (
-            cell(6, 3, 0, 3),
-            ACCENT,
-            "Чертёж жюри",
-            "236287.dxf проходит без ручных правок: слова слоёв паспорта ОГХ, единицы без заголовка, пунктир MicroStation собирается в линии.",
-        ),
-        (
-            cell(9, 3, 0, 3),
-            LIGHT,
-            "Незнакомый слой",
-            "Класс - по словам имени и по геометрии. Локальная модель в Ollama (gemma4) подсказывает в таблице уточнения, решает человек.",
-        ),
-        (
-            cell(6, 3, 3, 3),
-            LIGHT,
-            "Слои ГИС",
-            "GeoJSON и SHP. Охранные и природные территории задают тип территории по 369-ПП, охранные зоны газа и ЛЭП стесняют посадку.",
-        ),
-        (
-            cell(9, 3, 3, 3),
-            LIGHT,
-            "Кадастр",
-            "Участок задаёт назначение места. Яма на частном участке - на согласование с правообладателем, на участке дома - с собранием собственников.",
-        ),
-    )
-    for b, kind, head, body in items:
-        note(s, b, head, body, kind=kind, head_size=15, body_size=11.5)
-    notes(
-        s,
-        "Устойчивость к входу: чертёж жюри 236287 считается без JSON-переопределений; "
-        "Фрунзенская собрана из PDF. Подсказки LLM - совет в таблице уточнения, класс и план они "
-        "не меняют. Кадастр: ГрК РФ ст. 1 п. 12, ЖК РФ ст. 44 - правила R-PARCEL-* и R-MKD-*.",
-    )
-
-
-def s_workspace(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
-    s = new_slide(prs, 4, "Рабочее место в браузере")
-    shot(s, "console.png", cell(0, 7, 0, 4), Crop(), "Главная: улица или свой чертёж")
-    shot(s, "workspace.png", cell(7, 5, 0, 4), WORK_CROP, "План и замеры")
-    items = (
-        "Главная: улица пилота или свой DXF/DWG и реестр прогонов на одном экране.",
-        "Клик по кроне - замеры до сетей и пункт нормы. Вкладки «Посадки», «Эффект», «Легенда».",
-        "«Править»: перенос проверяется теми же нормами на лету, пересборка переписывает DXF.",
-        "Отчёты, ведомость Excel и записка DOCX открываются окном поверх плана.",
-    )
-    for i, item in enumerate(items):
-        b = cell(i * 3, 3, 4, 2)
-        card(s, b, ACCENT if i == 2 else LIGHT)
-        x, y, w, h = inset(b, 0.2)
-        circle_number(s, x, y, 0.36, str(i + 1), size=11)
-        if i == 2:
-            num = s.shapes[-1]
-            num.fill.fore_color.rgb = rgb(NIGHT)
-        text(
+    (head, body), *rest = INPUT_ITEMS
+    note(s, cell(4, 8, 0, 2), head, body, kind=ACCENT, head_size=14, body_size=11)
+    for i, (head, body) in enumerate(rest):
+        note(
             s,
-            (x, y + 0.46, w, h - 0.46),
-            [para(item, Style(MEDIUM, 10.5, WHITE if i == 2 else INK))],
-            line=1.18,
+            cell(4 + (i % 2) * 4, 4, 2 + (i // 2) * 2, 2),
+            head,
+            body,
+            head_size=12.5,
+            body_size=10.5,
         )
+    notes(s, INPUT_NOTES)
+
+
+def s_workspace(prs: Deck, f: dict[str, str]) -> None:
+    s = new_slide(prs, 4, "Рабочее место в браузере")
+    home, work, *small = workspace_tiles(f)
+    # главная карточка - план с замерами; вокруг пять экранов того же рабочего места
+    shot(s, work[0], cell(0, 6, 0, 4), work[1], work[2])
+    boxes = (
+        cell(6, 3, 0, 2),
+        cell(9, 3, 0, 2),
+        cell(6, 3, 2, 2),
+        cell(9, 3, 2, 2),
+        cell(0, 3, 4, 2),
+    )
+    for (name, crop, label), box in zip((home, *small), boxes, strict=True):
+        picture(s, name, box, crop, radius=R, shadow=False, border=BLUSH)
+        caption(s, box, label)
+    box = cell(3, 9, 4, 2)
+    card(s, box, ACCENT)
+    text(
+        s,
+        inset(box, 0.3),
+        [
+            para("ПРАВКА ПЛАНА", Style(SEMI, 9.5, WHITE)),
+            para(WORKSPACE_FOOT, Style(X_BOLD, 15, WHITE)),
+        ],
+        line=1.15,
+        after=4,
+        anchor=MSO_ANCHOR.MIDDLE,
+    )
     notes(
         s,
-        "Интерфейс второстепенен по ТЗ, но правка желательна: перенос, удаление, проверка точки "
-        "на лету, пересборка DXF. Каталог моделей растений - отдельная страница.",
+        "Интерфейс второстепенен по ТЗ, но правка желательна. Главная: улица пилота или свой "
+        "DXF/DWG и реестр прогонов. План: клик по кроне - замеры до сетей и пункт нормы. Вкладка "
+        "«Эффект» - баланс было - стало и индекс качества. Окно «Отчёты и файлы прогона»: нормы "
+        "CSV, отчёт по посадкам, записка DOCX, распознавание объектов JSON. «Как собран план» - "
+        "какие варианты отброшены и почему. Каталог моделей растений - отдельная страница.",
     )
 
 
@@ -1111,7 +1072,7 @@ def s_unique(prs: Deck, f: dict[str, str]) -> None:
             para(f"{f['acts']} актов", Style(X_BOLD, 22, WHITE)),
             para(
                 "Каждая посадка и каждый отказ - с замером, кодом проверки и цитатой из акта. "
-                "Доказательная база собирается детерминированным алгоритмом, без LLM.",
+                "Текст собирает детерминированный алгоритм, без LLM.",
                 Style(MEDIUM, 11.5, WHITE),
             ),
         ],
@@ -1120,25 +1081,25 @@ def s_unique(prs: Deck, f: dict[str, str]) -> None:
     )
     small = (
         (
-            cell(4, 4, 0, 2),
+            cell(8, 4, 0, 3),
             "Нормы в YAML",
             "Обновление норм без релиза",
-            "Правила, коэффициенты и профили в YAML: новая редакция без пересборки образа.",
+            "Правила, коэффициенты и профили (включая прикорневые барьеры по СП 42) вынесены в YAML. Новая редакция норм действует без пересборки Docker-образа.",
         ),
         (
-            cell(4, 4, 2, 2),
+            cell(4, 4, 0, 2),
             f"{f['violations']} нарушений",
             "Двухконтурный аудит",
-            "Готовый план повторно проверяется всеми правилами; в принятом плане Берзарина - 391 из 554 посадок с нарушениями.",
+            f"Готовый план повторно проверяется всеми правилами. Тот же нормоконтроль нашёл в принятом плане Берзарина {AUDIT_BAD} из {AUDIT_ALL} посадок с нарушениями.",
         ),
         (
             cell(4, 4, 4, 2),
             f"{f['species']} видов",
             "Вид под место",
-            "MILP подбирает породу: соль у проезда, свет, сети рядом, квоты на разнообразие.",
+            "Задача MILP подбирает породу по условиям места: соль у проезда, свет, сети рядом, квоты на разнообразие пород.",
         ),
         (
-            cell(8, 4, 0, 3),
+            cell(4, 4, 2, 2),
             f"{f['entities_changed']} из {f['entities']}",
             "Гарантия неизменности CAD",
             "Новое пишется только в слои GREEN_*. Каждый примитив исходной подосновы сверяется по хэшу blake2b до и после записи.",
@@ -1147,21 +1108,21 @@ def s_unique(prs: Deck, f: dict[str, str]) -> None:
             cell(8, 4, 3, 3),
             "Один план",
             "DXF, 3D, фото и отчёты",
-            "Проектировщик получает CAD-слои, согласующий - отчёт с нормами, жители - 3D-сцену.",
+            "Проектировщик получает CAD-слои, согласующий - отчёт HTML и Markdown с нормами, жители - 3D-сцену. Всё строится из одного проверенного плана.",
         ),
     )
     for b, metric, head, body in small:
         card(s, b, GLASS)
-        x, y, w, h = inset(b, 0.22)
+        x, y, w, h = inset(b, 0.2)
         text(
             s,
             (x, y, w, h),
             [
-                para(metric, Style(X_BOLD, 17, ROSE)),
+                para(metric, Style(X_BOLD, 16, ROSE)),
                 para(head, Style(SEMI, 12.5, WHITE)),
-                para(body, Style(MEDIUM, 10, MIST)),
+                para(body, Style(MEDIUM, 9.5, MIST)),
             ],
-            line=1.12,
+            line=1.06,
             after=3,
         )
     notes(
