@@ -109,3 +109,39 @@ def test_zone_words_do_not_catch_look_alikes(
     path = _layer(tmp_path / "функциональное_зонирование.geojson", (box(0, 0, 10, 10), name))
     classes = [f.object_class for f in YamlGisLayerSource(CONFIG).read([path]).features]
     assert classes == ([expected] if expected else [])
+
+
+def test_cadastre_parcel_sets_the_place_of_every_planting(tmp_path: Path) -> None:
+    """Земельный участок НСПД с ВРИ «многоэтажная жилая застройка» делает место двором так
+    же, как слой функционального зонирования (ТЗ, п. 1, данные публичных кадастров)."""
+    source = tmp_path / "street.dxf"
+    _street(source)
+    data = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": shapely.geometry.mapping(box(-10, -10, 130, 70)),
+                "properties": {
+                    "cad_num": "77:06:0012003:1234",
+                    "permitted_use_established_by_document": "Многоэтажная жилая застройка",
+                    "address": "г. Москва, Кустанайская ул., вл. 5",
+                },
+            }
+        ],
+    }
+    layer = tmp_path / "nspd_land_parcels.geojson"
+    layer.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
+    params = container.profiles.load(
+        "strict",
+        {"max_rejections": 20, "shrub_rows": False, "understory": False, "shrub_fill": False},
+    )
+    report = container.use_case.execute(
+        PlanRequest("cadastre", source, tmp_path / "out", "strict", params, gis_layers=(layer,))
+    )
+    assert report.plan.placements
+    assert {p.place for p in report.plan.placements} == {"yard"}
+    assert any(
+        "nspd_land_parcels" in note and "territory.yard" in note for note in report.load_notes
+    )
