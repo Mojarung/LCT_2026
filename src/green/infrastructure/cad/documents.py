@@ -32,6 +32,16 @@ APPID = "LCT_GREEN"
 _BAD_UNICODE_ESCAPE = re.compile(rb"\\U\+(?![0-9A-Fa-f]{4})")
 _GROUP_CODE = re.compile(rb"^\s*-?\d{1,4}\s*$")
 _LONE_CR = re.compile(rb"\r(?!\n)")
+# LibreDWG режет длинный текст на строки продолжения (код 3) посреди буквы UTF-8: начальный
+# байт буквы остаётся в конце одной строки, байты продолжения - в начале следующей. Строгий
+# загрузчик читает такие байты суррогатами, и текст потом не сериализуется (чертёж жюри «ИС ЗИЛ
+# озеленение.dwg»). Байты продолжения возвращаются к своей букве. Только DXF 2007+ (UTF-8):
+# в cp1251 байты 0x80-0xBF - обычные символы.
+_SPLIT_UTF8 = re.compile(
+    rb"([\xc2-\xf4][\x80-\xbf]{0,2})(\r?\n[ \t]*-?\d{1,4}[ \t]*\r?\n)([\x80-\xbf]{1,3})"
+)
+_ACADVER = re.compile(rb"\$ACADVER\s*\r?\n\s*1\s*\r?\n\s*AC(\d{4})")
+_UTF8_FROM = 1021  # AC1021 = DXF 2007, первая версия в UTF-8
 _REMOVED_ACAD_TABLE = re.compile(r"ACAD_TABLE\(#([0-9A-Fa-f]+)\)")
 _SPATIAL_REPAIRS = frozenset(
     {
@@ -167,11 +177,13 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     """
     try:
         require_complete_container(path)
-        doc = ezdxf.readfile(path)
-        if _misdeclared_cyrillic(doc):
-            doc = _as_cp1251(ezdxf.readfile(path, encoding=CP1251))
-            return _strict(path, doc, [_cp_note(path)])
-        return _strict(path, doc, [])
+        # Разрезанные буквы UTF-8 строгий загрузчик прочитал бы суррогатами: сразу к ремонту.
+        if not _has_split_utf8(path):
+            doc = ezdxf.readfile(path)
+            if _misdeclared_cyrillic(doc):
+                doc = _as_cp1251(ezdxf.readfile(path, encoding=CP1251))
+                return _strict(path, doc, [_cp_note(path)])
+            return _strict(path, doc, [])
     except ezdxf.DXFStructureError, ValueError:
         pass
     except OSError as error:
@@ -189,6 +201,7 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     notes.extend(_cycle_notes(path, auditor))
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
+    notes.extend(_mline_linetypes(path, doc))
     return doc, notes
 
 
@@ -210,6 +223,7 @@ def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[s
     auditor = doc.audit()
     _require_safe_audit(path, auditor, empty_tables=empty_tables)
     notes.extend(_cycle_notes(path, auditor))
+    notes.extend(_mline_linetypes(path, doc))
     fixes = len(auditor.fixes)
     if fixes or auditor.errors:
         notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
@@ -221,6 +235,28 @@ def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[s
             "Таблицы с данными или геометрией этим исключением не покрываются."
         )
     return doc, notes
+
+
+def _mline_linetypes(path: Path, doc: Drawing) -> list[str]:
+    """Элемент стиля мультилинии без типа линии (LibreDWG пишет пустую строку) - ByLayer.
+
+    ezdxf разбирает MLINE на отрезки с типом линии элемента и на пустом имени падает
+    (чертёж жюри «2026-07-21 - СПОЗУ.dwg»). Меняется только стиль в памяти: геометрия та же,
+    а тип линии отрезков берётся со слоя, как для ByLayer.
+    """
+    known = {str(name).casefold() for name in ("BYLAYER", "BYBLOCK")} | {
+        str(record.dxf.name).casefold() for record in doc.linetypes
+    }
+    fixed = 0
+    for _name, style in doc.mline_styles:
+        elements = style.elements.elements
+        for index, element in enumerate(elements):
+            if str(element.linetype).casefold() not in known:
+                elements[index] = element._replace(linetype="BYLAYER")
+                fixed += 1
+    if not fixed:
+        return []
+    return [f"{path.name}: элементы стилей мультилиний без типа линии - ByLayer: {fixed}"]
 
 
 def _require_safe_audit(
@@ -314,20 +350,39 @@ def _cycle_notes(path: Path, auditor: Auditor) -> list[str]:
 
 def _repaired_bytes(path: Path) -> tuple[bytes, list[str]]:
     """Ремонт строк, которые LibreDWG режет посреди escape-последовательности и перевода строки."""
-    data, joined = _join_broken_values(path.read_bytes())
+    data = path.read_bytes()
+    split = 0
+    if _utf8_dxf(data[:4096]):
+        data, split = _SPLIT_UTF8.subn(rb"\1\3\2", data)
+    data, joined = _join_broken_values(data)
     data, replaced = _BAD_UNICODE_ESCAPE.subn(b"?", data)
     # Одиночный CR внутри значения: текстовый режим Python считает его переводом строки, и пары
     # «код-значение» у строгого загрузчика съезжают. Режим восстановления делит только по LF.
     data, lone = _LONE_CR.subn(b"", data)
-    if not (joined or replaced or lone):
+    if not (joined or replaced or lone or split):
         return data, []
     note = (
         f"{path.name}: восстановлено разорванных строковых значений {joined}, "
         f"заменено некорректных последовательностей \\U+ {replaced}"
     )
+    if split:
+        note += f", собрано букв UTF-8, разрезанных переводом строки, {split}"
     if lone:
         note += f", убрано одиночных возвратов каретки {lone}"
     return data, [note]
+
+
+def _utf8_dxf(head: bytes) -> bool:
+    match = _ACADVER.search(head)
+    return match is not None and int(match.group(1)) >= _UTF8_FROM
+
+
+def _has_split_utf8(path: Path) -> bool:
+    """Есть ли буквы UTF-8, разрезанные переводом строки (см. _SPLIT_UTF8)."""
+    with path.open("rb") as handle:
+        if not _utf8_dxf(handle.read(4096)):
+            return False
+    return _SPLIT_UTF8.search(path.read_bytes()) is not None
 
 
 def _read_strict(data: bytes) -> Drawing | None:

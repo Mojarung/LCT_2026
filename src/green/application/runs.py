@@ -204,6 +204,19 @@ class RunService:
                 artifacts=tuple(sorted(set(saved) | set(reporter.record.artifacts))),
             )
 
+    def queue_rebuild(self, run_id: str) -> RunRecord:
+        """Отметить, что пересборка встала в общую очередь прогонов (max_parallel_runs).
+
+        Пока места нет, прогон в состоянии «в очереди», а не «готов»: иначе интерфейс не
+        знает, что работа ещё не началась, и на занятом стенде ждёт вслепую (20.10.2026:
+        27 с пересборки после 10 мин очереди, клиент сдался на 10-й минуте). Идущий прогон
+        своё состояние сохраняет.
+        """
+        record = self._store.get(run_id)
+        if record.state in {RunState.QUEUED, RunState.RUNNING}:
+            return record
+        return self._transition(record, RunState.QUEUED)
+
     def rebuild(self, run_id: str) -> RunRecord:
         """Переписать результат по исправленному плану: тот же путь записи, что и у прогона.
 
@@ -214,6 +227,9 @@ class RunService:
         if self._contexts is None:
             return self._transition(record, RunState.FAILED, error="Правка не подключена")
         with self._slots:
+            # Статус перечитывается после очереди: пока пересборка ждала места, его могли
+            # сменить (queue_rebuild, другая пересборка).
+            record = self._store.get(run_id)
             # Пока прогон ждал очереди, правки мог принять и другой процесс: в DXF идёт
             # черновик, догнавший журнал правок, а не тот, что был при постановке в очередь.
             context = self._contexts.get(run_id)
@@ -235,11 +251,14 @@ class RunService:
             context.report = report
             # Сохранённый контекст - уже с правками: после перезапуска правят этот план.
             self._contexts.put(context)
+            # Пересборка пишет только файлы плана. Разбор исходника (semantic-review.geojson,
+            # review-classification.json, review-input.dxf) остаётся прежним и в манифесте:
+            # без него после правки пропадали кнопка и страница уточнения объектов.
             return self._transition(
                 record,
                 RunState.SUCCEEDED,
                 summary=report.summary(),
-                artifacts=tuple(sorted(saved)),
+                artifacts=tuple(sorted(set(saved) | set(record.artifacts))),
             )
 
     def _transition(  # noqa: PLR0913 - поля перехода перечислены явно, а не словарём

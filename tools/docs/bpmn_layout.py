@@ -88,7 +88,10 @@ LAYOUTS: dict[str, dict[str, Slot]] = {
         "e_kept": Slot(0, 5, branch=True),
         "t_scene": Slot(1, 2),
         "t_shots": Slot(1, 3),
-        "e_scene": Slot(1, 4),
+        "g_photo": Slot(1, 4),
+        "e_scene": Slot(1, 4, branch=True),
+        "t_photo": Slot(1, 5),
+        "e_photo": Slot(1, 6),
     },
 }
 # Переходы, которые ведутся через явные точки, а не по общему правилу.

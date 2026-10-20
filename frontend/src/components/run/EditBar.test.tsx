@@ -1,7 +1,8 @@
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { PlanEditor } from '../../state/editor';
+import { PlanEditor, type RebuildPhase } from '../../state/editor';
 import { useWorkspace } from '../../state/workspace';
 import { EditBar } from './EditBar';
 
@@ -41,5 +42,45 @@ describe('EditBar', () => {
     });
     view.unmount();
     expect(leave().defaultPrevented).toBe(false);
+  });
+
+  it('says the rebuild waits in the queue, then that it runs, without promising a minute', async () => {
+    let report: (phase: RebuildPhase) => void = () => undefined;
+    let finish: () => void = () => undefined;
+    const editor = {
+      rebuild: (onPhase?: (phase: RebuildPhase) => void) => {
+        report = onPhase ?? report;
+        return new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      },
+    } as unknown as PlanEditor;
+    const user = userEvent.setup();
+    render(<EditBar editor={editor} onRebuilt={() => undefined} />);
+    act(() => {
+      useWorkspace.getState().setStale(true);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Пересобрать DXF' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Пересобираем DXF и объяснения…');
+    expect(screen.getByRole('status')).not.toHaveTextContent('до минуты');
+    act(() => {
+      report('queued');
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Пересборка в очереди: сервис считает другие прогоны.',
+    );
+    expect(screen.getByRole('button', { name: 'В очереди…' })).toBeDisabled();
+    act(() => {
+      report('running');
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Пересобираем DXF и объяснения…');
+    expect(screen.getByRole('button', { name: 'Пересобираем…' })).toBeDisabled();
+    await act(async () => {
+      finish();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Файлы результата пересобраны');
+    expect(useWorkspace.getState().stale).toBe(false);
   });
 });

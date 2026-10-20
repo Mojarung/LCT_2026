@@ -16,6 +16,7 @@ import anyio
 import orjson
 
 from green.application.errors import InputError
+from green.infrastructure.cad.structure import require_container_bounds
 from green.interfaces.api.errors import PayloadTooLargeError
 
 if TYPE_CHECKING:
@@ -81,6 +82,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
     except PayloadTooLargeError as error:
         container.runs.reject(record.run_id, str(error))
         raise
+    await _require_drawing(container, record.run_id, container.store.input_path(record.run_id))
 
     inventory_path = await _store_inventory(container, record.run_id, inventory)
     layer_paths = await _store_layers(container, record.run_id, layers)
@@ -100,6 +102,7 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         except PayloadTooLargeError as error:
             container.runs.reject(record.run_id, str(error))
             raise
+        await _require_drawing(container, record.run_id, target, upload.filename)
         extra_paths.append(target)
         source_names.append(upload.filename)
 
@@ -112,6 +115,25 @@ async def accept_run(  # noqa: PLR0913 - комплект приходит от�
         gis_layers=layer_paths,
     )
     return record
+
+
+async def _require_drawing(
+    container: Container, run_id: str, path: Path, name: str | None = None
+) -> None:
+    """Дешёвая проверка DXF при приёме: размер, начало и конец файла, без разбора.
+
+    Пустой файл, текст вместо DXF и обрезанная загрузка получают 422 сразу, а не после
+    очереди прогонов (до 20.10.2026 такой файл ждал свободного места минутами, чтобы
+    упасть с тем же текстом). Тело DXF и секцию ENTITIES по-прежнему проверяет прогон.
+    DWG здесь не проверяется: его читает конвертер, у него свои сообщения.
+    """
+    if path.suffix.lower() != ".dxf":
+        return
+    try:
+        await anyio.to_thread.run_sync(require_container_bounds, path, name)
+    except InputError as error:
+        container.runs.reject(run_id, str(error))
+        raise
 
 
 async def _store_layers(

@@ -18,6 +18,7 @@ import {
   relatedIndices,
   LABEL_ROLES,
   type ReviewGeometry,
+  pendingReviewHint,
   reviewJson,
   selectedIndices,
   selectedLabel,
@@ -151,6 +152,10 @@ export function ReviewPage() {
     });
   };
   const draftCount = Object.keys(assignments).length + Object.keys(labelAssignments).length;
+  // Столько же сомнительных объектов насчитает сервер (review_required_features): пока их
+  // больше нуля, пересчёт с уточнениями остановится, поэтому кнопка недоступна.
+  const pending = ready ? unresolvedCount(ready.data, assignments, ready.classes) : 0;
+  const pendingHint = pendingReviewHint(pending);
 
   // Карта впервые показывает первую группу списка, как только данные пришли; дальше вид
   // меняют только запросы из полей и кнопок.
@@ -165,7 +170,6 @@ export function ReviewPage() {
     if (geometry.isError) return geometry.error.message;
     if (report.isError) return report.error.message;
     if (!ready) return 'Читаем объекты…';
-    const pending = unresolvedCount(ready.data, assignments, ready.classes);
     return `Элементов: ${integer(ready.data.features.length)}. Автоматически: ${integer(Math.max(0, ready.data.features.length - pending - manualCount))}. Не уточнено: ${integer(pending)}. Ваших назначений: ${integer(manualCount)}.`;
   })();
 
@@ -214,7 +218,7 @@ export function ReviewPage() {
   };
 
   const apply = async () => {
-    if (!ready) return;
+    if (!ready || pending > 0) return;
     setApplying(true);
     setApplyError('');
     try {
@@ -611,12 +615,18 @@ export function ReviewPage() {
                     : 'Измените тип в таблице или подтвердите сомнительное распознавание.'}{' '}
                   Исходный прогон сохранится.
                 </p>
+                {pendingHint ? (
+                  <p className="hint review-pending" id={`${ids}-pending`}>
+                    {pendingHint}
+                  </p>
+                ) : null}
               </div>
               {names.has(REVIEW_DXF) ? (
                 <button
                   type="button"
                   className="primary"
-                  disabled={!canExport || applying || !draftCount}
+                  disabled={!canExport || applying || !draftCount || pending > 0}
+                  aria-describedby={pendingHint ? `${ids}-pending` : undefined}
                   onClick={() => void apply()}
                 >
                   {applying ? 'Запускаем пересчёт…' : 'Применить и пересчитать'}

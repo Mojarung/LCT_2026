@@ -13,7 +13,14 @@ import { EditQueue } from './editQueue';
 import { useWorkspace } from './workspace';
 
 const REBUILD_POLL_MS = 1500;
+/** Предел самой пересборки, от её начала (running) или от 202, если сервис не сказал об
+ *  очереди. Ожидание места в общей очереди прогонов (queued) не ограничено: сервис занят
+ *  другими прогонами, это не сбой, и статус прогона говорит об этом сам. Остановка сервиса
+ *  в очереди видна как сбой запроса или прогон «прерван», а не как истёкший срок. */
 const REBUILD_LIMIT_MS = 10 * 60_000;
+
+/** Что сейчас с пересборкой по статусу прогона: ждёт места или идёт. */
+export type RebuildPhase = 'queued' | 'running';
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -174,17 +181,26 @@ export class PlanEditor {
     });
   }
 
-  /** Пересобрать DXF и объяснения. Ждёт правки, ушедшие раньше, и конца самой пересборки. */
-  rebuild(): Promise<RunOut> {
+  /** Пересобрать DXF и объяснения. Ждёт правки, ушедшие раньше, и конца самой пересборки.
+   *  onPhase слышит смену «в очереди» / «идёт»: на занятом сервисе пересборка ждёт места
+   *  вместе с прогонами, и человек должен видеть, что ждёт очереди, а не зависания. */
+  rebuild(onPhase?: (phase: RebuildPhase) => void): Promise<RunOut> {
     return this.queue.enqueue(async () => {
-      const before = await getJson<RunOut>(this.url('').replace(/\/$/, ''), { cache: 'no-store' });
+      const runUrl = this.url('').replace(/\/$/, '');
+      const before = await getJson<RunOut>(runUrl, { cache: 'no-store' });
       await postJson<PlanSummaryOut>(this.url('rebuild'), {});
-      const deadline = Date.now() + REBUILD_LIMIT_MS;
-      while (Date.now() < deadline) {
+      let phase: RebuildPhase | null = null;
+      let deadline = Date.now() + REBUILD_LIMIT_MS;
+      while (phase === 'queued' || Date.now() < deadline) {
         await sleep(REBUILD_POLL_MS);
-        const run = await getJson<RunOut>(this.url('').replace(/\/$/, ''), { cache: 'no-store' });
+        const run = await getJson<RunOut>(runUrl, { cache: 'no-store' });
         if (run.state === 'failed') throw new Error(run.error ?? 'Пересборка не удалась.');
         if (run.state === 'succeeded' && run.updated_at !== before.updated_at) return run;
+        if ((run.state === 'queued' || run.state === 'running') && run.state !== phase) {
+          phase = run.state;
+          if (phase === 'running') deadline = Date.now() + REBUILD_LIMIT_MS;
+          onPhase?.(phase);
+        }
       }
       throw new Error('Пересборка идёт дольше 10 минут. Проверьте, что сервис работает.');
     });
