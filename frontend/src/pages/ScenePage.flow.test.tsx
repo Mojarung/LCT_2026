@@ -21,8 +21,13 @@ const h = vi.hoisted(() => {
   class FakeEngine {
     softwareRendering = false;
     touring = false;
-    freecam = { mode: 'fly' as 'fly' | 'walk' };
+    freecam = {
+      mode: 'fly' as 'fly' | 'walk',
+      pose: { x: 0, y: 30, z: 0, yaw: 0, pitch: -0.5 },
+    };
     readonly apply = vi.fn();
+    readonly setTreeClearanceConflicts = vi.fn();
+    readonly teleportTo = vi.fn(() => true);
     readonly setView = vi.fn();
     readonly addContext = vi.fn(() => 12);
     readonly dispose = vi.fn();

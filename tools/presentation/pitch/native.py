@@ -187,7 +187,7 @@ AUDIT = (
 )
 AUDIT_BAD, AUDIT_ALL = 391, 554
 # тесты на 20.10.2026: uv run pytest --collect-only, npx vitest run в frontend/
-TESTS_BACKEND, TESTS_FRONTEND = "2 623", "574"
+TESTS_BACKEND, TESTS_FRONTEND = "2 623", "1 082"
 
 
 # --------------------------------------------------------------------------- примитивы
