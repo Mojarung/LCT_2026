@@ -1034,10 +1034,21 @@
   font-size: var(--fs-small);
   color: rgb(255 255 255 / 70%);
 }
+/* Просмотр всегда тёмный: светлая подложка кнопок темы съедала белый текст («закрыть · Esc»,
+   «скачать», «оригинал»). Свои цвета, не токены темы. */
+.media-viewer .ghost,
 .media-viewer .ghost.small,
 .media-viewer .ghost.small.button {
+  background: rgb(255 255 255 / 12%);
   color: #fff;
-  border-color: rgb(255 255 255 / 45%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%);
+}
+.media-viewer .ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 22%);
+}
+.media-viewer .ghost:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 .viewer-stage {
   position: relative;
