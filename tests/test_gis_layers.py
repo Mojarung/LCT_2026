@@ -177,3 +177,70 @@ def test_gas_zone_from_a_layer_puts_plantings_inside_it_under_approval(tmp_path:
     }
     assert "R-GASAREA-TREE-001" in rules
     assert any("охранная_зона_газопровода" in note for note in report.load_notes)
+
+
+def test_cadastre_parcels_set_the_territory_by_permitted_use_not_by_address(
+    tmp_path: Path,
+) -> None:
+    """ТЗ, п. 1, «данные публичных кадастров»: участок НСПД по ВРИ задаёт тип территории.
+    Адрес («Парковая ул.», «бульвар») о назначении участка не говорит."""
+    parcels = [
+        ("Улично-дорожная сеть (12.0.1)", "г. Москва, Парковая ул.", ObjectClass.TERRITORY_STREET),
+        (
+            "Многоэтажная жилая застройка (высотная застройка)",
+            "Рождественский бульвар, 5",
+            ObjectClass.TERRITORY_YARD,
+        ),
+        ("Благоустройство территории", "Кустанайская ул.", ObjectClass.TERRITORY_SQUARE),
+        ("Отдых (рекреация)", "Лесная ул.", ObjectClass.TERRITORY_PARK),
+    ]
+    school = _feature(
+        box(100, 0, 120, 20),
+        vri="Дошкольное, начальное и среднее общее образование",
+        address="Сквер у школы",
+        area=5.0,
+    )
+    path = _write(
+        tmp_path / "кадастр_земельные_участки.geojson",
+        _collection(
+            *(
+                _feature(box(20 * i, 0, 20 * i + 15, 15), vri=vri, address=address)
+                for i, (vri, address, _) in enumerate(parcels)
+            ),
+            school,
+        ),
+    )
+
+    layers = YamlGisLayerSource(CONFIG).read([path])
+
+    assert [f.object_class for f in layers.features] == [cls for _, _, cls in parcels]
+    assert any("приняты к сведению" in note for note in layers.notes)
+
+
+def test_cadastre_restricted_zones_keep_gas_and_power_lines_as_constraints(
+    tmp_path: Path,
+) -> None:
+    path = _write(
+        tmp_path / "ЗОУИТ.geojson",
+        _collection(
+            _feature(box(0, 0, 10, 10), name="Охранная зона газопровода среднего давления"),
+            _feature(
+                box(20, 0, 30, 10), name="Охранная зона объектов электросетевого хозяйства ВЛ-10 кВ"
+            ),
+            _feature(box(40, 0, 50, 10), name="Охранная зона тепловых сетей"),
+        ),
+    )
+
+    layers = YamlGisLayerSource(CONFIG).read([path])
+
+    assert [f.object_class for f in layers.features] == [
+        ObjectClass.ZONE_GAS,
+        ObjectClass.ZONE_POWER,
+    ]
+    assert any("ЗОУИТ кроме газопровода и ЛЭП" in note for note in layers.notes)
+
+
+def test_cadastre_capital_construction_objects_are_buildings(tmp_path: Path) -> None:
+    path = _write(tmp_path / "nspd_oks.geojson", _collection(_feature(box(0, 0, 10, 10))))
+    (feature,) = YamlGisLayerSource(CONFIG).read([path]).features
+    assert feature.object_class is ObjectClass.BUILDING
