@@ -220,7 +220,7 @@ def _species_row(book: RuleBook, rule: object, subject: str) -> str:
 # Итоги tools/street_runs.py: пакет в образе Docker и нативные прогоны тех улиц, которым не
 # хватило памяти VM Docker. Строка более позднего источника заменяет неудачную строку раньшего.
 # Источники итогов улиц; позже в списке - приоритетнее (перепрогон перекрывает старый итог).
-LATEST = ROOT / "out" / "docker-final-0929"
+LATEST = ROOT / "out" / "street-runs-1020"
 SOURCES = (
     (ROOT / "out" / "docker-batch", ROOT / "out" / "docker-batch" / "runs", "Docker, Linux"),
     (ROOT / "out" / "street-runs-native", ROOT / "out" / "street-runs" / "runs", "Windows"),
@@ -236,8 +236,11 @@ SOURCES = (
     (ROOT / "out" / "docker-final-b", ROOT / "out" / "docker-final-b" / "runs", "Docker, Linux"),
     # Третья очередь для последней улицы, когда первая освободилась.
     (ROOT / "out" / "docker-final-c", ROOT / "out" / "docker-final-c" / "runs", "Docker, Linux"),
-    # Все 19 улиц кодом main 29.09.2026 (шаг деревьев по кронам): перекрывает всё прежнее.
-    (LATEST, LATEST / "runs", "Docker, Linux"),
+    # Все 19 улиц кодом main 29.09.2026 (шаг деревьев по кронам).
+    (ROOT / "out" / "docker-final-0929", ROOT / "out" / "docker-final-0929" / "runs", "Docker, Linux"),
+    # Все 20 улиц кодом main 20.10.2026 (Фрунзенская из PDF, грани карты покрытий с перемычками,
+    # чужие чертежи): перекрывает всё прежнее.
+    (LATEST, LATEST / "runs", "Windows"),
 )
 
 
@@ -784,6 +787,16 @@ def _pair(effect: dict, key: str) -> str:
     return f"{text(before)} → {text(after)}"
 
 
+def _lawn_new(runs: list[dict[str, object]]) -> float:
+    area = 0.0
+    for r in runs:
+        plan = Path(str(r["output"])) / "plan.json"
+        if r["state"] == "succeeded" and plan.is_file():
+            summary = json.loads(plan.read_text(encoding="utf-8")).get("summary") or {}
+            area += float(summary.get("lawn_new_m2") or 0.0)
+    return area
+
+
 def effect_facts(runs: list[dict[str, object]]) -> dict[str, str]:
     """Итог «было - стало» и виды посадок по всем улицам с посчитанным балансом."""
     effects = [
@@ -855,7 +868,9 @@ def effect_facts(runs: list[dict[str, object]]) -> dict[str, str]:
             f"{number(total('noise_curb_m', 'after') / 1000, 1)} км бортов"
         ),
         "effect_lawn_kept": thousands(round(total("lawn_m2", "before"))),
-        "effect_lawn_new": thousands(round(total("lawn_m2", "after") - total("lawn_m2", "before"))),
+        # Устраиваемый газон - из сводки плана (lawn_new_m2): разность «стало - было» по газону
+        # включает ямы посадок и бывает отрицательной (прогон 20.10.2026).
+        "effect_lawn_new": thousands(round(_lawn_new(runs))),
         "effect_trees_text": (
             f"Число существующих деревьев по чертежу определяется на {len(known)} улицах из "
             f"{len(effects)}"
@@ -1005,6 +1020,16 @@ ARTIFACTS: list[tuple[str, str, str]] = [
         "сцена 3D-вида: здания с этажностью, посадки с видом и размером кроны, границы, покрытия",
     ),
     (
+        "context.json",
+        "Визуализация",
+        "окружение участка для 3D-вида (дома, дороги и стоянки вокруг по карте): запрашивается один раз при первом открытии 3D, лежит рядом с `output/`",
+    ),
+    (
+        "name_hints.json",
+        "Классификация",
+        "подсказки локальной LLM о классе слоёв, понятых только по геометрии: только совет, план от них не зависит (есть, если подсказки спрашивали)",
+    ),
+    (
         "run_manifest.json",
         "Воспроизводимость",
         "исходный файл (имя, SHA-256, версия DXF), конвертер, профиль, все параметры, отпечатки свода правил и словаря слоёв, версии Python и библиотек, время этапов, сводка",
@@ -1037,6 +1062,7 @@ NOT_RUN_FILES = {
     "drawing.dxf",  # имя загрузки по умолчанию
     "repaired.dxf",  # промежуточный файл ремонта LibreDWG
     "index.html",  # бандл интерфейса
+    "index.json",  # оглавление плиток карты окружения (GREEN_OSM_TILES_DIR)
     "layer.geojson",  # имя слоя ГИС по умолчанию
     "status.json",
     # Задание фото по кадру 3D: каталог photos/<id>/, описан в ARTIFACTS_BESIDE.
@@ -1192,6 +1218,14 @@ PARAMS: list[tuple[str, list[tuple[str, str]]]] = [
                 "`true` - неопознанный объект останавливает прогон с перечнем",
             ),
             (
+                "require_reviewed_objects",
+                "`true` - очередь уточнения классов (запасные классы, слабые совпадения, предположения) должна быть пуста, иначе расчёт не продолжается; включён у профиля `review` и при пересчёте из экрана уточнений",
+            ),
+            (
+                "llm_hints",
+                "подсказки локальной LLM о классе слоёв, понятых только по геометрии, в `name_hints.json`; работают при `GREEN_LLM_URL`, план от них не зависит",
+            ),
+            (
                 "infer_unknown",
                 "`true` - незнакомый слой или знак получает класс по словам имени и геометрии; `false` - строгий режим",
             ),
@@ -1228,6 +1262,14 @@ PARAMS: list[tuple[str, list[tuple[str, str]]]] = [
             (
                 "osm_schools",
                 "школы и детские сады по OpenStreetMap: здание чертежа, совпавшее с контуром OSM, - 10 м от стены для деревьев, 1,5 м для кустарника (743-ПП, табл. 3.6.1)",
+            ),
+            (
+                "surface_target_stage",
+                "чьё покрытие читается в комплекте с существующим и проектным состоянием: `mixed` (по умолчанию, как раньше), `existing` или `proposed` - опыт сравнения стадий",
+            ),
+            (
+                "surface_source_stages",
+                "ручная стадия файлов комплекта: `file_sha8[:xref_hash8]` -> `existing` / `proposed` / `unknown`",
             ),
             (
                 "open_ground",
