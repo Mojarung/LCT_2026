@@ -68,5 +68,13 @@ export default defineConfig({
     // Исходники ez-tree импортируют файлы без расширений и картинки модулями: их обязан
     // собрать Vite, голый Node такой модуль не загрузит.
     server: { deps: { inline: [/ez-tree/] } },
+    // Покрытие по всем исходникам, а не только по загруженным тестами: файл без единого теста
+    // попадает в знаменатель (npm run test:coverage).
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/**/*.d.ts', 'src/main.tsx'],
+      reporter: ['text-summary', 'json-summary'],
+    },
   },
 });

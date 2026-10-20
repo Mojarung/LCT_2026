@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
+import { describe, expect, it, vi } from 'vitest';
 
 import { moonState, sceneTime } from './celestial';
-import { turned } from './sky';
+import { Atmosphere, sunColor, turned } from './sky';
 import { clearance, clusters, pointAt, route, spine, tourPose, tourRoute } from './tour';
 import type { Flat } from './types';
 
@@ -102,5 +103,105 @@ describe('поворот солнца', () => {
     expect(turned(sun, 20)).toEqual({ azimuth: 10, elevation: 30 });
     expect(turned(sun, -360)).toEqual({ azimuth: 350, elevation: 30 });
     expect(turned(sun, 0)).toBe(sun);
+  });
+});
+
+describe('цвет солнца', () => {
+  it('у горизонта тёплый, в полдень почти белый', () => {
+    const low = sunColor(0);
+    const high = sunColor(60);
+    expect(low.r).toBeCloseTo(1, 5);
+    expect(low.b).toBeCloseTo(0.36, 5);
+    expect(high.b).toBeCloseTo(0.92, 5);
+    expect(sunColor(20).b).toBeGreaterThan(low.b);
+    expect(sunColor(20).b).toBeLessThan(high.b);
+  });
+});
+
+describe('атмосфера сцены', () => {
+  /** Рендерер без WebGL: карта окружения подменяется пустой целью, экспозиция - число. */
+  function atmosphere() {
+    vi.spyOn(THREE.PMREMGenerator.prototype, 'fromScene').mockImplementation(
+      () => new THREE.WebGLRenderTarget(1, 1),
+    );
+    vi.spyOn(THREE.PMREMGenerator.prototype, 'dispose').mockImplementation(() => undefined);
+    const renderer = { toneMappingExposure: 1 } as unknown as THREE.WebGLRenderer;
+    const scene = new THREE.Scene();
+    return { atmosphere: new Atmosphere(renderer, scene), renderer, scene };
+  }
+
+  it('кладёт в сцену небо, солнце с тенью, рассеянный свет и дымку', () => {
+    const { atmosphere: a, scene } = atmosphere();
+    expect(scene.children).toContain(a.sky);
+    expect(scene.children).toContain(a.sun);
+    expect(scene.children).toContain(a.hemi);
+    expect(scene.fog).toBe(a.fog);
+    expect(a.sun.castShadow).toBe(true);
+    expect(a.sky.scale.x).toBe(4500);
+    expect(a.sky.material.uniforms.turbidity?.value).toBe(4.5);
+  });
+
+  it('летний полдень: солнце высоко, светло, ночи нет, карта окружения в сцене', () => {
+    const { atmosphere: a, renderer, scene } = atmosphere();
+    a.apply({ season: 'summer', hour: 13, clouds: 0, shadowSize: 2048, shadowExtent: 80 });
+    expect(a.state.elevation).toBeGreaterThan(40);
+    expect(a.state.night).toBe(0);
+    expect(a.state.direction.y).toBeGreaterThan(0.6);
+    expect(a.sun.intensity).toBeGreaterThan(4);
+    expect(a.sun.shadow.mapSize.x).toBe(2048);
+    expect(a.sun.shadow.camera.left).toBe(-80);
+    expect(a.hemi.color.getHex()).toBe(0xc8dcff);
+    expect(renderer.toneMappingExposure).toBeCloseTo(0.64, 2);
+    expect(scene.environment).not.toBeNull();
+    expect(a.sky.material.uniforms.showSunDisc?.value).toBe(1);
+  });
+
+  it('зимняя полночь: светит луна или небо, свет голубой и слабый, дымка тёмная', () => {
+    const { atmosphere: a, renderer } = atmosphere();
+    a.apply({ season: 'winter', hour: 0 });
+    expect(a.state.elevation).toBeLessThan(-20);
+    expect(a.state.night).toBe(1);
+    expect(a.state.color.getHex()).toBe(0x9fb2d6);
+    expect(a.state.intensity).toBeLessThan(0.4);
+    expect(a.hemi.color.getHex()).toBe(0x6f7fa8);
+    expect(a.fog.color.b).toBeLessThan(0.2);
+    expect(renderer.toneMappingExposure).toBeCloseTo(0.42, 5);
+  });
+
+  it('облака гасят солнце и сгущают дымку, осадки добавляют плотность', () => {
+    const { atmosphere: a } = atmosphere();
+    a.apply({ hour: 13, clouds: 0, fog: 0 });
+    const clear = { sun: a.sun.intensity, fog: a.fog.density };
+    a.apply({ clouds: 1, fog: 0.002 });
+    expect(a.sun.intensity).toBeLessThan(clear.sun);
+    expect(a.fog.density).toBeCloseTo(clear.fog + 0.0005 + 0.002, 6);
+    expect(a.sun.shadow.radius).toBeCloseTo(4, 5);
+  });
+
+  it('поворот на 180 градусов разворачивает солнце, высота та же', () => {
+    const { atmosphere: a } = atmosphere();
+    a.apply({ hour: 10, turn: 0 });
+    const before = a.state.direction.clone();
+    a.apply({ turn: 180 });
+    expect(a.state.direction.y).toBeCloseTo(before.y, 5);
+    expect(a.state.direction.x).toBeCloseTo(-before.x, 5);
+    expect(a.state.direction.z).toBeCloseTo(-before.z, 5);
+  });
+
+  it('тень идёт за фокусом шагами в пиксель, небо - за камерой', () => {
+    const { atmosphere: a } = atmosphere();
+    a.apply({ hour: 12, shadowSize: 100, shadowExtent: 50 });
+    a.follow(new THREE.Vector3(10.3, 0, -4.2), 5);
+    const target = a.sun.target.position;
+    const offset = a.sun.position.clone().sub(target);
+    expect(offset.length()).toBeCloseTo(600, 3);
+    expect(offset.normalize().dot(a.state.direction)).toBeCloseTo(1, 5);
+    expect(target.distanceTo(new THREE.Vector3(10.3, 0, -4.2))).toBeLessThan(1);
+    expect(a.sky.material.uniforms.time?.value).toBe(5);
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(100, 20, -30);
+    a.center(camera);
+    expect(a.sky.position.toArray()).toEqual([100, 20, -30]);
+    a.dispose();
   });
 });
