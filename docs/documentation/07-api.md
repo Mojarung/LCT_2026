@@ -23,6 +23,12 @@ Swagger UI («Try it out») без чтения кода: у полей форм
 | GET | `/api/v1/runs/{run_id}/draft` | текущий черновик плана после правок и признак «не пересобран» |
 | POST | `/api/v1/runs/{run_id}/edits` | правки: `move`, `delete`, `add`; посадки, которые правка перевела в отказ, - в `rejected_by_edit` с причиной |
 | POST | `/api/v1/runs/{run_id}/rebuild` | пересборка DXF и артефактов по черновику |
+| POST | `/api/v1/runs/{run_id}/review` | применить уточнения классов объектов новым прогоном; исходный прогон сохраняется |
+| GET | `/api/v1/runs/{run_id}/context` | город вокруг участка для 3D-вида: дома, деревья и дороги OpenStreetMap в кольце 450 м |
+| GET, POST | `/api/v1/runs/{run_id}/photos` | фото прогона и доступность генерации; поставить кадр 3D-вида в очередь модели (202 и `Location`) |
+| GET | `/api/v1/runs/{run_id}/photos/prompt` | промпт, который сервис соберёт для фото с этими параметрами |
+| GET, DELETE | `/api/v1/runs/{run_id}/photos/{photo_id}` | статус фото; удалить фото вместе с кадром (фото в очереди или в работе - 409) |
+| GET | `/api/v1/runs/{run_id}/photos/{photo_id}/{kind}` | файл фото: кадр 3D-вида (`source`), выход модели (`raw`), увеличенное фото (`photo`) |
 
 ### 7.2. Пример
 

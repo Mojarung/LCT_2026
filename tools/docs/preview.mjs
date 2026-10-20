@@ -3,9 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 const [input, outdir, list] = process.argv.slice(2);
 const pages = list.split(',').map(Number);
-const app = await chromium.launch({ args: ['--allow-file-access-from-files'] });
+const args = ['--allow-file-access-from-files'];
+const app = await chromium.launch({ args }).catch(() => chromium.launch({ channel: 'chrome', args }));
 const page = await app.newPage({ viewport: { width: 1240, height: 1754 } });
-const pdfjs = new URL('./node_modules/pdfjs-dist/legacy/build/pdf.mjs', 'file:///C:/proga/active/LCT_2026/tools/docs/').href;
+const pdfjs = new URL('./node_modules/pdfjs-dist/legacy/build/pdf.mjs', import.meta.url).href;
 const data = (await readFile(input)).toString('base64');
 await page.goto(new URL('./preview.html', import.meta.url).href);
 for (const n of pages) {
