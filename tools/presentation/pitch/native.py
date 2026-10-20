@@ -7,8 +7,9 @@
 04 техника, 05 уникальность, 06 развитие. Картинками идут только снимки сервиса; их обрезка
 задана свойствами кадра PowerPoint, и её можно поменять в самом PowerPoint.
 
-Числа: facts.json и приложение B документации (прогоны 28-29.09.2026), нормоконтроль Берзарина -
-docs/notes/24-audit.md, ответы заказчика - docs/notes/15-organizers-qa.md.
+Числа: facts.json и приложение B документации (прогон 20 улиц пилота), правила, акты и виды -
+заново из config/, нормоконтроль Берзарина - docs/notes/24-audit.md, ответы заказчика -
+docs/notes/15-organizers-qa.md.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml import parse_xml
 from pptx.oxml.ns import nsdecls, qn
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Inches, Pt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -82,7 +83,40 @@ SECTIONS = (
 
 
 def facts() -> dict[str, str]:
-    return json.loads((GENERATED / "facts.json").read_text(encoding="utf-8"))
+    """facts.json прогонов пилота; число правил, актов и видов - заново из config/.
+
+    Свод норм меняется чаще, чем пересобирается документация: слайд не должен отставать
+    от config/rules.yaml.
+    """
+    found = json.loads((GENERATED / "facts.json").read_text(encoding="utf-8"))
+    return {**found, **config_counts()}
+
+
+def config_counts() -> dict[str, str]:
+    """Правила, акты и виды по config/ - так же, как их считает tools/docs/annexes.py."""
+    # пакет проекта нужен только здесь
+    from green.domain.norms import CitationStatus  # noqa: PLC0415
+    from green.infrastructure.config.repositories import (  # noqa: PLC0415
+        YamlRuleBookSource,
+        YamlSpeciesCatalog,
+    )
+
+    config = ROOT / "config"
+    book = YamlRuleBookSource(config / "acts.yaml", config / "rules.yaml").load()
+    rules = book.all_rules
+    species = YamlSpeciesCatalog(config / "species.yaml").all()
+    by_text = sum(
+        1
+        for r in rules
+        if r.citation.act_id != "PROJECT" and r.citation.status is CitationStatus.VERIFIED
+    )
+    return {
+        "rules_total": str(len(rules)),
+        "rules_distance": str(len(book.distance_rules)),
+        "rules_by_text": str(by_text),
+        "acts": str(sum(1 for act_id in book.acts if act_id != "PROJECT")),
+        "species": str(len(species)),
+    }
 
 
 def table_rows(markdown: str) -> list[list[str]]:
@@ -110,6 +144,7 @@ SHORT_NAMES = {
     "Лодочная улица": "Лодочная",
     "Измайловская площадь": "Измайловская пл.",
     "Старый Гай ул.": "Старый Гай",
+    "Фрунзенская набережная": "Фрунзенская наб.",
     "Наташинский пр-д": "Наташинский пр-д",
     "Харьковский проезд": "Харьковский пр-д",
     "Куликовская улица": "Куликовская",
@@ -151,7 +186,8 @@ AUDIT = (
     ("прочие нормы", 130),
 )
 AUDIT_BAD, AUDIT_ALL = 391, 554
-DEMO_PLACEMENTS, DEMO_SECONDS = 1278, 66  # фрагмент Берзарина, прогон 01a0ea97 29.09.2026
+# тесты на 20.10.2026: uv run pytest --collect-only, npx vitest run в frontend/
+TESTS_BACKEND, TESTS_FRONTEND = "2 623", "574"
 
 
 # --------------------------------------------------------------------------- примитивы
@@ -319,6 +355,15 @@ class Crop:
     pos: tuple[float, float] = (0.5, 0.5)
     scale: float = 1.0
     origin: tuple[float, float] = (0.5, 0.5)
+
+
+# снимки 3D-вида и фото ИИ (shots.mjs): кадр как есть
+SCENE_CROP = Crop(scale=1.12)  # без шапки сайта и кнопки «Панели»
+# фото ИИ: JPEG после апскейла до 4K или PNG без апскейлера - что скачал shots.mjs
+PHOTO = next((n for n in ("photo-ai.jpg", "photo-ai.png") if (SHOTS / n).exists()), "photo-ai.jpg")
+PHOTO_CROP = Crop()
+REVIEW_CROP = Crop((0.5, 0.0))  # страница по центру окна, поля по краям срезаны
+WORK_CROP = Crop((0.5, 0.5))
 
 
 def picture(
@@ -521,7 +566,7 @@ def hbar_chart(
 
 def s_problem(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 1, "Под газоном идут кабели и трубы")
-    picture(s, "utilities.png", (LEFT, 2.1, 6.95, 4.45), Crop((0.5, 0.0), 1.65, (0.52, 0.18)))
+    picture(s, "utilities.png", (LEFT, 2.1, 6.95, 4.45), Crop((0.5, 0.5), 1.35, (0.5, 0.45)))
     x, w = 8.0, 4.67
     text(
         s,
@@ -548,7 +593,7 @@ def s_problem(prs: Deck, f: dict[str, str]) -> None:
         line=1.25,
     )
     for i, (value, label) in enumerate(
-        (("59 562", "места-кандидата вдоль бортов Кустанайской"), ("3 571", "проходят все нормы"))
+        (("14 316", "мест-кандидатов вдоль бортов Кустанайской"), ("1 639", "проходят все нормы"))
     ):
         y = 4.85 + i * 0.85
         text(s, (x, y, 2.0, 0.6), [para(value, Style(X_BOLD, 26, PINK))])
@@ -561,7 +606,8 @@ def s_problem(prs: Deck, f: dict[str, str]) -> None:
     notes(
         s,
         "Задача: посадить деревья и кусты по нормам отступов от сетей, зданий и бортов. "
-        f"На Кустанайской из 59 562 кандидатов нормы проходят 3 571. Всего в своде {f['rules_distance']} норм расстояний.",
+        f"На Кустанайской (прогон 20.10.2026) из 14 316 мест вдоль бортов нормы проходят 1 639. "
+        f"Всего в своде {f['rules_distance']} норм расстояний.",
     )
 
 
@@ -571,15 +617,15 @@ def s_solution(prs: Deck, f: dict[str, str]) -> None:
     frames = (
         (
             "flow-before.png",
-            Crop((0.4, 0.3), 1.5, (0.4, 0.3)),
+            Crop((0.3, 0.5), 2.0, (0.25, 0.3)),
             "DXF улицы",
-            "подоснова Мосгеотреста и сети; слои ГИС, перечётная ведомость",
+            "подоснова Мосгеотреста и сети; по желанию слои ГИС, кадастр, перечётная ведомость",
         ),
         (
             "flow-after.png",
-            Crop((0.4, 0.3), 1.5, (0.4, 0.3)),
+            Crop((0.3, 0.5), 2.0, (0.25, 0.3)),
             "План посадок",
-            "слои GREEN_*: деревья, кусты, газоны, отказы, зоны допустимости",
+            "слои GREEN_*: деревья, кусты, газоны, цветники, отказы, зоны допустимости",
         ),
         (
             "explain-card.png",
@@ -602,8 +648,9 @@ def s_solution(prs: Deck, f: dict[str, str]) -> None:
             arrow(s, (x + w + 0.15, 2.1 + h / 2), (x + w + gap - 0.15, 2.1 + h / 2), ROSE)
     foot(
         s,
-        f"Исходные слои чертежа не меняются: на 19 улицах сверено {f['entities']} объектов, "
-        f"изменено {f['entities_changed']}. У каждой посадки в DXF атрибуты вида и нормы.",
+        f"Исходные слои чертежа не меняются: на {f['streets_run']} улицах сверено "
+        f"{f['entities']} объектов, изменено {f['entities_changed']}. У каждой посадки в DXF "
+        "атрибуты вида и нормы.",
         dark=True,
     )
     notes(
@@ -614,18 +661,30 @@ def s_solution(prs: Deck, f: dict[str, str]) -> None:
 def s_steps(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 1, "Семь шагов от DXF до DXF")
     steps = (
-        ("Чтение без потерь", "каждый примитив учтён, чертёж сверяется с исходником"),
-        ("Классы слоёв и знаков", "сети, борта, здания, деревья; 179 знаков съёмки; слои ГИС"),
-        ("Карта покрытий", "газон, тротуар и проезд: где под ямой грунт"),
-        ("Места посадки", "аллея вдоль борта, группы на газоне, ряды и изгороди кустарника"),
-        ("Вид под место", f"{f['species']} видов, подбор задачей MILP по условиям места и квотам"),
+        (
+            "Чтение без потерь",
+            "DXF, DWG через ODA; каждый примитив учтён, пунктир съёмки собран в линии",
+        ),
+        (
+            "Классы слоёв и знаков",
+            "сети, борта, здания, деревья; незнакомый слой - по словам имени и геометрии",
+        ),
+        ("Карта покрытий", "газон, тротуар и проезд: где под ямой грунт, в том числе по подписям"),
+        (
+            "Места посадки",
+            "аллея вдоль борта, группы деревьев с газоном между ними, ряды кустарника, цветники",
+        ),
+        (
+            "Вид под место",
+            f"{f['species']} видов, MILP по условиям места и квотам; светолюбивые - не в тени домов",
+        ),
         (
             "Независимая проверка",
             f"{f['rules_total']} правил заново по готовому плану, нарушений {f['violations']}",
         ),
         (
             "Запись и объяснения",
-            "слои GREEN_*, блоки видов, ведомость, CSV и отчёт с пунктами актов",
+            "слои GREEN_*, ведомость, отчёт с пунктами актов, записка DOCX",
         ),
     )
     gap = 0.16
@@ -654,8 +713,8 @@ def s_steps(prs: Deck, f: dict[str, str]) -> None:
                 ("Алгоритм, а не обучение. ", Style(SEMI, 12.5, PINK)),
                 (
                     "Норма - порог расстояния, а принятые планы нарушают её в 391 посадке из 554: "
-                    "учиться на них нельзя. Места и виды выбирает задача MILP (HiGHS), каждое "
-                    "решение проверяемо.",
+                    "учиться на них нельзя. Места и виды выбирает задача MILP (HiGHS). Локальная "
+                    "языковая модель только подсказывает класс незнакомого слоя, план она не меняет.",
                     Style(MEDIUM, 12.5, BODY),
                 ),
             ]
@@ -671,7 +730,7 @@ def s_steps(prs: Deck, f: dict[str, str]) -> None:
 
 def s_explain(prs: Deck, f: dict[str, str]) -> None:
     s = new_slide(prs, 1, "У каждой посадки есть пункт нормы")
-    picture(s, "explain-map.png", (LEFT, 1.95, 4.85, 4.7), Crop((0.3, 0.45), 1.35, (0.3, 0.45)))
+    picture(s, "explain-map.png", (LEFT, 1.95, 4.85, 4.7), Crop((0.3, 0.5), 1.3, (0.5, 0.5)))
     picture(s, "explain-card.png", (5.75, 1.95, 3.25, 4.7), Crop((0.5, 0.0)))
     x, w = 9.35, 3.32
     text(
@@ -679,7 +738,7 @@ def s_explain(prs: Deck, f: dict[str, str]) -> None:
         (x, 2.0, w, 1.6),
         [
             para(
-                "Выноска на карте показывает замер: «теплосеть 13,23 ≥ 4,00». В карточке - "
+                "Выноска на карте показывает замер: «теплосеть 3,47 ≥ 2,50». В карточке - "
                 "правило, акт, пункт и дословная цитата.",
                 Style(SEMI, 14, INK),
             )
@@ -691,8 +750,8 @@ def s_explain(prs: Deck, f: dict[str, str]) -> None:
         (x, 3.75, w, 3.0),
         [
             para(
-                "Отказ объясняется так же: «до газопровода 0,44 м < 1,50 м (R-GAS-TREE-001: "
-                "СП 42.13330.2016, п. 9.6, табл. 9.1)».",
+                "Отказ объясняется так же: «до силового кабеля 0,51 м < 2,00 м». "
+                "Правило R-POWER-TREE-001, основание - СП 42.13330.2016, п. 9.6, табл. 9.1.",
                 Style(MEDIUM, 12, BODY),
             ),
             para(
@@ -728,9 +787,9 @@ def s_users(prs: Deck, f: dict[str, str]) -> None:
         ),
         (
             "Участник согласования",
-            "Сверяет объёмы озеленения и баланс «было - стало»: ведомость посадочного "
-            "материала собрана из того же плана, что и DXF.",
-            "ведомость и отчёт прогона",
+            "Сверяет объёмы озеленения и баланс «было - стало»: ведомость и пояснительная "
+            "записка собраны из того же плана, что и DXF.",
+            "ведомость Excel и записка DOCX",
         ),
     )
     gap = 0.3
@@ -849,31 +908,28 @@ def s_audit(prs: Deck, f: dict[str, str]) -> None:
 
 def s_visual(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
     s = new_slide(prs, 2, "Улицу видно до начала работ", bg="dark")
-    picture(
-        s,
-        "scene-kust-1.jpg",
-        (LEFT, 1.95, 7.3, 4.1),
-        Crop((0.5, 0.5), 1.14, (0.4, 0.62)),
-        dark=True,
-    )
+    picture(s, "scene3d.png", (LEFT, 1.95, 7.3, 4.1), SCENE_CROP, dark=True)
     tag(s, LEFT + 0.2, 1.95 + 4.1 - 0.5, "3D-вид по координатам плана")
     x, w = 8.25, RIGHT - 8.25
-    picture(s, "street-photo-1.jpg", (x, 1.95, w, 1.95), dark=True)
-    tag(s, x + 0.15, 1.95 + 1.95 - 0.45, "фото по кадру 3D-вида")
-    picture(s, "modern-after.jpg", (x, 4.1, w, 1.95), dark=True)
-    tag(s, x + 0.15, 4.1 + 1.95 - 0.45, "режим «новые фасады»")
+    picture(s, PHOTO, (x, 1.95, w, 1.95), PHOTO_CROP, dark=True)
+    tag(s, x + 0.15, 1.95 + 1.95 - 0.45, "фото ИИ по этому кадру")
+    picture(s, "scene-night.png", (x, 4.1, w, 1.95), SCENE_CROP, dark=True)
+    tag(s, x + 0.15, 4.1 + 1.95 - 0.45, "тот же кадр в 20:30, лето")
     foot(
         s,
-        "Здания по этажности из подписей чертежа, кроны по виду и возрасту, солнце по часу над "
-        "Москвой. Фото - Qwen-Image-2.1 на локальной видеокарте 6 ГБ, около 80 с на кадр: "
-        "жителям и согласующим показываем улицу с посадками на своих местах.",
+        "Покрытия, борта, ограды и площадки - по линиям чертежа, этажность домов - по подписям, "
+        "кроны - по виду и возрасту, солнце - по часу над Москвой. Фото по кадру рисует "
+        "Qwen-Image-2.1-Turbo на своей видеокарте, без внешних сервисов.",
         dark=True,
         y=6.25,
     )
     notes(
         s,
-        "Бонус ТЗ: 3D-вид и фото из того же плана. Посадки, ограды и люди стоят там же, где в DXF. "
-        "Режим «новые фасады» меняет только материалы домов.",
+        "Бонус ТЗ: 3D-вид и фото из того же плана. Посадки стоят там же, где в DXF; по тротуарам "
+        "ходят люди, на площадках дети. Время суток и сезон меняются на пульте, ночью горят "
+        "фонари. Фото по кадру: режим «по плану» не дорисовывает деревья, которых нет в плане. "
+        "Время: на RTX 5070 кадр 1536 x 864 - 85 с, через API с апскейлом до 4K - 94 с "
+        "(docs/notes/40); фото на слайде - 1536 x 864 без апскейла.",
     )
 
 
@@ -886,7 +942,8 @@ def s_city(prs: Deck, f: dict[str, str]) -> None:
         (
             f"{f['minutes_median']} мин",
             "на генерацию плана улицы",
-            f"Медиана по 19 улицам пилота, от {f['minutes_min']} до {f['minutes_max']} мин.",
+            f"Медиана по {f['streets_done']} улицам пилота, от {f['minutes_min']} "
+            f"до {f['minutes_max']} мин.",
             "Ориентир заказчика - до 60 мин.",
         ),
         (
@@ -894,7 +951,7 @@ def s_city(prs: Deck, f: dict[str, str]) -> None:
             "оцифрованных правил",
             f"{f['acts']} актов, в том числе 743-ПП и СП 42.13330; у {f['rules_by_text']} "
             "основание сверено по тексту.",
-            f"{f['violations']} нарушений в планах 19 улиц.",
+            f"{f['violations']} нарушений в планах {f['streets_done']} улиц.",
         ),
         (
             "2,7 мин",
@@ -934,8 +991,8 @@ def s_city(prs: Deck, f: dict[str, str]) -> None:
         ),
         (
             "Безопасность данных (on-premise)",
-            "Работа в закрытом контуре заказчика: геоданные не передаются на внешние серверы, "
-            "расчёту не нужны сеть и GPU.",
+            "Работа в закрытом контуре заказчика: геоданные не уходят на внешние серверы. "
+            "Расчёту не нужны сеть и GPU, фото и подсказки модели - на своей видеокарте.",
         ),
         (
             "Проверяемость решений",
@@ -951,15 +1008,15 @@ def s_city(prs: Deck, f: dict[str, str]) -> None:
         text(s, (x, py + 1.02, cw, 0.95), [para(body, Style(MEDIUM, 10.5, MIST))], line=1.2)
     notes(
         s,
-        "Эффект для города: улица за минуты вместо ручного разбора сетей, 95 правил вместо "
-        "ручной сверки, нормоконтроль подрядчика за 2,7 минуты. Внизу - три свойства, "
+        f"Эффект для города: улица за минуты вместо ручного разбора сетей, {f['rules_total']} "
+        "правил вместо ручной сверки, нормоконтроль подрядчика за 2,7 минуты. Внизу - три свойства, "
         "которые важны заказчику: нормы меняются без кода, данные не уходят из контура, "
         "каждое решение проверяемо по пункту акта.",
     )
 
 
 def s_effect(prs: Deck, f: dict[str, str]) -> None:
-    s = new_slide(prs, 3, "Тень и защита от пыли на 19 улицах", bg="dark")
+    s = new_slide(prs, 3, f"Тень и защита от пыли на {f['effect_streets']} улицах", bg="dark")
     top = sorted(street_curbs(), key=lambda r: r[2] - r[1], reverse=True)[:7]
     text(
         s,
@@ -985,7 +1042,10 @@ def s_effect(prs: Deck, f: dict[str, str]) -> None:
         legend=False,
     )
     stats = (
-        (f"{f['trees']} и {f['shrubs']}", "деревьев и кустов в планах 19 улиц пилота"),
+        (
+            f"{f['trees']} и {f['shrubs']}",
+            f"деревьев и кустов в планах {f['streets_done']} улиц пилота",
+        ),
         (
             f["effect_curb"].replace(" длины бортов", ""),
             f"длины бортов под кронами и кустарником, прирост {f['effect_curb_m']}",
@@ -1034,7 +1094,7 @@ def s_deploy(prs: Deck, f: dict[str, str]) -> None:
         (
             ("CLI", "green run, audit, verify"),
             ("HTTP API", "OpenAPI 3.1, Swagger без сети"),
-            ("Веб-интерфейс", "React, правка плана, 3D"),
+            ("Веб-интерфейс", "React: план, правка, 3D и фото"),
         )
     ):
         node(s, (LEFT, y0 + i * (h + gap), 2.8, h), head, sub)
@@ -1067,9 +1127,10 @@ def s_deploy(prs: Deck, f: dict[str, str]) -> None:
         (LEFT, 5.95, 6.65, 0.9),
         [
             para(
-                f"Образ на Ubuntu 26.04: по ТЗ МосТех.ОС близка к Ubuntu. {f['params']} параметров, "
-                "5 профилей; 2 077 тестов бэкенда и 312 фронтенда. Манифесты Kubernetes "
-                "проверены kubeconform.",
+                "Образ на Ubuntu 26.04: по ТЗ МосТех.ОС близка к Ubuntu; ODA File Converter - "
+                f"аргументом сборки. {f['params']} параметров, 5 профилей; {TESTS_BACKEND} теста "
+                f"бэкенда и {TESTS_FRONTEND} фронтенда. Ollama для подсказок - профиль llm в "
+                "compose. Манифесты Kubernetes проверены kubeconform.",
                 Style(MEDIUM, 11.5, MIST),
             )
         ],
@@ -1080,7 +1141,7 @@ def s_deploy(prs: Deck, f: dict[str, str]) -> None:
 
 
 def s_speed(prs: Deck, f: dict[str, str]) -> None:
-    s = new_slide(prs, 4, "19 улиц пилота без ручных правок")
+    s = new_slide(prs, 4, f"{f['streets_done']} улиц пилота без ручных правок")
     rows = sorted(street_minutes(f), key=lambda r: r[1])
     text(
         s,
@@ -1135,7 +1196,10 @@ def s_speed(prs: Deck, f: dict[str, str]) -> None:
     body_pr.set("vert", "horz")
     x, w = 9.75, RIGHT - 9.75
     stats = (
-        (f"{DEMO_SECONDS} с", f"демо-фрагмент Берзарина: {DEMO_PLACEMENTS} посадок, полный цикл"),
+        (
+            f"{f['streets_done']} из {len(rows)}",
+            "улиц каталога с планом; Фрунзенская собрана из PDF-генплана, DWG у неё нет",
+        ),
         (f["violations"], "нарушений норм в выданных планах по независимой проверке"),
         (
             f"{f['entities_changed']} из {f['entities']}",
@@ -1148,30 +1212,90 @@ def s_speed(prs: Deck, f: dict[str, str]) -> None:
         text(s, (x, y + 0.6, w, 0.9), [para(label, Style(MEDIUM, 11, BODY))], line=1.2)
     notes(
         s,
-        "Время по всем улицам пилота в Docker на Linux. Каждая улица - один прогон без ручных правок.",
+        "Время по всем улицам пилота, строгий профиль. Каждая улица - один прогон без ручных "
+        "правок. Фрунзенская набережная в материалах пилота есть только листами PDF: "
+        "tools/pdf_to_dxf.py собрал из пяти листов чертёж в метрах.",
     )
 
 
-def s_edit(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
-    s = new_slide(prs, 4, "План можно поправить в браузере")
-    picture(s, "edit.png", (LEFT, 1.95, 8.2, 4.85), Crop((0.5, 0.3), 1.9, (0.47, 0.42)))
-    x, w = 9.25, RIGHT - 9.25
+def s_inputs(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
+    s = new_slide(prs, 4, "Чужой чертёж и данные города")
+    picture(s, "review.png", (LEFT, 1.95, 6.3, 4.85), REVIEW_CROP)
+    text(
+        s,
+        (LEFT, 6.88, 6.3, 0.3),
+        [
+            para(
+                "Уточнение объектов чертежа: класс каждого слоя и основание",
+                Style(MEDIUM, 10, MUTE),
+            )
+        ],
+    )
+    x, w = 7.35, RIGHT - 7.35
     items = (
-        "Тянем посадку мышью или клавишами.",
-        "Сервис на лету проверяет новое место теми же нормами: красная выноска - до соседа или "
-        "сети меньше нормы.",
-        "Кнопка пересборки переписывает DXF и объяснения.",
+        (
+            "Чертёж жюри",
+            "236287.dxf проходит без ручных правок: слова слоёв паспорта ОГХ, единицы без "
+            "заголовка, пунктир MicroStation собирается в линии.",
+        ),
+        (
+            "Незнакомый слой",
+            "Класс - по словам имени и по геометрии. Локальная модель в Ollama (gemma4) "
+            "подсказывает в таблице уточнения, решает человек.",
+        ),
+        (
+            "Слои ГИС",
+            "GeoJSON и SHP. Охранные и природные территории задают тип территории по 369-ПП, "
+            "охранные зоны газа и ЛЭП из кадастра стесняют посадку.",
+        ),
+        (
+            "Кадастр",
+            "Участок задаёт назначение места. Яма на частном участке - на согласование с "
+            "правообладателем, на участке дома - с собранием собственников.",
+        ),
     )
-    y = 2.05
-    for i, item in enumerate(items):
-        circle_number(s, x, y, 0.42, str(i + 1), size=13)
-        box = text(
-            s, (x + 0.6, y + 0.02, w - 0.6, 1.4), [para(item, Style(MEDIUM, 13, INK))], line=1.25
+    y = 1.95
+    for head, body in items:
+        text(
+            s,
+            (x, y, w, 1.15),
+            [para(head, Style(X_BOLD, 13, NIGHT)), para(body, Style(MEDIUM, 11.5, BODY))],
+            line=1.2,
+            after=3,
         )
-        lines = 1 + len(item) // 34
-        y += max(0.75, lines * 0.3 + 0.45)
-        del box
-    notes(s, "Правка по ТЗ желательна: перенос, удаление, проверка точки на лету, пересборка DXF.")
+        y += 1.2
+    notes(
+        s,
+        "Устойчивость к входу: чертёж жюри 236287 считается без JSON-переопределений; "
+        "Фрунзенская собрана из PDF. Подсказки LLM - совет в таблице уточнения, класс и план они "
+        "не меняют. Кадастр: ГрК РФ ст. 1 п. 12, ЖК РФ ст. 44 - правила R-PARCEL-* и R-MKD-*.",
+    )
+
+
+def s_workspace(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - общая подпись слайдов
+    s = new_slide(prs, 4, "Рабочее место в браузере")
+    top, h = 1.95, 3.3
+    w_home = h * 16 / 9
+    picture(s, "console.png", (LEFT, top, w_home, h), Crop())
+    picture(s, "workspace.png", (LEFT + w_home + 0.3, top, WIDTH - w_home - 0.3, h), WORK_CROP)
+    items = (
+        "Главная: улица пилота или свой DXF/DWG и реестр прогонов на одном экране.",
+        "Клик по кроне - замеры до сетей и пункт нормы в правой панели. Вкладки «Посадки», "
+        "«Эффект», «Легенда».",
+        "«Править»: перенос проверяется теми же нормами на лету, пересборка переписывает DXF.",
+        "Отчёты, ведомость Excel и записка DOCX открываются окном поверх плана.",
+    )
+    gap = 0.3
+    w = (WIDTH - 3 * gap) / 4
+    for i, item in enumerate(items):
+        x = LEFT + i * (w + gap)
+        circle_number(s, x, 5.5, 0.42, str(i + 1), size=13)
+        text(s, (x + 0.55, 5.5, w - 0.55, 1.3), [para(item, Style(MEDIUM, 11.5, INK))], line=1.2)
+    notes(
+        s,
+        "Интерфейс второстепенен по ТЗ, но правка желательна: перенос, удаление, проверка точки "
+        "на лету, пересборка DXF. Каталог моделей растений - отдельная страница.",
+    )
 
 
 # --------------------------------------------------------------------------- 05 уникальность
@@ -1207,8 +1331,8 @@ def s_unique(prs: Deck, f: dict[str, str]) -> None:
         (
             f"{f['species']} видов",
             "Вид под место",
-            "Задача MILP подбирает породу по условиям места: соли у проезда, свет, сети рядом, "
-            "квоты 369-ПП на разнообразие пород.",
+            "Задача MILP подбирает породу по условиям места: соль у проезда, тень домов, сети "
+            "рядом, квоты 369-ПП на разнообразие пород.",
         ),
         (
             "1 план",
@@ -1257,7 +1381,7 @@ def s_roadmap(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - обща�
         (
             "Пилот в ДПиООС",
             (
-                "образ Docker на МосТех.ОС, без сети и GPU",
+                "образ Docker на МосТех.ОС: расчёт без сети и GPU",
                 "проектировщики получают черновик улицы с объяснениями",
                 "нормоконтроль проектов подрядчиков: green audit",
             ),
@@ -1265,9 +1389,8 @@ def s_roadmap(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - обща�
         (
             "Шире нормы и данные",
             (
-                "кадастр и зонирование ГИС как ограничения посадки",
+                "водоохранные зоны и объекты наследия: нужен сверенный пункт о посадке",
                 "охранные зоны по линиям сетей чертежа",
-                "рекомендуемый ассортимент по категориям территорий Москвы",
                 "почвы и корнеобитаемый объём по данным изысканий",
             ),
         ),
@@ -1320,51 +1443,6 @@ def s_roadmap(prs: Deck, f: dict[str, str]) -> None:  # noqa: ARG001 - обща�
     )
 
 
-# --------------------------------------------------------------------------- слайд структуры
-
-SECTION_SLIDES = (
-    "слайды 7-10",
-    "слайды 11-13",
-    "слайды 14-15",
-    "слайды 16-18",
-    "слайд 19",
-    "слайд 20",
-)
-
-
-def fill_structure_slide(slide: Slide) -> None:
-    """Слайд шаблона с шестью разделами: заголовок и номера слайдов каждого раздела."""
-    for shape in slide.shapes:
-        if not shape.has_text_frame:
-            continue
-        value = shape.text_frame.text
-        if value == "РЕКОМЕНДУЕМАЯ СТРУКТУРА ПРЕЗЕНТАЦИИ":
-            shape.text_frame.paragraphs[0].runs[0].text = "СТРУКТУРА ПРЕЗЕНТАЦИИ"
-            for run in shape.text_frame.paragraphs[0].runs[1:]:
-                run.text = ""
-        elif value == "Для продуктовых решений":
-            shape.text_frame.paragraphs[0].runs[0].text = "Сервис green"
-            for run in shape.text_frame.paragraphs[0].runs[1:]:
-                run.text = ""
-    cards = sorted(
-        (
-            sh
-            for sh in slide.shapes
-            if sh.name.startswith("Скругленный прямоугольник") and sh.height > Emu(1500000)
-        ),
-        key=lambda sh: (sh.top, sh.left),
-    )
-    for card, label in zip(cards, SECTION_SLIDES, strict=True):
-        box = slide.shapes.add_textbox(
-            card.left + Inches(1.1), card.top + Inches(0.42), card.width - Inches(1.35), Inches(0.3)
-        )
-        fill_frame(box.text_frame, [para(label, Style(SEMI, 10.5, MUTE))], align=PP_ALIGN.RIGHT)
-    notes(
-        slide,
-        "Идём по рекомендуемой структуре шаблона: шесть разделов, номера слайдов - в карточках.",
-    )
-
-
 OUR_SLIDES: tuple[Callable[[Deck, dict[str, str]], None], ...] = (
     s_problem,
     s_solution,
@@ -1377,7 +1455,8 @@ OUR_SLIDES: tuple[Callable[[Deck, dict[str, str]], None], ...] = (
     s_effect,
     s_deploy,
     s_speed,
-    s_edit,
+    s_inputs,
+    s_workspace,
     s_unique,
     s_roadmap,
 )
