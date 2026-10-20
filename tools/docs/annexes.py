@@ -29,7 +29,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from green.application.explain import OBJECT_LABELS  # noqa: E402
 from green.application.params import PlanParams  # noqa: E402
 from green.application.wording import counted  # noqa: E402
-from green.domain.norms import CitationStatus, RuleBook  # noqa: E402
+from green.domain.norms import CitationStatus, RuleBook, Severity  # noqa: E402
+from green.infrastructure.cad.writer import LAYER_COLORS  # noqa: E402
 from green.infrastructure.config.repositories import (  # noqa: E402
     YamlProfileSource,
     YamlRuleBookSource,
@@ -104,7 +105,9 @@ def rules_annex() -> str:
         "",
         "Как читать. Норма - наименьшее расстояние от оси ствола дерева или центра куста до "
         "элемента объекта, названного в столбце «Измерение» (стенка трубы, ось, край). «Запрет» - посадка ближе нормы "
-        "недопустима; «согласование» - допустима при согласовании с владельцем сети. "
+        "недопустима; «согласование» - допустима при согласовании с владельцем сети, "
+        "правообладателем участка кадастра или по решению собственников участка "
+        "многоквартирного дома. "
         "«Проектный параметр» - величина, которую акт требует, но не задаёт; она принята "
         "проектом, и объяснение так её и называет.",
         "",
@@ -536,8 +539,10 @@ def barrier_section(rows: list[dict]) -> list[str]:
         f"ставят {BARRIER_PRACTICE} (`docs/notes/34-designer-practice.md`). Поэтому профиль "
         "`strict` барьер не ставит, а профиль `barriers` (`root_barriers: true`) допускает место, "
         "если барьер делает отступ достаточным: условие записано в объяснении посадки, дерево - "
-        "на слое `GREEN_TREES_BARRIER`. Прогон профиля `barriers` 29.09.2026 тем же образом "
-        f"Docker {where}. Деревья - все деревья плана, из них с барьером - те, у которых барьер "
+        "на слое `GREEN_TREES_BARRIER`. Прогон профиля `barriers` - 29.09.2026 образом "
+        f"Docker с кодом того дня {where}; столбец `strict` - из пакета 20.10.2026, поэтому "
+        "разница между ними включает и изменения кода за три недели. Деревья - все деревья "
+        "плана, из них с барьером - те, у которых барьер "
         "стал условием посадки; нарушений - по независимой проверке плана профиля `barriers`.",
         "",
         "Столбец «Ещё мест с барьером» выше считает только места, которым строгий прогон "
@@ -618,11 +623,16 @@ def streets_annex() -> str:
         "## Приложение B. Результаты по улицам пилота {#annex-streets}",
         "",
         "Сервис проектирует посадки сам по DXF улицы: подоснова, сети, существующие насаждения, "
-        "граница работ. Проект проектировщика на вход не подаётся. Прогон 29.09.2026 в образе "
-        f"Docker, все {len(rows)} улиц каталога пилота, профиль `strict`: нормы СП 42.13330.2016, "
-        "как в ТЗ; существующие насаждения сохраняются; прикорневые барьеры не ставятся; ручных "
-        f"правок нет. Планов выдано {len(done)} из {len(rows)}, нарушений норм по независимой "
-        f"проверке плана - {issues}. Время прогона и сверка исходника - в разделе 8.",
+        "граница работ. Проект проектировщика на вход не подаётся. Пакет прогонов 20.10.2026 "
+        f"(`tools/street_runs.py`, машина разработчика под Windows), все {len(rows)} улиц "
+        "каталога пилота, профиль `strict`: нормы СП 42.13330.2016, как в ТЗ; существующие "
+        "насаждения сохраняются; прикорневые барьеры не ставятся; ручных правок нет. Пакет "
+        "посчитан кодом main утра 20.10.2026, до правил кадастра и ускорения карты покрытий "
+        "(коммиты `083f431`, `4354573`). Образ сдачи `4354573` под Linux дал на Камчатской, Песчаном и "
+        "Берзарина тот же план, на Харьковской - на 3 посадки больше (1641 против 1638, "
+        "проверка 20.10.2026). Слоёв кадастра у улиц пилота нет, поэтому правила кадастра на "
+        f"них не действуют. Планов выдано {len(done)} из {len(rows)}, нарушений норм по "
+        f"независимой проверке плана - {issues}. Время прогона и сверка исходника - в разделе 8.",
         "",
         "### Что план даёт улице {#annex-streets-effect}",
         "",
@@ -1582,6 +1592,15 @@ def facts() -> dict[str, str]:
     found: dict[str, object] = {
         "rules_total": len(rules),
         "rules_distance": len(book.distance_rules),
+        "rules_distance_classes": len({r.object_class for r in book.distance_rules}),
+        "rules_distance_forbid": sum(
+            1 for r in book.distance_rules if r.severity is not Severity.NEEDS_APPROVAL
+        ),
+        "rules_distance_approval": sum(
+            1 for r in book.distance_rules if r.severity is Severity.NEEDS_APPROVAL
+        ),
+        # Слои результата - из писателя DXF: новый слой без правки текста глав не теряется.
+        "result_layers": len(LAYER_COLORS),
         "rules_verified": sum(1 for r in rules if r.citation.status is CitationStatus.VERIFIED),
         # Разбивка оснований: сверено по тексту акта; проектный параметр (акт требует величину,
         # но не задаёт её, или аналогия); проектное определение без акта (газоны).

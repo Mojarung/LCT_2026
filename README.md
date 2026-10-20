@@ -16,13 +16,19 @@ docker compose up --build -d          # интерфейс и API на http://lo
 curl -s http://localhost:8000/api/v1/health
 ```
 
-Swagger - `http://localhost:8000/docs`, схема - [docs/openapi.json](docs/openapi.json).
-Kubernetes по желанию: `kubectl apply -k deploy/k8s`.
+Swagger - `http://localhost:8000/docs`, схема - [docs/openapi.json](docs/openapi.json) и
+`http://localhost:8000/api/v1/openapi.json`. Kubernetes по желанию: `kubectl apply -k deploy/k8s`.
+Стенд с 16 ГБ памяти: `GREEN_MAX_PARALLEL_RUNS: "1"` в `compose.yaml` и `docker compose
+restart api` между сериями тяжёлых улиц (разд. 8.2, п. 9 документации).
 
 ### Проверка своего чертежа за 10 минут
 
 1. `http://localhost:8000/` -> «Свой чертёж подосновы» -> выбрать DXF (или DWG и сопутствующие файлы
    комплекта), профиль «Строгий» -> «Запустить прогон». Параметры трогать не нужно.
+   DWG из архива пилота в образе по умолчанию не пройдёт: LibreDWG теряет геометрию областей
+   REGION, и прогон после расчёта остановится на сверке записанного DXF («не сохраняются N»).
+   Такой DWG подаётся DXF после ODA File Converter 27.1 или в образе, собранном с
+   `--build-arg WITH_ODA=true` (разд. 8.2, п. 1 документации).
 2. Единицы и классы слоёв сервис определяет сам. Если заголовок `$INSUNITS` противоречит
    геометрии (например, «миллиметры» у метровой подосновы), прогон идёт в единицах геометрии,
    а на странице прогона в блоке «Проверить» стоит «Исправлено автоматически» с числами.
@@ -104,6 +110,10 @@ GREEN_PHOTO_MODELS_DIR=~/green-models uv run green serve
   API ([07](docs/documentation/07-api.md)), ограничения и известные ошибки
   ([08](docs/documentation/08-limitations.md)); приложения - свод правил, итоги по улицам
   пилота, файлы прогона, параметры ([generated/](docs/documentation/generated/)).
+  Числа в Markdown-главах - подстановки `{{ключ}}`: значения считает из конфигов и прогонов
+  `tools/docs/annexes.py` в [generated/facts.json](docs/documentation/generated/facts.json),
+  итоговые числа - в PDF. Ответы на частые вопросы к плану (малые породы, пометка «эскиз»,
+  улица без деревьев) - разд. 8.4.
 - Презентация в шаблоне ЛЦТ 2026: [docs/green-lct2026.pdf](docs/green-lct2026.pdf), 20 слайдов
   (сборка - `tools/presentation/pitch/`). Анимированная схема конвейера -
   [docs/presentation.html](docs/presentation.html), её выгрузка -
@@ -115,9 +125,10 @@ GREEN_PHOTO_MODELS_DIR=~/green-models uv run green serve
 
 ## Пример входа и выхода
 
-[examples/](examples/README.md): фрагмент улицы Берзарина, `result.dxf` со слоями `GREEN_*`,
-отчёт интерпретаций, CSV посадок, проверка целостности и снимки 3D-вида участка; фото
-нейросетью по кадрам 3D-вида Харьковской улицы.
+[examples/](examples/README.md): фрагмент улицы Берзарина, посчитанный образом сдачи
+20.10.2026 (1282 посадки: 82 дерева и 1200 кустов, 38 отказов), `result.dxf` со слоями
+`GREEN_*`, отчёт интерпретаций, CSV посадок, проверка целостности, снимки LibreCAD и 3D-вида
+участка; фото нейросетью по кадрам 3D-вида Харьковской улицы.
 
 ## Проверки
 

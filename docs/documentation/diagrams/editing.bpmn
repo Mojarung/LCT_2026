@@ -11,7 +11,10 @@
     <endEvent id="e_kept" name="Экспорт отклонён, прежний DXF сохранён" />
     <task id="t_scene" name="3D-сцена из scene.json: здания, покрытия, посадки по видам" />
     <task id="t_shots" name="Снимки участка в PNG: сезон, возраст посадок, погода" />
-    <endEvent id="e_scene" name="Визуализации, согласованные с планом" />
+    <exclusiveGateway id="g_photo" name="Нужно фото, модели настроены?" />
+    <endEvent id="e_scene" name="Снимки 3D, согласованные с планом" />
+    <task id="t_photo" name="Фото по кадру 3D-вида: Qwen-Image-2.1 на видеокарте, виды плана в промпте" />
+    <endEvent id="e_photo" name="Фото с теми же местами посадок, что в кадре" />
     <sequenceFlow id="e1" sourceRef="start" targetRef="g_after" />
     <sequenceFlow id="e2" name="правка" sourceRef="g_after" targetRef="t_edit" />
     <sequenceFlow id="e3" sourceRef="t_edit" targetRef="t_recheck" />
@@ -21,7 +24,10 @@
     <sequenceFlow id="e7" name="нет" sourceRef="g_ok" targetRef="e_kept" />
     <sequenceFlow id="e8" name="визуализация" sourceRef="g_after" targetRef="t_scene" />
     <sequenceFlow id="e9" sourceRef="t_scene" targetRef="t_shots" />
-    <sequenceFlow id="e10" sourceRef="t_shots" targetRef="e_scene" />
+    <sequenceFlow id="e10" sourceRef="t_shots" targetRef="g_photo" />
+    <sequenceFlow id="e11" name="нет" sourceRef="g_photo" targetRef="e_scene" />
+    <sequenceFlow id="e12" name="да" sourceRef="g_photo" targetRef="t_photo" />
+    <sequenceFlow id="e13" sourceRef="t_photo" targetRef="e_photo" />
   </process>
   <bpmndi:BPMNDiagram id="editing_diagram">
     <bpmndi:BPMNPlane id="editing_plane" bpmnElement="green_after_run">
@@ -70,10 +76,25 @@
       <bpmndi:BPMNShape id="t_shots_di" bpmnElement="t_shots">
         <dc:Bounds x="752" y="358" width="180" height="104" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="e_scene_di" bpmnElement="e_scene">
-        <dc:Bounds x="1038" y="392" width="36" height="36" />
+      <bpmndi:BPMNShape id="g_photo_di" bpmnElement="g_photo" isMarkerVisible="true">
+        <dc:Bounds x="1031" y="385" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="971" y="432" width="170" height="61" />
+          <dc:Bounds x="971" y="335" width="170" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_scene_di" bpmnElement="e_scene">
+        <dc:Bounds x="1038" y="517" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="971" y="557" width="170" height="61" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="t_photo_di" bpmnElement="t_photo">
+        <dc:Bounds x="1180" y="358" width="180" height="104" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="e_photo_di" bpmnElement="e_photo">
+        <dc:Bounds x="1466" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1399" y="432" width="170" height="61" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="e1_di" bpmnElement="e1">
@@ -127,7 +148,25 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e10_di" bpmnElement="e10">
         <di:waypoint x="932" y="410" />
-        <di:waypoint x="1038" y="410" />
+        <di:waypoint x="1031" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e11_di" bpmnElement="e11">
+        <di:waypoint x="1056" y="435" />
+        <di:waypoint x="1056" y="517" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1062" y="441" width="37" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e12_di" bpmnElement="e12">
+        <di:waypoint x="1081" y="410" />
+        <di:waypoint x="1180" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1085" y="386" width="28" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e13_di" bpmnElement="e13">
+        <di:waypoint x="1360" y="410" />
+        <di:waypoint x="1466" y="410" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
