@@ -1,5 +1,5 @@
 import type { QualityJson } from '../../api/artifacts';
-import { decimal } from '../../lib/format';
+import { integer } from '../../lib/format';
 
 /** Индекс качества плана: оценка, слагаемые с тем, что измерено, и основание каждого.
  *  Веса - выбор команды: это сказано один раз над слагаемыми, у каждого - только число. */
@@ -16,14 +16,16 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
         <p className="quality-gate">{quality.gate}</p>
       ) : (
         <p className="quality-index">
-          <b>{decimal(quality.index)}</b> из 1
+          <b>{integer(quality.index * 100)}</b> из 100
         </p>
       )}
       {/* Итог стоит числом, разбор - под раскрытием: десять слагаемых со шкалами занимали
           панель целиком, и состав плана уходил за нижний край на высоте проектора. */}
       <details className="fold quality-fold">
         <summary>Как рассчитана оценка</summary>
-        <p className="term-note">Веса слагаемых выбрала команда.</p>
+        <p className="term-note">
+          Оценка и слагаемые — по шкале от 0 до 100. Веса слагаемых выбрала команда.
+        </p>
         <ul className="quality-terms">
           {quality.terms.map((term) => (
             <li key={term.key}>
@@ -31,7 +33,7 @@ export function QualityBlock({ quality }: { quality: QualityJson | undefined }) 
                 <summary>
                   <span className="term-name">{term.title}</span>
                   <span className="term-score">
-                    {term.score == null ? 'нет' : decimal(term.score)}
+                    {term.score == null ? 'нет' : integer(term.score * 100)}
                   </span>
                   <span className="term-bar" aria-hidden="true">
                     <i style={{ width: `${String(Math.round((term.score ?? 0) * 100))}%` }} />

@@ -249,6 +249,72 @@ describe('RunPage: finished run', () => {
     expect(await screen.findByRole('button', { name: 'Показать слой 0, группа 1' })).toBeVisible();
   });
 
+  it('explains existing source trees with insufficient building clearance separately from new planting', async () => {
+    mockApi({
+      ...succeededRoutes(),
+      '/api/v1/runs/r1/artifacts/rules.json': {
+        ...rules,
+        rules: {
+          ...rules.rules,
+          'R-BLD-TREE-001': {
+            ...rules.rules['R-UTIL-WATER-001'],
+            rule_id: 'R-BLD-TREE-001',
+            object_class: 'building',
+            measure_to: 'edge',
+            min_distance_m: 5,
+          },
+        },
+      },
+      '/api/v1/runs/r1/artifacts/basemap.geojson': {
+        ...basemap,
+        features: [
+          {
+            type: 'Feature',
+            properties: { class: 'building' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [100, 40],
+                  [110, 40],
+                  [110, 45],
+                  [100, 45],
+                  [100, 40],
+                ],
+              ],
+            },
+          },
+          {
+            type: 'Feature',
+            properties: { class: 'existing_tree', vegetation_kind: 'individual' },
+            geometry: { type: 'Point', coordinates: [105, 47] },
+          },
+          {
+            type: 'Feature',
+            properties: { class: 'existing_tree', vegetation_kind: 'individual' },
+            geometry: { type: 'Point', coordinates: [150, 70] },
+          },
+        ],
+      },
+    });
+    renderApp('/runs/r1');
+    const left = await screen.findByRole('complementary', { name: 'Прогон' });
+    const title = await within(left).findByText(
+      /Деревья исходного плана: недостаточный отступ до здания — 1/,
+    );
+    const notice = title.closest('[role="note"]');
+    expect(notice).toHaveTextContent('Эти деревья уже были в исходном чертеже');
+    expect(notice).toHaveTextContent('не означает назначение к вырубке');
+    const toggle = within(left).getByRole('button', { name: 'Показать деревья на плане' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveTextContent('Убрать подсветку деревьев');
+    expect(left).toHaveTextContent('фактический / требуемый отступ');
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('leads with the number of placements and the integrity of the base drawing', async () => {
     mockApi(succeededRoutes());
     renderApp('/runs/r1');
@@ -262,14 +328,20 @@ describe('RunPage: finished run', () => {
     expect(left.querySelector('.metric')).toHaveTextContent(/^302посадки в плане$/);
     // Целая подоснова - не тревога: нарушение сказано у числа, иначе строка в деталях.
     expect(left.querySelector('.metric-bad')).toBeNull();
-    expect(fact(left, 'Места, отклонённые нормами')).toHaveTextContent(/^161$/);
+    expect(within(left).queryByText('Места, отклонённые нормами')).toBeNull();
+    await userEvent.click(within(left).getByRole('button', { name: /Как собран план/ }));
+    const journal = await screen.findByRole('dialog', { name: 'Как собран план' });
+    expect(fact(journal, 'Места, отклонённые нормами')).toHaveTextContent(/^161$/);
+    expect(journal).toHaveTextContent('Они не включены в итоговый план');
+    await userEvent.click(within(journal).getByRole('button', { name: /Закрыть/ }));
     // Целая подоснова - отметкой среди проверок результата, а не строкой деталей.
     expect(within(left).getByText('Исходные слои чертежа целы')).toBeVisible();
     // Индекс качества - один раз, крупно справа; в пульте слева он был дублем.
     const right = await screen.findByRole('complementary', { name: 'Состав плана' });
     await userEvent.click(within(right).getByRole('button', { name: 'Эффект' }));
-    expect(await within(right).findByText('0,81')).toBeVisible();
-    expect(within(left).queryByText('0,81')).toBeNull();
+    expect(await within(right).findByText('81')).toBeVisible();
+    expect(right.querySelector('.quality-index')).toHaveTextContent('81 из 100');
+    expect(within(left).queryByText('81')).toBeNull();
     expect(document.body).toHaveClass('shell-map');
   });
 

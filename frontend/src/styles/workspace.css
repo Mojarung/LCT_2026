@@ -243,7 +243,9 @@ body.shell-map .topbar {
 .hud-view {
   top: var(--inset);
   left: calc(var(--side-l) + var(--inset));
+  right: calc(var(--side-r) + var(--inset));
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
   background: none;
@@ -1722,11 +1724,8 @@ body.shell-map .topbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  position: absolute;
+  position: relative;
   z-index: 4;
-  top: var(--inset);
-  left: 50%;
-  transform: translateX(-50%);
   padding: 10px 16px;
   border: 1px solid var(--edge);
   border-radius: var(--r-control);
@@ -1876,11 +1875,6 @@ body.shell-map .topbar {
   .semantic-review-tooltip {
     left: 0;
     transform: none;
-  }
-  .semantic-review-trigger {
-    left: var(--inset);
-    transform: none;
-    max-width: 50vw;
   }
   .semantic-review-panel {
     top: 44%;
@@ -2162,4 +2156,14 @@ body.semantic-review-mode .topbar {
     bottom: auto;
     max-height: calc(100% - var(--inset) * 2);
   }
+}
+
+.existing-tree-notice {
+  border-left: 3px solid #d83e3e;
+  background: color-mix(in srgb, #d83e3e 8%, var(--panel));
+}
+.existing-tree-notice > button {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: var(--fs-small);
 }

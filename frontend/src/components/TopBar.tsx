@@ -113,7 +113,11 @@ function RunCrumbs({ runId }: { runId: string }) {
         </span>
         <span className="crumbs-here" title={run ? `${run.source_name} · прогон ${run.id}` : runId}>
           <span className="crumbs-name">{run ? drawingName(run.source_name) : 'Прогон'}</span>
-          {params.length ? <span className="crumbs-meta">{params.join(' · ')}</span> : null}
+          {params.length ? (
+            <span className="crumbs-meta" title={params.join(' · ')}>
+              {params.join(' · ')}
+            </span>
+          ) : null}
         </span>
       </nav>
       {run?.state === 'succeeded' ? (

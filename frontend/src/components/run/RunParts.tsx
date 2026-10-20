@@ -112,9 +112,15 @@ export function RunMetrics({
   trees,
   draft = false,
   conflicts = null,
+  existingTreeConflicts = 0,
+  treesHighlighted = false,
+  onToggleTreeConflicts,
   onReview,
 }: {
   run: RunOut;
+  existingTreeConflicts?: number;
+  treesHighlighted?: boolean;
+  onToggleTreeConflicts?: () => void;
   onReview?: () => void;
   /** Кнопка конфликтов подосновы (SourceConflictNotice): первая строка блока «Проверить». */
   conflicts?: ReactNode;
@@ -174,9 +180,39 @@ export function RunMetrics({
           />
         ) : null}
       </ul>
+      {existingTreeConflicts > 0 ? (
+        <div className="notice existing-tree-notice" role="note">
+          <p className="notice-title">
+            Деревья исходного плана: недостаточный отступ до здания —{' '}
+            {integer(existingTreeConflicts)}
+          </p>
+          <p>
+            Эти деревья уже были в исходном чертеже. По его геометрии расстояние от ствола до здания
+            меньше нормативного отступа для новой посадки. Проверка отступов новых посадок выше не
+            относится к этим деревьям.
+          </p>
+          <p>
+            Требуется уточнить состояние и статус деревьев. Эта пометка не означает назначение к
+            вырубке.
+          </p>
+          <button
+            type="button"
+            className="review-download-link"
+            aria-pressed={treesHighlighted}
+            onClick={onToggleTreeConflicts}
+          >
+            {treesHighlighted ? 'Убрать подсветку деревьев' : 'Показать деревья на плане'}
+          </button>
+          {treesHighlighted ? (
+            <p>
+              Красные круги отмечают деревья; подписи — фактический / требуемый отступ до здания.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {/* Всё, что человеку надо проверить, - одним блоком: раньше согласование, эскиз, конфликты
           и отклонённые места стояли в четырёх местах пульта, и половина - под раскрытием. */}
-      {conflicts || approval || sketch || rejected || barrierPlaces || notices.length ? (
+      {conflicts || approval || sketch || notices.length ? (
         <div className="notice check-block">
           {/* Заголовок говорит, что это за план; строки - что именно смотреть, числом. */}
           <p className="notice-title">{sketch ? 'План-эскиз: что проверить' : 'Что проверить'}</p>
@@ -194,18 +230,6 @@ export function RunMetrics({
                 <dd>
                   {unconfirmed === total ? 'все' : `${integer(unconfirmed)} из ${integer(total)}`}
                 </dd>
-              </div>
-            ) : null}
-            {rejected > 0 ? (
-              <div>
-                <dt>Места, отклонённые нормами</dt>
-                <dd>{integer(rejected)}</dd>
-              </div>
-            ) : null}
-            {barrierPlaces > 0 ? (
-              <div className="run-sub-fact">
-                <dt>из них возможны с прикорневым барьером</dt>
-                <dd>{integer(barrierPlaces)}</dd>
               </div>
             ) : null}
           </dl>
@@ -233,13 +257,23 @@ export function RunMetrics({
       {/* Без обёртки «Детали расчёта»: внутри неё бывало одно-единственное раскрытие. Строка
           газонов - обычным текстом, журнал сборки плана - своим раскрытием. */}
       <LawnLine summary={summary} />
-      {warnings.length ? <PlanJournal warnings={warnings} /> : null}
+      {warnings.length || rejected || barrierPlaces ? (
+        <PlanJournal warnings={warnings} rejected={rejected} barrierPlaces={barrierPlaces} />
+      ) : null}
     </>
   );
 }
 
 /** Журнал сборки плана - строкой в панели, сам список - в окне по центру экрана. */
-function PlanJournal({ warnings }: { warnings: readonly string[] }) {
+function PlanJournal({
+  warnings,
+  rejected,
+  barrierPlaces,
+}: {
+  warnings: readonly string[];
+  rejected: number;
+  barrierPlaces: number;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -258,6 +292,26 @@ function PlanJournal({ warnings }: { warnings: readonly string[] }) {
           setOpen(false);
         }}
       >
+        {rejected > 0 || barrierPlaces > 0 ? (
+          <section aria-label="Отклонённые варианты посадки">
+            <p>
+              При подборе проверены и отклонены неподходящие варианты размещения новых посадок. Они
+              не включены в итоговый план и не означают нарушения у посадок плана.
+            </p>
+            <dl className="run-facts">
+              <div>
+                <dt>Места, отклонённые нормами</dt>
+                <dd>{integer(rejected)}</dd>
+              </div>
+              {barrierPlaces > 0 ? (
+                <div>
+                  <dt>Из них возможны с прикорневым барьером</dt>
+                  <dd>{integer(barrierPlaces)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        ) : null}
         <ul className="warn-list">
           {warnings.map((text) => (
             <li key={text}>{text}</li>

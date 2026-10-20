@@ -18,7 +18,11 @@ import type {
 } from '../api/artifacts';
 import { parseViewHash } from '../lib/viewHash';
 import { semanticReviewTarget } from './reviewView';
-import { drawSourceConflicts } from './sourceConflicts';
+import {
+  drawSourceConflicts,
+  drawTreeClearanceMarks,
+  type TreeClearanceMark,
+} from './sourceConflicts';
 import { buildChunks, type Chunk } from './chunks';
 import { ClassIndex, type Dimension, dimensionsFor, drawDimensions } from './dimensions';
 import type { ExistingPlant } from './existing';
@@ -127,6 +131,7 @@ export class PlanEngine {
     pulseStarted: number;
   } | null = null;
   private semanticReviewView: ViewState | null = null;
+  private treeClearanceMarks: readonly TreeClearanceMark[] = [];
   private sourceConflicts: readonly SourceConflict[] = [];
   private sourceConflictSelected: string | null = null;
   private readonly view: ViewState = { scale: 1, tx: 0, ty: 0, rot: 0 };
@@ -590,6 +595,22 @@ export class PlanEngine {
     this.schedule();
   }
 
+  setTreeClearanceMarks(items: readonly TreeClearanceMark[]): void {
+    this.treeClearanceMarks = items;
+    this.schedule();
+  }
+
+  focusTreeClearanceMarks(items: readonly TreeClearanceMark[]): void {
+    if (!items.length) return;
+    const points = items.flatMap(({ x, y }) => [
+      { x: x - 4, y: y - 4 },
+      { x: x + 4, y: y + 4 },
+    ]);
+    const target = fitView(extentOf(this.view, points), this.clearArea());
+    this.touched = true;
+    this.moveTo(target, GROUP_MS);
+  }
+
   focusSourceConflict(item: SourceConflict): void {
     const area = this.clearArea();
     this.view.scale = Math.max(18, this.view.scale);
@@ -893,6 +914,7 @@ export class PlanEngine {
       rect.width,
       rect.height,
     );
+    drawTreeClearanceMarks(ctx, this.view, this.treeClearanceMarks, rect.width, rect.height);
     if (this.pending.size) {
       const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const phase = still ? 0 : (performance.now() / 40) % PENDING_DASH;

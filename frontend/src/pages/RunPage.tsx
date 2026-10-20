@@ -32,6 +32,9 @@ import type { PlanEngine } from '../map/engine';
 import { loadSurface, toMapItems } from '../map/items';
 import { commonest } from '../map/models';
 import type { EngineHooks, MapItem } from '../map/types';
+import { buildWorld } from '../scene3d/world';
+import { treeClearanceConflicts } from '../scene3d/treeClearance';
+import type { SceneJson } from '../scene3d/types';
 import { PlanEditor } from '../state/editor';
 import { EngineContext } from '../state/engine';
 import { useWorkspace } from '../state/workspace';
@@ -126,6 +129,24 @@ export function RunPage() {
   );
   const plan = useArtifact<PlanJson>(runId, 'plan.json', done && names.has('plan.json'));
   const rules = useArtifact<RulesJson>(runId, 'rules.json', done && names.has('rules.json'));
+  const scene = useArtifact<SceneJson>(runId, 'scene.json', done && names.has('scene.json'));
+  const existingTreeConflicts = useMemo(() => {
+    if (!done || !basemap.data || !rules.data || (names.has('scene.json') && !scene.data))
+      return [];
+    const world = buildWorld({
+      scene: scene.data ?? null,
+      plan: names.has('scene.json') ? null : (plan.data ?? null),
+      basemap: basemap.data,
+    });
+    return treeClearanceConflicts(world, rules.data).map(({ plant, distance, required }) => ({
+      x: plant.x + world.origin[0],
+      y: world.origin[1] - plant.z,
+      distance,
+      required,
+    }));
+  }, [done, basemap.data, rules.data, scene.data, plan.data, names]);
+  const [highlightedTreeRun, setHighlightedTreeRun] = useState<string | null>(null);
+  const treesHighlighted = highlightedTreeRun === runId;
   const quality = useArtifact<QualityJson>(
     runId,
     'quality.json',
@@ -182,6 +203,9 @@ export function RunPage() {
 
   const engine = useRef<PlanEngine | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    engine.current?.setTreeClearanceMarks(treesHighlighted ? existingTreeConflicts : []);
+  }, [treesHighlighted, existingTreeConflicts]);
   const hooks = useRef<EngineHooks>(idle);
   const leftScroll = useOverflowMark<HTMLDivElement>();
   const planData = useRef(plan.data);
@@ -379,7 +403,40 @@ export function RunPage() {
               {data ? <RunStatus run={data} /> : <SquareLoader size={48} />}
             </div>
           )}
-          {withMap ? <MapHud editable={done && !reviewOpen} /> : null}
+          {withMap ? (
+            <MapHud
+              editable={done && !reviewOpen}
+              reviewControl={
+                done && data && names.has('semantic-review.geojson') ? (
+                  <button
+                    type="button"
+                    ref={reviewTrigger}
+                    className={`semantic-review-trigger${objectsNeedReview ? ' needs-review' : ''}`}
+                    aria-label="Объекты чертежа"
+                    aria-expanded={reviewOpen}
+                    aria-controls="semantic-review-panel"
+                    aria-describedby={objectsNeedReview ? 'semantic-review-warning' : undefined}
+                    onClick={() => {
+                      setReviewOpen((value) => !value);
+                    }}
+                  >
+                    {objectsNeedReview ? <UiIcon name="alert" size={18} /> : null}
+                    Объекты чертежа
+                    {objectsNeedReview ? (
+                      <span
+                        id="semantic-review-warning"
+                        role="tooltip"
+                        className="semantic-review-tooltip"
+                      >
+                        Не все объекты чертежа распознаны однозначно. Откройте таблицу, чтобы
+                        уточнить их типы.
+                      </span>
+                    ) : null}
+                  </button>
+                ) : null
+              }
+            />
+          ) : null}
           {/* У идущего прогона правой панели нет: обозначения - окошком над картой. */}
           {live ? <Legend done={false} /> : null}
           {choice ? (
@@ -397,42 +454,15 @@ export function RunPage() {
         </div>
 
         {done && data && names.has('semantic-review.geojson') ? (
-          <>
-            <button
-              type="button"
-              ref={reviewTrigger}
-              className={`semantic-review-trigger${objectsNeedReview ? ' needs-review' : ''}`}
-              aria-label="Объекты чертежа"
-              aria-expanded={reviewOpen}
-              aria-controls="semantic-review-panel"
-              aria-describedby={objectsNeedReview ? 'semantic-review-warning' : undefined}
-              onClick={() => {
-                setReviewOpen((value) => !value);
-              }}
-            >
-              {objectsNeedReview ? <UiIcon name="alert" size={18} /> : null}
-              Объекты чертежа
-              {objectsNeedReview ? (
-                <span
-                  id="semantic-review-warning"
-                  role="tooltip"
-                  className="semantic-review-tooltip"
-                >
-                  Не все объекты чертежа распознаны однозначно. Откройте таблицу, чтобы уточнить их
-                  типы.
-                </span>
-              ) : null}
-            </button>
-            <SemanticReviewPanel
-              key={runId}
-              run={data}
-              open={reviewOpen}
-              onClose={() => {
-                setReviewOpen(false);
-                reviewTrigger.current?.focus();
-              }}
-            />
-          </>
+          <SemanticReviewPanel
+            key={runId}
+            run={data}
+            open={reviewOpen}
+            onClose={() => {
+              setReviewOpen(false);
+              reviewTrigger.current?.focus();
+            }}
+          />
         ) : null}
 
         {live && data ? <ProgressHud run={data} fetchedAt={run.dataUpdatedAt} /> : null}
@@ -460,6 +490,13 @@ export function RunPage() {
                       }
                     : null
                 }
+                existingTreeConflicts={existingTreeConflicts.length}
+                treesHighlighted={treesHighlighted}
+                onToggleTreeConflicts={() => {
+                  const showing = !treesHighlighted;
+                  setHighlightedTreeRun(showing ? runId : null);
+                  if (showing) engine.current?.focusTreeClearanceMarks(existingTreeConflicts);
+                }}
                 draft={stale}
                 conflicts={conflictCount ? conflictNotice : null}
               />

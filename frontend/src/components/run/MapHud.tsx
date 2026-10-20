@@ -44,7 +44,13 @@ function Sep(): ReactNode {
 /** Кнопки карты у нижней кромки, по центру свободной области. Колесо мыши есть не у всех: на
  *  ноутбуке тачпадом масштаб ловится плохо, а на защите карту крутят чужими руками - ползунок
  *  задаёт масштаб сразу. Правка плана - здесь же, у карты, которую она меняет. */
-export function MapHud({ editable = false }: { editable?: boolean }) {
+export function MapHud({
+  editable = false,
+  reviewControl,
+}: {
+  editable?: boolean;
+  reviewControl?: ReactNode;
+}) {
   const engine = useEngine();
   const share = useWorkspace((s) => s.zoomShare);
   const orientation = useWorkspace((s) => s.orientation);
@@ -85,6 +91,7 @@ export function MapHud({ editable = false }: { editable?: boolean }) {
             setOrientation(current.orientation());
           }}
         />
+        {reviewControl ? <span className="hud-pair">{reviewControl}</span> : null}
       </div>
       <div className="hud hud-bottom" data-map-obstacle="bottom" role="toolbar" aria-label="Карта">
         <button

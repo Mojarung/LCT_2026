@@ -37,3 +37,45 @@ export function drawSourceConflicts(
   }
   ctx.restore();
 }
+
+export interface TreeClearanceMark {
+  x: number;
+  y: number;
+  distance: number;
+  required: number;
+}
+
+/** Screen-sized rings identify source trees without implying a clearance radius. */
+export function drawTreeClearanceMarks(
+  ctx: CanvasRenderingContext2D,
+  view: ViewState,
+  items: readonly TreeClearanceMark[],
+  width: number,
+  height: number,
+): void {
+  ctx.save();
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (const item of items) {
+    const { sx, sy } = toScreen(view, item.x, item.y);
+    if (sx < -100 || sy < -100 || sx > width + 100 || sy > height + 100) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(216, 62, 62, 0.18)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = '#c62828';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    const label = `${item.distance.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} / ${item.required.toLocaleString('ru-RU')} м`;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeText(label, sx + 21, sy);
+    ctx.fillStyle = '#a51d1d';
+    ctx.fillText(label, sx + 21, sy);
+  }
+  ctx.restore();
+}
