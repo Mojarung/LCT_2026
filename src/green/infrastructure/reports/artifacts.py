@@ -1085,8 +1085,8 @@ def _walk_notches_paved(
         neighbours = [out[int(k)] for k in tree.query(notch) if int(k) != i]
         cut = shapely.union_all(
             [
-                *[shapely.clip_by_rect(g, *box) for g in neighbours],
-                shapely.clip_by_rect(blocked, *box),
+                *[_clipped(g, box) for g in neighbours],
+                _clipped(blocked, box),
             ]
         )
         notch = _areal(notch.difference(cut))
@@ -1094,6 +1094,16 @@ def _walk_notches_paved(
         if pieces:
             out[i] = _areal(shapely.union_all([part, *pieces]))
     return out
+
+
+def _clipped(geometry: BaseGeometry, box: tuple[float, float, float, float]) -> BaseGeometry:
+    """Обрезка рамкой. Кольцо из трёх точек (вырожденный контур чужого чертежа) GEOS не
+    обрезает, а роняет весь surface.json («2026-07-21 - СПОЗУ.dwg»): такая часть сначала
+    исправляется make_valid."""
+    try:
+        return shapely.clip_by_rect(geometry, *box)
+    except shapely.errors.GEOSException:
+        return shapely.clip_by_rect(shapely.make_valid(geometry), *box)
 
 
 # Дыра в покрытии меньше этого и не газон - след знака колодца или обрезка дорожки, м².
