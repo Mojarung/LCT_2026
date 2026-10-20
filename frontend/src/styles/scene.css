@@ -1546,15 +1546,15 @@
 
 /* Панорама сверху, основной план снизу. ResizeObserver подстраивает оба холста. */
 .page-scene[data-plan='open'] > .canvas-holder {
-  bottom: 50%;
+  bottom: var(--plan-split, 50%);
 }
 .page-scene[data-plan='open'] .scene-left,
 .page-scene[data-plan='open'] .scene-panel:not(.collapsed) {
-  bottom: calc(50% + var(--inset));
-  max-height: calc(50% - var(--inset) * 2);
+  bottom: calc(var(--plan-split, 50%) + var(--inset));
+  max-height: calc(100% - var(--plan-split, 50%) - var(--inset) * 2);
 }
 .page-scene[data-plan='open'] .scene-bar {
-  bottom: calc(50% + 12px);
+  bottom: calc(var(--plan-split, 50%) + 12px);
   max-width: calc(100% - 24px);
 }
 .page-scene[data-plan='open'] .scene-help {
@@ -1562,7 +1562,7 @@
 }
 .scene-plan-map {
   position: absolute;
-  inset: 50% 0 0;
+  inset: calc(100% - var(--plan-split, 50%)) 0 0;
   z-index: 3;
   background: var(--map-sheet);
   border-top: 1px solid var(--hair-2);
@@ -1685,7 +1685,40 @@
   }
 }
 .page-scene[data-plan='open'] .scene-crosshair {
-  top: 25%;
+  top: calc((100% - var(--plan-split, 50%)) / 2);
+}
+/* Перемычка между 3D-видом и схемой: тянется вверх и вниз. */
+.scene-split-handle {
+  padding: 0;
+  border: 0;
+  background: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--plan-split, 50%);
+  z-index: 5;
+  height: 14px;
+  transform: translateY(50%);
+  display: grid;
+  place-items: center;
+  cursor: row-resize;
+  touch-action: none;
+}
+.scene-split-handle span {
+  width: 44px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--hair-2),
+    0 2px 6px rgb(0 0 0 / 18%);
+}
+.scene-split-handle:hover span,
+.scene-split-handle:focus-visible span {
+  background: var(--bone-2);
+}
+.scene-split-handle:focus-visible {
+  outline: none;
 }
 @media (max-width: 1080px) {
   .workspace.page-scene[data-plan='open'] {
@@ -1698,7 +1731,7 @@
   }
   .page-scene[data-plan='open'] > .canvas-holder {
     position: absolute;
-    inset: 0 0 50%;
+    inset: 0 0 var(--plan-split, 50%);
     height: auto;
     min-height: 0;
   }

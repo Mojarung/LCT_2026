@@ -26,6 +26,8 @@ import { type PromptDraft, PromptDialog } from '../components/scene/PromptDialog
 import { RunTitle } from '../components/run/RunParts';
 import { SquareLoader } from '../components/ui/SquareLoader';
 import { ScenePlanMap } from '../components/scene/ScenePlanMap';
+import { SplitHandle } from '../components/scene/SplitHandle';
+import { clampSplit } from '../lib/split';
 import { ScenePanel } from '../components/scene/ScenePanel';
 import { SideToggle } from '../components/scene/SideToggle';
 import { useSideCollapsed } from '../hooks/useSideCollapsed';
@@ -53,6 +55,8 @@ import type { ContextJson } from '../scene3d/context';
 import { buildWorld } from '../scene3d/world';
 import { treeClearanceConflicts } from '../scene3d/treeClearance';
 import { TreeClearanceNotice } from '../components/scene/TreeClearanceNotice';
+
+const SPLIT_KEY = 'green-scene-split';
 
 const STAGE_TITLES: Record<Stage, string> = {
   textures: 'Фактуры покрытий',
@@ -286,6 +290,24 @@ export function ScenePage() {
   const [shooting, setShooting] = useState(false);
   const [hudHidden, setHudHidden] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  // Доля высоты под схему: перемычку тянут, как в просмотре улиц Google; помнится в браузере.
+  const workspace = useRef<HTMLDivElement>(null);
+  const [split, setSplit] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(SPLIT_KEY));
+      return Number.isFinite(saved) && saved > 0 ? clampSplit(saved) : 0.5;
+    } catch {
+      return 0.5;
+    }
+  });
+  const changeSplit = useCallback((value: number) => {
+    setSplit(value);
+    try {
+      localStorage.setItem(SPLIT_KEY, String(value));
+    } catch {
+      // хранилище недоступно: доля живёт до перезагрузки
+    }
+  }, []);
   const [flash, setFlash] = useState(0);
   const [everLocked, setEverLocked] = useState(false);
   const [search] = useSearchParams();
@@ -635,12 +657,17 @@ export function ScenePage() {
 
   return (
     <div
+      ref={workspace}
       className="workspace page-scene"
+      style={{ '--plan-split': `${String(Math.round(split * 1000) / 10)}%` } as React.CSSProperties}
       data-hud={hudHidden ? 'hidden' : 'shown'}
       data-plan={planOpen && !hudHidden && readyToFly ? 'open' : undefined}
       data-gallery={gallery ? 'open' : undefined}
     >
       <div className="canvas-holder" ref={holder} />
+      {planOpen && !hudHidden && readyToFly && world ? (
+        <SplitHandle host={workspace} value={split} onChange={changeSplit} />
+      ) : null}
       {planOpen && !hudHidden && readyToFly && world ? (
         <ScenePlanMap
           key={runId}
