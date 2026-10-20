@@ -32,7 +32,9 @@ export function SplitHandle({
       onPointerDown={(event) => {
         dragging.current = true;
         event.currentTarget.setPointerCapture(event.pointerId);
+        // preventDefault снимает и фокус по щелчку: без него стрелки после щелчка не работали.
         event.preventDefault();
+        event.currentTarget.focus();
       }}
       onPointerMove={(event) => {
         if (dragging.current) fromPointer(event.clientY);
