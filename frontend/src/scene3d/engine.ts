@@ -97,6 +97,7 @@ import { StreetLights } from './streetlights';
 import { atmosphereOf, Weather } from './weather';
 import { clearance, type Route, tourPose, tourRoute, tourStart } from './tour';
 import { Forest } from './trees';
+import { sizeGuide } from './guide';
 import { GRASS_PRESETS, GrassField } from './grass';
 import type { Line, Plant, Ring, World } from './types';
 import { frameAt } from './world';
@@ -278,6 +279,8 @@ export class SceneEngine {
   private frames = 0;
   private fpsStart = 0;
   private lastHover: string | null = null;
+  /** Рамка размеров посадки под прицелом (guide.ts). */
+  private readonly guide = sizeGuide();
   private hoverTick = 0;
   private lights: StreetLights | null = null;
   /** Облёт: маршрут, пройденный путь и сглаженный курс - разворот на концах идёт плавно. */
@@ -332,7 +335,7 @@ export class SceneEngine {
     this.scene.name = 'green-3d';
     this.atmosphere = new Atmosphere(this.renderer, this.scene);
     this.forest = new Forest(world.plants);
-    this.scene.add(this.forest.root);
+    this.scene.add(this.forest.root, this.guide.group);
     this.walls = new Walls(world.buildings);
     this.freecam = new Freecam({
       element: canvas,
@@ -1448,6 +1451,7 @@ export class SceneEngine {
     } else {
       if (this.lastHover !== null) {
         this.lastHover = null;
+        this.guide.hide();
         this.events.hover(null);
       }
       return;
@@ -1459,6 +1463,8 @@ export class SceneEngine {
     const id = body ? body.plant.id : null;
     if (id === this.lastHover) return;
     this.lastHover = id;
+    if (body) this.guide.show(body.x, body.z, body.height, body.radius * 2);
+    else this.guide.hide();
     this.events.hover(
       body
         ? {
@@ -1601,8 +1607,10 @@ export class SceneEngine {
     const ratio = this.renderer.getPixelRatio();
     const lod = this.lodDistance();
     const out: Blob[] = [];
-    // Рабочие слои - для работы, не для фото: в кадр для модели они не идут.
+    // Рабочие слои и рамка размеров - для работы, не для фото: в кадр для модели они не идут.
     this.showOverlays(false, false);
+    const guide = this.guide.group.visible;
+    this.guide.hide();
     try {
       this.forest.apply({ lodDistance: QUALITY.high.lodDistance * 2 });
       this.renderer.setPixelRatio(1);
@@ -1627,6 +1635,7 @@ export class SceneEngine {
       return out;
     } finally {
       this.showOverlays(this.settings.utilities, this.settings.boundary);
+      this.guide.group.visible = guide;
       if (this.isRunning()) {
         this.forest.apply({ lodDistance: lod });
         this.renderer.setPixelRatio(ratio);
@@ -1651,6 +1660,8 @@ export class SceneEngine {
     const before = this.renderer.getPixelRatio();
     const size = this.renderer.getSize(new THREE.Vector2());
     const target = Math.min(before * scale, 4, Math.sqrt((3840 * 2160) / (size.x * size.y)));
+    const guide = this.guide.group.visible;
+    this.guide.hide();
     try {
       if (target !== before) this.renderer.setPixelRatio(target);
       this.resize(target);
@@ -1663,6 +1674,7 @@ export class SceneEngine {
       if (!blob) throw new Error('Браузер не отдал кадр: снимок не получился');
       return blob;
     } finally {
+      this.guide.group.visible = guide;
       // За время кодирования страницу могли закрыть: закрытый движок не перезапускаем.
       if (this.isRunning()) {
         if (target !== before) this.renderer.setPixelRatio(before);

@@ -99,6 +99,13 @@ C = ObjectClass
         ("ГП_Деревья", C.IGNORE),
         ("Вырубка_деревьев", C.IGNORE),
         ("Кустарники_проект", C.IGNORE),
+        # Чертёж жюри 236287 (паспорт ОГХ, 16.10.2026).
+        ("FLOWER", C.LAWN),
+        ("Щепа проект", C.LAWN),
+        ("спрятать", C.IGNORE),
+        ("04HOLE", C.UTILITY_ACCESS),
+        ("PIKS", C.IGNORE),
+        ("скан", C.IGNORE),
     ],
 )
 def test_pilot_names_are_inferred(name: str, expected: ObjectClass) -> None:

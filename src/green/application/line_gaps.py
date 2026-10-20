@@ -29,12 +29,17 @@ if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
 
 GAP_M = 2.0
+NEIGHBOURS = 8  # ближайших концов на каждый конец
 _TOUCH_M = 1e-6
 _MIN_POINTS = 2
 
 
 def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeometry]:
-    """Перемычки для разрывов не шире gap между линиями; сами линии не меняются."""
+    """Перемычки для разрывов не шире gap между линиями; сами линии не меняются.
+
+    Каждый конец смотрит только на NEIGHBOURS ближайших концов: на чертеже с тысячами коротких
+    штрихов (разобранная штриховка, частый пунктир) все пары в радиусе gap - десятки миллионов,
+    а перемычка всё равно идёт к ближайшему свободному концу."""
     parts = [
         p
         for g in lines
@@ -45,24 +50,47 @@ def bridges(lines: Sequence[BaseGeometry], gap: float = GAP_M) -> list[BaseGeome
         return []
     ends, outward = _ends(parts)
     tree = KDTree(ends)
-    touching: set[int] = set()
+    touching = np.zeros(len(ends), dtype=bool)
     for a, b in tree.query_pairs(_TOUCH_M):
         if a // 2 != b // 2:
-            touching.update((a, b))
-    pairs = sorted(
-        (float(np.linalg.norm(ends[a] - ends[b])), a, b)
-        for a, b in tree.query_pairs(gap)
-        if a // 2 != b // 2 and a not in touching and b not in touching
-    )
+            touching[[a, b]] = True
     out: list[BaseGeometry] = []
-    taken = set(touching)
-    for distance, a, b in pairs:
-        if a in taken or b in taken or distance <= _TOUCH_M:
+    taken = set(np.flatnonzero(touching).tolist())
+    for a, b in _nearest_pairs(tree, ends, touching, gap):
+        if a in taken or b in taken:
             continue
         taken.update((a, b))
         out.append(shapely.LineString([ends[a], ends[b]]))
     out.extend(_extensions(parts, ends, outward, taken, gap))
     return out
+
+
+def _nearest_pairs(
+    tree: KDTree, ends: NDArray[np.float64], touching: NDArray[np.bool_], gap: float
+) -> list[tuple[int, int]]:
+    """Пары концов разных линий ближе gap, от ближней к дальней, по NEIGHBOURS соседей."""
+    n = len(ends)
+    k = min(NEIGHBOURS + 1, n)
+    distance, index = tree.query(ends, k=k, distance_upper_bound=gap)
+    distance = np.asarray(distance).reshape(n, k)
+    index = np.asarray(index).reshape(n, k)
+    rows = np.repeat(np.arange(n), k)
+    cols = index.ravel()
+    lengths = distance.ravel()
+    keep = (cols < n) & (lengths > _TOUCH_M)
+    rows, cols, lengths = rows[keep], cols[keep], lengths[keep]
+    keep = (rows // 2 != cols // 2) & ~touching[rows] & ~touching[cols]
+    first = np.minimum(rows[keep], cols[keep])
+    second = np.maximum(rows[keep], cols[keep])
+    lengths = lengths[keep]
+    order = np.lexsort((second, first, lengths))
+    seen: set[tuple[int, int]] = set()
+    pairs = []
+    for a, b in zip(first[order].tolist(), second[order].tolist(), strict=True):
+        if (a, b) not in seen:
+            seen.add((a, b))
+            pairs.append((a, b))
+    return pairs
 
 
 def _ends(parts: Sequence[BaseGeometry]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
@@ -90,18 +118,19 @@ def _extensions(
     rays = np.array(
         [shapely.LineString([ends[i], ends[i] + outward[i] * gap]) for i in free], dtype=object
     )
-    index = shapely.STRtree(parts)
-    ray_ids, part_ids = index.query(rays, predicate="intersects")
+    lines = np.array(parts, dtype=object)
+    ray_ids, part_ids = shapely.STRtree(lines).query(rays, predicate="intersects")
+    own = np.array([free[r] // 2 for r in ray_ids.tolist()], dtype=np.int64)
+    other = part_ids != own
+    ray_ids, part_ids = ray_ids[other], part_ids[other]
+    if not len(ray_ids):
+        return []
+    hits = shapely.intersection(rays[ray_ids], lines[part_ids])
+    origins = shapely.points(ends[[free[r] for r in ray_ids.tolist()]])
+    distances = shapely.distance(origins, hits)
     best: dict[int, float] = {}
-    for r, k in zip(ray_ids.tolist(), part_ids.tolist(), strict=True):
+    for r, distance in zip(ray_ids.tolist(), distances.tolist(), strict=True):
         i = free[r]
-        if k == i // 2:
-            continue
-        hit = shapely.intersection(rays[r], parts[k])
-        if hit.is_empty:
-            continue
-        origin = shapely.Point(ends[i])
-        distance = float(shapely.distance(origin, hit))
         if _TOUCH_M < distance < best.get(i, np.inf):
             best[i] = distance
     return [

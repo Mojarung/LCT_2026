@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree, Voronoi
 
 from green.domain.objects import ObjectClass
 
@@ -194,9 +194,8 @@ def _medial_axis(polygon: BaseGeometry) -> list[shapely.LineString]:
     offset = np.asarray(polygon.bounds[:2])
     local = shapely.transform(polygon, lambda xy: xy - offset)
     dense = shapely.get_coordinates(shapely.segmentize(local.boundary, _STEP_M))
-    points = shapely.multipoints(np.unique(np.round(dense, 6), axis=0))
-    edges = shapely.get_parts(shapely.voronoi_polygons(points, only_edges=True))
-    edges = shapely.transform(edges, lambda xy: xy + offset)
+    edges = _voronoi_edges(np.unique(np.round(dense, 6), axis=0)) + offset
+    edges = shapely.linestrings(edges) if len(edges) else np.empty(0, dtype=object)
     shapely.prepare(polygon)
     inside = edges[shapely.contains_properly(polygon, edges)]
     # Рёбра Вороного сходятся с расхождением в 1e-16: без сетки они не склеиваются в линию.
@@ -212,6 +211,19 @@ def _medial_axis(polygon: BaseGeometry) -> list[shapely.LineString]:
         for line in shapely.get_parts(graph)
         if line.geom_type == "LineString" and line.length > _STEP_M
     ]
+
+
+def _voronoi_edges(xy: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Конечные рёбра диаграммы Вороного точек: массив отрезков (n, 2, 2).
+
+    Qhull (scipy), а не GEOS: точки контура полосы ограды лежат рядами на прямых, и на
+    вырожденной триангуляции GEOS считал диаграмму 16 тыс. точек 30 с, qhull - 0,1 с с тем же
+    результатом (Харьковская, 20.10.2026)."""
+    if len(xy) < 4:  # noqa: PLR2004 - qhull нужно не меньше четырёх точек на плоскости
+        return np.empty((0, 2, 2))
+    diagram = Voronoi(xy)
+    ridges = np.array([r for r in diagram.ridge_vertices if -1 not in r], dtype=np.int64)
+    return diagram.vertices[ridges] if len(ridges) else np.empty((0, 2, 2))
 
 
 def _prune(graph: BaseGeometry) -> BaseGeometry:

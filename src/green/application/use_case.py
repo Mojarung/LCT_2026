@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import re
+import shutil
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -28,7 +31,11 @@ from green.application.errors import ConversionError, InputError
 from green.application.explain import explain
 from green.application.fences import bridge_fence_gaps
 from green.application.gis_alignment import alignment_notes
-from green.application.input_quality import require_complete_geometry
+from green.application.input_quality import (
+    incomplete_geometry_note,
+    require_complete_geometry,
+    with_assumed_errors,
+)
 from green.application.insolation import ShadeMap, with_shade
 from green.application.kerbs import refine_kerbs
 from green.application.lawns import plan_lawns
@@ -60,8 +67,9 @@ from green.application.validation import (
     trim_to_quotas,
     validate_plan,
 )
-from green.application.volumes import build_volumes
+from green.application.volumes import Volumes, build_volumes
 from green.application.wording import counted, decimal_g
+from green.application.work_area import with_work_area
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -94,6 +102,41 @@ SCHOOL_REACH_M = 300.0
 RESULT_DXF = "result.dxf"
 PENDING_DXF = ".result.pending.dxf"
 MERGED_DXF = "merged_source.dxf"
+
+
+_LOG = logging.getLogger(__name__)
+# Сбои необязательного этапа на незнакомом чертеже: геометрия (GEOS, мультиполигон вместо
+# полигона) и данные неожиданного вида. Остановка по входу (InputError) и нехватка памяти или
+# диска сюда не входят - они останавливают прогон.
+OPTIONAL_STAGE_FAILURES = (
+    shapely.errors.GEOSException,
+    ValueError,
+    TypeError,
+    AttributeError,
+    IndexError,
+    KeyError,
+    ArithmeticError,
+)
+
+
+def optional_stage[T](title: str, make: Callable[[], T], fallback: T) -> tuple[T, str | None]:
+    """Этап, без которого план по нормам, DXF и объяснения полны: 3D-объёмы, карта для показа,
+    сдвиг слабых мест, газоны, баланс. Его сбой на чужом чертеже не роняет прогон, а
+    называется предупреждением (чертёж жюри 236287.dxf, 19.10.2026)."""
+    try:
+        return make(), None
+    except OPTIONAL_STAGE_FAILURES as exc:
+        _LOG.warning("Этап %s пропущен", title, exc_info=True)
+        reason = f"{type(exc).__name__}: {exc}"[:200]
+        return fallback, (
+            f"Этап «{title}» пропущен: на этом чертеже он не сработал ({reason}). План по нормам, "
+            "DXF и объяснения от него не зависят."
+        )
+
+
+def _noted(scene: Scene, *notes: str | None) -> Scene:
+    added = tuple(note for note in notes if note)
+    return replace(scene, warnings=(*scene.warnings, *added)) if added else scene
 
 
 # Посадки добавочных этапов кустарника: их можно снять ради квот, основу плана - нельзя.
@@ -258,7 +301,11 @@ class PlanSite:
             species = self._species.get(params.species_code)
         with watch.stage("read"):
             scene = self._reader.read(source, unit=params.drawing_unit)
-            require_complete_geometry(scene)
+            if params.strict_input:
+                require_complete_geometry(scene)
+            else:
+                scene, assumed = with_assumed_errors(scene)
+                scene = _noted(scene, incomplete_geometry_note(scene), assumed)
         with watch.stage("classify"):
             scene, coverage = classify_scene(scene, layer_map, params)
             semantics = classification_report(scene, layer_map, params)
@@ -315,16 +362,25 @@ class PlanSite:
             if bridged:
                 note = f"Ограда: {bridged} зазоров до 1 м между штрихами закрыто перемычками."
                 scene = replace(scene, warnings=(*scene.warnings, note))
+            # Чужой чертёж без замкнутой границы работ: участок по самому чертежу, а не пустой план.
+            if params.infer_work_boundary:
+                features, area_note = with_work_area(features)
+                scene = _noted(scene, area_note)
         # Подоснова строится до размещения и сразу уходит наружу: карта показывает чертёж,
         # пока план ещё считается. Зависит она только от классифицированных объектов.
         with watch.stage("basemap"):
-            basemap = build_basemap(features, scene.labels)
-            if progress is not None:
+            basemap, note = optional_stage(
+                "подоснова для карты", lambda: build_basemap(features, scene.labels), None
+            )
+            if progress is not None and basemap is not None:
                 progress.basemap(basemap)
             # Объёмы зданий для трёхмерной сцены - из тех же объектов и подписей, что и карта.
             # Отдельного этапа у них нет: на встроенном фрагменте Берзарина это 0,07 с, на
             # сцене из 560 тыс. объектов (49 копий фрагмента) - 2,8 с.
-            volumes = build_volumes(features, scene.labels)
+            volumes, volumes_note = optional_stage(
+                "объёмы зданий для 3D", lambda: build_volumes(features, scene.labels), Volumes()
+            )
+            scene = _noted(scene, note, volumes_note)
             # Тень зданий над местами посадок: подбор не ставит светолюбивый вид в тень.
             shade = ShadeMap(volumes.buildings)
         # Подсказки LLM - после подосновы: карта не ждёт модель (на процессоре - минуты).
@@ -359,24 +415,29 @@ class PlanSite:
         # карты там был газон. В границе - те же правила, за ней решает только нарисованное.
         with watch.stage("surface_display"):
             boundary = work_boundary(features)
-            display_surface = (
-                build_surface_map(
-                    features,
-                    scene.labels,
-                    display_extent(boundary),
-                    params.surface_cell_m,
-                    max_distance_m=params.surface_max_distance_m,
-                    ambiguity_m=params.surface_ambiguity_m,
-                    tree_distance_m=params.tree_seed_distance_m,
-                    inference_mode=params.surface_inference_mode,
-                    open_ground=params.open_ground,
-                    display_around=boundary,
-                    target_stage=params.surface_target_stage,
-                    source_stages=params.surface_source_stages,
-                )
-                if surface is not None
-                else None
+            display_surface, note = optional_stage(
+                "карта покрытий для 3D",
+                lambda: (
+                    build_surface_map(
+                        features,
+                        scene.labels,
+                        display_extent(boundary),
+                        params.surface_cell_m,
+                        max_distance_m=params.surface_max_distance_m,
+                        ambiguity_m=params.surface_ambiguity_m,
+                        tree_distance_m=params.tree_seed_distance_m,
+                        inference_mode=params.surface_inference_mode,
+                        open_ground=params.open_ground,
+                        display_around=boundary,
+                        target_stage=params.surface_target_stage,
+                        source_stages=params.surface_source_stages,
+                    )
+                    if surface is not None
+                    else None
+                ),
+                None,
             )
+            scene = _noted(scene, note)
         site = site_of(features, surface, crown_m=params.existing_crown_m)
         places = place_map(features)
         inventory = request.inventory
@@ -488,16 +549,22 @@ class PlanSite:
         # Слабые места - посадки впритык к норме - сервис сдвигает сам, если индекс от этого
         # растёт. Сдвинутый план принимается, только если его снова пропустила проверка.
         with watch.stage("refine"):
-            refined = refine_weak(
-                plan,
-                features=features,
-                labels=scene.labels,
-                rulebook=rulebook,
-                params=params,
-                site=site,
-                surface=surface,
+            refined, note = optional_stage(
+                "сдвиг слабых мест",
+                lambda: refine_weak(
+                    plan,
+                    features=features,
+                    labels=scene.labels,
+                    rulebook=rulebook,
+                    params=params,
+                    site=site,
+                    surface=surface,
+                ),
+                None,
             )
-            if refined.moved:
+            if note:
+                plan = replace(plan, warnings=(*plan.warnings, note))
+            if refined is not None and refined.moved:
                 # Сдвинутая посадка - в новой точке: место и категория В.6 для проверки заново.
                 moved = replace_moved_places(plan, refined.plan, places)
                 recheck = validate_plan(
@@ -523,21 +590,32 @@ class PlanSite:
         # мест, иначе посадочное место сдвинутой посадки легло бы на газон. Нормы посадок газон
         # не меняет, поэтому проверку плана не повторяет.
         with watch.stage("lawns"):
-            plan = plan_lawns(
+            lawned, note = optional_stage(
+                "газоны и цветники",
+                lambda: plan_lawns(
+                    plan,
+                    features=features,
+                    labels=scene.labels,
+                    surface=surface,
+                    rulebook=rulebook,
+                    params=params,
+                ),
                 plan,
-                features=features,
-                labels=scene.labels,
-                surface=surface,
-                rulebook=rulebook,
-                params=params,
             )
+            plan = replace(lawned, warnings=(*lawned.warnings, note)) if note else lawned
         # Что план даёт улице: было - существующие насаждения, стало - вместе с планом.
         with watch.stage("effect"):
-            plan = replace(
-                plan,
-                effect=street_effect(
+            effect, note = optional_stage(
+                "баланс «было - стало»",
+                lambda: street_effect(
                     plan, site, params, inventory, surface=surface, catalog=self._species.all()
                 ),
+                None,
+            )
+            plan = replace(
+                plan,
+                effect=effect,
+                warnings=(*plan.warnings, note) if note else plan.warnings,
             )
         with watch.stage("explain"):
             plan = explain(with_species_traces(plan, features, rulebook, params), rulebook)
@@ -718,15 +796,42 @@ def _issue_line(issue: ValidationIssue) -> str:
     return line
 
 
+_DWG_MAGIC = re.compile(rb"^AC10\d\d")
+_LEADING = b"\xef\xbb\xbf \t\r\n"  # BOM и пробелы перед первым кодом группы
+_BINARY_DXF = b"AutoCAD Binary DXF"
+
+
+def drawing_kind(source: Path) -> str | None:
+    """«.dwg» или «.dxf» по первым байтам файла; None - не узнан (решает расширение)."""
+    with source.open("rb") as stream:
+        head = stream.read(64)
+    if _DWG_MAGIC.match(head):
+        return ".dwg"
+    text = head.lstrip(_LEADING)
+    if head.startswith(_BINARY_DXF) or text.startswith((b"0", b"999")):
+        return ".dxf"
+    return None
+
+
 def to_dxf(
     converters: Sequence[DrawingConverter], source: Path, work_dir: Path
 ) -> tuple[Path, str | None]:
-    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер."""
+    """DXF отдаётся как есть, DWG конвертирует первый доступный конвертер.
+
+    Тип решает содержимое, а не расширение: DWG, сохранённый с расширением .dxf (или DXF с
+    расширением .dwg), - частая ошибка выгрузки, и чтение не должно на ней падать."""
     suffix = source.suffix.lower()
-    if suffix == ".dxf":
+    if suffix not in {".dxf", ".dwg"}:
+        raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+    kind = drawing_kind(source) or suffix
+    if kind == ".dxf":
         return source, None
     if suffix != ".dwg":
-        raise InputError(f"Ожидается DXF или DWG, получен {source.suffix or 'файл без расширения'}")
+        # Конвертеры выбирают файлы по расширению (ODA - маска *.DWG): копия с верным именем.
+        renamed = work_dir / "converted" / "renamed" / f"{source.stem}.dwg"
+        renamed.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, renamed)
+        source = renamed
     for converter in converters:
         if converter.available():
             # Packages often contain different drawings with the same basename.

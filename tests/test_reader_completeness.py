@@ -98,10 +98,16 @@ def test_unresolved_xref_cannot_produce_an_approved_plan(tmp_path: Path, profile
     xref.attach(doc, block_name="unknown_network", filename="missing.dxf")
     doc.saveas(source)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
-    params = container.profiles.load(profile, {})
+    params = container.profiles.load(profile, {"strict_input": True})
     with pytest.raises(InputError, match="unknown_network"):
         container.use_case.execute(PlanRequest("xref", source, tmp_path / "out", profile, params))
     assert not (tmp_path / "out/result.dxf").exists()
+    # По умолчанию план строится по прочитанному, а пропуск назван первым предупреждением.
+    soft = container.profiles.load(profile, {})
+    report = container.use_case.execute(
+        PlanRequest("xref", source, tmp_path / "soft", profile, soft)
+    )
+    assert any("прочитан не полностью" in w and "unknown_network" in w for w in report.warnings)
 
 
 @pytest.mark.parametrize("name", ["arbitrary-01", "Слой_77", "msdElementTypeCustom"])
@@ -164,5 +170,9 @@ def test_recursive_block_is_a_reported_gap(tmp_path: Path) -> None:
     doc.modelspace().add_blockref("cycle", (0, 0))
     path = tmp_path / "cycle.dxf"
     doc.saveas(path)
-    with pytest.raises(InputError, match="block reference cycle"):
-        EzdxfSceneReader().read(path, unit="m")
+    # Цикл ссылок не останавливает чтение: повторная вставка внутри себя не разбирается и
+    # называется в журнале, не считаясь потерей геометрии (20.10.2026).
+    scene = EzdxfSceneReader().read(path, unit="m")
+    assert any("цикл ссылок" in w for w in scene.warnings)
+    assert scene.read_diagnostics.outcomes["insert:cycle"] == 1
+    assert "INSERT:cycle" not in scene.read_diagnostics.block_failures

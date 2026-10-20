@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import itertools
 import re
 import tempfile
 import threading
@@ -61,6 +62,8 @@ _SPATIAL_REPAIRS = frozenset(
 )
 
 type Loaded = tuple[Drawing, list[str]]
+
+_CYCLE_BLOCK = re.compile(r'block "([^"]+)"')
 
 
 class DocumentCache:
@@ -121,6 +124,26 @@ class DocumentCache:
         return frozenset(doc.entitydb.keys()) - loaded
 
 
+# Штриховок, многострочного текста и прозрачности в DXF R12 нет: результат R12-чертежа пишется в
+# R2000. ezdxf переводит загруженный документ без потерь, и отпечатки исходных сущностей снимаются
+# уже в форме R2000 - и при записи, и при сверке (`green verify`), иначе сравнивались бы разные
+# записи одной сущности.
+RESULT_MIN_VERSION = "AC1015"
+R12_NOTE = (
+    "Чертёж в формате DXF R12: результат записан в DXF R2000 (штриховки газонов и зон, "
+    "многострочный текст в R12 не существуют). Исходные сущности перенесены без изменений, "
+    "сверка целостности идёт в форме R2000."
+)
+
+
+def upgrade_for_result(doc: Drawing) -> bool:
+    """Переводит документ старше R2000 в R2000 до записи и сверки; True - если переводил."""
+    if doc.dxfversion >= RESULT_MIN_VERSION:
+        return False
+    doc.dxfversion = RESULT_MIN_VERSION
+    return True
+
+
 def entity_layer(entity: DXFEntity) -> str:
     """Слой сущности; у неизвестной ezdxf сущности (ARCALIGNEDTEXT и т.п.) атрибута нет - «0»."""
     return str(entity.dxf.get("layer", "0")) if entity.dxf.is_supported("layer") else "0"
@@ -144,7 +167,11 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     """
     try:
         require_complete_container(path)
-        return _strict(path, ezdxf.readfile(path), [])
+        doc = ezdxf.readfile(path)
+        if _misdeclared_cyrillic(doc):
+            doc = _as_cp1251(ezdxf.readfile(path, encoding=CP1251))
+            return _strict(path, doc, [_cp_note(path)])
+        return _strict(path, doc, [])
     except ezdxf.DXFStructureError, ValueError:
         pass
     except OSError as error:
@@ -159,6 +186,7 @@ def load_document(path: Path) -> tuple[Drawing, list[str]]:
     except (ezdxf.DXFStructureError, ValueError) as error:
         raise InputError(f"{path.name} не является корректным DXF: {error}") from error
     _require_safe_audit(path, auditor)
+    notes.extend(_cycle_notes(path, auditor))
     fixes = len(auditor.fixes) + len(auditor.errors)
     notes.append(f"{path.name} прочитан в режиме восстановления, исправлено записей: {fixes}")
     return doc, notes
@@ -181,6 +209,7 @@ def _strict(path: Path, doc: Drawing, notes: list[str]) -> tuple[Drawing, list[s
     }
     auditor = doc.audit()
     _require_safe_audit(path, auditor, empty_tables=empty_tables)
+    notes.extend(_cycle_notes(path, auditor))
     fixes = len(auditor.fixes)
     if fixes or auditor.errors:
         notes.append(f"{path.name}: аудит исправил записей: {fixes}, ошибок: {len(auditor.errors)}")
@@ -211,13 +240,72 @@ def _require_safe_audit(
         match = _REMOVED_ACAD_TABLE.search(fix.message)
         return match is None or match.group(1).upper() not in (empty_tables or set())
 
-    problems = [*auditor.errors, *(f for f in auditor.fixes if unsafe(f))]
+    # Блок, вставляющий сам себя: геометрия не потеряна, обход прерывает цикл на повторе имени
+    # блока (reader, insert:cycle). Остальные неисправленные ошибки останавливают чтение.
+    errors = [e for e in auditor.errors if e.code != AuditError.INVALID_BLOCK_REFERENCE_CYCLE]
+    problems = [*errors, *(f for f in auditor.fixes if unsafe(f))]
     if problems:
         detail = "; ".join(f"{entry.code}: {entry.message}" for entry in problems[:10])
         raise InputError(
             f"{path.name}: аудит DXF обнаружил потерю/изменение геометрии или "
             f"неисправленные ошибки: {detail}. Нужен исправленный исходник."
         )
+
+
+CP1251 = "cp1251"
+_LATIN_LETTERS = re.compile("[À-ÿ]")
+_CYRILLIC = re.compile("[Ѐ-ӿ]")
+_CODEPAGE_SAMPLE = 5_000  # объектов модели для проверки кодировки
+_MOJIBAKE_MIN = 20  # букв Latin-1 - меньше не повод перечитывать
+_FIXED_SHARE = 0.8  # после перекодировки кириллицей становятся почти все такие буквы
+
+
+def _misdeclared_cyrillic(doc: Drawing) -> bool:
+    """Кириллица в cp1251 под заголовком другой кодовой страницы (ANSI_1252 у экспорта из
+    западных программ): имена слоёв и подписи читаются как «Ãðàíèöà». DXF 2007+ - UTF-8."""
+    if doc.dxfversion >= "AC1021" or doc.encoding == CP1251:
+        return False
+    sample = [layer.dxf.name for layer in doc.layers]
+    for entity in itertools.islice(doc.modelspace(), _CODEPAGE_SAMPLE):
+        sample.append(entity.dxf.get("layer", ""))
+        if entity.dxftype() in {"TEXT", "MTEXT"}:
+            sample.append(str(entity.dxf.get("text", "")))
+    text = "".join(sample)
+    latin = len(_LATIN_LETTERS.findall(text))
+    if latin < _MOJIBAKE_MIN or len(_CYRILLIC.findall(text)) >= latin:
+        return False
+    try:
+        fixed = text.encode(doc.encoding, errors="ignore").decode(CP1251, errors="ignore")
+    except LookupError:
+        return False
+    return len(_CYRILLIC.findall(fixed)) >= _FIXED_SHARE * latin
+
+
+def _as_cp1251(doc: Drawing) -> Drawing:
+    doc.encoding = CP1251  # и результат пишется той же кодовой страницей
+    return doc
+
+
+def _cp_note(path: Path) -> str:
+    return (
+        f"{path.name}: кодовая страница в заголовке не совпадает с текстом - имена слоёв и "
+        "подписи в cp1251 (кириллица); чертёж прочитан как cp1251, результат записан в ней же."
+    )
+
+
+def _cycle_notes(path: Path, auditor: Auditor) -> list[str]:
+    cycles = [e for e in auditor.errors if e.code == AuditError.INVALID_BLOCK_REFERENCE_CYCLE]
+    if not cycles:
+        return []
+    found = {m.group(1) for e in cycles if (m := _CYCLE_BLOCK.search(e.message))}
+    names = sorted(n for n in found if not n.startswith("*")) or sorted(found)
+    return [
+        (
+            f"{path.name}: блоки вставляют сами себя (цикл ссылок): {', '.join(names[:10])}. "
+            "Повторная вставка того же блока внутри себя не разбирается, объекты одного "
+            "прохода учтены; исходник не меняется."
+        )
+    ]
 
 
 def _repaired_bytes(path: Path) -> tuple[bytes, list[str]]:

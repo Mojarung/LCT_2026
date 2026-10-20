@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+import shapely
+
 from green.application.errors import InputError
 
 if TYPE_CHECKING:
@@ -37,3 +39,21 @@ def inner_area(feature: Feature) -> BaseGeometry:
 
 def outer_area(feature: Feature) -> BaseGeometry:
     return reserved_buffer(feature.geometry, error_bound(feature))
+
+
+# Буфер мультилинии из тысяч частей GEOS строит объединением буферов каждой части, и на частом
+# пунктире (десятки тысяч штрихов в сантиметрах друг от друга) это минуты и часы. Те же точки
+# дают два шага: тонкий буфер каждой части, объединение, затем буфер многоугольника на
+# остаток расстояния (сумма Минковского кругов - круг суммы радиусов). Синтетический борт из
+# 28 920 штрихов: больше 390 с напрямую, 4 с в два шага (20.10.2026).
+MANY_PARTS = 2_000
+THIN_M = 0.05
+
+
+def buffer_lines(geometry: BaseGeometry, distance: float, *, quad_segs: int = 8) -> BaseGeometry:
+    """Буфер линий на distance; для мультилинии из многих частей - в два шага."""
+    parts = shapely.get_parts(geometry)
+    if len(parts) < MANY_PARTS or distance <= THIN_M:
+        return shapely.buffer(geometry, distance, quad_segs=quad_segs)
+    thin = shapely.union_all(shapely.buffer(parts, THIN_M, quad_segs=2))
+    return shapely.buffer(thin, distance - THIN_M, quad_segs=quad_segs)

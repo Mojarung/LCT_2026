@@ -350,6 +350,8 @@ class ProfileModel(_Strict):
     osm_schools: bool = True
     llm_hints: bool = True
     require_work_boundary: bool = True
+    infer_work_boundary: bool = True
+    strict_input: bool = False
     planting_radius_m: float = Field(default=1.24, ge=0, le=10)  # круг площади ямы 2,2 x 2,2 м
     shrub_planting_radius_m: float = Field(default=0.5, ge=0, le=10)
     surface_cell_m: float = Field(default=0.5, ge=0.1, le=5.0)

@@ -157,7 +157,7 @@ def test_partial_input_does_not_publish_plan(tmp_path: Path, profile: str) -> No
     _street(path)
     _inject_empty_region(path)
     container = build_container(Settings(config_dir=ROOT / "config", runs_dir=tmp_path / "runs"))
-    params = container.profiles.load(profile, {})
+    params = container.profiles.load(profile, {"strict_input": True})
     with pytest.raises(InputError, match="REGION"):
         container.use_case.execute(PlanRequest("lost", path, tmp_path / "out", profile, params))
     assert not (tmp_path / "out/result.dxf").exists()

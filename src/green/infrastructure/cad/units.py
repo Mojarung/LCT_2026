@@ -108,6 +108,8 @@ class Spread:
 
 
 def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
+    if not len(doc.modelspace()):
+        raise InputError(_empty_model(doc))
     code = int(doc.header.get("$INSUNITS", _UNITLESS) or _UNITLESS)
     header = f"$INSUNITS={code} ({_HEADER_NAMES.get(code, 'неизвестные единицы')})"
     if requested != AUTO:
@@ -122,9 +124,14 @@ def decide_units(doc: Drawing, requested: str = AUTO) -> UnitDecision:
     if code == _UNITLESS:
         guess = _unitless_guess(doc)
         if guess is None:
-            if not len(doc.modelspace()):
-                raise InputError("В пространстве модели нет ни одного объекта: планировать нечего")
-            raise InputError(f"Единицы чертежа не заданы ({header}); задайте drawing_unit явно")
+            unit, reason, other = _fallback_guess(doc)
+            note = (
+                f"Исправлено автоматически, проверьте масштаб: единицы чертежа не заданы "
+                f"({header}), а признаки по геометрии спорят или их мало ({reason}); принято "
+                f"drawing_unit={unit} (1 единица = {EXPLICIT_UNITS[unit]:g} м). Если масштаб "
+                f"не тот, запустите с drawing_unit={other}."
+            )
+            return UnitDecision(EXPLICIT_UNITS[unit], (note + _RESCALED_TAIL,))
         unit, reason, other = guess
         note = (
             f"Исправлено автоматически: единицы чертежа не заданы ({header}); по геометрии "
@@ -208,6 +215,31 @@ def _unitless_guess(doc: Drawing) -> tuple[str, str, str] | None:
 
 
 _UNITLESS_SPLIT = 10_000.0
+
+
+def _fallback_guess(doc: Drawing) -> tuple[str, str, str]:
+    """Единица чертежа без единиц, когда признаки не сошлись: метр - единица подосновы
+    Мосгеотреста и МСК-Москва; миллиметр - только если в метрах участок длиннее 100 км."""
+    spread = measure(doc)
+    if spread is None:
+        return "m", "координат для оценки нет", "mm"
+    extent = f"разброс координат {spread.width:.0f} x {spread.height:.0f} единиц"
+    if spread.size > _MAX_SITE_M:
+        return "mm", f"{extent}: в метрах участок длиннее 100 км", "m"
+    return "m", extent + _text(spread.text_height), "mm"
+
+
+def _empty_model(doc: Drawing) -> str:
+    """Причина пустого чертежа: геометрия только в листах - другое дело, чем пустой файл."""
+    sheets = [f"«{layout.name}» ({len(layout)})" for layout in doc.layouts if len(layout)]
+    sheets = [s for s in sheets if not s.startswith("«Model»")]
+    if sheets:
+        return (
+            "В пространстве модели нет ни одного объекта, геометрия только в листах: "
+            f"{', '.join(sheets)}. Подоснову читают из модели: перенесите её в пространство "
+            "модели (в CAD: CHSPACE) и запустите снова."
+        )
+    return "В пространстве модели нет ни одного объекта: планировать нечего"
 
 
 def _text(height: float | None) -> str:

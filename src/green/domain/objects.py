@@ -251,8 +251,11 @@ class ReadDiagnostics:
 
     @property
     def block_failures(self) -> tuple[str, ...]:
+        # INSERT:cycle - блок внутри самого себя: его объекты уже учтены на этом пути обхода.
         return tuple(
-            kind for kind in self.skipped_by_type if kind.startswith(("INSERT:", "VIRTUAL:"))
+            kind
+            for kind in self.skipped_by_type
+            if kind.startswith(("INSERT:", "VIRTUAL:")) and kind != "INSERT:cycle"
         )
 
 

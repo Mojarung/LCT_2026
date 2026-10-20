@@ -27,13 +27,17 @@ def test_declared_units_work_for_a_small_unfamiliar_drawing(code: int, factor: f
     assert decide_units(doc).unit_m == pytest.approx(factor)
 
 
-def test_missing_units_require_an_explicit_scale() -> None:
+def test_missing_units_without_evidence_take_metres_and_say_so() -> None:
+    """Прогон идёт на любом чертеже (20.10.2026): без признаков - метр подосновы Мосгеотреста,
+    с предупреждением проверить масштаб и подсказкой, чем его задать."""
     doc = ezdxf.new("R2018")
     doc.units = 0
     doc.modelspace().add_line((0, 0), (1000, 0))
-    with pytest.raises(InputError, match="drawing_unit"):
-        decide_units(doc)
-    assert decide_units(doc, "m").unit_m == 1
+    decision = decide_units(doc)
+    assert decision.unit_m == 1
+    assert "проверьте масштаб" in decision.notes[0]
+    assert "drawing_unit=mm" in decision.notes[0]
+    assert decide_units(doc, "mm").unit_m == pytest.approx(0.001)
 
 
 @pytest.mark.parametrize(
@@ -120,6 +124,21 @@ def test_unitless_metre_street_without_text_is_taken_in_metres() -> None:
     assert decide_units(_unitless(480, 290)).unit_m == 1.0
 
 
-def test_unitless_drawing_in_the_ambiguous_band_still_asks() -> None:
-    with pytest.raises(InputError, match="drawing_unit"):
-        decide_units(_unitless(25_000, 2_000, text=3.5))
+def test_unitless_drawing_in_the_ambiguous_band_takes_metres_and_warns() -> None:
+    decision = decide_units(_unitless(25_000, 2_000, text=3.5))
+    assert decision.unit_m == 1.0
+    assert "проверьте масштаб" in decision.notes[0]
+
+
+def test_unitless_drawing_too_long_for_metres_takes_millimetres() -> None:
+    decision = decide_units(_unitless(400_000, 20_000, text=3.5))
+    assert decision.unit_m == pytest.approx(0.001)
+    assert "drawing_unit=m" in decision.notes[0]
+
+
+def test_drawing_only_in_a_sheet_names_the_sheet() -> None:
+    doc = ezdxf.new("R2018")
+    doc.units = 0
+    doc.layouts.get("Layout1").add_line((0, 0), (100, 0))
+    with pytest.raises(InputError, match="Layout1"):
+        decide_units(doc)
